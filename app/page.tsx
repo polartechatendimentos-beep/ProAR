@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent } from "react";
 import {
   Activity, AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight,
   Bell, Boxes, BriefcaseBusiness, Building2, CalendarDays, ChartNoAxesCombined,
   CheckCircle2, ChevronDown, ChevronRight, CircleDollarSign, ClipboardList,
   Clock3, FileChartColumn, FileText, Filter, Grid2X2, HandCoins, Headphones,
-  ArrowLeft, Camera, Contact, Edit3, Hospital, Landmark, LayoutDashboard, LogIn, LogOut, MapPin,
+  ArrowLeft, Camera, Contact, Edit3, Eye, EyeOff, Hospital, Landmark, LayoutDashboard, LogIn, LogOut, MapPin,
   CreditCard, Keyboard, Menu, Minus, MoreHorizontal, Package, Phone, Plus, ReceiptText, ScanBarcode, School, Search, Settings,
   ShieldCheck, ShoppingBag, ShoppingCart, Store, TrendingUp, UserCheck, UserRound,
   PenTool, Tag, Trash2,
@@ -67,7 +67,7 @@ const customers: Customer[] = [];
 const linkedUnits: Record<string, { icon: IconType; name: string; type: string; doc: string; responsible: string; phone: string; address: string; orders: number }[]> = {};
 const linkedSectors: Record<string, { icon: IconType; name: string; type: string; doc: string; responsible: string; phone: string; address: string; orders: number }[]> = {};
 
-function Header({ title, subtitle, onMenu, onNewOrder }: { title: string; subtitle: string; onMenu: () => void; onNewOrder: () => void }) {
+function Header({ title, subtitle, onMenu, onNewOrder, userName, onLogout }: { title: string; subtitle: string; onMenu: () => void; onNewOrder: () => void; userName: string; onLogout: () => void }) {
   return <header className="topbar">
     <div className="headline">
       <button className="menu-toggle" aria-label="Abrir menu" onClick={onMenu}><Menu size={20}/></button>
@@ -77,7 +77,8 @@ function Header({ title, subtitle, onMenu, onNewOrder }: { title: string; subtit
       <label className="global-search"><Search size={16}/><input aria-label="Pesquisa global" placeholder="Pesquisar no ProAR..." /><kbd>⌘ K</kbd></label>
       <button className="icon-btn" aria-label="Notificações"><Bell size={18}/></button>
       <button className="primary-btn" onClick={onNewOrder}><Plus size={17}/> Nova ordem</button>
-      <div className="profile"><div className="profile-avatar">TV<span /></div><div><strong>Tiago Viana</strong><small>Administrador</small></div><ChevronDown size={14}/></div>
+      <div className="profile"><div className="profile-avatar">{userName.split(" ").map(word => word[0]).slice(0,2).join("").toUpperCase()}<span /></div><div><strong>{userName}</strong><small>Utilizador autorizado</small></div></div>
+      <button className="icon-btn" aria-label="Sair do sistema" title="Sair do sistema" onClick={onLogout}><LogOut size={18}/></button>
     </div>
   </header>;
 }
@@ -369,6 +370,55 @@ type ModalSave = {
   description: string;
 };
 
+type AuthenticatedUser = { username: string; displayName: string };
+
+function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Não foi possível entrar.");
+      onLogin({ username: result.username, displayName: result.displayName });
+    } catch (loginError) {
+      setError(loginError instanceof Error ? loginError.message : "Não foi possível entrar.");
+    } finally {
+      setLoading(false);
+    }
+  };
+  return <main className="login-page">
+    <section className="login-brand">
+      <div className="login-brand-mark">P<span>✦</span></div>
+      <span>PROAR • GESTÃO DE SERVIÇOS</span>
+      <h1>Bem-vindo ao ProAR</h1>
+      <p>Clientes, ordens de serviço, agenda, estoque e financeiro sincronizados num único sistema.</p>
+      <div className="login-security"><ShieldCheck size={18}/><div><b>Acesso protegido</b><small>Os dados são compartilhados com segurança entre computador e celular.</small></div></div>
+    </section>
+    <section className="login-panel">
+      <form onSubmit={submit}>
+        <span className="section-kicker"><ShieldCheck size={12}/> ACESSO RESTRITO</span>
+        <h2>Entrar no sistema</h2>
+        <p>Utilize o seu nome de utilizador e senha.</p>
+        <label>Utilizador<input autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} placeholder="Nome do utilizador"/></label>
+        <label>Senha<div className="password-field"><input type={showPassword ? "text" : "password"} autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} placeholder="Digite a sua senha"/><button type="button" aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"} onClick={() => setShowPassword(value => !value)}>{showPassword ? <EyeOff size={17}/> : <Eye size={17}/>}</button></div></label>
+        {error && <div className="login-error" role="alert"><AlertTriangle size={15}/>{error}</div>}
+        <button className="login-submit" disabled={loading || !username || !password}>{loading ? "Verificando..." : <><LogIn size={17}/> Entrar</>}</button>
+      </form>
+    </section>
+  </main>;
+}
+
 function Modal({ title, customers, close, onSave }: { title: string; customers: Customer[]; close: () => void; onSave: (data: ModalSave) => void }) {
   const isLinkedStructure = title.startsWith("Nova unidade, filial ou setor");
   const isNewOrder = title === "Nova ordem de serviço";
@@ -447,6 +497,8 @@ function Modal({ title, customers, close, onSave }: { title: string; customers: 
 }
 
 export default function Home() {
+  const [authenticatedUser, setAuthenticatedUser] = useState<AuthenticatedUser | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
   const [current, setCurrent] = useState("Painel inicial");
   const [menuOpen, setMenuOpen] = useState(false);
   const [modal, setModal] = useState("");
@@ -456,17 +508,47 @@ export default function Home() {
   const [moduleRecords, setModuleRecords] = useState<Record<string, ModuleRecord[]>>({});
   const [savedMessage, setSavedMessage] = useState("");
   useEffect(() => {
-    try {
-      const storedOrders = localStorage.getItem("proar-v3-service-orders");
-      const storedCustomers = localStorage.getItem("proar-v3-customers");
-      const storedRecords = localStorage.getItem("proar-v3-module-records");
-      if (storedOrders) setServiceOrders(JSON.parse(storedOrders));
-      if (storedCustomers) setCustomerRecords(JSON.parse(storedCustomers));
-      if (storedRecords) setModuleRecords(JSON.parse(storedRecords));
-    } catch {
-      // Mantém os dados iniciais caso o armazenamento do navegador esteja indisponível.
-    }
+    fetch("/api/auth").then(async response => response.ok ? response.json() : null).then(result => {
+      if (result?.authenticated) setAuthenticatedUser({ username: result.username, displayName: result.displayName });
+    }).finally(() => setCheckingSession(false));
   }, []);
+  useEffect(() => {
+    if (!authenticatedUser) return;
+    const loadSharedState = async () => {
+      try {
+        const response = await fetch("/api/state", { cache: "no-store" });
+        if (!response.ok) throw new Error();
+        const { state } = await response.json();
+        if (state) {
+          setServiceOrders(state.serviceOrders ?? []);
+          setCustomerRecords(state.customers ?? []);
+          setModuleRecords(state.moduleRecords ?? {});
+          return;
+        }
+        const localState = {
+          serviceOrders: JSON.parse(localStorage.getItem("proar-v3-service-orders") ?? "[]"),
+          customers: JSON.parse(localStorage.getItem("proar-v3-customers") ?? "[]"),
+          moduleRecords: JSON.parse(localStorage.getItem("proar-v3-module-records") ?? "{}"),
+        };
+        await fetch("/api/state", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(localState) });
+        setServiceOrders(localState.serviceOrders);
+        setCustomerRecords(localState.customers);
+        setModuleRecords(localState.moduleRecords);
+      } catch {
+        setSavedMessage("A base compartilhada está temporariamente indisponível.");
+      }
+    };
+    loadSharedState();
+  }, [authenticatedUser]);
+  const persistSharedState = (nextCustomers: Customer[], nextOrders: ServiceOrder[], nextModules: Record<string, ModuleRecord[]>) => {
+    fetch("/api/state", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ customers: nextCustomers, serviceOrders: nextOrders, moduleRecords: nextModules }),
+    }).then(response => {
+      if (!response.ok) setSavedMessage("Registro mantido neste aparelho, mas a sincronização falhou.");
+    });
+  };
   const saveRecord = (data: ModalSave) => {
     if (data.title === "Novo cliente") {
       const newCustomer: Customer = {
@@ -482,6 +564,7 @@ export default function Home() {
       const updatedCustomers = [newCustomer, ...customerRecords];
       setCustomerRecords(updatedCustomers);
       localStorage.setItem("proar-v3-customers", JSON.stringify(updatedCustomers));
+      persistSharedState(updatedCustomers, serviceOrders, moduleRecords);
       setCurrent("Clientes");
       setSavedMessage(`Cliente ${newCustomer.name} cadastrado com sucesso.`);
     } else if (data.title === "Nova ordem de serviço") {
@@ -502,6 +585,7 @@ export default function Home() {
       const updatedOrders = [newOrder, ...serviceOrders];
       setServiceOrders(updatedOrders);
       localStorage.setItem("proar-v3-service-orders", JSON.stringify(updatedOrders));
+      persistSharedState(customerRecords, updatedOrders, moduleRecords);
       setCurrent("Ordens de serviço");
       setSavedMessage(`Ordem ${newOrder.id} gravada com sucesso.`);
     } else {
@@ -516,6 +600,7 @@ export default function Home() {
       const updatedRecords = { ...moduleRecords, [moduleName]: [record, ...(moduleRecords[moduleName] ?? [])] };
       setModuleRecords(updatedRecords);
       localStorage.setItem("proar-v3-module-records", JSON.stringify(updatedRecords));
+      persistSharedState(customerRecords, serviceOrders, updatedRecords);
       setCurrent(moduleName);
       setSavedMessage("Registro gravado com sucesso.");
     }
@@ -524,10 +609,16 @@ export default function Home() {
   };
   const titles: Record<string,string> = { "Painel inicial": "Bom dia, Tiago", "Clientes": "Gestão de clientes" };
   const subtitles: Record<string,string> = { "Painel inicial": "Uma visão completa da sua empresa em tempo real.", "Clientes": "Cadastros, unidades, histórico e relacionamento." };
+  const logout = async () => {
+    await fetch("/api/auth", { method: "DELETE" });
+    setAuthenticatedUser(null);
+  };
+  if (checkingSession) return <div className="session-loading"><div className="brand-mark">P<span>✦</span></div><p>A carregar o ProAR...</p></div>;
+  if (!authenticatedUser) return <LoginScreen onLogin={setAuthenticatedUser}/>;
   return <div className="app-shell">
     <Sidebar current={current} setCurrent={setCurrent} open={menuOpen} close={() => setMenuOpen(false)}/>
     <main className="main">
-      <Header title={titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNewOrder={() => setModal("Nova ordem de serviço")}/>
+      <Header title={current === "Painel inicial" ? `Bom dia, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNewOrder={() => setModal("Nova ordem de serviço")} userName={authenticatedUser.displayName} onLogout={logout}/>
       {savedMessage && <div className="save-toast" role="status"><CheckCircle2 size={16}/>{savedMessage}</div>}
       <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} customers={customerRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Vendas" ? <SalesPDV customers={customerRecords}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} serviceOrders={serviceOrders}/> : <GenericModule name={current} onOpen={setModal} records={moduleRecords[current] ?? []}/>}</div>
       <footer><span>© 2026 ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
