@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 import {
   Activity, AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight,
   Bell, Boxes, BriefcaseBusiness, Building2, CalendarDays, ChartNoAxesCombined,
@@ -51,7 +51,20 @@ const stats: { icon: IconType; value: string; label: string; note: string; tone:
   { icon: AlertTriangle, value: "05", label: "Atrasadas", note: "Requerem atenção", tone: "red", trend: "−2" },
 ];
 
-const orders = [
+type ServiceOrder = {
+  id: string; client: string; unit: string; service: string; tech: string;
+  time: string; status: string; tone: string; avatar: string;
+};
+
+type ModuleRecord = {
+  id: string;
+  name: string;
+  client: string;
+  description: string;
+  createdAt: string;
+};
+
+const orders: ServiceOrder[] = [
   { id: "#OS-0248", client: "Prefeitura de Mirassol", unit: "Secretaria de Educação", service: "Manutenção preventiva", tech: "Tiago Viana", time: "08:30", status: "Em andamento", tone: "blue", avatar: "PM" },
   { id: "#OS-0247", client: "Drogaria Santa Rita", unit: "Unidade Olímpia", service: "Higienização completa", tech: "João Carlos", time: "09:00", status: "Agendada", tone: "violet", avatar: "DS" },
   { id: "#OS-0246", client: "Construtora Impper", unit: "Obra Legacy • Casa 24", service: "Infraestrutura frigorígena", tech: "Caio Henrique", time: "10:30", status: "Aguardando material", tone: "orange", avatar: "CI" },
@@ -211,7 +224,7 @@ function Customers({ onOpen }: { onOpen: (name: string) => void }) {
   </section>;
 }
 
-function ServiceOrders({ onOpen }: { onOpen: (name: string) => void }) {
+function ServiceOrders({ onOpen, serviceOrders }: { onOpen: (name: string) => void; serviceOrders: ServiceOrder[] }) {
   return <section className="module-page service-orders">
     <div className="module-toolbar"><label className="list-search"><Search size={15}/><input placeholder="Pesquisar ordem, cliente ou técnico..."/></label><button className="outline-btn"><Filter size={14}/> Filtros</button><button className="primary-btn" onClick={() => onOpen("Nova ordem de serviço")}><Plus size={16}/> Nova ordem de serviço</button></div>
     <div className="module-summary">
@@ -219,28 +232,45 @@ function ServiceOrders({ onOpen }: { onOpen: (name: string) => void }) {
       <article><span><UserCheck size={19}/></span><div><small>TÉCNICOS EMPENHADOS</small><strong>8</strong><em>3 em atendimento</em></div></article>
       <article><span><CheckCircle2 size={19}/></span><div><small>FINALIZADAS NO MÊS</small><strong>127</strong><em>Com relatório e assinatura</em></div></article>
     </div>
-    <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><Wrench size={12}/> OPERAÇÃO TÉCNICA</span><h2>Ordens de serviço</h2><p>Acompanhe técnico, check-in, check-out, fotos e assinatura.</p></div><button>Exportar <ChevronDown size={13}/></button></div><div className="table-wrap"><table><thead><tr><th>ORDEM</th><th>CLIENTE / LOCAL</th><th>TÉCNICO EMPENHADO</th><th>CHECK-IN</th><th>CHECK-OUT</th><th>EVIDÊNCIAS</th><th>SITUAÇÃO</th><th /></tr></thead><tbody>{orders.map(order => <tr key={`manage-${order.id}`}><td><b className="order-id">{order.id}</b></td><td><div className="client-cell"><span>{order.avatar}</span><div><strong>{order.client}</strong><small>{order.unit}</small></div></div></td><td><div className="tech"><span>{order.tech.split(" ").map(name => name[0]).slice(0,2).join("")}</span>{order.tech}</div></td><td><span className={`check-state ${order.status === "Em andamento" ? "done" : ""}`}><LogIn size={12}/>{order.status === "Em andamento" ? "08:27" : "Pendente"}</span></td><td><span className="check-state"><LogOut size={12}/>Pendente</span></td><td><span className="evidence-count"><Camera size={12}/> 0/2 fotos</span></td><td><span className={`status ${order.tone}`}><i/> {order.status}</span></td><td><button className="open-client">Abrir ordem <ChevronRight size={13}/></button></td></tr>)}</tbody></table></div></div>
+    <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><Wrench size={12}/> OPERAÇÃO TÉCNICA</span><h2>Ordens de serviço</h2><p>Acompanhe técnico, check-in, check-out, fotos e assinatura.</p></div><button>Exportar <ChevronDown size={13}/></button></div><div className="table-wrap"><table><thead><tr><th>ORDEM</th><th>CLIENTE / LOCAL</th><th>TÉCNICO EMPENHADO</th><th>CHECK-IN</th><th>CHECK-OUT</th><th>EVIDÊNCIAS</th><th>SITUAÇÃO</th><th /></tr></thead><tbody>{serviceOrders.map(order => <tr key={`manage-${order.id}`}><td><b className="order-id">{order.id}</b></td><td><div className="client-cell"><span>{order.avatar}</span><div><strong>{order.client}</strong><small>{order.unit}</small></div></div></td><td><div className="tech"><span>{order.tech.split(" ").map(name => name[0]).slice(0,2).join("")}</span>{order.tech}</div></td><td><span className={`check-state ${order.status === "Em andamento" ? "done" : ""}`}><LogIn size={12}/>{order.status === "Em andamento" ? "08:27" : "Pendente"}</span></td><td><span className="check-state"><LogOut size={12}/>Pendente</span></td><td><span className="evidence-count"><Camera size={12}/> 0/2 fotos</span></td><td><span className={`status ${order.tone}`}><i/> {order.status}</span></td><td><button className="open-client">Abrir ordem <ChevronRight size={13}/></button></td></tr>)}</tbody></table></div></div>
   </section>;
 }
 
-function GenericModule({ name }: { name: string }) {
+function GenericModule({ name, onOpen, records }: { name: string; onOpen: (name: string) => void; records: ModuleRecord[] }) {
   const descriptions: Record<string,string> = {
     "Equipamentos": "Acompanhe o parque de equipamentos, histórico técnico, garantias e próximas manutenções.",
     "Ordens de serviço": "Planeje atendimentos, distribua equipes e acompanhe cada serviço até a assinatura.",
     "Estoque": "Controle entradas, saídas, reservas, inventários, perdas e alertas de reposição.",
     "Financeiro": "Acompanhe contas a pagar e receber, fluxo de caixa, conciliação e centros de custo.",
   };
-  return <section className="module-page"><div className="welcome-panel"><div className="welcome-icon"><Grid2X2 size={32}/></div><div><span>MÓDULO PROAR</span><h2>{name}</h2><p>{descriptions[name] || `Consulte, cadastre e acompanhe todas as informações de ${name.toLowerCase()} em um só lugar.`}</p><button className="primary-btn"><Plus size={16}/> Novo registro</button></div></div>
-    <div className="empty-grid">{[{t:"Visão geral",i:LayoutDashboard},{t:"Registros recentes",i:Clock3},{t:"Indicadores",i:TrendingUp}].map(({t,i:Icon})=><article className="panel" key={t}><span><Icon size={19}/></span><h3>{t}</h3><p>Este módulo está pronto para receber os dados reais da sua operação.</p><button>Explorar <ArrowRight size={12}/></button></article>)}</div></section>;
+  return <section className="module-page"><div className="welcome-panel"><div className="welcome-icon"><Grid2X2 size={32}/></div><div><span>MÓDULO PROAR</span><h2>{name}</h2><p>{descriptions[name] || `Consulte, cadastre e acompanhe todas as informações de ${name.toLowerCase()} em um só lugar.`}</p><button className="primary-btn" onClick={() => onOpen(`Novo registro • ${name}`)}><Plus size={16}/> Novo registro</button></div></div>
+    {records.length ? <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><ClipboardList size={12}/> CADASTROS</span><h2>Registros de {name.toLowerCase()}</h2><p>{records.length} registro(s) gravado(s)</p></div></div><div className="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>NOME / IDENTIFICAÇÃO</th><th>CLIENTE / RESPONSÁVEL</th><th>DESCRIÇÃO</th><th>CADASTRADO EM</th></tr></thead><tbody>{records.map(record => <tr key={record.id}><td><b className="order-id">{record.id}</b></td><td><strong>{record.name}</strong></td><td>{record.client || "—"}</td><td>{record.description || "—"}</td><td>{record.createdAt}</td></tr>)}</tbody></table></div></div> :
+    <div className="empty-grid">{[{t:"Visão geral",i:LayoutDashboard},{t:"Registros recentes",i:Clock3},{t:"Indicadores",i:TrendingUp}].map(({t,i:Icon})=><article className="panel" key={t}><span><Icon size={19}/></span><h3>{t}</h3><p>Use “Novo registro” para adicionar o primeiro cadastro deste módulo.</p><button onClick={() => onOpen(`Novo registro • ${name}`)}>Cadastrar agora <ArrowRight size={12}/></button></article>)}</div>}</section>;
 }
 
-function Modal({ title, close }: { title: string; close: () => void }) {
+type ModalSave = {
+  title: string;
+  name: string;
+  client: string;
+  unit: string;
+  tech: string;
+  time: string;
+  description: string;
+};
+
+function Modal({ title, close, onSave }: { title: string; close: () => void; onSave: (data: ModalSave) => void }) {
   const isLinkedStructure = title.startsWith("Nova unidade, filial ou setor");
   const isNewOrder = title === "Nova ordem de serviço";
   const [selectedClient, setSelectedClient] = useState("");
   const [checkedIn, setCheckedIn] = useState(false);
   const [checkedOut, setCheckedOut] = useState(false);
   const [signed, setSigned] = useState(false);
+  const [unit, setUnit] = useState("");
+  const [tech, setTech] = useState("");
+  const [time, setTime] = useState("");
+  const [recordName, setRecordName] = useState("");
+  const [recordClient, setRecordClient] = useState("");
+  const [description, setDescription] = useState("");
   const parentCustomer = isLinkedStructure ? title.split("•")[1]?.trim() : "";
   const selectedClientData = customers.find(customer => customer.name === selectedClient);
   const availableUnits = selectedClient ? [
@@ -262,14 +292,14 @@ function Modal({ title, close }: { title: string; close: () => void }) {
     </> : <>
       {isNewOrder ? <>
         <label>Cliente cadastrado<select value={selectedClient} onChange={event => setSelectedClient(event.target.value)}><option value="">Selecione o cliente</option>{customers.map(customer => <option key={customer.doc} value={customer.name}>{customer.name} • {customer.doc}</option>)}</select></label>
-        <label>Unidade, filial ou setor<select disabled={!selectedClient}><option value="">{selectedClient ? "Selecione o local do atendimento" : "Selecione primeiro o cliente"}</option>{availableUnits.map(unit => <option key={unit.name} value={unit.name}>{unit.name} • {unit.type}</option>)}</select></label>
+        <label>Unidade, filial ou setor<select value={unit} onChange={event => setUnit(event.target.value)} disabled={!selectedClient}><option value="">{selectedClient ? "Selecione o local do atendimento" : "Selecione primeiro o cliente"}</option>{availableUnits.map(item => <option key={item.name} value={item.name}>{item.name} • {item.type}</option>)}</select></label>
         <label>Responsável do cliente<input value={selectedClientData?.contact ?? ""} readOnly placeholder="Carregado pelo cadastro"/></label>
         <label>Telefone<input value={selectedClientData?.phone ?? ""} readOnly placeholder="Carregado pelo cadastro"/></label>
         <label>Data do atendimento<input type="date"/></label>
-        <label>Horário<input type="time"/></label>
-        <label>Técnico empenhado<select><option value="">Selecione o técnico</option><option>Tiago Viana</option><option>João Carlos</option><option>Caio Henrique</option><option>Thiago Souza</option><option>Lucas Mendes</option></select></label>
+        <label>Horário<input type="time" value={time} onChange={event => setTime(event.target.value)}/></label>
+        <label>Técnico empenhado<select value={tech} onChange={event => setTech(event.target.value)}><option value="">Selecione o técnico</option><option>Tiago Viana</option><option>João Carlos</option><option>Caio Henrique</option><option>Thiago Souza</option><option>Lucas Mendes</option></select></label>
         <label>Prioridade<select><option>Normal</option><option>Alta</option><option>Urgente</option></select></label>
-        <label className="wide">Descrição / solicitação<textarea placeholder="Descreva o atendimento, problema informado ou observações..."/></label>
+        <label className="wide">Descrição / solicitação<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="Descreva o atendimento, problema informado ou observações..."/></label>
         <div className="wide order-execution">
           <div className="execution-head"><div><span>EXECUÇÃO DO ATENDIMENTO</span><h3>Controle do técnico em campo</h3></div><small>Horário registrado automaticamente</small></div>
           <div className="check-actions"><button type="button" className={checkedIn ? "done" : ""} onClick={() => setCheckedIn(true)}><LogIn size={17}/><span><b>{checkedIn ? "Check-in realizado" : "Dar check-in"}</b><small>{checkedIn ? "Técnico no local • 08:27" : "Registrar chegada ao cliente"}</small></span></button><button type="button" disabled={!checkedIn} className={checkedOut ? "done" : ""} onClick={() => setCheckedOut(true)}><LogOut size={17}/><span><b>{checkedOut ? "Check-out realizado" : "Dar check-out"}</b><small>{checkedOut ? "Atendimento finalizado • 10:42" : "Registrar saída do cliente"}</small></span></button></div>
@@ -277,25 +307,76 @@ function Modal({ title, close }: { title: string; close: () => void }) {
           <div className={`signature-box ${signed ? "signed" : ""}`}><div><PenTool size={22}/><span><b>{signed ? "Assinatura registrada" : "Assinatura digital do cliente"}</b><small>{signed ? "Responsável confirmou o atendimento" : "O cliente assina diretamente na tela"}</small></span></div><button type="button" onClick={() => setSigned(!signed)}>{signed ? "Limpar assinatura" : "Coletar assinatura"}</button></div>
         </div>
       </> : <>
-        <label>Cliente / Razão social<input placeholder="Digite o nome do cliente"/></label><label>CPF ou CNPJ<input placeholder="00.000.000/0000-00"/></label><label>Unidade ou setor<select><option>Selecione uma unidade</option><option>Matriz</option><option>Secretaria de Educação</option></select></label><label>Responsável<input placeholder="Nome do responsável"/></label><label>Telefone / WhatsApp<input placeholder="(00) 00000-0000"/></label><label>Data do atendimento<input type="date"/></label><label className="wide">Descrição / solicitação<textarea placeholder="Descreva o atendimento, problema informado ou observações..."/></label>
+        <label>Nome / identificação<input value={recordName} onChange={event => setRecordName(event.target.value)} placeholder="Digite o nome do registro"/></label><label>Cliente / responsável<input value={recordClient} onChange={event => setRecordClient(event.target.value)} placeholder="Cliente, fornecedor ou responsável"/></label><label>Código / documento<input placeholder="Código, CPF, CNPJ ou número interno"/></label><label>Situação<select><option>Ativo</option><option>Em elaboração</option><option>Pendente</option><option>Inativo</option></select></label><label>Telefone / contato<input placeholder="(00) 00000-0000"/></label><label>Data<input type="date"/></label><label className="wide">Descrição / observações<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="Inclua os detalhes deste cadastro..."/></label>
       </>}
     </>}
-  </div><div className="modal-actions"><button className="outline-btn" onClick={close}>Cancelar</button><button className="primary-btn" onClick={close}><CheckCircle2 size={15}/> Salvar registro</button></div></div></div>;
+  </div><div className="modal-actions"><button className="outline-btn" onClick={close}>Cancelar</button><button className="primary-btn" disabled={isNewOrder ? !selectedClient || !tech : (!isLinkedStructure && !recordName)} onClick={() => onSave({ title, name: recordName, client: isNewOrder ? selectedClient : recordClient, unit, tech, time, description })}><CheckCircle2 size={15}/> Salvar registro</button></div></div></div>;
 }
 
 export default function Home() {
   const [current, setCurrent] = useState("Painel inicial");
   const [menuOpen, setMenuOpen] = useState(false);
   const [modal, setModal] = useState("");
+  const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>(orders);
+  const [moduleRecords, setModuleRecords] = useState<Record<string, ModuleRecord[]>>({});
+  const [savedMessage, setSavedMessage] = useState("");
+  useEffect(() => {
+    try {
+      const storedOrders = localStorage.getItem("proar-service-orders");
+      const storedRecords = localStorage.getItem("proar-module-records");
+      if (storedOrders) setServiceOrders(JSON.parse(storedOrders));
+      if (storedRecords) setModuleRecords(JSON.parse(storedRecords));
+    } catch {
+      // Mantém os dados iniciais caso o armazenamento do navegador esteja indisponível.
+    }
+  }, []);
+  const saveRecord = (data: ModalSave) => {
+    if (data.title === "Nova ordem de serviço") {
+      const sequence = Math.max(249, ...serviceOrders.map(order => Number(order.id.replace(/\D/g, "")) || 0)) + 1;
+      const newOrder: ServiceOrder = {
+        id: `#OS-${String(sequence).padStart(4, "0")}`,
+        client: data.client,
+        unit: data.unit || "Unidade principal",
+        service: data.description || "Atendimento técnico",
+        tech: data.tech,
+        time: data.time || "A definir",
+        status: "Aberta",
+        tone: "gray",
+        avatar: data.client.split(" ").map(word => word[0]).slice(0, 2).join("").toUpperCase(),
+      };
+      const updatedOrders = [newOrder, ...serviceOrders];
+      setServiceOrders(updatedOrders);
+      localStorage.setItem("proar-service-orders", JSON.stringify(updatedOrders));
+      setCurrent("Ordens de serviço");
+      setSavedMessage(`Ordem ${newOrder.id} gravada com sucesso.`);
+    } else {
+      const moduleName = data.title.includes("•") ? data.title.split("•").pop()!.trim() : data.title.replace(/^Novo(a)?\s+/i, "");
+      const record: ModuleRecord = {
+        id: `${moduleName.slice(0, 3).toUpperCase()}-${Date.now().toString().slice(-6)}`,
+        name: data.name || moduleName,
+        client: data.client,
+        description: data.description,
+        createdAt: new Date().toLocaleString("pt-BR"),
+      };
+      const updatedRecords = { ...moduleRecords, [moduleName]: [record, ...(moduleRecords[moduleName] ?? [])] };
+      setModuleRecords(updatedRecords);
+      localStorage.setItem("proar-module-records", JSON.stringify(updatedRecords));
+      setCurrent(moduleName);
+      setSavedMessage("Registro gravado com sucesso.");
+    }
+    setModal("");
+    window.setTimeout(() => setSavedMessage(""), 3500);
+  };
   const titles: Record<string,string> = { "Painel inicial": "Bom dia, Tiago", "Clientes": "Gestão de clientes" };
   const subtitles: Record<string,string> = { "Painel inicial": "Uma visão completa da sua empresa em tempo real.", "Clientes": "Cadastros, unidades, histórico e relacionamento." };
   return <div className="app-shell">
     <Sidebar current={current} setCurrent={setCurrent} open={menuOpen} close={() => setMenuOpen(false)}/>
     <main className="main">
       <Header title={titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNewOrder={() => setModal("Nova ordem de serviço")}/>
-      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent}/> : current === "Clientes" ? <Customers onOpen={setModal}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal}/> : <GenericModule name={current}/>}</div>
+      {savedMessage && <div className="save-toast" role="status"><CheckCircle2 size={16}/>{savedMessage}</div>}
+      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent}/> : current === "Clientes" ? <Customers onOpen={setModal}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} serviceOrders={serviceOrders}/> : <GenericModule name={current} onOpen={setModal} records={moduleRecords[current] ?? []}/>}</div>
       <footer><span>© 2026 ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
-    {modal && <Modal title={modal} close={() => setModal("")}/>}
+    {modal && <Modal title={modal} close={() => setModal("")} onSave={saveRecord}/>}
   </div>;
 }
