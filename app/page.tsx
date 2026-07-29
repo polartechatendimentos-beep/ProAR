@@ -390,7 +390,7 @@ function Modal({ title, customers, close, onSave }: { title: string; customers: 
         <label>Responsável do cliente<input value={selectedClientData?.contact ?? ""} readOnly placeholder="Carregado pelo cadastro"/></label>
         <label>Telefone<input value={selectedClientData?.phone ?? ""} readOnly placeholder="Carregado pelo cadastro"/></label>
         <label className="wide">Endereço do atendimento<input value={unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? ""} readOnly placeholder="Carregado pelo cadastro do cliente"/></label>
-        <label>Data do atendimento<input type="date" value={date} onChange={event => setDate(event.target.value)}/></label>
+        <label>Data do atendimento<input type="date" value={date} onInput={event => setDate(event.currentTarget.value)} onChange={event => setDate(event.target.value)}/></label>
         <label>Horário<input type="time" value={time} onChange={event => setTime(event.target.value)}/></label>
         <label>Técnico empenhado<select value={tech} onChange={event => setTech(event.target.value)}><option value="">Selecione o técnico</option><option>Tiago Viana</option><option>João Carlos</option><option>Caio Henrique</option><option>Thiago Souza</option><option>Lucas Mendes</option></select></label>
         <label>Prioridade<select><option>Normal</option><option>Alta</option><option>Urgente</option></select></label>
