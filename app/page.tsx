@@ -196,7 +196,7 @@ function Customers({ onOpen, customers }: { onOpen: (name: string) => void; cust
   </section>;
 }
 
-function ServiceOrders({ onOpen, serviceOrders }: { onOpen: (name: string) => void; serviceOrders: ServiceOrder[] }) {
+function ServiceOrders({ onOpen, onSelect, serviceOrders }: { onOpen: (name: string) => void; onSelect: (order: ServiceOrder) => void; serviceOrders: ServiceOrder[] }) {
   const today = new Date().toISOString().slice(0, 10);
   return <section className="module-page service-orders">
     <div className="module-toolbar"><label className="list-search"><Search size={15}/><input placeholder="Pesquisar ordem, cliente ou técnico..."/></label><button className="outline-btn"><Filter size={14}/> Filtros</button><button className="primary-btn" onClick={() => onOpen("Nova ordem de serviço")}><Plus size={16}/> Nova ordem de serviço</button></div>
@@ -205,16 +205,40 @@ function ServiceOrders({ onOpen, serviceOrders }: { onOpen: (name: string) => vo
       <article><span><UserCheck size={19}/></span><div><small>TÉCNICOS EMPENHADOS</small><strong>{new Set(serviceOrders.map(item => item.tech).filter(Boolean)).size}</strong><em>Cadastros reais</em></div></article>
       <article><span><CheckCircle2 size={19}/></span><div><small>FINALIZADAS</small><strong>{serviceOrders.filter(item => item.status === "Concluída").length}</strong><em>Total registrado</em></div></article>
     </div>
-    <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><Wrench size={12}/> OPERAÇÃO TÉCNICA</span><h2>Ordens de serviço</h2><p>Acompanhe técnico, agendamento e endereço do atendimento.</p></div><button>Exportar <ChevronDown size={13}/></button></div><div className="table-wrap"><table><thead><tr><th>ORDEM</th><th>CLIENTE / LOCAL</th><th>DATA / HORÁRIO</th><th>ENDEREÇO</th><th>TÉCNICO</th><th>SITUAÇÃO</th><th /></tr></thead><tbody>{serviceOrders.map(order => <tr key={`manage-${order.id}`}><td><b className="order-id">{order.id}</b></td><td><div className="client-cell"><span>{order.avatar}</span><div><strong>{order.client}</strong><small>{order.unit}</small></div></div></td><td>{order.date ? new Date(`${order.date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem data"} • {order.time || "Sem horário"}</td><td>{order.address || "—"}</td><td><div className="tech"><span>{order.tech.split(" ").map(name => name[0]).slice(0,2).join("")}</span>{order.tech}</div></td><td><span className={`status ${order.tone}`}><i/> {order.status}</span></td><td><button className="open-client">Abrir ordem <ChevronRight size={13}/></button></td></tr>)}</tbody></table></div>{!serviceOrders.length && <div className="linked-empty"><ClipboardList size={22}/><h4>Nenhuma ordem cadastrada</h4><p>Crie uma nova ordem para iniciar a operação.</p></div>}</div>
+    <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><Wrench size={12}/> OPERAÇÃO TÉCNICA</span><h2>Ordens de serviço</h2><p>Duplo clique em uma linha para abrir a ordem completa.</p></div><button>Exportar <ChevronDown size={13}/></button></div><div className="table-wrap"><table><thead><tr><th>ORDEM</th><th>CLIENTE / LOCAL</th><th>DATA / HORÁRIO</th><th>ENDEREÇO</th><th>TÉCNICO</th><th>SITUAÇÃO</th><th /></tr></thead><tbody>{serviceOrders.map(order => <tr className="clickable-row" title="Clique duas vezes para abrir a ordem" onDoubleClick={() => onSelect(order)} key={`manage-${order.id}`}><td><b className="order-id">{order.id}</b></td><td><div className="client-cell"><span>{order.avatar}</span><div><strong>{order.client}</strong><small>{order.unit}</small></div></div></td><td>{order.date ? new Date(`${order.date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem data"} • {order.time || "Sem horário"}</td><td><button className="address-button" onClick={() => onSelect(order)}><MapPin size={13}/><span>{order.address || "Endereço não informado"}</span></button></td><td><div className="tech"><span>{order.tech.split(" ").map(name => name[0]).slice(0,2).join("")}</span>{order.tech}</div></td><td><span className={`status ${order.tone}`}><i/> {order.status}</span></td><td><button className="open-client" onClick={() => onSelect(order)}>Abrir ordem <ChevronRight size={13}/></button></td></tr>)}</tbody></table></div>{!serviceOrders.length && <div className="linked-empty"><ClipboardList size={22}/><h4>Nenhuma ordem cadastrada</h4><p>Crie uma nova ordem para iniciar a operação.</p></div>}</div>
   </section>;
 }
 
-function Agenda({ serviceOrders, onOpen }: { serviceOrders: ServiceOrder[]; onOpen: (name: string) => void }) {
+function Agenda({ serviceOrders, onOpen, onSelect }: { serviceOrders: ServiceOrder[]; onOpen: (name: string) => void; onSelect: (order: ServiceOrder) => void }) {
   const scheduled = [...serviceOrders].filter(order => order.date).sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`));
   return <section className="module-page">
     <div className="module-toolbar"><div><span className="section-kicker"><CalendarDays size={12}/> AGENDA OPERACIONAL</span><h2>Serviços agendados</h2><p>Ordens com data definida aparecem automaticamente aqui.</p></div><button className="primary-btn" onClick={() => onOpen("Nova ordem de serviço")}><Plus size={16}/> Agendar serviço</button></div>
-    <div className="panel customer-panel"><div className="table-wrap"><table><thead><tr><th>DATA</th><th>HORÁRIO</th><th>ORDEM</th><th>CLIENTE</th><th>ENDEREÇO</th><th>TÉCNICO</th><th>SITUAÇÃO</th></tr></thead><tbody>{scheduled.map(order => <tr key={`agenda-${order.id}`}><td><strong>{new Date(`${order.date}T12:00:00`).toLocaleDateString("pt-BR")}</strong></td><td>{order.time || "A definir"}</td><td><b className="order-id">{order.id}</b></td><td>{order.client}<small className="agenda-unit">{order.unit}</small></td><td>{order.address || "—"}</td><td>{order.tech}</td><td><span className={`status ${order.tone}`}><i/> {order.status}</span></td></tr>)}</tbody></table></div>{!scheduled.length && <div className="linked-empty"><CalendarDays size={24}/><h4>Nenhum serviço agendado</h4><p>Informe a data ao criar uma ordem de serviço.</p></div>}</div>
+    <div className="panel customer-panel"><div className="agenda-hint"><Zap size={13}/> Clique duas vezes em um agendamento para abrir a ordem de serviço.</div><div className="table-wrap"><table><thead><tr><th>DATA</th><th>HORÁRIO</th><th>ORDEM</th><th>CLIENTE</th><th>ENDEREÇO</th><th>TÉCNICO</th><th>SITUAÇÃO</th><th /></tr></thead><tbody>{scheduled.map(order => <tr className="clickable-row" title="Clique duas vezes para abrir a ordem" onDoubleClick={() => onSelect(order)} key={`agenda-${order.id}`}><td><strong>{new Date(`${order.date}T12:00:00`).toLocaleDateString("pt-BR")}</strong></td><td>{order.time || "A definir"}</td><td><b className="order-id">{order.id}</b></td><td>{order.client}<small className="agenda-unit">{order.unit}</small></td><td><button className="address-button" onClick={() => onSelect(order)}><MapPin size={13}/><span>{order.address || "Endereço não informado"}</span></button></td><td>{order.tech}</td><td><span className={`status ${order.tone}`}><i/> {order.status}</span></td><td><button className="open-client" onClick={() => onSelect(order)}>Abrir <ChevronRight size={13}/></button></td></tr>)}</tbody></table></div>{!scheduled.length && <div className="linked-empty"><CalendarDays size={24}/><h4>Nenhum serviço agendado</h4><p>Informe a data ao criar uma ordem de serviço.</p></div>}</div>
   </section>;
+}
+
+function OrderDetail({ order, close }: { order: ServiceOrder; close: () => void }) {
+  const mapsSearch = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.address)}`;
+  const mapsEmbed = `https://www.google.com/maps?q=${encodeURIComponent(order.address)}&output=embed`;
+  return <div className="modal-layer" role="dialog" aria-modal="true" aria-label={`Ordem ${order.id}`}>
+    <button className="modal-backdrop" onClick={close} aria-label="Fechar ordem"/>
+    <div className="modal order-detail-modal">
+      <div className="modal-head"><div><span>ORDEM DE SERVIÇO</span><h2>{order.id} • {order.client}</h2><p>{order.unit}</p></div><button onClick={close} aria-label="Fechar"><X size={18}/></button></div>
+      <div className="order-detail-content">
+        <div className="order-overview">
+          <article><CalendarDays size={17}/><div><small>AGENDAMENTO</small><strong>{order.date ? new Date(`${order.date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem data"} • {order.time || "A definir"}</strong></div></article>
+          <article><UserCheck size={17}/><div><small>TÉCNICO EMPENHADO</small><strong>{order.tech || "Não definido"}</strong></div></article>
+          <article><Wrench size={17}/><div><small>SERVIÇO</small><strong>{order.service}</strong></div></article>
+          <article><Activity size={17}/><div><small>SITUAÇÃO</small><strong>{order.status}</strong></div></article>
+        </div>
+        <section className="order-map">
+          <div className="order-map-head"><div><span><MapPin size={16}/></span><div><small>ENDEREÇO DO ATENDIMENTO</small><strong>{order.address || "Endereço não informado"}</strong></div></div>{order.address && <a href={mapsSearch} target="_blank" rel="noreferrer">Abrir no Google Maps <ArrowRight size={13}/></a>}</div>
+          {order.address ? <iframe title={`Mapa de ${order.address}`} src={mapsEmbed} loading="lazy" referrerPolicy="no-referrer-when-downgrade"/> : <div className="map-empty"><MapPin size={24}/><p>Cadastre o endereço do cliente para visualizar o mapa.</p></div>}
+        </section>
+      </div>
+      <div className="modal-actions"><button className="outline-btn" onClick={close}>Fechar</button><button className="primary-btn" onClick={() => window.print()}><FileText size={15}/> Imprimir ordem</button></div>
+    </div>
+  </div>;
 }
 
 type SaleItem = { id: string; name: string; code: string; price: number; kind: "Produto" | "Serviço" };
@@ -362,6 +386,8 @@ function Modal({ title, customers, close, onSave }: { title: string; customers: 
   const [contact, setContact] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [addressValidated, setAddressValidated] = useState(false);
+  const [showAddressMap, setShowAddressMap] = useState(false);
   const [date, setDate] = useState("");
   const [description, setDescription] = useState("");
   const parentCustomer = isLinkedStructure ? title.split("•")[1]?.trim() : "";
@@ -406,19 +432,25 @@ function Modal({ title, customers, close, onSave }: { title: string; customers: 
         <label>CPF ou CNPJ<input value={doc} onChange={event => setDoc(event.target.value)} placeholder="00.000.000/0000-00"/></label>
         <label>Responsável<input value={contact} onChange={event => setContact(event.target.value)} placeholder="Nome do responsável"/></label>
         <label>Telefone / WhatsApp<input value={phone} onChange={event => setPhone(event.target.value)} placeholder="(00) 00000-0000"/></label>
-        <label className="wide">Endereço completo<input value={address} onChange={event => setAddress(event.target.value)} placeholder="CEP, rua, número, complemento, bairro, cidade e estado"/></label>
+        <label className="wide">Endereço completo<input value={address} onChange={event => { setAddress(event.target.value); setAddressValidated(false); setShowAddressMap(false); }} placeholder="CEP, rua, número, complemento, bairro, cidade e estado"/></label>
+        <div className="wide address-validation">
+          <div><span className="map-validation-icon"><MapPin size={18}/></span><div><b>Validar endereço no Google Maps</b><small>Confira rua, número, bairro e cidade antes de salvar o cliente.</small></div></div>
+          <button type="button" disabled={!address.trim()} onClick={() => { setShowAddressMap(true); setAddressValidated(true); }}>{addressValidated ? <CheckCircle2 size={15}/> : <Search size={15}/>} {addressValidated ? "Endereço validado" : "Buscar e validar"}</button>
+          {showAddressMap && address.trim() && <div className="address-map-preview"><iframe title={`Validação de ${address}`} src={`https://www.google.com/maps?q=${encodeURIComponent(address)}&output=embed`} loading="lazy" referrerPolicy="no-referrer-when-downgrade"/><a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`} target="_blank" rel="noreferrer">Ver resultado completo no Google Maps <ArrowRight size={12}/></a></div>}
+        </div>
         <label className="wide">Observações<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="Informações adicionais do cliente..."/></label>
       </> : <>
         <label>Nome / identificação<input value={recordName} onChange={event => setRecordName(event.target.value)} placeholder="Digite o nome do registro"/></label><label>Cliente / responsável<input value={recordClient} onChange={event => setRecordClient(event.target.value)} placeholder="Cliente, fornecedor ou responsável"/></label><label>Código / documento<input placeholder="Código, CPF, CNPJ ou número interno"/></label><label>Situação<select><option>Ativo</option><option>Em elaboração</option><option>Pendente</option><option>Inativo</option></select></label><label>Telefone / contato<input placeholder="(00) 00000-0000"/></label><label>Data<input type="date"/></label><label className="wide">Descrição / observações<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="Inclua os detalhes deste cadastro..."/></label>
       </>}
     </>}
-  </div><div className="modal-actions"><button className="outline-btn" onClick={close}>Cancelar</button><button className="primary-btn" disabled={isNewOrder ? !selectedClient || !tech || !date : (!isLinkedStructure && !recordName)} onClick={() => onSave({ title, name: recordName, client: isNewOrder ? selectedClient : recordClient, doc, contact, phone, address: isNewOrder ? (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "") : address, unit, tech, date, time, description })}><CheckCircle2 size={15}/> Salvar registro</button></div></div></div>;
+  </div><div className="modal-actions"><button className="outline-btn" onClick={close}>Cancelar</button><button className="primary-btn" disabled={isNewOrder ? !selectedClient || !tech || !date : isNewCustomer ? !recordName || !address.trim() || !addressValidated : (!isLinkedStructure && !recordName)} onClick={() => onSave({ title, name: recordName, client: isNewOrder ? selectedClient : recordClient, doc, contact, phone, address: isNewOrder ? (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "") : address, unit, tech, date, time, description })}><CheckCircle2 size={15}/> Salvar registro</button></div></div></div>;
 }
 
 export default function Home() {
   const [current, setCurrent] = useState("Painel inicial");
   const [menuOpen, setMenuOpen] = useState(false);
   const [modal, setModal] = useState("");
+  const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null);
   const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>(orders);
   const [customerRecords, setCustomerRecords] = useState<Customer[]>(customers);
   const [moduleRecords, setModuleRecords] = useState<Record<string, ModuleRecord[]>>({});
@@ -497,9 +529,10 @@ export default function Home() {
     <main className="main">
       <Header title={titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNewOrder={() => setModal("Nova ordem de serviço")}/>
       {savedMessage && <div className="save-toast" role="status"><CheckCircle2 size={16}/>{savedMessage}</div>}
-      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} customers={customerRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal}/> : current === "Vendas" ? <SalesPDV customers={customerRecords}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} serviceOrders={serviceOrders}/> : <GenericModule name={current} onOpen={setModal} records={moduleRecords[current] ?? []}/>}</div>
+      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} customers={customerRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Vendas" ? <SalesPDV customers={customerRecords}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} serviceOrders={serviceOrders}/> : <GenericModule name={current} onOpen={setModal} records={moduleRecords[current] ?? []}/>}</div>
       <footer><span>© 2026 ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
     {modal && <Modal title={modal} customers={customerRecords} close={() => setModal("")} onSave={saveRecord}/>}
+    {selectedOrder && <OrderDetail order={selectedOrder} close={() => setSelectedOrder(null)}/>}
   </div>;
 }
