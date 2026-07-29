@@ -93,7 +93,7 @@ function Sidebar({ current, setCurrent, open, close }: { current: string; setCur
   return <>
     {open && <button className="backdrop" aria-label="Fechar menu" onClick={close} />}
     <aside className={`sidebar ${open ? "open" : ""}`}>
-      <div className="brand"><div className="brand-mark">P<span>✦</span></div><div><strong>Pro<span>AR</span></strong><small>GESTÃO DE SERVIÇOS</small></div></div>
+      <div className="brand"><div className="brand-mark brand-logo"><img src="/icon.png" alt="Ícone ProAR"/></div><div><strong>Pro<span>AR</span></strong><small>GESTÃO DE SERVIÇOS</small></div></div>
       <nav>{navGroups.map(group => <div className="nav-group" key={group.label}>
         <p>{group.label}</p>
         {group.items.map(({icon: Icon, name, badge}) => <button key={name} className={current === name ? "active" : ""} onClick={() => { setCurrent(name); close(); }}>
@@ -187,7 +187,7 @@ function CustomerDetail({ customerName, customers, onBack, onOpen }: { customerN
   </section>;
 }
 
-function Customers({ onOpen, customers }: { onOpen: (name: string) => void; customers: Customer[] }) {
+function Customers({ onOpen, onDelete, customers }: { onOpen: (name: string) => void; onDelete: (customer: Customer) => void; customers: Customer[] }) {
   const [query, setQuery] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState("");
   const filtered = useMemo(() => customers.filter(c => `${c.name} ${c.doc} ${c.contact}`.toLowerCase().includes(query.toLowerCase())), [query, customers]);
@@ -199,11 +199,11 @@ function Customers({ onOpen, customers }: { onOpen: (name: string) => void; cust
       <article><span><Building2 size={19}/></span><div><small>UNIDADES CADASTRADAS</small><strong>{customers.reduce((total, item) => total + item.units, 0)}</strong><em>Vinculadas aos clientes</em></div></article>
       <article><span><HandCoins size={19}/></span><div><small>FATURAMENTO NO MÊS</small><strong>R$ 0,00</strong><em>Sem vendas lançadas</em></div></article>
     </div>
-    <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><UsersRound size={12}/> CARTEIRA</span><h2>Clientes cadastrados</h2><p>{filtered.length} registro(s) encontrado(s)</p></div><button>Exportar <ChevronDown size={13}/></button></div><div className="table-wrap"><table><thead><tr><th>CLIENTE</th><th>CPF / CNPJ</th><th>RESPONSÁVEL</th><th>TELEFONE</th><th>ENDEREÇO</th><th>SITUAÇÃO</th><th /></tr></thead><tbody>{filtered.map(c => <tr key={c.id} onDoubleClick={() => setSelectedCustomer(c.name)}><td><div className="client-cell"><span>{c.name.split(" ").map(x => x[0]).slice(0,2).join("")}</span><strong>{c.name}</strong></div></td><td>{c.doc || "—"}</td><td>{c.contact || "—"}</td><td>{c.phone || "—"}</td><td>{c.address || "—"}</td><td><span className="status green"><i/> {c.status}</span></td><td><button className="open-client" onClick={() => setSelectedCustomer(c.name)}>Abrir cliente <ChevronRight size={14}/></button></td></tr>)}</tbody></table></div>{!filtered.length && <div className="linked-empty"><UsersRound size={22}/><h4>Nenhum cliente cadastrado</h4><p>Use “Novo cliente” para iniciar sua base real.</p></div>}</div>
+    <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><UsersRound size={12}/> CARTEIRA</span><h2>Clientes cadastrados</h2><p>{filtered.length} registro(s) encontrado(s)</p></div><button>Exportar <ChevronDown size={13}/></button></div><div className="table-wrap"><table><thead><tr><th>CLIENTE</th><th>CPF / CNPJ</th><th>RESPONSÁVEL</th><th>TELEFONE</th><th>ENDEREÇO</th><th>SITUAÇÃO</th><th>AÇÕES</th></tr></thead><tbody>{filtered.map(c => <tr key={c.id} onDoubleClick={() => setSelectedCustomer(c.name)}><td><div className="client-cell"><span>{c.name.split(" ").map(x => x[0]).slice(0,2).join("")}</span><strong>{c.name}</strong></div></td><td>{c.doc || "—"}</td><td>{c.contact || "—"}</td><td>{c.phone || "—"}</td><td>{c.address || "—"}</td><td><span className="status green"><i/> {c.status}</span></td><td><div className="row-actions"><button className="open-client" onClick={() => setSelectedCustomer(c.name)}>Abrir <ChevronRight size={14}/></button><button className="delete-action" aria-label={`Excluir ${c.name}`} onClick={() => onDelete(c)}><Trash2 size={14}/></button></div></td></tr>)}</tbody></table></div>{!filtered.length && <div className="linked-empty"><UsersRound size={22}/><h4>Nenhum cliente cadastrado</h4><p>Use “Novo cliente” para iniciar sua base real.</p></div>}</div>
   </section>;
 }
 
-function ServiceOrders({ onOpen, onSelect, serviceOrders }: { onOpen: (name: string) => void; onSelect: (order: ServiceOrder) => void; serviceOrders: ServiceOrder[] }) {
+function ServiceOrders({ onOpen, onSelect, onDelete, serviceOrders }: { onOpen: (name: string) => void; onSelect: (order: ServiceOrder) => void; onDelete: (order: ServiceOrder) => void; serviceOrders: ServiceOrder[] }) {
   const today = new Date().toISOString().slice(0, 10);
   return <section className="module-page service-orders">
     <div className="module-toolbar"><label className="list-search"><Search size={15}/><input placeholder="Pesquisar ordem, cliente ou técnico..."/></label><button className="outline-btn"><Filter size={14}/> Filtros</button><button className="primary-btn" onClick={() => onOpen("Nova ordem de serviço")}><Plus size={16}/> Nova ordem de serviço</button></div>
@@ -212,7 +212,7 @@ function ServiceOrders({ onOpen, onSelect, serviceOrders }: { onOpen: (name: str
       <article><span><UserCheck size={19}/></span><div><small>TÉCNICOS EMPENHADOS</small><strong>{new Set(serviceOrders.map(item => item.tech).filter(Boolean)).size}</strong><em>Cadastros reais</em></div></article>
       <article><span><CheckCircle2 size={19}/></span><div><small>FINALIZADAS</small><strong>{serviceOrders.filter(item => item.status === "Concluída").length}</strong><em>Total registrado</em></div></article>
     </div>
-    <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><Wrench size={12}/> OPERAÇÃO TÉCNICA</span><h2>Ordens de serviço</h2><p>Duplo clique em uma linha para abrir a ordem completa.</p></div><button>Exportar <ChevronDown size={13}/></button></div><div className="table-wrap"><table><thead><tr><th>ORDEM</th><th>CLIENTE / LOCAL</th><th>DATA / HORÁRIO</th><th>ENDEREÇO</th><th>TÉCNICO</th><th>SITUAÇÃO</th><th /></tr></thead><tbody>{serviceOrders.map(order => <tr className="clickable-row" title="Clique duas vezes para abrir a ordem" onDoubleClick={() => onSelect(order)} key={`manage-${order.id}`}><td><b className="order-id">{order.id}</b></td><td><div className="client-cell"><span>{order.avatar}</span><div><strong>{order.client}</strong><small>{order.unit}</small></div></div></td><td>{order.date ? new Date(`${order.date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem data"} • {order.time || "Sem horário"}</td><td><button className="address-button" onClick={() => onSelect(order)}><MapPin size={13}/><span>{order.address || "Endereço não informado"}</span></button></td><td><div className="tech"><span>{order.tech.split(" ").map(name => name[0]).slice(0,2).join("")}</span>{order.tech}</div></td><td><span className={`status ${order.tone}`}><i/> {order.status}</span></td><td><button className="open-client" onClick={() => onSelect(order)}>Abrir ordem <ChevronRight size={13}/></button></td></tr>)}</tbody></table></div>{!serviceOrders.length && <div className="linked-empty"><ClipboardList size={22}/><h4>Nenhuma ordem cadastrada</h4><p>Crie uma nova ordem para iniciar a operação.</p></div>}</div>
+    <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><Wrench size={12}/> OPERAÇÃO TÉCNICA</span><h2>Ordens de serviço</h2><p>Duplo clique em uma linha para abrir a ordem completa.</p></div><button>Exportar <ChevronDown size={13}/></button></div><div className="table-wrap"><table><thead><tr><th>ORDEM</th><th>CLIENTE / LOCAL</th><th>DATA / HORÁRIO</th><th>ENDEREÇO</th><th>TÉCNICO</th><th>SITUAÇÃO</th><th>AÇÕES</th></tr></thead><tbody>{serviceOrders.map(order => <tr className="clickable-row" title="Clique duas vezes para abrir a ordem" onDoubleClick={() => onSelect(order)} key={`manage-${order.id}`}><td><b className="order-id">{order.id}</b></td><td><div className="client-cell"><span>{order.avatar}</span><div><strong>{order.client}</strong><small>{order.unit}</small></div></div></td><td>{order.date ? new Date(`${order.date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem data"} • {order.time || "Sem horário"}</td><td><button className="address-button" onClick={() => onSelect(order)}><MapPin size={13}/><span>{order.address || "Endereço não informado"}</span></button></td><td><div className="tech"><span>{order.tech.split(" ").map(name => name[0]).slice(0,2).join("")}</span>{order.tech}</div></td><td><span className={`status ${order.tone}`}><i/> {order.status}</span></td><td><div className="row-actions"><button className="open-client" onClick={() => onSelect(order)}>Abrir <ChevronRight size={13}/></button><button className="delete-action" aria-label={`Excluir ${order.id}`} onClick={() => onDelete(order)}><Trash2 size={14}/></button></div></td></tr>)}</tbody></table></div>{!serviceOrders.length && <div className="linked-empty"><ClipboardList size={22}/><h4>Nenhuma ordem cadastrada</h4><p>Crie uma nova ordem para iniciar a operação.</p></div>}</div>
   </section>;
 }
 
@@ -451,7 +451,7 @@ function SalesPDV({ customers }: { customers: Customer[] }) {
   </section>;
 }
 
-function GenericModule({ name, onOpen, records }: { name: string; onOpen: (name: string) => void; records: ModuleRecord[] }) {
+function GenericModule({ name, onOpen, onDelete, records }: { name: string; onOpen: (name: string) => void; onDelete: (moduleName: string, record: ModuleRecord) => void; records: ModuleRecord[] }) {
   const descriptions: Record<string,string> = {
     "Equipamentos": "Acompanhe o parque de equipamentos, histórico técnico, garantias e próximas manutenções.",
     "Ordens de serviço": "Planeje atendimentos, distribua equipes e acompanhe cada serviço até a assinatura.",
@@ -459,7 +459,7 @@ function GenericModule({ name, onOpen, records }: { name: string; onOpen: (name:
     "Financeiro": "Acompanhe contas a pagar e receber, fluxo de caixa, conciliação e centros de custo.",
   };
   return <section className="module-page"><div className="welcome-panel"><div className="welcome-icon"><Grid2X2 size={32}/></div><div><span>MÓDULO PROAR</span><h2>{name}</h2><p>{descriptions[name] || `Consulte, cadastre e acompanhe todas as informações de ${name.toLowerCase()} em um só lugar.`}</p><button className="primary-btn" onClick={() => onOpen(`Novo registro • ${name}`)}><Plus size={16}/> Novo registro</button></div></div>
-    {records.length ? <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><ClipboardList size={12}/> CADASTROS</span><h2>Registros de {name.toLowerCase()}</h2><p>{records.length} registro(s) gravado(s)</p></div></div><div className="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>NOME / IDENTIFICAÇÃO</th><th>CLIENTE / RESPONSÁVEL</th><th>DESCRIÇÃO</th><th>CADASTRADO EM</th></tr></thead><tbody>{records.map(record => <tr key={record.id}><td><b className="order-id">{record.id}</b></td><td><strong>{record.name}</strong></td><td>{record.client || "—"}</td><td>{record.description || "—"}</td><td>{record.createdAt}</td></tr>)}</tbody></table></div></div> :
+    {records.length ? <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><ClipboardList size={12}/> CADASTROS</span><h2>Registros de {name.toLowerCase()}</h2><p>{records.length} registro(s) gravado(s)</p></div><button className="primary-btn" onClick={() => onOpen(`Novo registro • ${name}`)}><Plus size={14}/> Adicionar</button></div><div className="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>NOME / IDENTIFICAÇÃO</th><th>CLIENTE / RESPONSÁVEL</th><th>DESCRIÇÃO</th><th>CADASTRADO EM</th><th>AÇÕES</th></tr></thead><tbody>{records.map(record => <tr key={record.id}><td><b className="order-id">{record.id}</b></td><td><strong>{record.name}</strong></td><td>{record.client || "—"}</td><td>{record.description || "—"}</td><td>{record.createdAt}</td><td><button className="delete-action" aria-label={`Excluir ${record.name}`} onClick={() => onDelete(name, record)}><Trash2 size={14}/> Excluir</button></td></tr>)}</tbody></table></div></div> :
     <div className="empty-grid">{[{t:"Visão geral",i:LayoutDashboard},{t:"Registros recentes",i:Clock3},{t:"Indicadores",i:TrendingUp}].map(({t,i:Icon})=><article className="panel" key={t}><span><Icon size={19}/></span><h3>{t}</h3><p>Use “Novo registro” para adicionar o primeiro cadastro deste módulo.</p><button onClick={() => onOpen(`Novo registro • ${name}`)}>Cadastrar agora <ArrowRight size={12}/></button></article>)}</div>}</section>;
 }
 
@@ -507,8 +507,8 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
   };
   return <main className="login-page">
     <section className="login-brand">
-      <div className="login-brand-mark">P<span>✦</span></div>
-      <span>PROAR • GESTÃO DE SERVIÇOS</span>
+      <img className="login-official-logo" src="/proar-logo.png" alt="ProAR — Gestão de Serviços"/>
+      <span>SISTEMA INTEGRADO DE GESTÃO</span>
       <h1>Bem-vindo ao ProAR</h1>
       <p>Clientes, ordens de serviço, agenda, estoque e financeiro sincronizados num único sistema.</p>
       <div className="login-security"><ShieldCheck size={18}/><div><b>Acesso protegido</b><small>Os dados são compartilhados com segurança entre computador e celular.</small></div></div>
@@ -677,9 +677,9 @@ export default function Home() {
       setCurrent("Clientes");
       setSavedMessage(`Cliente ${newCustomer.name} cadastrado com sucesso.`);
     } else if (data.title === "Nova ordem de serviço") {
-      const sequence = Math.max(0, ...serviceOrders.map(order => Number(order.id.replace(/\D/g, "")) || 0)) + 1;
+      const sequence = Math.max(15499, ...serviceOrders.map(order => Number(order.id.replace(/\D/g, "")) || 0)) + 1;
       const newOrder: ServiceOrder = {
-        id: `#OS-${String(sequence).padStart(4, "0")}`,
+        id: `#OS-${String(sequence).padStart(5, "0")}`,
         client: data.client,
         unit: data.unit || "Unidade principal",
         service: data.description || "Atendimento técnico",
@@ -722,14 +722,39 @@ export default function Home() {
     await fetch("/api/auth", { method: "DELETE" });
     setAuthenticatedUser(null);
   };
-  if (checkingSession) return <div className="session-loading"><div className="brand-mark">P<span>✦</span></div><p>A carregar o ProAR...</p></div>;
+  const deleteCustomer = (customer: Customer) => {
+    if (!window.confirm(`Excluir o cliente “${customer.name}”? Esta ação também remove o cadastro da base compartilhada.`)) return;
+    const updatedCustomers = customerRecords.filter(item => item.id !== customer.id);
+    setCustomerRecords(updatedCustomers);
+    localStorage.setItem("proar-v3-customers", JSON.stringify(updatedCustomers));
+    persistSharedState(updatedCustomers, serviceOrders, moduleRecords);
+    setSavedMessage("Cliente excluído com sucesso.");
+  };
+  const deleteOrder = (order: ServiceOrder) => {
+    if (!window.confirm(`Excluir definitivamente a ordem ${order.id}?`)) return;
+    const updatedOrders = serviceOrders.filter(item => item.id !== order.id);
+    setServiceOrders(updatedOrders);
+    localStorage.setItem("proar-v3-service-orders", JSON.stringify(updatedOrders));
+    persistSharedState(customerRecords, updatedOrders, moduleRecords);
+    setSelectedOrder(null);
+    setSavedMessage(`Ordem ${order.id} excluída.`);
+  };
+  const deleteModuleRecord = (moduleName: string, record: ModuleRecord) => {
+    if (!window.confirm(`Excluir o registro “${record.name}”?`)) return;
+    const updatedModules = { ...moduleRecords, [moduleName]: (moduleRecords[moduleName] ?? []).filter(item => item.id !== record.id) };
+    setModuleRecords(updatedModules);
+    localStorage.setItem("proar-v3-module-records", JSON.stringify(updatedModules));
+    persistSharedState(customerRecords, serviceOrders, updatedModules);
+    setSavedMessage("Registro excluído com sucesso.");
+  };
+  if (checkingSession) return <div className="session-loading"><div className="brand-mark brand-logo"><img src="/icon.png" alt="ProAR"/></div><p>A carregar o ProAR...</p></div>;
   if (!authenticatedUser) return <LoginScreen onLogin={setAuthenticatedUser}/>;
   return <div className="app-shell">
     <Sidebar current={current} setCurrent={setCurrent} open={menuOpen} close={() => setMenuOpen(false)}/>
     <main className="main">
       <Header title={current === "Painel inicial" ? `Bom dia, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNewOrder={() => setModal("Nova ordem de serviço")} userName={authenticatedUser.displayName} onLogout={logout}/>
       {savedMessage && <div className="save-toast" role="status"><CheckCircle2 size={16}/>{savedMessage}</div>}
-      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} customers={customerRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Vendas" ? <SalesPDV customers={customerRecords}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} serviceOrders={serviceOrders}/> : <GenericModule name={current} onOpen={setModal} records={moduleRecords[current] ?? []}/>}</div>
+      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} customers={customerRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Vendas" ? <SalesPDV customers={customerRecords}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} serviceOrders={serviceOrders}/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} records={moduleRecords[current] ?? []}/>}</div>
       <footer><span>© 2026 ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
     {modal && <Modal title={modal} customers={customerRecords} close={() => setModal("")} onSave={saveRecord}/>}
