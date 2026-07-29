@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
   Activity, AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight,
   Bell, Boxes, BriefcaseBusiness, Building2, CalendarDays, ChartNoAxesCombined,
@@ -47,6 +47,12 @@ const navGroups: { label: string; items: NavItem[] }[] = [
 type ServiceOrder = {
   id: string; client: string; unit: string; service: string; tech: string;
   date: string; time: string; address: string; status: string; tone: string; avatar: string;
+  checkInAt?: string;
+  checkOutAt?: string;
+  photoBefore?: string;
+  photoAfter?: string;
+  clientSignature?: string;
+  technicianSignature?: string;
 };
 
 type Customer = {
@@ -218,9 +224,96 @@ function Agenda({ serviceOrders, onOpen, onSelect }: { serviceOrders: ServiceOrd
   </section>;
 }
 
-function OrderDetail({ order, close }: { order: ServiceOrder; close: () => void }) {
+async function imageFileToDataUrl(file: File) {
+  const source = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const element = new Image();
+    element.onload = () => resolve(element);
+    element.onerror = reject;
+    element.src = source;
+  });
+  const scale = Math.min(1, 1280 / image.width);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(image.width * scale));
+  canvas.height = Math.max(1, Math.round(image.height * scale));
+  canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.78);
+}
+
+function SignaturePad({ label, value, onChange }: { label: string; value?: string; onChange: (value: string) => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawing = useRef(false);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    if (value) {
+      const image = new Image();
+      image.onload = () => context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      image.src = value;
+    }
+  }, [value]);
+
+  const point = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    return { x: (event.clientX - rect.left) * (canvas.width / rect.width), y: (event.clientY - rect.top) * (canvas.height / rect.height) };
+  };
+  const start = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    drawing.current = true;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const context = event.currentTarget.getContext("2d");
+    const position = point(event);
+    context?.beginPath();
+    context?.moveTo(position.x, position.y);
+  };
+  const move = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (!drawing.current) return;
+    const context = event.currentTarget.getContext("2d");
+    const position = point(event);
+    if (context) {
+      context.strokeStyle = "#102b4b";
+      context.lineWidth = 3;
+      context.lineCap = "round";
+      context.lineJoin = "round";
+      context.lineTo(position.x, position.y);
+      context.stroke();
+    }
+  };
+  const finish = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (!drawing.current) return;
+    drawing.current = false;
+    onChange(event.currentTarget.toDataURL("image/png"));
+  };
+
+  return <div className={`signature-pad ${value ? "signed" : ""}`}>
+    <div><span><PenTool size={15}/></span><div><b>{label}</b><small>{value ? "Assinatura registrada" : "Assine no quadro abaixo"}</small></div><button type="button" onClick={() => onChange("")}>Limpar</button></div>
+    <canvas ref={canvasRef} width={720} height={180} onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish}/>
+  </div>;
+}
+
+function OrderDetail({ order, close, onUpdate }: { order: ServiceOrder; close: () => void; onUpdate: (order: ServiceOrder) => void }) {
+  const [currentOrder, setCurrentOrder] = useState(order);
   const mapsSearch = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.address)}`;
   const mapsEmbed = `https://www.google.com/maps?q=${encodeURIComponent(order.address)}&output=embed`;
+  const update = (patch: Partial<ServiceOrder>) => {
+    const updated = { ...currentOrder, ...patch };
+    setCurrentOrder(updated);
+    onUpdate(updated);
+  };
+  const uploadPhoto = async (field: "photoBefore" | "photoAfter", file?: File) => {
+    if (!file) return;
+    update({ [field]: await imageFileToDataUrl(file) });
+  };
+  const formatMoment = (value?: string) => value ? new Date(value).toLocaleString("pt-BR") : "";
   return <div className="modal-layer" role="dialog" aria-modal="true" aria-label={`Ordem ${order.id}`}>
     <button className="modal-backdrop" onClick={close} aria-label="Fechar ordem"/>
     <div className="modal order-detail-modal">
@@ -228,13 +321,28 @@ function OrderDetail({ order, close }: { order: ServiceOrder; close: () => void 
       <div className="order-detail-content">
         <div className="order-overview">
           <article><CalendarDays size={17}/><div><small>AGENDAMENTO</small><strong>{order.date ? new Date(`${order.date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem data"} • {order.time || "A definir"}</strong></div></article>
-          <article><UserCheck size={17}/><div><small>TÉCNICO EMPENHADO</small><strong>{order.tech || "Não definido"}</strong></div></article>
+          <article><UserCheck size={17}/><div><small>TÉCNICO RESPONSÁVEL</small><strong>{currentOrder.tech || "Não definido"}</strong></div></article>
           <article><Wrench size={17}/><div><small>SERVIÇO</small><strong>{order.service}</strong></div></article>
-          <article><Activity size={17}/><div><small>SITUAÇÃO</small><strong>{order.status}</strong></div></article>
+          <article><Activity size={17}/><div><small>SITUAÇÃO</small><strong>{currentOrder.status}</strong></div></article>
         </div>
         <section className="order-map">
           <div className="order-map-head"><div><span><MapPin size={16}/></span><div><small>ENDEREÇO DO ATENDIMENTO</small><strong>{order.address || "Endereço não informado"}</strong></div></div>{order.address && <a href={mapsSearch} target="_blank" rel="noreferrer">Abrir no Google Maps <ArrowRight size={13}/></a>}</div>
           {order.address ? <iframe title={`Mapa de ${order.address}`} src={mapsEmbed} loading="lazy" referrerPolicy="no-referrer-when-downgrade"/> : <div className="map-empty"><MapPin size={24}/><p>Cadastre o endereço do cliente para visualizar o mapa.</p></div>}
+        </section>
+        <section className="field-execution">
+          <div className="execution-head"><div><span>EXECUÇÃO EM CAMPO</span><h3>Registo do atendimento</h3></div><small>Os dados são sincronizados automaticamente</small></div>
+          <div className="check-actions">
+            <button type="button" className={currentOrder.checkInAt ? "done" : ""} onClick={() => !currentOrder.checkInAt && update({ checkInAt: new Date().toISOString(), status: "Em andamento", tone: "blue" })}><LogIn size={18}/><span><b>{currentOrder.checkInAt ? "Check-in realizado" : "Fazer check-in"}</b><small>{currentOrder.checkInAt ? formatMoment(currentOrder.checkInAt) : "Registrar chegada ao cliente"}</small></span></button>
+            <button type="button" disabled={!currentOrder.checkInAt} className={currentOrder.checkOutAt ? "done" : ""} onClick={() => !currentOrder.checkOutAt && update({ checkOutAt: new Date().toISOString(), status: "Concluída", tone: "green" })}><LogOut size={18}/><span><b>{currentOrder.checkOutAt ? "Check-out realizado" : "Fazer check-out"}</b><small>{currentOrder.checkOutAt ? formatMoment(currentOrder.checkOutAt) : "Registrar saída do cliente"}</small></span></button>
+          </div>
+          <div className="evidence-grid">
+            <label className={`upload-box photo-evidence ${currentOrder.photoBefore ? "has-photo" : ""}`}>{currentOrder.photoBefore ? <img src={currentOrder.photoBefore} alt="Antes do serviço"/> : <Camera size={23}/>}<b>Foto antes do serviço</b><small>{currentOrder.photoBefore ? "Toque para substituir" : "Abrir câmera ou galeria"}</small><input type="file" accept="image/*" capture="environment" onChange={event => uploadPhoto("photoBefore", event.target.files?.[0])}/></label>
+            <label className={`upload-box photo-evidence ${currentOrder.photoAfter ? "has-photo" : ""}`}>{currentOrder.photoAfter ? <img src={currentOrder.photoAfter} alt="Depois do serviço"/> : <Camera size={23}/>}<b>Foto depois do serviço</b><small>{currentOrder.photoAfter ? "Toque para substituir" : "Abrir câmera ou galeria"}</small><input type="file" accept="image/*" capture="environment" onChange={event => uploadPhoto("photoAfter", event.target.files?.[0])}/></label>
+          </div>
+          <div className="signature-grid">
+            <SignaturePad label="Assinatura do cliente" value={currentOrder.clientSignature} onChange={clientSignature => update({ clientSignature })}/>
+            <SignaturePad label="Assinatura do técnico responsável" value={currentOrder.technicianSignature} onChange={technicianSignature => update({ technicianSignature })}/>
+          </div>
         </section>
       </div>
       <div className="modal-actions"><button className="outline-btn" onClick={close}>Fechar</button><button className="primary-btn" onClick={() => window.print()}><FileText size={15}/> Imprimir ordem</button></div>
@@ -424,9 +532,6 @@ function Modal({ title, customers, close, onSave }: { title: string; customers: 
   const isNewOrder = title === "Nova ordem de serviço";
   const isNewCustomer = title === "Novo cliente";
   const [selectedClient, setSelectedClient] = useState("");
-  const [checkedIn, setCheckedIn] = useState(false);
-  const [checkedOut, setCheckedOut] = useState(false);
-  const [signed, setSigned] = useState(false);
   const [unit, setUnit] = useState("");
   const [tech, setTech] = useState("");
   const [time, setTime] = useState("");
@@ -471,12 +576,7 @@ function Modal({ title, customers, close, onSave }: { title: string; customers: 
         <label>Técnico empenhado<select value={tech} onChange={event => setTech(event.target.value)}><option value="">Selecione o técnico</option><option>Tiago Viana</option><option>João Carlos</option><option>Caio Henrique</option><option>Thiago Souza</option><option>Lucas Mendes</option></select></label>
         <label>Prioridade<select><option>Normal</option><option>Alta</option><option>Urgente</option></select></label>
         <label className="wide">Descrição / solicitação<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="Descreva o atendimento, problema informado ou observações..."/></label>
-        <div className="wide order-execution">
-          <div className="execution-head"><div><span>EXECUÇÃO DO ATENDIMENTO</span><h3>Controle do técnico em campo</h3></div><small>Horário registrado automaticamente</small></div>
-          <div className="check-actions"><button type="button" className={checkedIn ? "done" : ""} onClick={() => setCheckedIn(true)}><LogIn size={17}/><span><b>{checkedIn ? "Check-in realizado" : "Dar check-in"}</b><small>{checkedIn ? "Técnico no local • 08:27" : "Registrar chegada ao cliente"}</small></span></button><button type="button" disabled={!checkedIn} className={checkedOut ? "done" : ""} onClick={() => setCheckedOut(true)}><LogOut size={17}/><span><b>{checkedOut ? "Check-out realizado" : "Dar check-out"}</b><small>{checkedOut ? "Atendimento finalizado • 10:42" : "Registrar saída do cliente"}</small></span></button></div>
-          <div className="evidence-grid"><label className="upload-box"><Camera size={22}/><b>Foto antes do serviço</b><small>JPG, PNG ou foto da câmera</small><input type="file" accept="image/*" capture="environment"/></label><label className="upload-box"><Camera size={22}/><b>Foto depois do serviço</b><small>JPG, PNG ou foto da câmera</small><input type="file" accept="image/*" capture="environment"/></label></div>
-          <div className={`signature-box ${signed ? "signed" : ""}`}><div><PenTool size={22}/><span><b>{signed ? "Assinatura registrada" : "Assinatura digital do cliente"}</b><small>{signed ? "Responsável confirmou o atendimento" : "O cliente assina diretamente na tela"}</small></span></div><button type="button" onClick={() => setSigned(!signed)}>{signed ? "Limpar assinatura" : "Coletar assinatura"}</button></div>
-        </div>
+        <div className="wide execution-notice"><ShieldCheck size={18}/><div><b>Execução disponível após salvar</b><small>Abra a ordem para fazer check-in, check-out, incluir fotos e recolher as duas assinaturas.</small></div></div>
       </> : isNewCustomer ? <>
         <label>Nome / Razão social<input value={recordName} onChange={event => setRecordName(event.target.value)} placeholder="Nome completo ou razão social"/></label>
         <label>CPF ou CNPJ<input value={doc} onChange={event => setDoc(event.target.value)} placeholder="00.000.000/0000-00"/></label>
@@ -548,6 +648,15 @@ export default function Home() {
     }).then(response => {
       if (!response.ok) setSavedMessage("Registro mantido neste aparelho, mas a sincronização falhou.");
     });
+  };
+  const updateServiceOrder = (updatedOrder: ServiceOrder) => {
+    const updatedOrders = serviceOrders.map(order => order.id === updatedOrder.id ? updatedOrder : order);
+    setServiceOrders(updatedOrders);
+    setSelectedOrder(updatedOrder);
+    localStorage.setItem("proar-v3-service-orders", JSON.stringify(updatedOrders));
+    persistSharedState(customerRecords, updatedOrders, moduleRecords);
+    setSavedMessage(`Ordem ${updatedOrder.id} atualizada e sincronizada.`);
+    window.setTimeout(() => setSavedMessage(""), 2500);
   };
   const saveRecord = (data: ModalSave) => {
     if (data.title === "Novo cliente") {
@@ -624,6 +733,6 @@ export default function Home() {
       <footer><span>© 2026 ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
     {modal && <Modal title={modal} customers={customerRecords} close={() => setModal("")} onSave={saveRecord}/>}
-    {selectedOrder && <OrderDetail order={selectedOrder} close={() => setSelectedOrder(null)}/>}
+    {selectedOrder && <OrderDetail order={selectedOrder} close={() => setSelectedOrder(null)} onUpdate={updateServiceOrder}/>}
   </div>;
 }
