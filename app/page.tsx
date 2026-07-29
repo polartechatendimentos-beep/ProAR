@@ -53,6 +53,7 @@ type ServiceOrder = {
   photoAfter?: string;
   clientSignature?: string;
   technicianSignature?: string;
+  catalogItems?: { id: string; name: string; kind: "Serviço" | "Produto" }[];
 };
 
 type Customer = {
@@ -66,6 +67,7 @@ type ModuleRecord = {
   client: string;
   description: string;
   createdAt: string;
+  kind?: "Serviço" | "Produto";
 };
 
 const orders: ServiceOrder[] = [];
@@ -325,6 +327,10 @@ function OrderDetail({ order, close, onUpdate }: { order: ServiceOrder; close: (
           <article><Wrench size={17}/><div><small>SERVIÇO</small><strong>{order.service}</strong></div></article>
           <article><Activity size={17}/><div><small>SITUAÇÃO</small><strong>{currentOrder.status}</strong></div></article>
         </div>
+        <section className="order-items-panel">
+          <div className="execution-head"><div><span>SERVIÇOS DA ORDEM</span><h3>Serviços e itens cadastrados</h3></div><small>{currentOrder.catalogItems?.length ?? 0} item(ns)</small></div>
+          {currentOrder.catalogItems?.length ? <div className="order-item-list">{currentOrder.catalogItems.map(item => <article key={item.id}><span>{item.kind === "Produto" ? <Package size={16}/> : <Wrench size={16}/>}</span><div><b>{item.name}</b><small>{item.kind}</small></div><CheckCircle2 size={16}/></article>)}</div> : <div className="catalog-empty"><Wrench size={19}/><span>Nenhum serviço cadastrado foi vinculado a esta ordem.</span></div>}
+        </section>
         <section className="order-map">
           <div className="order-map-head"><div><span><MapPin size={16}/></span><div><small>ENDEREÇO DO ATENDIMENTO</small><strong>{order.address || "Endereço não informado"}</strong></div></div>{order.address && <a href={mapsSearch} target="_blank" rel="noreferrer">Abrir no Google Maps <ArrowRight size={13}/></a>}</div>
           {order.address ? <iframe title={`Mapa de ${order.address}`} src={mapsEmbed} loading="lazy" referrerPolicy="no-referrer-when-downgrade"/> : <div className="map-empty"><MapPin size={24}/><p>Cadastre o endereço do cliente para visualizar o mapa.</p></div>}
@@ -459,7 +465,7 @@ function GenericModule({ name, onOpen, onDelete, records }: { name: string; onOp
     "Financeiro": "Acompanhe contas a pagar e receber, fluxo de caixa, conciliação e centros de custo.",
   };
   return <section className="module-page"><div className="welcome-panel"><div className="welcome-icon"><Grid2X2 size={32}/></div><div><span>MÓDULO PROAR</span><h2>{name}</h2><p>{descriptions[name] || `Consulte, cadastre e acompanhe todas as informações de ${name.toLowerCase()} em um só lugar.`}</p><button className="primary-btn" onClick={() => onOpen(`Novo registro • ${name}`)}><Plus size={16}/> Novo registro</button></div></div>
-    {records.length ? <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><ClipboardList size={12}/> CADASTROS</span><h2>Registros de {name.toLowerCase()}</h2><p>{records.length} registro(s) gravado(s)</p></div><button className="primary-btn" onClick={() => onOpen(`Novo registro • ${name}`)}><Plus size={14}/> Adicionar</button></div><div className="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>NOME / IDENTIFICAÇÃO</th><th>CLIENTE / RESPONSÁVEL</th><th>DESCRIÇÃO</th><th>CADASTRADO EM</th><th>AÇÕES</th></tr></thead><tbody>{records.map(record => <tr key={record.id}><td><b className="order-id">{record.id}</b></td><td><strong>{record.name}</strong></td><td>{record.client || "—"}</td><td>{record.description || "—"}</td><td>{record.createdAt}</td><td><button className="delete-action" aria-label={`Excluir ${record.name}`} onClick={() => onDelete(name, record)}><Trash2 size={14}/> Excluir</button></td></tr>)}</tbody></table></div></div> :
+    {records.length ? <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><ClipboardList size={12}/> CADASTROS</span><h2>Registros de {name.toLowerCase()}</h2><p>{records.length} registro(s) gravado(s)</p></div><button className="primary-btn" onClick={() => onOpen(`Novo registro • ${name}`)}><Plus size={14}/> Adicionar</button></div><div className="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>TIPO</th><th>NOME / IDENTIFICAÇÃO</th><th>CLIENTE / RESPONSÁVEL</th><th>DESCRIÇÃO</th><th>CADASTRADO EM</th><th>AÇÕES</th></tr></thead><tbody>{records.map(record => <tr key={record.id}><td><b className="order-id">{record.id}</b></td><td><span className={`record-kind ${record.kind === "Produto" ? "product" : "service"}`}>{record.kind || (name === "Produtos" ? "Produto" : "Serviço")}</span></td><td><strong>{record.name}</strong></td><td>{record.client || "—"}</td><td>{record.description || "—"}</td><td>{record.createdAt}</td><td><button className="delete-action" aria-label={`Excluir ${record.name}`} onClick={() => onDelete(name, record)}><Trash2 size={14}/> Excluir</button></td></tr>)}</tbody></table></div></div> :
     <div className="empty-grid">{[{t:"Visão geral",i:LayoutDashboard},{t:"Registros recentes",i:Clock3},{t:"Indicadores",i:TrendingUp}].map(({t,i:Icon})=><article className="panel" key={t}><span><Icon size={19}/></span><h3>{t}</h3><p>Use “Novo registro” para adicionar o primeiro cadastro deste módulo.</p><button onClick={() => onOpen(`Novo registro • ${name}`)}>Cadastrar agora <ArrowRight size={12}/></button></article>)}</div>}</section>;
 }
 
@@ -476,6 +482,8 @@ type ModalSave = {
   date: string;
   time: string;
   description: string;
+  kind: "Serviço" | "Produto";
+  catalogItems: { id: string; name: string; kind: "Serviço" | "Produto" }[];
 };
 
 type AuthenticatedUser = { username: string; displayName: string };
@@ -527,10 +535,11 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
   </main>;
 }
 
-function Modal({ title, customers, close, onSave }: { title: string; customers: Customer[]; close: () => void; onSave: (data: ModalSave) => void }) {
+function Modal({ title, customers, catalogRecords, close, onSave }: { title: string; customers: Customer[]; catalogRecords: ModuleRecord[]; close: () => void; onSave: (data: ModalSave) => void }) {
   const isLinkedStructure = title.startsWith("Nova unidade, filial ou setor");
   const isNewOrder = title === "Nova ordem de serviço";
   const isNewCustomer = title === "Novo cliente";
+  const isCatalogRegistration = title.includes("Serviços") || title.includes("Produtos");
   const [selectedClient, setSelectedClient] = useState("");
   const [unit, setUnit] = useState("");
   const [tech, setTech] = useState("");
@@ -545,6 +554,8 @@ function Modal({ title, customers, close, onSave }: { title: string; customers: 
   const [showAddressMap, setShowAddressMap] = useState(false);
   const [date, setDate] = useState("");
   const [description, setDescription] = useState("");
+  const [recordKind, setRecordKind] = useState<"Serviço" | "Produto">(title.includes("Produtos") ? "Produto" : "Serviço");
+  const [selectedCatalogIds, setSelectedCatalogIds] = useState<string[]>([]);
   const parentCustomer = isLinkedStructure ? title.split("•")[1]?.trim() : "";
   const selectedClientData = customers.find(customer => customer.name === selectedClient);
   const availableUnits = selectedClient ? [
@@ -575,6 +586,11 @@ function Modal({ title, customers, close, onSave }: { title: string; customers: 
         <label>Horário<input type="time" value={time} onChange={event => setTime(event.target.value)}/></label>
         <label>Técnico empenhado<select value={tech} onChange={event => setTech(event.target.value)}><option value="">Selecione o técnico</option><option>Tiago Viana</option><option>João Carlos</option><option>Caio Henrique</option><option>Thiago Souza</option><option>Lucas Mendes</option></select></label>
         <label>Prioridade<select><option>Normal</option><option>Alta</option><option>Urgente</option></select></label>
+        <div className="wide order-catalog">
+          <div className="execution-head"><div><span>SERVIÇOS CADASTRADOS</span><h3>Selecione os itens da ordem</h3></div><small>{selectedCatalogIds.length} selecionado(s)</small></div>
+          <div className="catalog-check-list">{catalogRecords.filter(item => (item.kind || "Serviço") === "Serviço").map(item => <label key={item.id} className={selectedCatalogIds.includes(item.id) ? "selected" : ""}><input type="checkbox" checked={selectedCatalogIds.includes(item.id)} onChange={() => setSelectedCatalogIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])}/><span><Wrench size={15}/></span><div><b>{item.name}</b><small>{item.description || "Serviço cadastrado"}</small></div><CheckCircle2 size={15}/></label>)}</div>
+          {!catalogRecords.some(item => (item.kind || "Serviço") === "Serviço") && <div className="catalog-empty"><Wrench size={19}/><span>Nenhum serviço cadastrado. Cadastre no menu Serviços para selecionar aqui.</span></div>}
+        </div>
         <label className="wide">Descrição / solicitação<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="Descreva o atendimento, problema informado ou observações..."/></label>
         <div className="wide execution-notice"><ShieldCheck size={18}/><div><b>Execução disponível após salvar</b><small>Abra a ordem para fazer check-in, check-out, incluir fotos e recolher as duas assinaturas.</small></div></div>
       </> : isNewCustomer ? <>
@@ -590,10 +606,11 @@ function Modal({ title, customers, close, onSave }: { title: string; customers: 
         </div>
         <label className="wide">Observações<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="Informações adicionais do cliente..."/></label>
       </> : <>
+        {isCatalogRegistration && <div className="wide kind-selector"><span>TIPO DO CADASTRO</span><label className={recordKind === "Serviço" ? "active" : ""}><input type="radio" name="record-kind" checked={recordKind === "Serviço"} onChange={() => setRecordKind("Serviço")}/><Wrench size={17}/><div><b>Serviço</b><small>Será disponibilizado nas ordens de serviço</small></div></label><label className={recordKind === "Produto" ? "active" : ""}><input type="radio" name="record-kind" checked={recordKind === "Produto"} onChange={() => setRecordKind("Produto")}/><Package size={17}/><div><b>Produto</b><small>Item físico, peça ou material de estoque</small></div></label></div>}
         <label>Nome / identificação<input value={recordName} onChange={event => setRecordName(event.target.value)} placeholder="Digite o nome do registro"/></label><label>Cliente / responsável<input value={recordClient} onChange={event => setRecordClient(event.target.value)} placeholder="Cliente, fornecedor ou responsável"/></label><label>Código / documento<input placeholder="Código, CPF, CNPJ ou número interno"/></label><label>Situação<select><option>Ativo</option><option>Em elaboração</option><option>Pendente</option><option>Inativo</option></select></label><label>Telefone / contato<input placeholder="(00) 00000-0000"/></label><label>Data<input type="date"/></label><label className="wide">Descrição / observações<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="Inclua os detalhes deste cadastro..."/></label>
       </>}
     </>}
-  </div><div className="modal-actions"><button className="outline-btn" onClick={close}>Cancelar</button><button className="primary-btn" disabled={isNewOrder ? !selectedClient || !tech || !date : isNewCustomer ? !recordName || !address.trim() || !addressValidated : (!isLinkedStructure && !recordName)} onClick={() => onSave({ title, name: recordName, client: isNewOrder ? selectedClient : recordClient, doc, contact, phone, address: isNewOrder ? (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "") : address, unit, tech, date, time, description })}><CheckCircle2 size={15}/> Salvar registro</button></div></div></div>;
+  </div><div className="modal-actions"><button className="outline-btn" onClick={close}>Cancelar</button><button className="primary-btn" disabled={isNewOrder ? !selectedClient || !tech || !date : isNewCustomer ? !recordName || !address.trim() || !addressValidated : (!isLinkedStructure && !recordName)} onClick={() => onSave({ title, name: recordName, client: isNewOrder ? selectedClient : recordClient, doc, contact, phone, address: isNewOrder ? (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "") : address, unit, tech, date, time, description, kind: recordKind, catalogItems: catalogRecords.filter(item => selectedCatalogIds.includes(item.id)).map(item => ({ id: item.id, name: item.name, kind: item.kind || "Serviço" })) })}><CheckCircle2 size={15}/> Salvar registro</button></div></div></div>;
 }
 
 export default function Home() {
@@ -682,7 +699,7 @@ export default function Home() {
         id: `#OS-${String(sequence).padStart(5, "0")}`,
         client: data.client,
         unit: data.unit || "Unidade principal",
-        service: data.description || "Atendimento técnico",
+        service: data.catalogItems.length ? data.catalogItems.map(item => item.name).join(", ") : data.description || "Atendimento técnico",
         tech: data.tech,
         date: data.date,
         time: data.time || "A definir",
@@ -690,6 +707,7 @@ export default function Home() {
         status: "Agendada",
         tone: "violet",
         avatar: data.client.split(" ").map(word => word[0]).slice(0, 2).join("").toUpperCase(),
+        catalogItems: data.catalogItems,
       };
       const updatedOrders = [newOrder, ...serviceOrders];
       setServiceOrders(updatedOrders);
@@ -698,13 +716,15 @@ export default function Home() {
       setCurrent("Ordens de serviço");
       setSavedMessage(`Ordem ${newOrder.id} gravada com sucesso.`);
     } else {
-      const moduleName = data.title.includes("•") ? data.title.split("•").pop()!.trim() : data.title.replace(/^Novo(a)?\s+/i, "");
+      const requestedModule = data.title.includes("•") ? data.title.split("•").pop()!.trim() : data.title.replace(/^Novo(a)?\s+/i, "");
+      const moduleName = requestedModule === "Serviços" || requestedModule === "Produtos" ? `${data.kind}s` : requestedModule;
       const record: ModuleRecord = {
         id: `${moduleName.slice(0, 3).toUpperCase()}-${Date.now().toString().slice(-6)}`,
         name: data.name || moduleName,
         client: data.client,
         description: data.description,
         createdAt: new Date().toLocaleString("pt-BR"),
+        kind: requestedModule === "Serviços" || requestedModule === "Produtos" ? data.kind : undefined,
       };
       const updatedRecords = { ...moduleRecords, [moduleName]: [record, ...(moduleRecords[moduleName] ?? [])] };
       setModuleRecords(updatedRecords);
@@ -757,7 +777,7 @@ export default function Home() {
       <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} customers={customerRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Vendas" ? <SalesPDV customers={customerRecords}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} serviceOrders={serviceOrders}/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} records={moduleRecords[current] ?? []}/>}</div>
       <footer><span>© 2026 ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
-    {modal && <Modal title={modal} customers={customerRecords} close={() => setModal("")} onSave={saveRecord}/>}
+    {modal && <Modal title={modal} customers={customerRecords} catalogRecords={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} close={() => setModal("")} onSave={saveRecord}/>}
     {selectedOrder && <OrderDetail order={selectedOrder} close={() => setSelectedOrder(null)} onUpdate={updateServiceOrder}/>}
   </div>;
 }
