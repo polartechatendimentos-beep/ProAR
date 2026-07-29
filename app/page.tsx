@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import {
   Activity, AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight,
   Bell, Boxes, BriefcaseBusiness, Building2, CalendarDays, ChartNoAxesCombined,
   CheckCircle2, ChevronDown, ChevronRight, CircleDollarSign, ClipboardList,
   Clock3, FileChartColumn, FileText, Filter, Grid2X2, HandCoins, Headphones,
   ArrowLeft, Camera, Contact, Edit3, Hospital, Landmark, LayoutDashboard, LogIn, LogOut, MapPin,
-  Menu, MoreHorizontal, Package, Phone, Plus, School, Search, Settings,
+  CreditCard, Keyboard, Menu, Minus, MoreHorizontal, Package, Phone, Plus, ReceiptText, ScanBarcode, School, Search, Settings,
   ShieldCheck, ShoppingBag, ShoppingCart, Store, TrendingUp, UserCheck, UserRound,
-  PenTool,
+  PenTool, Tag, Trash2,
   UsersRound, WalletCards, Warehouse, Wrench, X, Zap
 } from "lucide-react";
 
@@ -236,6 +236,113 @@ function ServiceOrders({ onOpen, serviceOrders }: { onOpen: (name: string) => vo
   </section>;
 }
 
+type SaleItem = { id: string; name: string; code: string; price: number; kind: "Produto" | "Serviço" };
+type CartItem = SaleItem & { quantity: number };
+
+const quickSaleCatalog: SaleItem[] = [
+  { id: "p1", name: "Higienização Split", code: "SRV-001", price: 350, kind: "Serviço" },
+  { id: "p2", name: "Instalação até 12.000 BTUs", code: "SRV-002", price: 550, kind: "Serviço" },
+  { id: "p3", name: "Diagnóstico técnico", code: "SRV-003", price: 180, kind: "Serviço" },
+  { id: "p4", name: "Suporte condensadora", code: "PRO-014", price: 95, kind: "Produto" },
+  { id: "p5", name: "Tubo de cobre 1/4 — metro", code: "PRO-028", price: 42.5, kind: "Produto" },
+  { id: "p6", name: "Carga de fluido refrigerante", code: "SRV-011", price: 450, kind: "Serviço" },
+];
+
+function SalesPDV() {
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState<"itens" | "cliente" | "pagamento" | "opcoes">("itens");
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [discount, setDiscount] = useState(0);
+  const [customer, setCustomer] = useState("");
+  const [payment, setPayment] = useState("PIX");
+  const [notice, setNotice] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+  const filteredCatalog = quickSaleCatalog.filter(item => `${item.name} ${item.code} ${item.kind}`.toLowerCase().includes(search.toLowerCase()));
+  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const total = Math.max(0, subtotal - discount);
+
+  const addItem = (item: SaleItem) => setCart(current => {
+    const existing = current.find(record => record.id === item.id);
+    return existing ? current.map(record => record.id === item.id ? { ...record, quantity: record.quantity + 1 } : record) : [...current, { ...item, quantity: 1 }];
+  });
+  const changeQuantity = (id: string, amount: number) => setCart(current => current
+    .map(item => item.id === id ? { ...item, quantity: item.quantity + amount } : item)
+    .filter(item => item.quantity > 0));
+  const finishSale = () => {
+    if (!cart.length) {
+      setNotice("Adicione pelo menos um item à venda.");
+      return;
+    }
+    const sale = {
+      id: `VEN-${Date.now().toString().slice(-6)}`,
+      customer: customer || "Consumidor final",
+      payment,
+      subtotal,
+      discount,
+      total,
+      items: cart,
+      createdAt: new Date().toLocaleString("pt-BR"),
+    };
+    const previous = JSON.parse(localStorage.getItem("proar-pdv-sales") || "[]");
+    localStorage.setItem("proar-pdv-sales", JSON.stringify([sale, ...previous]));
+    setCart([]);
+    setDiscount(0);
+    setCustomer("");
+    setActiveTab("itens");
+    setNotice(`Venda ${sale.id} finalizada — R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.`);
+  };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "F1") { event.preventDefault(); setShortcutsOpen(value => !value); }
+      if (event.key === "F2") { event.preventDefault(); setActiveTab("itens"); searchRef.current?.focus(); }
+      if (event.key === "F3") { event.preventDefault(); setActiveTab("cliente"); }
+      if (event.key === "F4") { event.preventDefault(); setActiveTab("pagamento"); }
+      if (event.key === "F8") { event.preventDefault(); setActiveTab("opcoes"); }
+      if (event.key === "F10") { event.preventDefault(); finishSale(); }
+      if (event.key === "Escape") setShortcutsOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
+  return <section className="pdv-page">
+    <div className="pdv-command">
+      <div><span className="section-kicker"><ShoppingBag size={12}/> VENDA RÁPIDA</span><h2>PDV ProAR</h2><p>Produtos e serviços em um fluxo direto, sem campos desnecessários.</p></div>
+      <div className="pdv-shortcuts"><button onClick={() => setShortcutsOpen(true)}><Keyboard size={14}/><kbd>F1</kbd> Atalhos</button><span>Caixa aberto</span></div>
+    </div>
+    {notice && <div className="pdv-notice"><CheckCircle2 size={15}/>{notice}<button onClick={() => setNotice("")}><X size={13}/></button></div>}
+    <nav className="pdv-tabs" aria-label="Etapas da venda">
+      <button className={activeTab === "itens" ? "active" : ""} onClick={() => setActiveTab("itens")}><ScanBarcode size={15}/><span>Itens</span><kbd>F2</kbd></button>
+      <button className={activeTab === "cliente" ? "active" : ""} onClick={() => setActiveTab("cliente")}><UserRound size={15}/><span>Cliente</span><kbd>F3</kbd></button>
+      <button className={activeTab === "pagamento" ? "active" : ""} onClick={() => setActiveTab("pagamento")}><CreditCard size={15}/><span>Pagamento</span><kbd>F4</kbd></button>
+      <button className={activeTab === "opcoes" ? "active" : ""} onClick={() => setActiveTab("opcoes")}><MoreHorizontal size={15}/><span>Mais opções</span><kbd>F8</kbd></button>
+    </nav>
+    <div className="pdv-layout">
+      <div className="pdv-workspace panel">
+        {activeTab === "itens" && <>
+          <label className="pdv-search"><Search size={19}/><input ref={searchRef} autoFocus value={search} onChange={event => setSearch(event.target.value)} placeholder="Digite produto, serviço ou código..."/><kbd>F2</kbd></label>
+          <div className="pdv-catalog">{filteredCatalog.map(item => <button key={item.id} onClick={() => addItem(item)}>
+            <span className={item.kind === "Serviço" ? "service" : "product"}>{item.kind === "Serviço" ? <Wrench size={17}/> : <Package size={17}/>}</span>
+            <div><small>{item.code} • {item.kind}</small><strong>{item.name}</strong></div>
+            <b>R$ {item.price.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b><Plus size={16}/>
+          </button>)}</div>
+        </>}
+        {activeTab === "cliente" && <div className="pdv-hidden-panel"><div className="pdv-panel-title"><UserRound size={20}/><div><h3>Cliente da venda</h3><p>Opcional para vendas rápidas.</p></div></div><label>Selecionar cliente<select value={customer} onChange={event => setCustomer(event.target.value)}><option value="">Consumidor final</option>{customers.map(item => <option key={item.doc} value={item.name}>{item.name} • {item.doc}</option>)}</select></label><button className="outline-btn"><Plus size={14}/> Cadastro rápido</button></div>}
+        {activeTab === "pagamento" && <div className="pdv-hidden-panel"><div className="pdv-panel-title"><CreditCard size={20}/><div><h3>Forma de pagamento</h3><p>Escolha uma opção para concluir.</p></div></div><div className="payment-grid">{["PIX", "Dinheiro", "Cartão de débito", "Cartão de crédito", "Boleto", "Transferência"].map(option => <button className={payment === option ? "active" : ""} key={option} onClick={() => setPayment(option)}>{option}</button>)}</div></div>}
+        {activeTab === "opcoes" && <div className="pdv-hidden-panel"><div className="pdv-panel-title"><Tag size={20}/><div><h3>Opções da venda</h3><p>Recursos menos utilizados ficam ocultos aqui.</p></div></div><label>Desconto em reais<input type="number" min="0" max={subtotal} value={discount || ""} onChange={event => setDiscount(Number(event.target.value))} placeholder="R$ 0,00"/></label><label>Observações<textarea placeholder="Informações adicionais para o comprovante..."/></label></div>}
+      </div>
+      <aside className="pdv-cart panel">
+        <div className="pdv-cart-head"><div><ReceiptText size={17}/><span><strong>Venda atual</strong><small>{cart.reduce((sum, item) => sum + item.quantity, 0)} item(ns)</small></span></div>{cart.length > 0 && <button onClick={() => setCart([])}><Trash2 size={13}/> Limpar</button>}</div>
+        <div className="pdv-cart-items">{cart.length ? cart.map(item => <article key={item.id}><div><small>{item.code}</small><strong>{item.name}</strong><span>R$ {item.price.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div><div className="quantity"><button onClick={() => changeQuantity(item.id, -1)}><Minus size={12}/></button><b>{item.quantity}</b><button onClick={() => changeQuantity(item.id, 1)}><Plus size={12}/></button></div><b>R$ {(item.price * item.quantity).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></article>) : <div className="pdv-empty"><ShoppingCart size={29}/><strong>Carrinho vazio</strong><p>Selecione um produto ou serviço para iniciar.</p></div>}</div>
+        <div className="pdv-summary"><p><span>Subtotal</span><b>R$ {subtotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></p>{discount > 0 && <p className="discount"><span>Desconto</span><b>− R$ {discount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></p>}<div><span>TOTAL</span><strong>R$ {total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></div><small>{customer || "Consumidor final"} • {payment}</small><button className="finish-sale" disabled={!cart.length} onClick={finishSale}><CheckCircle2 size={17}/> Finalizar venda <kbd>F10</kbd></button></div>
+      </aside>
+    </div>
+    {shortcutsOpen && <div className="shortcut-layer" role="dialog" aria-modal="true" aria-label="Atalhos do PDV"><button className="modal-backdrop" onClick={() => setShortcutsOpen(false)} aria-label="Fechar atalhos"/><div className="shortcut-card"><div><span><Keyboard size={19}/></span><div><small>PDV PROAR</small><h3>Atalhos de teclado</h3></div><button onClick={() => setShortcutsOpen(false)} aria-label="Fechar"><X size={16}/></button></div>{[["F1","Abrir esta ajuda"],["F2","Pesquisar produto ou serviço"],["F3","Selecionar cliente"],["F4","Forma de pagamento"],["F8","Desconto e outras opções"],["F10","Finalizar a venda"],["ESC","Fechar janela"]].map(([key,label]) => <p key={key}><kbd>{key}</kbd><span>{label}</span></p>)}</div></div>}
+  </section>;
+}
+
 function GenericModule({ name, onOpen, records }: { name: string; onOpen: (name: string) => void; records: ModuleRecord[] }) {
   const descriptions: Record<string,string> = {
     "Equipamentos": "Acompanhe o parque de equipamentos, histórico técnico, garantias e próximas manutenções.",
@@ -374,7 +481,7 @@ export default function Home() {
     <main className="main">
       <Header title={titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNewOrder={() => setModal("Nova ordem de serviço")}/>
       {savedMessage && <div className="save-toast" role="status"><CheckCircle2 size={16}/>{savedMessage}</div>}
-      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent}/> : current === "Clientes" ? <Customers onOpen={setModal}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} serviceOrders={serviceOrders}/> : <GenericModule name={current} onOpen={setModal} records={moduleRecords[current] ?? []}/>}</div>
+      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent}/> : current === "Clientes" ? <Customers onOpen={setModal}/> : current === "Vendas" ? <SalesPDV/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} serviceOrders={serviceOrders}/> : <GenericModule name={current} onOpen={setModal} records={moduleRecords[current] ?? []}/>}</div>
       <footer><span>© 2026 ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
     {modal && <Modal title={modal} close={() => setModal("")} onSave={saveRecord}/>}
