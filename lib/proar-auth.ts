@@ -1,11 +1,37 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
-type ProARUser = { username: string; displayName: string; passwordHash: string };
+type ProARUser = {
+  username: string;
+  displayName: string;
+  passwordHash: string;
+  role: string;
+  permissions: string[];
+  active: boolean;
+};
 const SESSION_SECONDS = 60 * 60 * 12;
 
 function users(): ProARUser[] {
-  try { return JSON.parse(process.env.PROAR_USERS_JSON ?? "[]") as ProARUser[]; }
-  catch { return []; }
+  const systemUsers: ProARUser[] = [{
+    username: "jhonnatam.reis",
+    displayName: "Jhonnatam Reis",
+    passwordHash: "5994471abb01112afcc18159f6cc74b4f511b99806da59b3caf5a9c173cacfc5",
+    role: "Técnico",
+    permissions: ["Painel inicial", "Agenda", "Clientes", "Equipamentos", "Ordens de serviço", "Serviços"],
+    active: true,
+  }];
+  try {
+    const environmentUsers = (JSON.parse(process.env.PROAR_USERS_JSON ?? "[]") as Partial<ProARUser>[]).map(user => ({
+      username: user.username ?? "",
+      displayName: user.displayName ?? user.username ?? "",
+      passwordHash: user.passwordHash ?? "",
+      role: user.role ?? "Administrador",
+      permissions: user.permissions ?? ["*"],
+      active: user.active ?? true,
+    }));
+    return [...environmentUsers, ...systemUsers.filter(systemUser => !environmentUsers.some(user => user.username.toLocaleLowerCase("pt-BR") === systemUser.username))];
+  } catch {
+    return systemUsers;
+  }
 }
 
 function safeEqual(left: string, right: string) {
@@ -16,7 +42,7 @@ function safeEqual(left: string, right: string) {
 
 export function authenticate(username: string, password: string) {
   const normalized = username.trim().toLocaleLowerCase("pt-BR");
-  const user = users().find(item => item.username.toLocaleLowerCase("pt-BR") === normalized);
+  const user = users().find(item => item.active && item.username.toLocaleLowerCase("pt-BR") === normalized);
   if (!user) return null;
   const passwordHash = createHash("sha256").update(password).digest("hex");
   return safeEqual(passwordHash, user.passwordHash) ? user : null;
