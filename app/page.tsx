@@ -87,6 +87,8 @@ type PurchaseItem = {
   description: string;
   quantity: number;
   unitValue: number;
+  productId?: string;
+  registerProduct?: boolean;
 };
 
 type PurchaseInstallment = { number: string; dueDate: string; value: number };
@@ -644,6 +646,10 @@ type ModalSave = {
   installments: number;
   firstDueDate: string;
   paymentInstallments: PurchaseInstallment[];
+  xmlImported: boolean;
+  supplierDoc: string;
+  supplierId: string;
+  registerSupplier: boolean;
 };
 
 type AuthenticatedUser = { username: string; displayName: string; role?: string; permissions?: string[] };
@@ -695,7 +701,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
   </main>;
 }
 
-function Modal({ title, customers, catalogRecords, close, onSave }: { title: string; customers: Customer[]; catalogRecords: ModuleRecord[]; close: () => void; onSave: (data: ModalSave) => void }) {
+function Modal({ title, customers, catalogRecords, supplierRecords, close, onSave }: { title: string; customers: Customer[]; catalogRecords: ModuleRecord[]; supplierRecords: ModuleRecord[]; close: () => void; onSave: (data: ModalSave) => void }) {
   const isLinkedStructure = title.startsWith("Nova unidade, filial ou setor");
   const isNewOrder = title === "Nova ordem de serviço";
   const isNewCustomer = title === "Novo cliente";
@@ -727,10 +733,14 @@ function Modal({ title, customers, catalogRecords, close, onSave }: { title: str
   const [firstDueDate, setFirstDueDate] = useState("");
   const [paymentInstallments, setPaymentInstallments] = useState<PurchaseInstallment[]>([]);
   const [xmlImportStatus, setXmlImportStatus] = useState("");
+  const [xmlImported, setXmlImported] = useState(false);
+  const [supplierId, setSupplierId] = useState("");
+  const [supplierDoc, setSupplierDoc] = useState("");
   const purchaseTotal = purchaseItems.reduce((total, item) => total + item.quantity * item.unitValue, 0);
   const updatePurchaseItem = (id: string, changes: Partial<PurchaseItem>) => setPurchaseItems(items => items.map(item => item.id === id ? { ...item, ...changes } : item));
   const addPurchaseItem = () => setPurchaseItems(items => [...items, { id: `ITEM-${Date.now()}-${items.length}`, description: "", quantity: 1, unitValue: 0 }]);
   const removePurchaseItem = (id: string) => setPurchaseItems(items => items.length === 1 ? items : items.filter(item => item.id !== id));
+  const normalizeKey = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
   const importPurchaseXml = async (file?: File) => {
     if (!file) return;
     setXmlImportStatus("A processar o XML...");
@@ -750,7 +760,9 @@ function Modal({ title, customers, catalogRecords, close, onSave }: { title: str
       const issueDate = ide ? byTag(ide, "dhEmi") || byTag(ide, "dEmi") : "";
       const importedItems = elements("det").map((det, index) => {
         const product = Array.from(det.getElementsByTagNameNS("*", "prod"))[0] || det.getElementsByTagName("prod")[0];
-        return { id: `XML-${Date.now()}-${index}`, description: byTag(product || det, "xProd") || `Item ${index + 1}`, quantity: Number(byTag(product || det, "qCom")) || 1, unitValue: Number(byTag(product || det, "vUnCom")) || Number(byTag(product || det, "vProd")) || 0 };
+        const description = byTag(product || det, "xProd") || `Item ${index + 1}`;
+        const existingProduct = catalogRecords.find(item => (item.kind || "Serviço") === "Produto" && normalizeKey(item.name) === normalizeKey(description));
+        return { id: `XML-${Date.now()}-${index}`, description, quantity: Number(byTag(product || det, "qCom")) || 1, unitValue: Number(byTag(product || det, "vUnCom")) || Number(byTag(product || det, "vProd")) || 0, productId: existingProduct?.id || "", registerProduct: !existingProduct };
       }).filter(item => item.description && item.quantity > 0);
       if (!importedItems.length) throw new Error("Nenhum item de compra encontrado");
       const importedInstallments = elements("dup").map((dup, index) => ({ number: byTag(dup, "nDup") || String(index + 1), dueDate: byTag(dup, "dVenc"), value: Number(byTag(dup, "vDup")) || 0 })).filter(item => item.dueDate || item.value > 0);
@@ -760,11 +772,16 @@ function Modal({ title, customers, catalogRecords, close, onSave }: { title: str
       setRecordName(`NF-e ${invoiceNumber || file.name.replace(/\.xml$/i, "")}`);
       setRecordClient(supplier || "Fornecedor do XML");
       setDoc(supplierDoc);
+      setSupplierDoc(supplierDoc);
+      const existingSupplier = supplierRecords.find(item => normalizeKey(item.name) === normalizeKey(supplier));
+      setSupplierId(existingSupplier?.id || "");
+      if (existingSupplier) setRecordClient(existingSupplier.name);
       setDate(issueDate ? issueDate.slice(0, 10) : "");
       setRecordCategory("Compra importada por XML");
       setDescription(`NF-e ${invoiceNumber || "sem número"}${supplierDoc ? ` • CNPJ/CPF ${supplierDoc}` : ""} • Arquivo ${file.name}`);
       setPaymentMethod(paymentNames[paymentCode] || (importedInstallments.length ? "Boleto" : "Outros"));
       setPaymentInstallments(importedInstallments);
+      setXmlImported(true);
       setPaymentType(importedInstallments.length ? "A prazo" : "À vista");
       setInstallments(Math.max(1, importedInstallments.length));
       setFirstDueDate(importedInstallments[0]?.dueDate || "");
@@ -829,6 +846,11 @@ function Modal({ title, customers, catalogRecords, close, onSave }: { title: str
           <span className="purchase-xml-icon"><FileText size={21}/></span><div><b>Importar XML da NF-e</b><small>Preenche automaticamente fornecedor, nota fiscal, itens, valores e parcelas do Contas a Pagar.</small>{xmlImportStatus && <em className={xmlImportStatus.startsWith("Não") ? "error" : "success"}>{xmlImportStatus}</em>}</div>
           <label className="xml-upload-button"><FileText size={15}/> Selecionar XML<input type="file" accept=".xml,text/xml,application/xml" onChange={event => { void importPurchaseXml(event.target.files?.[0]); event.currentTarget.value = ""; }}/></label>
         </div>}
+        {requestedModule === "Compras" && xmlImported && <div className="wide xml-registration-review">
+          <div className="xml-review-head"><div><span>VINCULAÇÃO DOS CADASTROS</span><h3>Fornecedor e produtos encontrados no XML</h3></div><small>Escolha um cadastro existente ou autorize a criação automática.</small></div>
+          <div className="xml-supplier-link"><div><Store size={17}/><span><b>{recordClient}</b><small>{supplierDoc || "Documento não informado no XML"}</small></span></div><label>Fornecedor<select value={supplierId || "__new__"} onChange={event => { const value = event.target.value; setSupplierId(value === "__new__" ? "" : value); const existing = supplierRecords.find(item => item.id === value); if (existing) setRecordClient(existing.name); }}><option value="__new__">Cadastrar novo fornecedor</option>{supplierRecords.map(item => <option key={item.id} value={item.id}>Usar cadastro: {item.name}</option>)}</select></label></div>
+          <div className="xml-product-links">{purchaseItems.map(item => <div key={item.id}><span><Package size={15}/><b>{item.description}</b></span><select value={item.productId || "__new__"} onChange={event => updatePurchaseItem(item.id, { productId: event.target.value === "__new__" ? "" : event.target.value, registerProduct: event.target.value === "__new__" })}><option value="__new__">Cadastrar novo produto</option>{catalogRecords.filter(product => (product.kind || "Serviço") === "Produto").map(product => <option key={product.id} value={product.id}>Usar: {product.name}</option>)}</select></div>)}</div>
+        </div>}
         {requestedModule === "Compras" && <div className="wide purchase-editor">
           <div className="purchase-editor-head"><div><span>ITENS DA COMPRA</span><h3>Produtos e materiais</h3></div><button type="button" onClick={addPurchaseItem}><Plus size={14}/> Adicionar item</button></div>
           <div className="purchase-item-labels"><span>DESCRIÇÃO DO ITEM</span><span>QUANTIDADE</span><span>VALOR UNITÁRIO</span><span>SUBTOTAL</span><span/></div>
@@ -855,7 +877,7 @@ function Modal({ title, customers, catalogRecords, close, onSave }: { title: str
         <label>{requestedModule === "Funcionários" ? "Telefone / WhatsApp" : "Telefone / contato"}<input placeholder="(00) 00000-0000"/></label><label>{requestedModule === "Funcionários" ? "Data de admissão" : requestedModule === "Compras" ? "Previsão de entrega" : requestedModule === "Financeiro" ? "Data de vencimento" : "Data"}<input type="date" value={date} onChange={event => setDate(event.target.value)}/></label><label className="wide">{requestedModule === "Funcionários" ? "Permissões e observações" : "Descrição / observações"}<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder={requestedModule === "Funcionários" ? "Informe os módulos autorizados e observações do funcionário..." : "Inclua os detalhes deste cadastro..."}/></label>
       </>}
     </>}
-  </div><div className="modal-actions"><button className="outline-btn" onClick={close}>Cancelar</button><button className="primary-btn" disabled={isNewOrder ? !selectedClient || !tech || !date : isNewCustomer ? !recordName || !address.trim() || !addressValidated : requestedModule === "Compras" ? !recordName || !recordClient || !purchaseItems.some(item => item.description.trim() && item.quantity > 0) || purchaseTotal <= 0 || (paymentType === "A prazo" && !firstDueDate) : (!isLinkedStructure && !recordName)} onClick={() => onSave({ title, name: recordName, client: isNewOrder ? selectedClient : recordClient, doc, contact, phone, address: isNewOrder ? (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "") : address, unit, tech, date, time, description, status: recordStatus, value: requestedModule === "Compras" ? purchaseTotal : Number(recordValue) || 0, category: recordCategory, kind: recordKind, catalogItems: catalogRecords.filter(item => selectedCatalogIds.includes(item.id)).map(item => ({ id: item.id, name: item.name, kind: item.kind || "Serviço" })), purchaseItems: purchaseItems.filter(item => item.description.trim() && item.quantity > 0), paymentType, paymentMethod, installments: paymentType === "A prazo" ? Math.max(1, installments) : 1, firstDueDate, paymentInstallments })}><CheckCircle2 size={15}/> Salvar registro</button></div></div></div>;
+  </div><div className="modal-actions"><button className="outline-btn" onClick={close}>Cancelar</button><button className="primary-btn" disabled={isNewOrder ? !selectedClient || !tech || !date : isNewCustomer ? !recordName || !address.trim() || !addressValidated : requestedModule === "Compras" ? !recordName || !recordClient || !purchaseItems.some(item => item.description.trim() && item.quantity > 0) || purchaseTotal <= 0 || (paymentType === "A prazo" && !firstDueDate) : (!isLinkedStructure && !recordName)} onClick={() => onSave({ title, name: recordName, client: isNewOrder ? selectedClient : recordClient, doc, contact, phone, address: isNewOrder ? (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "") : address, unit, tech, date, time, description, status: recordStatus, value: requestedModule === "Compras" ? purchaseTotal : Number(recordValue) || 0, category: recordCategory, kind: recordKind, catalogItems: catalogRecords.filter(item => selectedCatalogIds.includes(item.id)).map(item => ({ id: item.id, name: item.name, kind: item.kind || "Serviço" })), purchaseItems: purchaseItems.filter(item => item.description.trim() && item.quantity > 0), paymentType, paymentMethod, installments: paymentType === "A prazo" ? Math.max(1, installments) : 1, firstDueDate, paymentInstallments, xmlImported, supplierDoc, supplierId, registerSupplier: xmlImported && !supplierId })}><CheckCircle2 size={15}/> Salvar registro</button></div></div></div>;
 }
 
 export default function Home() {
@@ -982,6 +1004,27 @@ export default function Home() {
         paymentInstallments: data.paymentInstallments,
       };
       let updatedRecords = { ...moduleRecords, [moduleName]: [record, ...(moduleRecords[moduleName] ?? [])] };
+      if (moduleName === "Compras" && data.xmlImported) {
+        const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+        const currentSuppliers = updatedRecords.Fornecedores ?? [];
+        if (data.registerSupplier && !currentSuppliers.some(item => normalize(item.name) === normalize(data.client))) {
+          const supplier: ModuleRecord = { id: `FOR-${Date.now().toString().slice(-6)}`, name: data.client, client: data.client, description: `${data.supplierDoc ? `CNPJ/CPF ${data.supplierDoc} • ` : ""}Fornecedor cadastrado automaticamente pela importação do XML`, createdAt: new Date().toLocaleString("pt-BR"), status: "Ativo", category: "Fornecedor de produtos" };
+          updatedRecords = { ...updatedRecords, Fornecedores: [supplier, ...currentSuppliers] };
+        }
+        const currentProducts = updatedRecords.Produtos ?? [];
+        const newProducts: ModuleRecord[] = [];
+        data.purchaseItems.filter(item => item.registerProduct && !item.productId).forEach((item, index) => {
+          const existing = [...currentProducts, ...newProducts].find(product => normalize(product.name) === normalize(item.description));
+          if (existing) item.productId = existing.id;
+          else {
+            const product: ModuleRecord = { id: `PRO-${Date.now().toString().slice(-5)}-${index + 1}`, name: item.description, client: data.client, description: `Produto cadastrado automaticamente pela compra ${record.id}`, createdAt: new Date().toLocaleString("pt-BR"), kind: "Produto", status: "Ativo", value: item.unitValue, category: data.category || "Produto importado por XML" };
+            item.productId = product.id;
+            newProducts.push(product);
+          }
+        });
+        record.purchaseItems = data.purchaseItems;
+        if (newProducts.length) updatedRecords = { ...updatedRecords, Produtos: [...newProducts, ...currentProducts] };
+      }
       if (moduleName === "Compras" && data.paymentType === "A prazo") {
         const baseDueDate = new Date(`${data.firstDueDate}T12:00:00`);
         const installmentCount = Math.max(1, data.paymentInstallments.length || data.installments);
@@ -1078,7 +1121,7 @@ export default function Home() {
       <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} customers={customerRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Vendas" ? <SalesPDV customers={customerRecords}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} serviceOrders={serviceOrders}/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} records={moduleRecords[current] ?? []}/>}</div>
       <footer><span>© 2026 ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
-    {modal && <Modal title={modal} customers={customerRecords} catalogRecords={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} close={() => setModal("")} onSave={saveRecord}/>}
+    {modal && <Modal title={modal} customers={customerRecords} catalogRecords={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} supplierRecords={moduleRecords["Fornecedores"] ?? []} close={() => setModal("")} onSave={saveRecord}/>}
     {selectedOrder && <OrderDetail order={selectedOrder} close={() => setSelectedOrder(null)} onUpdate={updateServiceOrder}/>}
   </div>;
 }
