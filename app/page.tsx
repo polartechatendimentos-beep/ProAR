@@ -77,6 +77,7 @@ type ModuleRecord = {
   paymentMethod?: string;
   installments?: number;
   firstDueDate?: string;
+  paymentInstallments?: PurchaseInstallment[];
   purchaseId?: string;
   installmentNumber?: number;
 };
@@ -87,6 +88,8 @@ type PurchaseItem = {
   quantity: number;
   unitValue: number;
 };
+
+type PurchaseInstallment = { number: string; dueDate: string; value: number };
 
 const orders: ServiceOrder[] = [];
 const customers: Customer[] = [];
@@ -640,6 +643,7 @@ type ModalSave = {
   paymentMethod: string;
   installments: number;
   firstDueDate: string;
+  paymentInstallments: PurchaseInstallment[];
 };
 
 type AuthenticatedUser = { username: string; displayName: string; role?: string; permissions?: string[] };
@@ -721,10 +725,54 @@ function Modal({ title, customers, catalogRecords, close, onSave }: { title: str
   const [paymentMethod, setPaymentMethod] = useState("PIX");
   const [installments, setInstallments] = useState(1);
   const [firstDueDate, setFirstDueDate] = useState("");
+  const [paymentInstallments, setPaymentInstallments] = useState<PurchaseInstallment[]>([]);
+  const [xmlImportStatus, setXmlImportStatus] = useState("");
   const purchaseTotal = purchaseItems.reduce((total, item) => total + item.quantity * item.unitValue, 0);
   const updatePurchaseItem = (id: string, changes: Partial<PurchaseItem>) => setPurchaseItems(items => items.map(item => item.id === id ? { ...item, ...changes } : item));
   const addPurchaseItem = () => setPurchaseItems(items => [...items, { id: `ITEM-${Date.now()}-${items.length}`, description: "", quantity: 1, unitValue: 0 }]);
   const removePurchaseItem = (id: string) => setPurchaseItems(items => items.length === 1 ? items : items.filter(item => item.id !== id));
+  const importPurchaseXml = async (file?: File) => {
+    if (!file) return;
+    setXmlImportStatus("A processar o XML...");
+    try {
+      const xml = new DOMParser().parseFromString(await file.text(), "application/xml");
+      if (xml.querySelector("parsererror")) throw new Error("XML inválido");
+      const byTag = (root: ParentNode, tag: string) => {
+        const scoped = root as XMLDocument | Element;
+        return scoped.getElementsByTagNameNS?.("*", tag)?.[0]?.textContent?.trim() || scoped.getElementsByTagName?.(tag)?.[0]?.textContent?.trim() || "";
+      };
+      const elements = (tag: string) => Array.from(xml.getElementsByTagNameNS("*", tag).length ? xml.getElementsByTagNameNS("*", tag) : xml.getElementsByTagName(tag));
+      const emit = elements("emit")[0];
+      const ide = elements("ide")[0];
+      const supplier = emit ? byTag(emit, "xNome") : "";
+      const supplierDoc = emit ? byTag(emit, "CNPJ") || byTag(emit, "CPF") : "";
+      const invoiceNumber = ide ? byTag(ide, "nNF") : "";
+      const issueDate = ide ? byTag(ide, "dhEmi") || byTag(ide, "dEmi") : "";
+      const importedItems = elements("det").map((det, index) => {
+        const product = Array.from(det.getElementsByTagNameNS("*", "prod"))[0] || det.getElementsByTagName("prod")[0];
+        return { id: `XML-${Date.now()}-${index}`, description: byTag(product || det, "xProd") || `Item ${index + 1}`, quantity: Number(byTag(product || det, "qCom")) || 1, unitValue: Number(byTag(product || det, "vUnCom")) || Number(byTag(product || det, "vProd")) || 0 };
+      }).filter(item => item.description && item.quantity > 0);
+      if (!importedItems.length) throw new Error("Nenhum item de compra encontrado");
+      const importedInstallments = elements("dup").map((dup, index) => ({ number: byTag(dup, "nDup") || String(index + 1), dueDate: byTag(dup, "dVenc"), value: Number(byTag(dup, "vDup")) || 0 })).filter(item => item.dueDate || item.value > 0);
+      const paymentCode = elements("detPag")[0] ? byTag(elements("detPag")[0], "tPag") : "";
+      const paymentNames: Record<string, string> = { "01": "Dinheiro", "03": "Cartão de crédito", "04": "Cartão de débito", "15": "Boleto", "16": "Depósito bancário", "17": "PIX", "18": "Transferência bancária", "90": "Sem pagamento", "99": "Outros" };
+      setPurchaseItems(importedItems);
+      setRecordName(`NF-e ${invoiceNumber || file.name.replace(/\.xml$/i, "")}`);
+      setRecordClient(supplier || "Fornecedor do XML");
+      setDoc(supplierDoc);
+      setDate(issueDate ? issueDate.slice(0, 10) : "");
+      setRecordCategory("Compra importada por XML");
+      setDescription(`NF-e ${invoiceNumber || "sem número"}${supplierDoc ? ` • CNPJ/CPF ${supplierDoc}` : ""} • Arquivo ${file.name}`);
+      setPaymentMethod(paymentNames[paymentCode] || (importedInstallments.length ? "Boleto" : "Outros"));
+      setPaymentInstallments(importedInstallments);
+      setPaymentType(importedInstallments.length ? "A prazo" : "À vista");
+      setInstallments(Math.max(1, importedInstallments.length));
+      setFirstDueDate(importedInstallments[0]?.dueDate || "");
+      setXmlImportStatus(`XML importado: ${importedItems.length} item(ns)${importedInstallments.length ? ` e ${importedInstallments.length} parcela(s)` : ""}. Revise os dados antes de salvar.`);
+    } catch (error) {
+      setXmlImportStatus(error instanceof Error ? `Não foi possível importar: ${error.message}.` : "Não foi possível importar este XML.");
+    }
+  };
   const parentCustomer = isLinkedStructure ? title.split("•")[1]?.trim() : "";
   const selectedClientData = customers.find(customer => customer.name === selectedClient);
   const availableUnits = selectedClient ? [
@@ -777,6 +825,10 @@ function Modal({ title, customers, catalogRecords, close, onSave }: { title: str
       </> : <>
         {isCatalogRegistration && <div className="wide kind-selector"><span>TIPO DO CADASTRO</span><label className={recordKind === "Serviço" ? "active" : ""}><input type="radio" name="record-kind" checked={recordKind === "Serviço"} onChange={() => setRecordKind("Serviço")}/><Wrench size={17}/><div><b>Serviço</b><small>Será disponibilizado nas ordens de serviço</small></div></label><label className={recordKind === "Produto" ? "active" : ""}><input type="radio" name="record-kind" checked={recordKind === "Produto"} onChange={() => setRecordKind("Produto")}/><Package size={17}/><div><b>Produto</b><small>Item físico, peça ou material de estoque</small></div></label></div>}
         {managementFlows[requestedModule] && <div className="wide module-form-guidance"><span><Grid2X2 size={18}/></span><div><b>Cadastro integrado de ${requestedModule.toLowerCase()}</b><small>Ao salvar, o registro ficará disponível nas abas, filtros e relatórios deste fluxo.</small></div></div>}
+        {requestedModule === "Compras" && <div className="wide purchase-xml-import">
+          <span className="purchase-xml-icon"><FileText size={21}/></span><div><b>Importar XML da NF-e</b><small>Preenche automaticamente fornecedor, nota fiscal, itens, valores e parcelas do Contas a Pagar.</small>{xmlImportStatus && <em className={xmlImportStatus.startsWith("Não") ? "error" : "success"}>{xmlImportStatus}</em>}</div>
+          <label className="xml-upload-button"><FileText size={15}/> Selecionar XML<input type="file" accept=".xml,text/xml,application/xml" onChange={event => { void importPurchaseXml(event.target.files?.[0]); event.currentTarget.value = ""; }}/></label>
+        </div>}
         {requestedModule === "Compras" && <div className="wide purchase-editor">
           <div className="purchase-editor-head"><div><span>ITENS DA COMPRA</span><h3>Produtos e materiais</h3></div><button type="button" onClick={addPurchaseItem}><Plus size={14}/> Adicionar item</button></div>
           <div className="purchase-item-labels"><span>DESCRIÇÃO DO ITEM</span><span>QUANTIDADE</span><span>VALOR UNITÁRIO</span><span>SUBTOTAL</span><span/></div>
@@ -791,8 +843,8 @@ function Modal({ title, customers, catalogRecords, close, onSave }: { title: str
         </div>}
         {requestedModule === "Compras" && <div className="wide purchase-payment">
           <div className="purchase-payment-title"><span><CreditCard size={18}/></span><div><b>Condição de pagamento</b><small>Compras a prazo serão lançadas automaticamente em Contas a Pagar.</small></div></div>
-          <div className="payment-type-options"><label className={paymentType === "À vista" ? "active" : ""}><input type="radio" name="purchase-payment-type" checked={paymentType === "À vista"} onChange={() => { setPaymentType("À vista"); setInstallments(1); }}/><b>À vista</b><small>Um único pagamento</small></label><label className={paymentType === "A prazo" ? "active" : ""}><input type="radio" name="purchase-payment-type" checked={paymentType === "A prazo"} onChange={() => setPaymentType("A prazo")}/><b>A prazo</b><small>Gerar parcelas no financeiro</small></label></div>
-          <div className="purchase-payment-fields"><label>Forma de pagamento<select value={paymentMethod} onChange={event => setPaymentMethod(event.target.value)}><option>PIX</option><option>Boleto</option><option>Transferência bancária</option><option>Cartão de crédito</option><option>Cheque</option><option>Dinheiro</option><option>Outros</option></select></label>{paymentType === "A prazo" && <><label>Número de parcelas<input type="number" min="2" max="48" value={installments} onChange={event => setInstallments(Math.max(2, Math.min(48, Number(event.target.value))))}/></label><label>Primeiro vencimento<input type="date" value={firstDueDate} onChange={event => setFirstDueDate(event.target.value)}/></label><div className="installment-preview"><small>VALOR POR PARCELA</small><b>R$ {(purchaseTotal / Math.max(installments, 1)).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></div></>}</div>
+          <div className="payment-type-options"><label className={paymentType === "À vista" ? "active" : ""}><input type="radio" name="purchase-payment-type" checked={paymentType === "À vista"} onChange={() => { setPaymentType("À vista"); setInstallments(1); setPaymentInstallments([]); }}/><b>À vista</b><small>Um único pagamento</small></label><label className={paymentType === "A prazo" ? "active" : ""}><input type="radio" name="purchase-payment-type" checked={paymentType === "A prazo"} onChange={() => { setPaymentType("A prazo"); setPaymentInstallments([]); }}/><b>A prazo</b><small>Gerar parcelas no financeiro</small></label></div>
+          <div className="purchase-payment-fields"><label>Forma de pagamento<select value={paymentMethod} onChange={event => setPaymentMethod(event.target.value)}><option>PIX</option><option>Boleto</option><option>Transferência bancária</option><option>Cartão de crédito</option><option>Cheque</option><option>Dinheiro</option><option>Outros</option></select></label>{paymentType === "A prazo" && <><label>Número de parcelas<input type="number" min="1" max="48" value={installments} onChange={event => { setInstallments(Math.max(1, Math.min(48, Number(event.target.value)))); setPaymentInstallments([]); }}/></label><label>Primeiro vencimento<input type="date" value={firstDueDate} onChange={event => { setFirstDueDate(event.target.value); setPaymentInstallments([]); }}/></label><div className="installment-preview"><small>{paymentInstallments.length ? "PARCELAS IMPORTADAS DO XML" : "VALOR ESTIMADO POR PARCELA"}</small><b>{paymentInstallments.length ? `${paymentInstallments.length} vencimento(s)` : `R$ ${(purchaseTotal / Math.max(installments, 1)).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}</b></div></>}</div>
         </div>}
         <label>{requestedModule === "Compras" ? "Produto, material ou pedido" : requestedModule === "Financeiro" ? "Descrição do lançamento" : requestedModule === "Fornecedores" ? "Razão social / Nome fantasia" : requestedModule === "Funcionários" ? "Nome completo do funcionário" : "Nome / identificação"}<input value={recordName} onChange={event => setRecordName(event.target.value)} placeholder={requestedModule === "Funcionários" ? "Nome completo" : "Digite o nome do registro"}/></label>
         <label>{requestedModule === "Compras" ? "Fornecedor" : requestedModule === "Financeiro" ? "Cliente ou fornecedor" : requestedModule === "Fornecedores" ? "Responsável comercial" : requestedModule === "Funcionários" ? "Utilizador de acesso" : "Cliente / responsável"}<input value={recordClient} onChange={event => setRecordClient(event.target.value)} placeholder={requestedModule === "Funcionários" ? "Ex.: nome.sobrenome" : "Nome relacionado ao cadastro"}/></label>
@@ -803,7 +855,7 @@ function Modal({ title, customers, catalogRecords, close, onSave }: { title: str
         <label>{requestedModule === "Funcionários" ? "Telefone / WhatsApp" : "Telefone / contato"}<input placeholder="(00) 00000-0000"/></label><label>{requestedModule === "Funcionários" ? "Data de admissão" : requestedModule === "Compras" ? "Previsão de entrega" : requestedModule === "Financeiro" ? "Data de vencimento" : "Data"}<input type="date" value={date} onChange={event => setDate(event.target.value)}/></label><label className="wide">{requestedModule === "Funcionários" ? "Permissões e observações" : "Descrição / observações"}<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder={requestedModule === "Funcionários" ? "Informe os módulos autorizados e observações do funcionário..." : "Inclua os detalhes deste cadastro..."}/></label>
       </>}
     </>}
-  </div><div className="modal-actions"><button className="outline-btn" onClick={close}>Cancelar</button><button className="primary-btn" disabled={isNewOrder ? !selectedClient || !tech || !date : isNewCustomer ? !recordName || !address.trim() || !addressValidated : requestedModule === "Compras" ? !recordName || !recordClient || !purchaseItems.some(item => item.description.trim() && item.quantity > 0) || purchaseTotal <= 0 || (paymentType === "A prazo" && !firstDueDate) : (!isLinkedStructure && !recordName)} onClick={() => onSave({ title, name: recordName, client: isNewOrder ? selectedClient : recordClient, doc, contact, phone, address: isNewOrder ? (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "") : address, unit, tech, date, time, description, status: recordStatus, value: requestedModule === "Compras" ? purchaseTotal : Number(recordValue) || 0, category: recordCategory, kind: recordKind, catalogItems: catalogRecords.filter(item => selectedCatalogIds.includes(item.id)).map(item => ({ id: item.id, name: item.name, kind: item.kind || "Serviço" })), purchaseItems: purchaseItems.filter(item => item.description.trim() && item.quantity > 0), paymentType, paymentMethod, installments: paymentType === "A prazo" ? Math.max(2, installments) : 1, firstDueDate })}><CheckCircle2 size={15}/> Salvar registro</button></div></div></div>;
+  </div><div className="modal-actions"><button className="outline-btn" onClick={close}>Cancelar</button><button className="primary-btn" disabled={isNewOrder ? !selectedClient || !tech || !date : isNewCustomer ? !recordName || !address.trim() || !addressValidated : requestedModule === "Compras" ? !recordName || !recordClient || !purchaseItems.some(item => item.description.trim() && item.quantity > 0) || purchaseTotal <= 0 || (paymentType === "A prazo" && !firstDueDate) : (!isLinkedStructure && !recordName)} onClick={() => onSave({ title, name: recordName, client: isNewOrder ? selectedClient : recordClient, doc, contact, phone, address: isNewOrder ? (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "") : address, unit, tech, date, time, description, status: recordStatus, value: requestedModule === "Compras" ? purchaseTotal : Number(recordValue) || 0, category: recordCategory, kind: recordKind, catalogItems: catalogRecords.filter(item => selectedCatalogIds.includes(item.id)).map(item => ({ id: item.id, name: item.name, kind: item.kind || "Serviço" })), purchaseItems: purchaseItems.filter(item => item.description.trim() && item.quantity > 0), paymentType, paymentMethod, installments: paymentType === "A prazo" ? Math.max(1, installments) : 1, firstDueDate, paymentInstallments })}><CheckCircle2 size={15}/> Salvar registro</button></div></div></div>;
 }
 
 export default function Home() {
@@ -927,21 +979,23 @@ export default function Home() {
         paymentMethod: data.paymentMethod,
         installments: data.installments,
         firstDueDate: data.firstDueDate,
+        paymentInstallments: data.paymentInstallments,
       };
       let updatedRecords = { ...moduleRecords, [moduleName]: [record, ...(moduleRecords[moduleName] ?? [])] };
       if (moduleName === "Compras" && data.paymentType === "A prazo") {
         const baseDueDate = new Date(`${data.firstDueDate}T12:00:00`);
-        const installmentCount = Math.max(2, data.installments);
+        const installmentCount = Math.max(1, data.paymentInstallments.length || data.installments);
         const baseInstallmentValue = Number((data.value / installmentCount).toFixed(2));
         const payables: ModuleRecord[] = Array.from({ length: installmentCount }, (_, index) => {
-          const dueDate = new Date(baseDueDate);
-          dueDate.setMonth(baseDueDate.getMonth() + index);
-          const installmentValue = index === installmentCount - 1 ? Number((data.value - baseInstallmentValue * (installmentCount - 1)).toFixed(2)) : baseInstallmentValue;
+          const xmlInstallment = data.paymentInstallments[index];
+          const dueDate = xmlInstallment?.dueDate ? new Date(`${xmlInstallment.dueDate}T12:00:00`) : new Date(baseDueDate);
+          if (!xmlInstallment?.dueDate) dueDate.setMonth(baseDueDate.getMonth() + index);
+          const installmentValue = xmlInstallment?.value || (index === installmentCount - 1 ? Number((data.value - baseInstallmentValue * (installmentCount - 1)).toFixed(2)) : baseInstallmentValue);
           return {
             id: `FIN-${record.id}-${String(index + 1).padStart(2, "0")}`,
             name: `Conta a pagar • ${record.name} • ${index + 1}/${installmentCount}`,
             client: data.client,
-            description: `Compra ${record.id} • ${data.paymentMethod}`,
+            description: `Compra ${record.id} • ${data.paymentMethod}${xmlInstallment ? " • Importado do XML" : ""}`,
             createdAt: new Date().toLocaleString("pt-BR"),
             status: "Em aberto",
             date: dueDate.toISOString().slice(0, 10),
@@ -960,7 +1014,7 @@ export default function Home() {
       localStorage.setItem("proar-v3-module-records", JSON.stringify(updatedRecords));
       persistSharedState(customerRecords, serviceOrders, updatedRecords);
       setCurrent(moduleName);
-      setSavedMessage(moduleName === "Compras" && data.paymentType === "A prazo" ? `Compra gravada e ${Math.max(2, data.installments)} parcelas lançadas em Contas a Pagar.` : "Registro gravado com sucesso.");
+      setSavedMessage(moduleName === "Compras" && data.paymentType === "A prazo" ? `Compra gravada e ${Math.max(1, data.paymentInstallments.length || data.installments)} parcela(s) lançada(s) em Contas a Pagar.` : "Registro gravado com sucesso.");
     }
     setModal("");
     window.setTimeout(() => setSavedMessage(""), 3500);
