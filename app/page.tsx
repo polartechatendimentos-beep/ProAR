@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType, type Dispatch, type FormEvent, type PointerEvent as ReactPointerEvent, type SetStateAction } from "react";
 import {
   Activity, AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight,
   Bell, Boxes, BriefcaseBusiness, Building2, CalendarDays, ChartNoAxesCombined,
@@ -9,7 +9,7 @@ import {
   ArrowLeft, Camera, Contact, Edit3, Eye, EyeOff, Hospital, Landmark, LayoutDashboard, LogIn, LogOut, MapPin,
   CreditCard, Keyboard, Menu, Minus, MoreHorizontal, Package, Phone, Plus, ReceiptText, ScanBarcode, School, Search, Settings,
   ShieldCheck, ShoppingBag, ShoppingCart, Store, TrendingUp, UserCheck, UserRound,
-  PenTool, Tag, Trash2,
+  PenTool, Tag, Trash2, Save, UploadCloud, KeyRound, LockKeyhole, BadgeCheck, ServerCog,
   UsersRound, WalletCards, Warehouse, Wrench, X, Zap
 } from "lucide-react";
 
@@ -749,6 +749,99 @@ function Reports({ modules, customers, serviceOrders }: { modules: Record<string
   </section>;
 }
 
+type FiscalSection = Record<string, string | boolean>;
+type FiscalCertificate = { fileName: string; subject: string; issuer: string; document: string; serialNumber: string; validFrom: string; validTo: string; fingerprint: string; importedAt: string; status: string };
+
+const emptyCompany: FiscalSection = { corporateName: "", tradeName: "", cnpj: "", stateRegistration: "", municipalRegistration: "", cnae: "", taxRegime: "Simples Nacional", email: "", phone: "", cep: "", street: "", number: "", complement: "", neighborhood: "", city: "Mirassol", state: "SP" };
+const emptyNfe: FiscalSection = { environment: "Homologação", nfeSeries: "1", nextNfe: "1", nfceSeries: "1", nextNfce: "1", cscId: "", cscToken: "", defaultCfop: "", defaultNcm: "", taxCode: "", autoIssueOrder: false };
+const emptyNfse: FiscalSection = { provider: "Cidade360 — Mirassol/SP", apiBase: "https://webapp1-mirassol.cidade360.cloud/NFSe.Api", environment: "Homologação", dpsSeries: "", nextDps: "1", lc116Item: "", nationalTaxCode: "", municipalTaxCode: "", contributorInternalCode: "", nbs: "", issRate: "", issWithheld: false, defaultDescription: "", autoIssueServiceOrder: false };
+
+function SettingsPage() {
+  const [tab, setTab] = useState("Empresa");
+  const [company, setCompany] = useState<FiscalSection>(emptyCompany);
+  const [nfe, setNfe] = useState<FiscalSection>(emptyNfe);
+  const [nfse, setNfse] = useState<FiscalSection>(emptyNfse);
+  const [certificate, setCertificate] = useState<FiscalCertificate | null>(null);
+  const [certificateFile, setCertificateFile] = useState<File | null>(null);
+  const [certificatePassword, setCertificatePassword] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/fiscal-config", { cache: "no-store" }).then(async response => {
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      setCompany({ ...emptyCompany, ...(result.company ?? {}) });
+      setNfe({ ...emptyNfe, ...(result.nfe ?? {}) });
+      setNfse({ ...emptyNfse, ...(result.nfse ?? {}) });
+      setCertificate(result.certificate ?? null);
+    }).catch(reason => setError(reason.message || "Não foi possível carregar a configuração fiscal."));
+  }, []);
+
+  const update = (setter: Dispatch<SetStateAction<FiscalSection>>, key: string, value: string | boolean) => setter(current => ({ ...current, [key]: value }));
+  const field = (label: string, value: string, setter: Dispatch<SetStateAction<FiscalSection>>, key: string, options?: string[]) => <label><span>{label}</span>{options ? <select value={value} onChange={event => update(setter, key, event.target.value)}>{options.map(option => <option key={option}>{option}</option>)}</select> : <input value={value} onChange={event => update(setter, key, event.target.value)} />}</label>;
+
+  async function saveSettings() {
+    setBusy(true); setMessage(""); setError("");
+    try {
+      const response = await fetch("/api/fiscal-config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ company, nfe, nfse }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      setMessage("Configuração fiscal guardada com segurança.");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Falha ao guardar."); }
+    finally { setBusy(false); }
+  }
+
+  async function importCertificate(event: FormEvent) {
+    event.preventDefault();
+    if (!certificateFile || !certificatePassword) { setError("Selecione o arquivo A1 e informe a senha."); return; }
+    setBusy(true); setMessage(""); setError("");
+    try {
+      const body = new FormData(); body.append("certificate", certificateFile); body.append("password", certificatePassword);
+      const response = await fetch("/api/fiscal-config", { method: "POST", body });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      setCertificate(result.certificate); setCertificatePassword(""); setCertificateFile(null);
+      setMessage("Certificado A1 validado e importado no cofre fiscal.");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Falha ao importar o certificado."); }
+    finally { setBusy(false); }
+  }
+
+  async function removeCertificate() {
+    if (!confirm("Remover o certificado digital do cofre fiscal? As emissões ficarão bloqueadas.")) return;
+    setBusy(true); setMessage(""); setError("");
+    try {
+      const response = await fetch("/api/fiscal-config", { method: "DELETE" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      setCertificate(null); setMessage("Certificado removido.");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Falha ao remover."); }
+    finally { setBusy(false); }
+  }
+
+  const companyReady = Boolean(company.corporateName && company.cnpj && company.municipalRegistration && company.city && company.state);
+  const tabs = [{ name: "Empresa", icon: Building2 }, { name: "NF-e / NFC-e", icon: ReceiptText }, { name: "NFS-e", icon: FileText }, { name: "Certificado A1", icon: KeyRound }];
+  return <section className="settings-page">
+    <div className="fiscal-hero"><div><span className="section-kicker"><ShieldCheck size={12}/> CENTRAL FISCAL</span><h2>Configuração da empresa e documentos fiscais</h2><p>Dados usados na emissão de NF-e, NFC-e em pedidos e NFS-e nas ordens de serviço.</p></div><button className="primary-btn" disabled={busy} onClick={saveSettings}><Save size={16}/>{busy ? "Guardando..." : "Guardar configurações"}</button></div>
+    <div className="fiscal-readiness">
+      <article className={companyReady ? "ready" : "pending"}><span><Building2 size={19}/></span><div><small>CADASTRO DA EMPRESA</small><strong>{companyReady ? "Dados essenciais completos" : "Preenchimento pendente"}</strong></div>{companyReady ? <CheckCircle2 size={18}/> : <AlertTriangle size={18}/>}</article>
+      <article className={certificate?.status === "Válido" ? "ready" : "pending"}><span><BadgeCheck size={19}/></span><div><small>CERTIFICADO DIGITAL</small><strong>{certificate ? `${certificate.status} até ${new Date(certificate.validTo).toLocaleDateString("pt-BR")}` : "A1 não importado"}</strong></div>{certificate?.status === "Válido" ? <CheckCircle2 size={18}/> : <AlertTriangle size={18}/>}</article>
+      <article className={companyReady && certificate?.status === "Válido" ? "ready" : "pending"}><span><ServerCog size={19}/></span><div><small>PRONTIDÃO FISCAL</small><strong>{companyReady && certificate?.status === "Válido" ? "Habilitado para integração" : "Revise as pendências"}</strong></div><LockKeyhole size={18}/></article>
+    </div>
+    {(message || error) && <div className={`settings-alert ${error ? "error" : "success"}`}>{error ? <AlertTriangle size={16}/> : <CheckCircle2 size={16}/>}<span>{error || message}</span><button onClick={() => { setError(""); setMessage(""); }}><X size={14}/></button></div>}
+    <div className="settings-shell">
+      <nav className="settings-nav">{tabs.map(({name, icon: Icon}) => <button key={name} className={tab === name ? "active" : ""} onClick={() => setTab(name)}><Icon size={17}/><span>{name}</span><ChevronRight size={14}/></button>)}</nav>
+      <div className="settings-content">
+        {tab === "Empresa" && <><div className="settings-section-head"><div><small>IDENTIFICAÇÃO DO EMITENTE</small><h3>Cadastro da empresa</h3><p>Informe os dados exatamente como constam nos cadastros fiscais.</p></div><Building2 size={24}/></div><div className="fiscal-form-grid">{field("Razão social *", String(company.corporateName), setCompany, "corporateName")}{field("Nome fantasia", String(company.tradeName), setCompany, "tradeName")}{field("CNPJ *", String(company.cnpj), setCompany, "cnpj")}{field("Inscrição Estadual", String(company.stateRegistration), setCompany, "stateRegistration")}{field("Inscrição Municipal *", String(company.municipalRegistration), setCompany, "municipalRegistration")}{field("CNAE principal", String(company.cnae), setCompany, "cnae")}{field("Regime tributário", String(company.taxRegime), setCompany, "taxRegime", ["Simples Nacional", "Simples Nacional — excesso de sublimite", "Regime Normal", "MEI"])}{field("E-mail fiscal", String(company.email), setCompany, "email")}{field("Telefone", String(company.phone), setCompany, "phone")}</div><div className="form-divider"><MapPin size={14}/> Endereço fiscal</div><div className="fiscal-form-grid address-grid">{field("CEP *", String(company.cep), setCompany, "cep")}{field("Logradouro *", String(company.street), setCompany, "street")}{field("Número *", String(company.number), setCompany, "number")}{field("Complemento", String(company.complement), setCompany, "complement")}{field("Bairro *", String(company.neighborhood), setCompany, "neighborhood")}{field("Cidade *", String(company.city), setCompany, "city")}{field("UF *", String(company.state), setCompany, "state", ["SP", "MG", "PR", "RJ", "MS", "GO", "SC", "RS", "BA", "DF"])}</div></>}
+        {tab === "NF-e / NFC-e" && <><div className="settings-section-head"><div><small>PEDIDOS E VENDAS</small><h3>Parâmetros de NF-e e NFC-e</h3><p>Numeração, ambiente fiscal e códigos padrão usados nos pedidos.</p></div><ReceiptText size={24}/></div><div className="fiscal-form-grid">{field("Ambiente", String(nfe.environment), setNfe, "environment", ["Homologação", "Produção"])}{field("Série NF-e", String(nfe.nfeSeries), setNfe, "nfeSeries")}{field("Próxima NF-e", String(nfe.nextNfe), setNfe, "nextNfe")}{field("Série NFC-e", String(nfe.nfceSeries), setNfe, "nfceSeries")}{field("Próxima NFC-e", String(nfe.nextNfce), setNfe, "nextNfce")}{field("Identificador CSC", String(nfe.cscId), setNfe, "cscId")}{field("Token CSC", String(nfe.cscToken), setNfe, "cscToken")}{field("CFOP padrão", String(nfe.defaultCfop), setNfe, "defaultCfop")}{field("NCM padrão", String(nfe.defaultNcm), setNfe, "defaultNcm")}{field("CST / CSOSN padrão", String(nfe.taxCode), setNfe, "taxCode")}</div><label className="fiscal-switch"><input type="checkbox" checked={Boolean(nfe.autoIssueOrder)} onChange={event => update(setNfe, "autoIssueOrder", event.target.checked)}/><span/><div><strong>Preparar emissão pelo pedido</strong><small>Exibe a ação fiscal após salvar ou faturar um pedido.</small></div></label></>}
+        {tab === "NFS-e" && <><div className="settings-section-head"><div><small>ORDENS DE SERVIÇO</small><h3>Parâmetros de NFS-e</h3><p>Configuração do prestador e dos códigos de serviço usados na DPS.</p></div><FileText size={24}/></div><div className="fiscal-form-grid">{field("Provedor / município", String(nfse.provider), setNfse, "provider")}{field("Ambiente", String(nfse.environment), setNfse, "environment", ["Homologação", "Produção"])}<label className="span-2"><span>Endereço da API</span><input value={String(nfse.apiBase)} onChange={event => update(setNfse, "apiBase", event.target.value)}/></label>{field("Série DPS", String(nfse.dpsSeries), setNfse, "dpsSeries")}{field("Próxima DPS", String(nfse.nextDps), setNfse, "nextDps")}{field("Item LC 116", String(nfse.lc116Item), setNfse, "lc116Item")}{field("Código tributação nacional", String(nfse.nationalTaxCode), setNfse, "nationalTaxCode")}{field("Código tributação municipal", String(nfse.municipalTaxCode), setNfse, "municipalTaxCode")}{field("Código interno contribuinte", String(nfse.contributorInternalCode), setNfse, "contributorInternalCode")}{field("Código NBS", String(nfse.nbs), setNfse, "nbs")}{field("Alíquota ISS (%)", String(nfse.issRate), setNfse, "issRate")}<label className="span-2"><span>Descrição padrão do serviço</span><textarea value={String(nfse.defaultDescription)} onChange={event => update(setNfse, "defaultDescription", event.target.value)}/></label></div><div className="switch-row"><label className="fiscal-switch"><input type="checkbox" checked={Boolean(nfse.issWithheld)} onChange={event => update(setNfse, "issWithheld", event.target.checked)}/><span/><div><strong>ISS retido por padrão</strong><small>Pode ser alterado em cada emissão.</small></div></label><label className="fiscal-switch"><input type="checkbox" checked={Boolean(nfse.autoIssueServiceOrder)} onChange={event => update(setNfse, "autoIssueServiceOrder", event.target.checked)}/><span/><div><strong>Habilitar emissão na OS</strong><small>Libera o botão “Emitir NFS-e” na ordem concluída.</small></div></label></div></>}
+        {tab === "Certificado A1" && <><div className="settings-section-head"><div><small>ASSINATURA E AUTENTICAÇÃO</small><h3>Certificado digital A1</h3><p>Importe um arquivo .PFX ou .P12. O arquivo e sua senha ficam criptografados no cofre privado do servidor.</p></div><KeyRound size={24}/></div>{certificate ? <div className="certificate-card"><div className="certificate-status"><span><BadgeCheck size={24}/></span><div><small>CERTIFICADO {certificate.status.toUpperCase()}</small><h4>{certificate.fileName}</h4><p>{certificate.subject}</p></div><em className={certificate.status === "Válido" ? "valid" : "expired"}>{certificate.status}</em></div><dl><div><dt>Documento</dt><dd>{certificate.document || "Identificado no titular"}</dd></div><div><dt>Validade</dt><dd>{new Date(certificate.validFrom).toLocaleDateString("pt-BR")} a {new Date(certificate.validTo).toLocaleDateString("pt-BR")}</dd></div><div><dt>Emissor</dt><dd>{certificate.issuer}</dd></div><div><dt>Serial</dt><dd>{certificate.serialNumber}</dd></div><div className="wide"><dt>Impressão digital SHA-256</dt><dd>{certificate.fingerprint}</dd></div></dl><div className="certificate-actions"><button className="outline-btn" onClick={() => setCertificate(null)}><UploadCloud size={15}/> Substituir certificado</button><button className="delete-button" onClick={removeCertificate}><Trash2 size={15}/> Remover</button></div></div> : <form className="certificate-upload" onSubmit={importCertificate}><div className="certificate-drop"><UploadCloud size={28}/><h4>Selecione o certificado A1</h4><p>Arquivo .PFX ou .P12 com até 2 MB</p><label className="outline-btn">Escolher arquivo<input type="file" hidden accept=".pfx,.p12,application/x-pkcs12" onChange={event => setCertificateFile(event.target.files?.[0] ?? null)}/></label>{certificateFile && <strong>{certificateFile.name}</strong>}</div><label className="certificate-password"><span>Senha do certificado</span><div><LockKeyhole size={16}/><input type="password" value={certificatePassword} onChange={event => setCertificatePassword(event.target.value)} placeholder="Informe a senha do A1"/></div><small>A senha não é exibida novamente e nunca é enviada ao navegador após a importação.</small></label><button className="primary-btn" disabled={busy || !certificateFile || !certificatePassword}><ShieldCheck size={16}/>{busy ? "Validando..." : "Validar e importar certificado"}</button></form>}<div className="security-note"><LockKeyhole size={18}/><div><strong>Proteção do certificado</strong><p>O conteúdo é validado no servidor e guardado com criptografia AES-256-GCM em armazenamento privado. Nenhuma chave ou senha fiscal é salva no navegador.</p></div></div></>}
+      </div>
+    </div>
+  </section>;
+}
+
 function GenericModule({ name, onOpen, onDelete, onUpdate, records }: { name: string; onOpen: (name: string) => void; onDelete: (moduleName: string, record: ModuleRecord) => void; onUpdate: (moduleName: string, record: ModuleRecord) => void; records: ModuleRecord[] }) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todas");
@@ -1305,7 +1398,7 @@ export default function Home() {
     <main className="main">
       <Header title={current === "Painel inicial" ? `Bom dia, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNewOrder={() => setModal("Nova ordem de serviço")} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onLogout={logout}/>
       {savedMessage && <div className="save-toast" role="status"><CheckCircle2 size={16}/>{savedMessage}</div>}
-      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} customers={customerRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Vendas" ? <SalesPDV customers={customerRecords}/> : current === "Licitações" ? <Licitacoes/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} serviceOrders={serviceOrders}/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} records={moduleRecords[current] ?? []}/>}</div>
+      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} customers={customerRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Vendas" ? <SalesPDV customers={customerRecords}/> : current === "Licitações" ? <Licitacoes/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} serviceOrders={serviceOrders}/> : current === "Configurações" ? <SettingsPage/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} records={moduleRecords[current] ?? []}/>}</div>
       <footer><span>© 2026 ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
     {modal && <Modal title={modal} customers={customerRecords} catalogRecords={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} supplierRecords={moduleRecords["Fornecedores"] ?? []} close={() => setModal("")} onSave={saveRecord}/>}
