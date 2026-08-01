@@ -332,6 +332,7 @@ function SignaturePad({ label, value, onChange }: { label: string; value?: strin
 
 function OrderDetail({ order, close, onUpdate }: { order: ServiceOrder; close: () => void; onUpdate: (order: ServiceOrder) => void }) {
   const [currentOrder, setCurrentOrder] = useState(order);
+  const [pdfMessage, setPdfMessage] = useState("");
   const mapsSearch = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.address)}`;
   const mapsEmbed = `https://www.google.com/maps?q=${encodeURIComponent(order.address)}&output=embed`;
   const update = (patch: Partial<ServiceOrder>) => {
@@ -344,6 +345,118 @@ function OrderDetail({ order, close, onUpdate }: { order: ServiceOrder; close: (
     update({ [field]: await imageFileToDataUrl(file) });
   };
   const formatMoment = (value?: string) => value ? new Date(value).toLocaleString("pt-BR") : "";
+  const createOrderPdf = async () => {
+    const { jsPDF } = await import("jspdf");
+    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+    const pageWidth = 210;
+    const margin = 13;
+    const contentWidth = pageWidth - margin * 2;
+    const blue = [15, 92, 190] as [number, number, number];
+    const dark = [30, 43, 61] as [number, number, number];
+    const gray = [102, 116, 135] as [number, number, number];
+    const line = [205, 214, 225] as [number, number, number];
+    const addImage = async (source: string | undefined, x: number, y: number, width: number, height: number) => {
+      if (!source) return false;
+      try { pdf.addImage(source, source.includes("image/png") ? "PNG" : "JPEG", x, y, width, height, undefined, "FAST"); return true; } catch { return false; }
+    };
+    const sectionTitle = (title: string, y: number) => {
+      pdf.setFillColor(...blue); pdf.roundedRect(margin, y, contentWidth, 7, 1.2, 1.2, "F");
+      pdf.setTextColor(255, 255, 255); pdf.setFont("helvetica", "bold"); pdf.setFontSize(8); pdf.text(title.toUpperCase(), margin + 3, y + 4.7);
+      return y + 9;
+    };
+    const field = (label: string, value: string, x: number, y: number, width: number, height = 13) => {
+      pdf.setDrawColor(...line); pdf.setFillColor(249, 251, 253); pdf.roundedRect(x, y, width, height, 1, 1, "FD");
+      pdf.setTextColor(...gray); pdf.setFont("helvetica", "bold"); pdf.setFontSize(6); pdf.text(label.toUpperCase(), x + 2.3, y + 3.6);
+      pdf.setTextColor(...dark); pdf.setFont("helvetica", "normal"); pdf.setFontSize(8); pdf.text(pdf.splitTextToSize(value || "Não informado", width - 4.6), x + 2.3, y + 8);
+    };
+    try {
+      const logoBlob = await fetch("/proar-logo.png").then(response => response.blob());
+      const logoData = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = reject; reader.readAsDataURL(logoBlob); });
+      await addImage(logoData, margin, 9, 48, 25);
+    } catch { /* mantém o cabeçalho textual se a logo não carregar */ }
+    pdf.setTextColor(...dark); pdf.setFont("helvetica", "bold"); pdf.setFontSize(13); pdf.text("POLARTECH AR CONDICIONADO", 66, 15);
+    pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.2); pdf.text("Telefone: (17) 2122-2806", 66, 20); pdf.text("E-mail: atendimentos@polartechsolucoes.com.br", 66, 24); pdf.text("Mirassol - SP", 66, 28);
+    pdf.setTextColor(...blue); pdf.setFont("helvetica", "bold"); pdf.setFontSize(9); pdf.text("ORDEM DE SERVIÇO", 197, 14, { align: "right" });
+    pdf.setTextColor(...dark); pdf.setFontSize(16); pdf.text(currentOrder.id, 197, 22, { align: "right" });
+    pdf.setFont("helvetica", "normal"); pdf.setFontSize(7); pdf.text(`Gerada em ${new Date().toLocaleString("pt-BR")}`, 197, 28, { align: "right" });
+    pdf.setDrawColor(...blue); pdf.setLineWidth(.8); pdf.line(margin, 37, 197, 37);
+
+    let y = sectionTitle("Informações do cliente", 42);
+    field("Cliente", currentOrder.client, margin, y, 88); field("Unidade / setor", currentOrder.unit || "Unidade principal", 103, y, 94); y += 15;
+    field("Endereço do atendimento", currentOrder.address || "Não informado", margin, y, contentWidth); y += 15;
+
+    y = sectionTitle("Informações da atividade", y + 1);
+    field("Serviço", currentOrder.service || "Atendimento técnico", margin, y, 88); field("Técnico responsável", currentOrder.tech || "Não informado", 103, y, 94); y += 15;
+    field("Data / horário", `${currentOrder.date ? new Date(`${currentOrder.date}T12:00:00`).toLocaleDateString("pt-BR") : "Não informada"} - ${currentOrder.time || "A definir"}`, margin, y, 58);
+    field("Situação", currentOrder.status, 73, y, 42); field("Check-in", currentOrder.checkInAt ? formatMoment(currentOrder.checkInAt) : "Não realizado", 117, y, 39); field("Check-out", currentOrder.checkOutAt ? formatMoment(currentOrder.checkOutAt) : "Não realizado", 158, y, 39); y += 15;
+
+    y = sectionTitle("Serviços prestados", y + 1);
+    const serviceLines = currentOrder.catalogItems?.length ? currentOrder.catalogItems.map((item, index) => `${index + 1}. ${item.name} (${item.kind})`) : [currentOrder.service || "Atendimento técnico"];
+    const serviceHeight = Math.max(16, serviceLines.length * 6 + 5);
+    pdf.setDrawColor(...line); pdf.roundedRect(margin, y, contentWidth, serviceHeight, 1, 1, "S"); pdf.setTextColor(...dark); pdf.setFont("helvetica", "normal"); pdf.setFontSize(8);
+    serviceLines.forEach((text, index) => pdf.text(pdf.splitTextToSize(text, contentWidth - 6), margin + 3, y + 5 + index * 6)); y += serviceHeight + 2;
+
+    y = sectionTitle("Checklist técnico", y);
+    const checks = ["Atendimento e diagnóstico realizados", "Equipamento inspecionado", "Área de trabalho organizada", "Teste de funcionamento executado", "Orientações repassadas ao cliente"];
+    checks.forEach((check, index) => { const rowY = y + index * 7; pdf.setDrawColor(...line); pdf.rect(margin, rowY, contentWidth, 7); pdf.setTextColor(...dark); pdf.setFontSize(7.5); pdf.text("✓", margin + 3, rowY + 4.7); pdf.text(check, margin + 8, rowY + 4.7); }); y += checks.length * 7 + 3;
+
+    y = sectionTitle("Registro fotográfico - antes e depois", y);
+    const photoY = y; const photoW = 88; const photoH = 55;
+    pdf.setDrawColor(...line); pdf.roundedRect(margin, photoY, photoW, photoH, 1, 1, "S"); pdf.roundedRect(109, photoY, photoW, photoH, 1, 1, "S");
+    const beforeAdded = await addImage(currentOrder.photoBefore, margin + 3, photoY + 3, photoW - 6, photoH - 11); const afterAdded = await addImage(currentOrder.photoAfter, 112, photoY + 3, photoW - 6, photoH - 11);
+    pdf.setTextColor(...gray); pdf.setFont("helvetica", "bold"); pdf.setFontSize(7); if (!beforeAdded) pdf.text("FOTO NÃO ADICIONADA", margin + photoW / 2, photoY + 27, { align: "center" }); if (!afterAdded) pdf.text("FOTO NÃO ADICIONADA", 109 + photoW / 2, photoY + 27, { align: "center" });
+    pdf.text("ANTES DO SERVIÇO", margin + photoW / 2, photoY + photoH - 3, { align: "center" }); pdf.text("DEPOIS DO SERVIÇO", 109 + photoW / 2, photoY + photoH - 3, { align: "center" });
+
+    pdf.addPage();
+    pdf.setTextColor(...blue); pdf.setFont("helvetica", "bold"); pdf.setFontSize(9); pdf.text(`ORDEM DE SERVIÇO ${currentOrder.id}`, margin, 13); pdf.setTextColor(...gray); pdf.setFontSize(7); pdf.text("REGISTRO TÉCNICO E CONFIRMAÇÃO DO ATENDIMENTO", 197, 13, { align: "right" }); pdf.setDrawColor(...blue); pdf.line(margin, 17, 197, 17);
+    y = sectionTitle("Observações e conclusão", 23);
+    field("Resultado do atendimento", currentOrder.status === "Concluída" ? "Serviço concluído e atendimento finalizado." : `Atendimento em situação: ${currentOrder.status}.`, margin, y, contentWidth, 20); y += 24;
+    y = sectionTitle("Assinaturas", y);
+    const signatureY = y; const signatureW = 88; const signatureH = 43;
+    pdf.setDrawColor(...line); pdf.roundedRect(margin, signatureY, signatureW, signatureH, 1, 1, "S"); pdf.roundedRect(109, signatureY, signatureW, signatureH, 1, 1, "S");
+    await addImage(currentOrder.clientSignature, margin + 8, signatureY + 4, signatureW - 16, 23); await addImage(currentOrder.technicianSignature, 117, signatureY + 4, signatureW - 16, 23);
+    pdf.setTextColor(...dark); pdf.setFont("helvetica", "bold"); pdf.setFontSize(7); pdf.text("ASSINATURA DO CLIENTE", margin + signatureW / 2, signatureY + 32, { align: "center" }); pdf.text("ASSINATURA DO TÉCNICO", 109 + signatureW / 2, signatureY + 32, { align: "center" });
+    pdf.setFont("helvetica", "normal"); pdf.setFontSize(7); pdf.text(currentOrder.client, margin + signatureW / 2, signatureY + 37, { align: "center" }); pdf.text(currentOrder.tech || "Técnico responsável", 109 + signatureW / 2, signatureY + 37, { align: "center" }); y += signatureH + 5;
+    y = sectionTitle("Evidências do atendimento", y);
+    const evidenceY = y; const evidenceH = 92;
+    pdf.setDrawColor(...line); pdf.roundedRect(margin, evidenceY, contentWidth, evidenceH, 1, 1, "S");
+    await addImage(currentOrder.photoBefore, margin + 4, evidenceY + 4, 84, 72); await addImage(currentOrder.photoAfter, 109, evidenceY + 4, 84, 72);
+    pdf.setTextColor(...gray); pdf.setFont("helvetica", "bold"); pdf.setFontSize(7); pdf.text("ANTES", 55, evidenceY + 82, { align: "center" }); pdf.text("DEPOIS", 151, evidenceY + 82, { align: "center" });
+    pdf.setDrawColor(...line); pdf.line(margin, 282, 197, 282); pdf.setTextColor(...gray); pdf.setFont("helvetica", "normal"); pdf.setFontSize(6.5); pdf.text("POLARTECH AR CONDICIONADO - Documento técnico gerado pelo ProAR", margin, 287); pdf.text("Página 2 de 2", 197, 287, { align: "right" });
+    const filename = `Ordem-de-Servico-${currentOrder.id.replace(/[^a-zA-Z0-9-]/g, "")}.pdf`;
+    return { blob: pdf.output("blob"), filename };
+  };
+  const downloadOrderPdf = async () => {
+    setPdfMessage("A gerar o PDF...");
+    try { const { blob, filename } = await createOrderPdf(); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = filename; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 2000); setPdfMessage("PDF gerado com sucesso."); }
+    catch { setPdfMessage("Não foi possível gerar o PDF."); }
+  };
+  const shareOrder = async (channel: "WhatsApp" | "E-mail") => {
+    setPdfMessage(`A preparar envio por ${channel}...`);
+    try {
+      const { blob, filename } = await createOrderPdf();
+      const file = new File([blob], filename, { type: "application/pdf" });
+      if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+        await navigator.share({ title: `Ordem de Serviço ${currentOrder.id}`, text: `Segue a Ordem de Serviço ${currentOrder.id} - ${currentOrder.client}.`, files: [file] });
+        setPdfMessage("Ordem compartilhada com sucesso."); return;
+      }
+      const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = filename; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 3000);
+      const text = encodeURIComponent(`Segue a Ordem de Serviço ${currentOrder.id} referente ao atendimento de ${currentOrder.client}. O PDF foi gerado para anexação.`);
+      if (channel === "WhatsApp") window.open(`https://wa.me/?text=${text}`, "_blank", "noopener,noreferrer");
+      else window.location.href = `mailto:?subject=${encodeURIComponent(`Ordem de Serviço ${currentOrder.id}`)}&body=${text}`;
+      setPdfMessage(`PDF baixado. Anexe-o ao envio por ${channel}.`);
+    } catch (error) { if ((error as Error)?.name !== "AbortError") setPdfMessage("Não foi possível preparar o compartilhamento."); }
+  };
+  const prepareNfse = async () => {
+    const fiscalPortal = window.open("about:blank", "_blank");
+    setPdfMessage("A preparar a OS para emissão da NFS-e...");
+    try {
+      const { blob, filename } = await createOrderPdf();
+      const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = filename; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 3000);
+      if (fiscalPortal) fiscalPortal.location.href = "https://webapp1-mirassol.cidade360.cloud/NFSe.Portal/Prestador/Nota/Index";
+      setPdfMessage("OS gerada. Portal fiscal aberto para confirmar a emissão da NFS-e.");
+    } catch { fiscalPortal?.close(); setPdfMessage("Não foi possível preparar a emissão da NFS-e."); }
+  };
   return <div className="modal-layer" role="dialog" aria-modal="true" aria-label={`Ordem ${order.id}`}>
     <button className="modal-backdrop" onClick={close} aria-label="Fechar ordem"/>
     <div className="modal order-detail-modal">
@@ -379,7 +492,8 @@ function OrderDetail({ order, close, onUpdate }: { order: ServiceOrder; close: (
           </div>
         </section>
       </div>
-      <div className="modal-actions"><button className="outline-btn" onClick={close}>Fechar</button><a className="outline-btn order-nfse-button" href="https://webapp1-mirassol.cidade360.cloud/NFSe.Portal/Prestador/Nota/Index" target="_blank" rel="noreferrer"><ReceiptText size={15}/> Emitir NFS-e</a><button className="primary-btn" onClick={() => window.print()}><FileText size={15}/> Imprimir ordem</button></div>
+      {pdfMessage && <div className="order-pdf-message"><CheckCircle2 size={15}/>{pdfMessage}</div>}
+      <div className="modal-actions order-document-actions"><button className="outline-btn" onClick={close}>Fechar</button><button className="outline-btn" onClick={() => void shareOrder("E-mail")}><ArrowRight size={15}/> E-mail</button><button className="outline-btn whatsapp-share" onClick={() => void shareOrder("WhatsApp")}><Phone size={15}/> WhatsApp</button><button className="outline-btn" onClick={() => void downloadOrderPdf()}><FileText size={15}/> Gerar PDF</button><button className="primary-btn order-nfse-button" onClick={() => void prepareNfse()}><ReceiptText size={15}/> Emitir NFS-e</button></div>
       <article className="print-service-order">
         <header className="print-order-header"><img src="/proar-logo.png" alt="ProAR — Gestão de Serviços"/><div><span>ORDEM DE SERVIÇO</span><h1>{currentOrder.id}</h1><p>Documento técnico de atendimento</p></div></header>
         <section className="print-order-status"><div><small>SITUAÇÃO</small><strong>{currentOrder.status}</strong></div><div><small>DATA AGENDADA</small><strong>{currentOrder.date ? new Date(`${currentOrder.date}T12:00:00`).toLocaleDateString("pt-BR") : "Não informada"}</strong></div><div><small>HORÁRIO</small><strong>{currentOrder.time || "Não informado"}</strong></div></section>
