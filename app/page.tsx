@@ -379,7 +379,7 @@ function OrderDetail({ order, close, onUpdate }: { order: ServiceOrder; close: (
           </div>
         </section>
       </div>
-      <div className="modal-actions"><button className="outline-btn" onClick={close}>Fechar</button><button className="primary-btn" onClick={() => window.print()}><FileText size={15}/> Imprimir ordem</button></div>
+      <div className="modal-actions"><button className="outline-btn" onClick={close}>Fechar</button><a className="outline-btn order-nfse-button" href="https://webapp1-mirassol.cidade360.cloud/NFSe.Portal/Prestador/Nota/Index" target="_blank" rel="noreferrer"><ReceiptText size={15}/> Emitir NFS-e</a><button className="primary-btn" onClick={() => window.print()}><FileText size={15}/> Imprimir ordem</button></div>
       <article className="print-service-order">
         <header className="print-order-header"><img src="/proar-logo.png" alt="ProAR — Gestão de Serviços"/><div><span>ORDEM DE SERVIÇO</span><h1>{currentOrder.id}</h1><p>Documento técnico de atendimento</p></div></header>
         <section className="print-order-status"><div><small>SITUAÇÃO</small><strong>{currentOrder.status}</strong></div><div><small>DATA AGENDADA</small><strong>{currentOrder.date ? new Date(`${currentOrder.date}T12:00:00`).toLocaleDateString("pt-BR") : "Não informada"}</strong></div><div><small>HORÁRIO</small><strong>{currentOrder.time || "Não informado"}</strong></div></section>
