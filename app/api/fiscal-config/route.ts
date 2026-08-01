@@ -33,7 +33,8 @@ type FiscalRecord = {
 };
 
 function authorized(request: NextRequest) {
-  return readSession(request.cookies.get(COOKIE_NAME)?.value);
+  const user = readSession(request.cookies.get(COOKIE_NAME)?.value);
+  return user && (user.permissions.includes("*") || user.permissions.includes("Configurações")) ? user : null;
 }
 
 function encryptionKey() {
