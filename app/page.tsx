@@ -81,6 +81,9 @@ type ModuleRecord = {
   paymentInstallments?: PurchaseInstallment[];
   purchaseId?: string;
   installmentNumber?: number;
+  reminderEnabled?: boolean;
+  reminderDays?: number;
+  reminderMessage?: string;
 };
 
 type PurchaseItem = {
@@ -507,12 +510,12 @@ function OrderDetail({ order, close, onUpdate }: { order: ServiceOrder; close: (
   </div>;
 }
 
-type SaleItem = { id: string; name: string; code: string; price: number; kind: "Produto" | "Serviço" };
+type SaleItem = { id: string; name: string; code: string; price: number; kind: "Produto" | "Serviço"; reminderEnabled?: boolean; reminderDays?: number; reminderMessage?: string };
 type CartItem = SaleItem & { quantity: number };
 
 const quickSaleCatalog: SaleItem[] = [];
 
-function SalesPDV({ customers }: { customers: Customer[] }) {
+function SalesPDV({ customers, catalogRecords, onFinishSale }: { customers: Customer[]; catalogRecords: ModuleRecord[]; onFinishSale: (sale: { id: string; customer: string; payment: string; subtotal: number; discount: number; total: number; items: CartItem[]; createdAt: string }) => void }) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"itens" | "cliente" | "pagamento" | "opcoes">("itens");
@@ -522,7 +525,8 @@ function SalesPDV({ customers }: { customers: Customer[] }) {
   const [payment, setPayment] = useState("PIX");
   const [notice, setNotice] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
-  const filteredCatalog = quickSaleCatalog.filter(item => `${item.name} ${item.code} ${item.kind}`.toLowerCase().includes(search.toLowerCase()));
+  const saleCatalog: SaleItem[] = catalogRecords.map(item => ({ id: item.id, name: item.name, code: item.id, price: item.value ?? 0, kind: item.kind ?? "Produto", reminderEnabled: item.reminderEnabled, reminderDays: item.reminderDays, reminderMessage: item.reminderMessage }));
+  const filteredCatalog = saleCatalog.filter(item => `${item.name} ${item.code} ${item.kind}`.toLowerCase().includes(search.toLowerCase()));
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const total = Math.max(0, subtotal - discount);
 
@@ -550,6 +554,7 @@ function SalesPDV({ customers }: { customers: Customer[] }) {
     };
     const previous = JSON.parse(localStorage.getItem("proar-v3-pdv-sales") || "[]");
     localStorage.setItem("proar-v3-pdv-sales", JSON.stringify([sale, ...previous]));
+    onFinishSale(sale);
     setCart([]);
     setDiscount(0);
     setCustomer("");
@@ -662,25 +667,25 @@ function downloadCsv(filename: string, rows: string[][]) {
   URL.revokeObjectURL(link.href);
 }
 
-type PublicTender = { numeroControlePNCP?: string; objetoCompra?: string; modalidadeNome?: string; dataEncerramentoProposta?: string; valorTotalEstimado?: number; linkSistemaOrigem?: string; anoCompra?: number; sequencialCompra?: number; orgaoEntidade?: { razaoSocial?: string; cnpj?: string }; unidadeOrgao?: { municipioNome?: string; ufSigla?: string; nomeUnidade?: string } };
+type PublicTender = { numeroControlePNCP?: string; objetoCompra?: string; modalidadeNome?: string; dataEncerramentoProposta?: string; valorTotalEstimado?: number; linkSistemaOrigem?: string; anoCompra?: number; sequencialCompra?: number; distanciaMirassol?: number; discoveredAt?: string; whatsappStatus?: string; orgaoEntidade?: { razaoSocial?: string; cnpj?: string }; unidadeOrgao?: { municipioNome?: string; ufSigla?: string; nomeUnidade?: string } };
 
 function Licitacoes() {
   const today = new Date();
-  const prior = new Date(today); prior.setDate(today.getDate() - 30);
+  const next60Days = new Date(today); next60Days.setDate(today.getDate() + 60);
   const iso = (value: Date) => value.toISOString().slice(0, 10);
   const [keyword, setKeyword] = useState("empresa especializada para prestar serviços de manutenção preventiva e corretiva em aparelho de ar condicionado");
   const [kindFilter, setKindFilter] = useState("Todos");
-  const [uf, setUf] = useState("SP");
-  const [modality, setModality] = useState("6");
-  const [startDate, setStartDate] = useState(iso(prior));
-  const [endDate, setEndDate] = useState(iso(today));
-  const [radius, setRadius] = useState("150");
+  const [uf, setUf] = useState("");
+  const [modality, setModality] = useState("all");
+  const [startDate, setStartDate] = useState(iso(today));
+  const [endDate, setEndDate] = useState(iso(next60Days));
+  const [radius, setRadius] = useState("300");
   const [results, setResults] = useState<PublicTender[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const distances: Record<string, number> = { mirassol:0, "sao jose do rio preto":15, jaci:21, "bady bassitt":22, balsamo:29, "neves paulista":32, "monte aprazivel":41, cedral:34, potirendaba:43, tanabi:45, ibira:48, catanduva:58, olimpia:62, votuporanga:77, barretos:105, bebedouro:112, fernandopolis:120, aracatuba:135, jaboticabal:145, franca:220, "ribeirao preto":225 };
   const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
-  const distanceOf = (item: PublicTender) => distances[normalize(item.unidadeOrgao?.municipioNome || "")];
+  const distanceOf = (item: PublicTender) => item.distanciaMirassol ?? distances[normalize(item.unidadeOrgao?.municipioNome || "")];
   const tenderKind = (item: PublicTender) => {
     const text = normalize(item.objetoCompra || "");
     const service = /manutenc|instalac|higieniz|limpeza|pmoc|assistencia tecnica|servico|reparo|conserto/.test(text);
@@ -696,12 +701,12 @@ function Licitacoes() {
     const kind = tenderKind(item);
     const matchesKind = kindFilter === "Todos" || kind === kindFilter || kind === "Misto";
     const distance = distanceOf(item);
-    return climateFocus && matchesKeyword && matchesKind && (!radius || distance === undefined || distance <= Number(radius));
+    return climateFocus && matchesKeyword && matchesKind && (!radius || (distance !== undefined && distance <= Number(radius)));
   });
   const searchTenders = async () => {
     setLoading(true); setError("");
     try {
-      const params = new URLSearchParams({ dataInicial: startDate, dataFinal: endDate, modalidade: modality, uf });
+      const params = new URLSearchParams({ dataInicial: startDate, dataFinal: endDate, modalidade: modality, uf, raio: radius });
       const response = await fetch(`/api/licitacoes?${params.toString()}`, { cache: "no-store" });
       if (!response.ok) throw new Error("O PNCP não respondeu à consulta");
       const payload = await response.json();
@@ -710,11 +715,12 @@ function Licitacoes() {
     } catch (searchError) { setError(searchError instanceof Error ? searchError.message : "Não foi possível consultar as licitações."); }
     finally { setLoading(false); }
   };
+  useEffect(() => { searchTenders(); }, []);
   return <section className="module-page tenders-page">
     <div className="management-hero tender-hero"><div><span className="section-kicker"><Landmark size={12}/> OPORTUNIDADES PÚBLICAS</span><h2>Central de Licitações</h2><p>Consulta oficial de editais e avisos publicados no PNCP, incluindo o link do sistema de origem utilizado por cada órgão.</p></div><div className="management-actions"><a className="outline-btn" href="https://pncp.gov.br/app/editais" target="_blank" rel="noreferrer"><Landmark size={14}/> Abrir PNCP</a><button className="primary-btn" onClick={searchTenders} disabled={loading}><Search size={15}/> {loading ? "Consultando..." : "Buscar oportunidades"}</button></div></div>
     <div className="tender-sources"><a href="https://www.gov.br/compras/pt-br" target="_blank" rel="noreferrer">Compras.gov.br</a><a href="https://pncp.gov.br" target="_blank" rel="noreferrer">PNCP</a><a href="https://www.bec.sp.gov.br" target="_blank" rel="noreferrer">BEC/SP</a><a href="https://www.licitardigital.com.br" target="_blank" rel="noreferrer">Licitar Digital</a><a href="https://bllcompras.com" target="_blank" rel="noreferrer">BLL Compras</a></div>
-    <div className="tender-filter-panel"><label className="wide-search">Objeto / palavra-chave<input value={keyword} onChange={event => setKeyword(event.target.value)} placeholder="Ex.: ar-condicionado, PMOC, climatização, manutenção"/></label><label>Foco da oportunidade<select value={kindFilter} onChange={event => setKindFilter(event.target.value)}><option>Todos</option><option>Serviço</option><option>Produto</option></select></label><label>UF<select value={uf} onChange={event => setUf(event.target.value)}><option>SP</option><option>MG</option><option>PR</option><option>RJ</option><option>MS</option><option>GO</option><option value="">Brasil</option></select></label><label>Modalidade<select value={modality} onChange={event => setModality(event.target.value)}><option value="6">Pregão eletrônico</option><option value="4">Concorrência eletrônica</option><option value="8">Dispensa de licitação</option><option value="9">Inexigibilidade</option><option value="12">Credenciamento</option><option value="all">Todas as principais</option></select></label><label>Data inicial<input type="date" value={startDate} onChange={event => setStartDate(event.target.value)}/></label><label>Data final<input type="date" value={endDate} onChange={event => setEndDate(event.target.value)}/></label><label>Distância de Mirassol<select value={radius} onChange={event => setRadius(event.target.value)}><option value="50">Até 50 km</option><option value="100">Até 100 km</option><option value="150">Até 150 km</option><option value="250">Até 250 km</option><option value="">Sem limite</option></select></label></div>
-    <div className="tender-focus-note"><ShieldCheck size={16}/><div><b>Filtro técnico de climatização ativado</b><small>Resultados genéricos de manutenção, mobiliário, purificadores e outros equipamentos são descartados. A busca aceita serviços e também aquisição de aparelhos, peças e materiais de ar-condicionado.</small></div></div>
+    <div className="tender-filter-panel"><label className="wide-search">Objeto / palavra-chave<input value={keyword} onChange={event => setKeyword(event.target.value)} placeholder="Ex.: ar-condicionado, PMOC, climatização, manutenção"/></label><label>Foco da oportunidade<select value={kindFilter} onChange={event => setKindFilter(event.target.value)}><option>Todos</option><option>Serviço</option><option>Produto</option></select></label><label>UF<select value={uf} onChange={event => setUf(event.target.value)}><option value="">SP e região próxima</option><option>SP</option><option>MG</option></select></label><label>Modalidade<select value={modality} onChange={event => setModality(event.target.value)}><option value="6">Pregão eletrônico</option><option value="4">Concorrência eletrônica</option><option value="8">Dispensa de licitação</option><option value="9">Inexigibilidade</option><option value="12">Credenciamento</option><option value="all">Todas as principais</option></select></label><label>Encerramento inicial<input type="date" value={startDate} onChange={event => setStartDate(event.target.value)}/></label><label>Encerramento final<input type="date" value={endDate} onChange={event => setEndDate(event.target.value)}/></label><label>Distância de Mirassol<select value={radius} onChange={event => setRadius(event.target.value)}><option value="50">Até 50 km</option><option value="100">Até 100 km</option><option value="150">Até 150 km</option><option value="250">Até 250 km</option><option value="300">Até 300 km</option></select></label></div>
+    <div className="tender-focus-note"><ShieldCheck size={16}/><div><b>Monitor automático diário ativado</b><small>Busca oportunidades com encerramento nos próximos 60 dias e até 300 km de Mirassol. Resultados genéricos são descartados e licitações já identificadas não geram novo aviso.</small></div></div>
     <div className="tender-summary"><article><span><Search size={17}/></span><div><small>RESULTADOS LOCALIZADOS</small><strong>{visible.length}</strong></div></article><article><span><MapPin size={17}/></span><div><small>CIDADE DE REFERÊNCIA</small><strong>Mirassol/SP</strong></div></article><article><span><Clock3 size={17}/></span><div><small>PERÍODO CONSULTADO</small><strong>{new Date(`${startDate}T12:00:00`).toLocaleDateString("pt-BR")} — {new Date(`${endDate}T12:00:00`).toLocaleDateString("pt-BR")}</strong></div></article></div>
     {error && <div className="tender-warning"><AlertTriangle size={16}/>{error}</div>}
     <div className="tender-results">{visible.map((item, index) => { const distance = distanceOf(item); const pncpUrl = item.orgaoEntidade?.cnpj && item.anoCompra && item.sequencialCompra ? `https://pncp.gov.br/app/editais/${item.orgaoEntidade.cnpj}/${item.anoCompra}/${item.sequencialCompra}` : "https://pncp.gov.br/app/editais"; return <article key={item.numeroControlePNCP || index}><header><div><span>{item.modalidadeNome || "Contratação pública"}</span><em className={`tender-kind ${tenderKind(item).toLowerCase()}`}>{tenderKind(item)}</em></div><b>{distance === undefined ? "Distância a confirmar" : `${distance} km de Mirassol`}</b></header><h3>{item.objetoCompra || "Objeto não informado"}</h3><div className="tender-meta"><span><Landmark size={13}/>{item.orgaoEntidade?.razaoSocial || "Órgão público"}</span><span><MapPin size={13}/>{item.unidadeOrgao?.municipioNome || "Município não informado"}/{item.unidadeOrgao?.ufSigla || uf}</span><span><Clock3 size={13}/>Encerramento: {item.dataEncerramentoProposta ? new Date(item.dataEncerramentoProposta).toLocaleString("pt-BR") : "Consultar edital"}</span></div><footer><strong>{item.valorTotalEstimado ? `R$ ${item.valorTotalEstimado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "Valor não informado"}</strong><div><a href={pncpUrl} target="_blank" rel="noreferrer">Ver no PNCP</a>{item.linkSistemaOrigem && <a href={item.linkSistemaOrigem} target="_blank" rel="noreferrer">Sistema do órgão <ArrowRight size={12}/></a>}</div></footer></article>; })}{!loading && !visible.length && <div className="linked-empty"><Landmark size={24}/><h4>Faça uma consulta oficial</h4><p>Defina os filtros e clique em “Buscar oportunidades”.</p></div>}</div>
@@ -918,6 +924,9 @@ type ModalSave = {
   supplierDoc: string;
   supplierId: string;
   registerSupplier: boolean;
+  reminderEnabled: boolean;
+  reminderDays: number;
+  reminderMessage: string;
 };
 
 type AuthenticatedUser = { username: string; displayName: string; role?: string; permissions?: string[] };
@@ -993,6 +1002,9 @@ function Modal({ title, customers, catalogRecords, supplierRecords, close, onSav
   const [recordValue, setRecordValue] = useState("");
   const [recordCategory, setRecordCategory] = useState("");
   const [recordKind, setRecordKind] = useState<"Serviço" | "Produto">(title.includes("Produtos") ? "Produto" : "Serviço");
+  const [reminderEnabled, setReminderEnabled] = useState(title.includes("Produtos"));
+  const [reminderDays, setReminderDays] = useState(180);
+  const [reminderMessage, setReminderMessage] = useState("Olá! Já está no período recomendado para realizar a higienização do seu ar-condicionado. Podemos agendar?");
   const [selectedCatalogIds, setSelectedCatalogIds] = useState<string[]>([]);
   const [purchaseItems, setPurchaseItems] = useState<PurchaseItem[]>([{ id: `ITEM-${Date.now()}`, description: "", quantity: 1, unitValue: 0 }]);
   const [paymentType, setPaymentType] = useState<"À vista" | "A prazo">("À vista");
@@ -1109,6 +1121,7 @@ function Modal({ title, customers, catalogRecords, supplierRecords, close, onSav
         <label className="wide">Observações<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="Informações adicionais do cliente..."/></label>
       </> : <>
         {isCatalogRegistration && <div className="wide kind-selector"><span>TIPO DO CADASTRO</span><label className={recordKind === "Serviço" ? "active" : ""}><input type="radio" name="record-kind" checked={recordKind === "Serviço"} onChange={() => setRecordKind("Serviço")}/><Wrench size={17}/><div><b>Serviço</b><small>Será disponibilizado nas ordens de serviço</small></div></label><label className={recordKind === "Produto" ? "active" : ""}><input type="radio" name="record-kind" checked={recordKind === "Produto"} onChange={() => setRecordKind("Produto")}/><Package size={17}/><div><b>Produto</b><small>Item físico, peça ou material de estoque</small></div></label></div>}
+        {isCatalogRegistration && recordKind === "Produto" && <div className="wide product-reminder-editor"><div className="product-reminder-title"><span><Bell size={18}/></span><div><b>Lembrete automático ao cliente</b><small>Após a venda, o sistema agenda uma mensagem de higienização para o cliente.</small></div><label className="mini-switch"><input type="checkbox" checked={reminderEnabled} onChange={event => setReminderEnabled(event.target.checked)}/><i/></label></div>{reminderEnabled && <div className="product-reminder-fields"><label>Enviar após quantos dias?<input type="number" min="1" max="730" value={reminderDays} onChange={event => setReminderDays(Math.max(1, Number(event.target.value)))}/></label><label className="wide">Mensagem ao cliente<textarea value={reminderMessage} onChange={event => setReminderMessage(event.target.value)} /></label></div>}</div>}
         {managementFlows[requestedModule] && <div className="wide module-form-guidance"><span><Grid2X2 size={18}/></span><div><b>Cadastro integrado de ${requestedModule.toLowerCase()}</b><small>Ao salvar, o registro ficará disponível nas abas, filtros e relatórios deste fluxo.</small></div></div>}
         {requestedModule === "Compras" && <div className="wide purchase-xml-import">
           <span className="purchase-xml-icon"><FileText size={21}/></span><div><b>Importar XML da NF-e</b><small>Preenche automaticamente fornecedor, nota fiscal, itens, valores e parcelas do Contas a Pagar.</small>{xmlImportStatus && <em className={xmlImportStatus.startsWith("Não") ? "error" : "success"}>{xmlImportStatus}</em>}</div>
@@ -1145,7 +1158,7 @@ function Modal({ title, customers, catalogRecords, supplierRecords, close, onSav
         <label>{requestedModule === "Funcionários" ? "Telefone / WhatsApp" : "Telefone / contato"}<input placeholder="(00) 00000-0000"/></label><label>{requestedModule === "Funcionários" ? "Data de admissão" : requestedModule === "Compras" ? "Previsão de entrega" : requestedModule === "Financeiro" ? "Data de vencimento" : "Data"}<input type="date" value={date} onChange={event => setDate(event.target.value)}/></label><label className="wide">{requestedModule === "Funcionários" ? "Permissões e observações" : "Descrição / observações"}<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder={requestedModule === "Funcionários" ? "Informe os módulos autorizados e observações do funcionário..." : "Inclua os detalhes deste cadastro..."}/></label>
       </>}
     </>}
-  </div><div className="modal-actions"><button className="outline-btn" onClick={close}>Cancelar</button><button className="primary-btn" disabled={isNewOrder ? !selectedClient || !tech || !date : isNewCustomer ? !recordName || !address.trim() || !addressValidated : requestedModule === "Compras" ? !recordName || !recordClient || !purchaseItems.some(item => item.description.trim() && item.quantity > 0) || purchaseTotal <= 0 || (paymentType === "A prazo" && !firstDueDate) : (!isLinkedStructure && !recordName)} onClick={() => onSave({ title, name: recordName, client: isNewOrder ? selectedClient : recordClient, doc, contact, phone, address: isNewOrder ? (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "") : address, unit, tech, date, time, description, status: recordStatus, value: requestedModule === "Compras" ? purchaseTotal : Number(recordValue) || 0, category: recordCategory, kind: recordKind, catalogItems: catalogRecords.filter(item => selectedCatalogIds.includes(item.id)).map(item => ({ id: item.id, name: item.name, kind: item.kind || "Serviço" })), purchaseItems: purchaseItems.filter(item => item.description.trim() && item.quantity > 0), paymentType, paymentMethod, installments: paymentType === "A prazo" ? Math.max(1, installments) : 1, firstDueDate, paymentInstallments, xmlImported, supplierDoc, supplierId, registerSupplier: xmlImported && !supplierId })}><CheckCircle2 size={15}/> Salvar registro</button></div></div></div>;
+  </div><div className="modal-actions"><button className="outline-btn" onClick={close}>Cancelar</button><button className="primary-btn" disabled={isNewOrder ? !selectedClient || !tech || !date : isNewCustomer ? !recordName || !address.trim() || !addressValidated : requestedModule === "Compras" ? !recordName || !recordClient || !purchaseItems.some(item => item.description.trim() && item.quantity > 0) || purchaseTotal <= 0 || (paymentType === "A prazo" && !firstDueDate) : (!isLinkedStructure && !recordName)} onClick={() => onSave({ title, name: recordName, client: isNewOrder ? selectedClient : recordClient, doc, contact, phone, address: isNewOrder ? (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "") : address, unit, tech, date, time, description, status: recordStatus, value: requestedModule === "Compras" ? purchaseTotal : Number(recordValue) || 0, category: recordCategory, kind: recordKind, catalogItems: catalogRecords.filter(item => selectedCatalogIds.includes(item.id)).map(item => ({ id: item.id, name: item.name, kind: item.kind || "Serviço" })), purchaseItems: purchaseItems.filter(item => item.description.trim() && item.quantity > 0), paymentType, paymentMethod, installments: paymentType === "A prazo" ? Math.max(1, installments) : 1, firstDueDate, paymentInstallments, xmlImported, supplierDoc, supplierId, registerSupplier: xmlImported && !supplierId, reminderEnabled: recordKind === "Produto" && reminderEnabled, reminderDays, reminderMessage })}><CheckCircle2 size={15}/> Salvar registro</button></div></div></div>;
 }
 
 export default function Home() {
@@ -1200,6 +1213,18 @@ export default function Home() {
     }).then(response => {
       if (!response.ok) setSavedMessage("Registro mantido neste aparelho, mas a sincronização falhou.");
     });
+  };
+  const finishPdvSale = (sale: { id: string; customer: string; payment: string; subtotal: number; discount: number; total: number; items: CartItem[]; createdAt: string }) => {
+    const customer = customerRecords.find(item => item.name === sale.customer);
+    const saleRecord: ModuleRecord = { id: sale.id, name: `Venda ${sale.id}`, client: sale.customer, description: sale.items.map(item => `${item.quantity}x ${item.name}`).join(" • "), createdAt: sale.createdAt, status: "Concluída", value: sale.total, category: sale.payment };
+    const reminders: ModuleRecord[] = sale.items.filter(item => item.reminderEnabled && customer?.phone).map((item, index) => {
+      const due = new Date(); due.setDate(due.getDate() + Math.max(1, item.reminderDays ?? 180));
+      return { id: `LEM-${sale.id}-${index + 1}`, name: `Lembrete de higienização • ${item.name}`, client: sale.customer, description: item.reminderMessage || "Já está no período recomendado para realizar a higienização do seu ar-condicionado.", createdAt: new Date().toLocaleString("pt-BR"), status: "Agendado", date: due.toISOString().slice(0, 10), category: customer?.phone || "", reminderEnabled: true, reminderDays: item.reminderDays, reminderMessage: item.reminderMessage };
+    });
+    const updatedModules = { ...moduleRecords, Vendas: [saleRecord, ...(moduleRecords.Vendas ?? [])], Lembretes: [...reminders, ...(moduleRecords.Lembretes ?? [])] };
+    setModuleRecords(updatedModules);
+    localStorage.setItem("proar-v3-module-records", JSON.stringify(updatedModules));
+    persistSharedState(customerRecords, serviceOrders, updatedModules);
   };
   const updateServiceOrder = (updatedOrder: ServiceOrder) => {
     const updatedOrders = serviceOrders.map(order => order.id === updatedOrder.id ? updatedOrder : order);
@@ -1270,6 +1295,9 @@ export default function Home() {
         installments: data.installments,
         firstDueDate: data.firstDueDate,
         paymentInstallments: data.paymentInstallments,
+        reminderEnabled: data.reminderEnabled,
+        reminderDays: data.reminderDays,
+        reminderMessage: data.reminderMessage,
       };
       let updatedRecords = { ...moduleRecords, [moduleName]: [record, ...(moduleRecords[moduleName] ?? [])] };
       if (moduleName === "Compras" && data.xmlImported) {
@@ -1398,7 +1426,7 @@ export default function Home() {
     <main className="main">
       <Header title={current === "Painel inicial" ? `Bom dia, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNewOrder={() => setModal("Nova ordem de serviço")} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onLogout={logout}/>
       {savedMessage && <div className="save-toast" role="status"><CheckCircle2 size={16}/>{savedMessage}</div>}
-      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} customers={customerRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Vendas" ? <SalesPDV customers={customerRecords}/> : current === "Licitações" ? <Licitacoes/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} serviceOrders={serviceOrders}/> : current === "Configurações" ? <SettingsPage/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} records={moduleRecords[current] ?? []}/>}</div>
+      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} customers={customerRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} catalogRecords={[...(moduleRecords.Produtos ?? []), ...(moduleRecords.Serviços ?? [])]} onFinishSale={finishPdvSale}/> : current === "Licitações" ? <Licitacoes/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} serviceOrders={serviceOrders}/> : current === "Configurações" ? <SettingsPage/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} records={moduleRecords[current] ?? []}/>}</div>
       <footer><span>© 2026 ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
     {modal && <Modal title={modal} customers={customerRecords} catalogRecords={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} supplierRecords={moduleRecords["Fornecedores"] ?? []} close={() => setModal("")} onSave={saveRecord}/>}
