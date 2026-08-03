@@ -89,3 +89,6 @@ footer{height:48px;border-top:1px solid #e3e9f0;color:#9aa5b4;display:flex;justi
 /* Fontes externas da Central de Licitações */
 @media(min-width:951px){.tender-filters{grid-template-columns:minmax(240px,1fr) 145px 130px 130px 145px}}
 .tender-source{display:inline-flex;align-items:center;padding:4px 7px;border-radius:99px;background:#e8f1fc;color:#315f95;font-size:6px;line-height:1;font-weight:900;white-space:nowrap}.tender-source.source-bllcompras{background:#e9f8ef;color:#087d48}.tender-source.source-comprasgovbr{background:#fff2dc;color:#a56205}.tender-source.source-licitacese{background:#f0eaff;color:#6840a8}
+
+/* Importação tratada de clientes */
+.customer-import-button{display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer}.customer-import-button input{display:none}
