@@ -584,6 +584,7 @@ type Tender = {
   anoCompra?: number;
   sequencialCompra?: number;
   distanciaMirassol?: number;
+  sourcePortal?: "PNCP" | "Compras.gov.br" | "BLL Compras" | "Licitações-e";
   orgaoEntidade?: { razaoSocial?: string; cnpj?: string };
   unidadeOrgao?: { municipioNome?: string; ufSigla?: string; nomeUnidade?: string };
 };
@@ -596,6 +597,7 @@ function TendersModule() {
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(sixtyDays);
   const [radius, setRadius] = useState("300");
+  const [source, setSource] = useState("Todas as fontes");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [warning, setWarning] = useState("");
@@ -620,9 +622,8 @@ function TendersModule() {
 
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
-    if (!term) return items;
-    return items.filter(item => [item.objetoCompra, item.orgaoEntidade?.razaoSocial, item.unidadeOrgao?.municipioNome, item.modalidadeNome].some(value => value?.toLocaleLowerCase("pt-BR").includes(term)));
-  }, [items, search]);
+    return items.filter(item => (source === "Todas as fontes" || (item.sourcePortal || "PNCP") === source) && (!term || [item.objetoCompra, item.orgaoEntidade?.razaoSocial, item.unidadeOrgao?.municipioNome, item.modalidadeNome].some(value => value?.toLocaleLowerCase("pt-BR").includes(term))));
+  }, [items, search, source]);
   const totalValue = filtered.reduce((sum, item) => sum + Number(item.valorTotalEstimado || 0), 0);
   const pncpLink = (item: Tender) => item.orgaoEntidade?.cnpj && item.anoCompra && item.sequencialCompra
     ? `https://pncp.gov.br/app/editais/${item.orgaoEntidade.cnpj}/${item.anoCompra}/${item.sequencialCompra}`
@@ -631,13 +632,13 @@ function TendersModule() {
   return <section className="tenders-page">
     <div className="management-hero tender-hero"><div><span className="section-kicker"><Gavel size={12}/> MONITORAMENTO PÚBLICO</span><h2>Licitações de climatização</h2><p>Busca direcionada para ar-condicionado, refrigeração, PMOC, peças e equipamentos relacionados.</p></div><button className="primary-btn" disabled={loading} onClick={() => void load(false)}><RefreshCw className={loading ? "spinning" : ""} size={15}/>{loading ? "Consultando..." : "Atualizar busca"}</button></div>
     <div className="tender-kpis"><article><span><Gavel size={17}/></span><div><small>OPORTUNIDADES</small><strong>{filtered.length}</strong></div></article><article><span><CircleDollarSign size={17}/></span><div><small>VALOR ESTIMADO</small><strong>R$ {totalValue.toLocaleString("pt-BR", { notation: "compact", maximumFractionDigits: 1 })}</strong></div></article><article><span><MapPin size={17}/></span><div><small>RAIO DE BUSCA</small><strong>Até {radius} km</strong></div></article><article><span><Clock3 size={17}/></span><div><small>ÚLTIMA CONSULTA</small><strong>{lastScan ? new Date(lastScan).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "Aguardando"}</strong></div></article></div>
-    <div className="panel tender-filters"><label className="tender-search"><Search size={16}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Pesquisar órgão, objeto ou cidade..."/></label><label>De<input type="date" value={startDate} onChange={event => setStartDate(event.target.value)}/></label><label>Até<input type="date" value={endDate} onChange={event => setEndDate(event.target.value)}/></label><label>Distância<select value={radius} onChange={event => setRadius(event.target.value)}><option value="100">Até 100 km</option><option value="200">Até 200 km</option><option value="300">Até 300 km</option></select></label></div>
+    <div className="panel tender-filters"><label className="tender-search"><Search size={16}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Pesquisar órgão, objeto ou cidade..."/></label><label>Fonte<select value={source} onChange={event => setSource(event.target.value)}><option>Todas as fontes</option><option>PNCP</option><option>Compras.gov.br</option><option>BLL Compras</option><option>Licitações-e</option></select></label><label>De<input type="date" value={startDate} onChange={event => setStartDate(event.target.value)}/></label><label>Até<input type="date" value={endDate} onChange={event => setEndDate(event.target.value)}/></label><label>Distância<select value={radius} onChange={event => setRadius(event.target.value)}><option value="100">Até 100 km</option><option value="200">Até 200 km</option><option value="300">Até 300 km</option></select></label></div>
     {warning && <div className="tender-alert warning"><AlertTriangle size={16}/>{warning}</div>}
     {error && <div className="tender-alert error"><AlertTriangle size={16}/><span>{error}</span><button onClick={() => void load(false)}>Tentar novamente</button></div>}
     {loading ? <div className="panel tender-loading"><RefreshCw className="spinning" size={24}/><strong>Consultando oportunidades no PNCP</strong><p>Aplicando o filtro técnico de climatização e distância.</p></div> : filtered.length ? <div className="tender-grid">{filtered.map((item, index) => {
       const closing = item.dataEncerramentoProposta ? new Date(item.dataEncerramentoProposta) : null;
       const days = closing ? Math.ceil((closing.getTime() - Date.now()) / 86400000) : null;
-      return <article className="panel tender-card" key={item.numeroControlePNCP || `${item.objetoCompra}-${index}`}><header><span><Gavel size={15}/>{item.modalidadeNome || "Contratação pública"}</span><em className={days !== null && days <= 7 ? "urgent" : ""}>{days === null ? "Prazo não informado" : days < 0 ? "Encerrada" : `${days} dia(s) restantes`}</em></header><h3>{item.objetoCompra || "Objeto não informado"}</h3><div className="tender-meta"><span><Landmark size={13}/>{item.orgaoEntidade?.razaoSocial || "Órgão não informado"}</span><span><MapPin size={13}/>{item.unidadeOrgao?.municipioNome || "Cidade não informada"}/{item.unidadeOrgao?.ufSigla || "—"} • {item.distanciaMirassol ?? "—"} km</span><span><Clock3 size={13}/>Encerramento: {closing ? closing.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—"}</span></div><footer><strong>R$ {Number(item.valorTotalEstimado || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong><div><a href={pncpLink(item)} target="_blank" rel="noreferrer">Ver no PNCP <ExternalLink size={12}/></a>{item.linkSistemaOrigem && <a href={item.linkSistemaOrigem} target="_blank" rel="noreferrer">Sistema do órgão <ArrowRight size={12}/></a>}</div></footer></article>;
+      return <article className="panel tender-card" key={item.numeroControlePNCP || `${item.objetoCompra}-${index}`}><header><span><Gavel size={15}/>{item.modalidadeNome || "Contratação pública"}<b className={`tender-source source-${(item.sourcePortal || "PNCP").toLowerCase().replace(/[^a-z]/g, "")}`}>{item.sourcePortal || "PNCP"}</b></span><em className={days !== null && days <= 7 ? "urgent" : ""}>{days === null ? "Prazo não informado" : days < 0 ? "Encerrada" : `${days} dia(s) restantes`}</em></header><h3>{item.objetoCompra || "Objeto não informado"}</h3><div className="tender-meta"><span><Landmark size={13}/>{item.orgaoEntidade?.razaoSocial || "Órgão não informado"}</span><span><MapPin size={13}/>{item.unidadeOrgao?.municipioNome || "Cidade não informada"}/{item.unidadeOrgao?.ufSigla || "—"} • {item.distanciaMirassol ?? "—"} km</span><span><Clock3 size={13}/>Encerramento: {closing ? closing.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—"}</span></div><footer><strong>R$ {Number(item.valorTotalEstimado || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong><div><a href={pncpLink(item)} target="_blank" rel="noreferrer">Ver no PNCP <ExternalLink size={12}/></a>{item.linkSistemaOrigem && <a href={item.linkSistemaOrigem} target="_blank" rel="noreferrer">Abrir no {item.sourcePortal || "sistema do órgão"} <ArrowRight size={12}/></a>}</div></footer></article>;
     })}</div> : !error && <div className="panel linked-empty tender-empty"><Gavel size={26}/><h4>Nenhuma licitação encontrada</h4><p>Não há oportunidades aderentes aos filtros atuais. Ajuste o período ou a distância e atualize a busca.</p></div>}
   </section>;
 }
