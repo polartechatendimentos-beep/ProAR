@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { municipalityDistances } from "../../../lib/municipality-distances";
 
-const PNCP_URL = "https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao";
-const modalities = ["4", "6", "8", "9", "12"];
+const PNCP_URL = "https://pncp.gov.br/api/consulta/v1/contratacoes/proposta";
 const climateTerms = /ar\s*-?\s*condicionado|condicionador(?:es)? de ar|climatiza|refrigera|pmoc|hvac|split|multi\s*split|cassete|piso\s*teto|evaporador|condensador|chiller|vrf|fluido refrigerante|g[aá]s refrigerante|compressor frigor[ií]fico/i;
 const excludedTerms = /purificador(?:es)? de [aá]gua|equipamento fotodocumentador|mobili[aá]rio|geladeira dom[eé]stica|bebedouro(?!.*refrigera)/i;
 
@@ -18,28 +18,27 @@ export type PncpTender = {
   dataEncerramentoProposta?: string; valorTotalEstimado?: number; linkSistemaOrigem?: string;
   anoCompra?: number; sequencialCompra?: number;
   orgaoEntidade?: { razaoSocial?: string; cnpj?: string };
-  unidadeOrgao?: { municipioNome?: string; ufSigla?: string; nomeUnidade?: string };
+  unidadeOrgao?: { municipioNome?: string; ufSigla?: string; nomeUnidade?: string; codigoIbge?: string };
   distanciaMirassol?: number;
 };
 
-async function fetchPage(dataInicial: string, dataFinal: string, modality: string, uf: string, page: number) {
-  const query = new URLSearchParams({ dataInicial, dataFinal, codigoModalidadeContratacao: modality, pagina: String(page), tamanhoPagina: "50", uf });
-  const response = await fetch(`${PNCP_URL}?${query}`, { headers: { Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(18000) });
+async function fetchPage(dataFinal: string, uf: string, page: number) {
+  const query = new URLSearchParams({ dataFinal, pagina: String(page), tamanhoPagina: "50", uf });
+  const response = await fetch(`${PNCP_URL}?${query}`, { headers: { Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(25000) });
   if (!response.ok) throw new Error(`PNCP respondeu ${response.status}`);
   const payload = await response.json();
-  return { data: Array.isArray(payload?.data) ? payload.data as PncpTender[] : [], totalPages: Math.min(Number(payload?.totalPaginas ?? 1), 4) };
+  return { data: Array.isArray(payload?.data) ? payload.data as PncpTender[] : [], totalPages: Math.min(Number(payload?.totalPaginas ?? 1), 8) };
 }
 
-export async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radius?: number }) {
+export async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radius?: number; all?: boolean; term?: string }) {
   const today = options?.start ?? new Date();
   const end = options?.end ?? new Date(today.getTime() + 60 * 86400000);
-  const publicationStart = new Date(today.getTime() - 120 * 86400000);
   const fmt = (date: Date) => date.toISOString().slice(0, 10).replaceAll("-", "");
-  const calls = ["SP", "MG"].flatMap(uf => modalities.map(async modality => {
-    const first = await fetchPage(fmt(publicationStart), fmt(today), modality, uf, 1);
-    const extra = await Promise.all(Array.from({ length: Math.max(0, first.totalPages - 1) }, (_, index) => fetchPage(fmt(publicationStart), fmt(today), modality, uf, index + 2).catch(() => ({ data: [], totalPages: 0 }))));
+  const calls = ["SP", "MG", "MS", "PR", "GO"].map(async uf => {
+    const first = await fetchPage(fmt(end), uf, 1);
+    const extra = await Promise.all(Array.from({ length: Math.max(0, first.totalPages - 1) }, (_, index) => fetchPage(fmt(end), uf, index + 2).catch(() => ({ data: [], totalPages: 0 }))));
     return [first.data, ...extra.map(page => page.data)].flat();
-  }));
+  });
   const settled = await Promise.allSettled(calls);
   const raw = settled.flatMap(result => result.status === "fulfilled" ? result.value : []);
   const radius = options?.radius ?? 300;
@@ -47,10 +46,13 @@ export async function searchAutomaticTenders(options?: { start?: Date; end?: Dat
   const endTime = new Date(end.toISOString().slice(0, 10) + "T23:59:59-03:00").getTime();
   const filtered = raw.filter(item => {
     const object = item.objetoCompra ?? "";
-    if (!climateTerms.test(object) || excludedTerms.test(object)) return false;
+    if (!options?.all) {
+      const term = normalize(options?.term ?? "");
+      if (term ? !normalize(object).includes(term) : (!climateTerms.test(object) || excludedTerms.test(object))) return false;
+    }
     const closing = item.dataEncerramentoProposta ? new Date(item.dataEncerramentoProposta).getTime() : 0;
     if (!closing || closing < startTime || closing > endTime) return false;
-    const distance = cityDistances[normalize(item.unidadeOrgao?.municipioNome ?? "")];
+    const distance = municipalityDistances[String(item.unidadeOrgao?.codigoIbge ?? "")] ?? cityDistances[normalize(item.unidadeOrgao?.municipioNome ?? "")];
     if (distance === undefined || distance > radius) return false;
     item.distanciaMirassol = distance;
     return true;
@@ -77,8 +79,9 @@ export async function GET(request: NextRequest) {
     const start = startParam ? new Date(`${startParam}T12:00:00-03:00`) : new Date();
     const end = endParam ? new Date(`${endParam}T23:59:59-03:00`) : new Date(Date.now() + 60 * 86400000);
     const radius = Math.min(300, Math.max(1, Number(request.nextUrl.searchParams.get("raio") ?? 300)));
-    const result = await searchAutomaticTenders({ start, end, radius });
-    return NextResponse.json({ data: result.data, source: "PNCP", radius, warning: result.failed ? "Parte das consultas do PNCP não respondeu; os resultados disponíveis foram carregados." : "" });
+    const term = request.nextUrl.searchParams.get("q")?.trim() ?? "";
+    const result = await searchAutomaticTenders({ start, end, radius, all: !term, term });
+    return NextResponse.json({ data: result.data, source: "PNCP", radius, warning: result.failed === 5 ? "O PNCP não respondeu à consulta completa. Tente atualizar novamente." : "" });
   } catch (error) {
     console.error("PNCP search failed", error);
     return NextResponse.json({ error: "O serviço oficial do PNCP está temporariamente indisponível." }, { status: 502 });
