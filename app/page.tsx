@@ -70,6 +70,7 @@ type ServiceOrder = {
 type Customer = {
   id: string; name: string; doc: string; contact: string; phone: string;
   address: string; units: number; status: string;
+  email?: string; fantasy?: string; personType?: string;
 };
 
 type ModuleRecord = {
@@ -245,13 +246,31 @@ function CustomerDetail({ customerName, customers, onBack, onOpen }: { customerN
   </section>;
 }
 
-function Customers({ onOpen, onDelete, customers }: { onOpen: (name: string) => void; onDelete: (customer: Customer) => void; customers: Customer[] }) {
+function parseSemicolonCsv(source: string) {
+  const rows: string[][] = []; let row: string[] = []; let field = ""; let quoted = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === '"') {
+      if (quoted && source[index + 1] === '"') { field += '"'; index += 1; }
+      else quoted = !quoted;
+    } else if (character === ";" && !quoted) { row.push(field.trim()); field = ""; }
+    else if ((character === "\n" || character === "\r") && !quoted) {
+      if (character === "\r" && source[index + 1] === "\n") index += 1;
+      row.push(field.trim()); field = ""; if (row.some(Boolean)) rows.push(row); row = [];
+    } else field += character;
+  }
+  if (field || row.length) { row.push(field.trim()); if (row.some(Boolean)) rows.push(row); }
+  const headers = (rows.shift() ?? []).map(header => header.replace(/^\uFEFF/, "").trim());
+  return rows.map(values => Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""])));
+}
+
+function Customers({ onOpen, onDelete, onImport, customers }: { onOpen: (name: string) => void; onDelete: (customer: Customer) => void; onImport: (file: File) => Promise<void>; customers: Customer[] }) {
   const [query, setQuery] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState("");
   const filtered = useMemo(() => customers.filter(c => `${c.name} ${c.doc} ${c.contact}`.toLowerCase().includes(query.toLowerCase())), [query, customers]);
   if (selectedCustomer) return <CustomerDetail customerName={selectedCustomer} customers={customers} onBack={() => setSelectedCustomer("")} onOpen={onOpen}/>;
   return <section className="module-page">
-    <div className="module-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Pesquisar cliente, CPF ou CNPJ..." /></label><button className="outline-btn"><Filter size={14}/> Filtros</button><button className="primary-btn" onClick={() => onOpen("Novo cliente")}><Plus size={16}/> Novo cliente</button></div>
+    <div className="module-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Pesquisar cliente, CPF ou CNPJ..." /></label><button className="outline-btn"><Filter size={14}/> Filtros</button><label className="outline-btn customer-import-button"><ArrowDownRight size={14}/> Importar CSV<input type="file" accept=".csv,text/csv" onChange={async event => { const file = event.target.files?.[0]; if (file) await onImport(file); event.target.value = ""; }}/></label><button className="primary-btn" onClick={() => onOpen("Novo cliente")}><Plus size={16}/> Novo cliente</button></div>
     <div className="module-summary">
       <article><span><UsersRound size={19}/></span><div><small>CLIENTES ATIVOS</small><strong>{customers.filter(item => item.status === "Ativo").length}</strong><em>Cadastros reais</em></div></article>
       <article><span><Building2 size={19}/></span><div><small>UNIDADES CADASTRADAS</small><strong>{customers.reduce((total, item) => total + item.units, 0)}</strong><em>Vinculadas aos clientes</em></div></article>
@@ -1198,6 +1217,46 @@ export default function Home() {
       if (!response.ok) setSavedMessage("Registro mantido neste aparelho, mas a sincronização falhou.");
     });
   };
+  const importCustomers = async (file: File) => {
+    const records = parseSemicolonCsv(await file.text());
+    const supplierRows = records.filter(record => String(record["Tipo contato"] ?? "").toLocaleLowerCase("pt-BR").includes("fornecedor"));
+    const eligible = records.filter(record => !String(record["Tipo contato"] ?? "").toLocaleLowerCase("pt-BR").includes("fornecedor") && String(record.Nome ?? "").trim());
+    const existingKeys = new Set(customerRecords.flatMap(customer => {
+      const document = customer.doc.replace(/\D/g, "");
+      return [document ? `doc:${document}` : "", `name:${customer.name.trim().toLocaleLowerCase("pt-BR")}`].filter(Boolean);
+    }));
+    const imported: Customer[] = [];
+    let duplicates = 0;
+    for (const record of eligible) {
+      const name = String(record.Nome ?? "").replace(/\s+/g, " ").trim();
+      const document = String(record["CNPJ / CPF"] ?? "").trim();
+      const documentDigits = document.replace(/\D/g, "");
+      const keys = [documentDigits ? `doc:${documentDigits}` : "", `name:${name.toLocaleLowerCase("pt-BR")}`].filter(Boolean);
+      if (keys.some(key => existingKeys.has(key))) { duplicates += 1; continue; }
+      keys.forEach(key => existingKeys.add(key));
+      const address = [record["Endereço"], record.Número, record.Complemento, record.Bairro, record.Cidade, record.UF, record.CEP]
+        .map(value => String(value ?? "").trim()).filter(Boolean).join(", ");
+      imported.push({
+        id: `CLI-${String(record.ID || Date.now()).replace(/\D/g, "").slice(-10) || Date.now()}`,
+        name,
+        fantasy: String(record.Fantasia ?? "").trim(),
+        doc: document,
+        contact: String(record.Contatos ?? "").trim(),
+        phone: String(record.Celular || record.Fone || "").trim(),
+        email: String(record["E-mail"] || record["E-mail para envio NFe"] || "").trim().toLocaleLowerCase("pt-BR"),
+        personType: String(record["Tipo pessoa"] ?? "").trim(),
+        address,
+        units: 1,
+        status: /^inativo$/i.test(String(record.Situação ?? "")) ? "Inativo" : "Ativo",
+      });
+    }
+    const updatedCustomers = [...customerRecords, ...imported];
+    setCustomerRecords(updatedCustomers);
+    localStorage.setItem("proar-v3-customers", JSON.stringify(updatedCustomers));
+    persistSharedState(updatedCustomers, serviceOrders, moduleRecords);
+    setSavedMessage(`${imported.length} cliente(s) importado(s) • ${supplierRows.length} fornecedor(es) descartado(s) • ${duplicates} duplicado(s) ignorado(s).`);
+    window.setTimeout(() => setSavedMessage(""), 7000);
+  };
   const updateServiceOrder = (updatedOrder: ServiceOrder) => {
     const updatedOrders = serviceOrders.map(order => order.id === updatedOrder.id ? updatedOrder : order);
     const reminderId = `LEM-${updatedOrder.id.replace(/\D/g, "")}`;
@@ -1408,7 +1467,7 @@ export default function Home() {
     <main className="main">
       <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNewOrder={() => setModal("Nova ordem de serviço")} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onLogout={logout}/>
       {savedMessage && <div className="save-toast" role="status"><CheckCircle2 size={16}/>{savedMessage}</div>}
-      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} customers={customerRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Vendas" ? <SalesPDV customers={customerRecords}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders}/> : current === "Licitações" ? <TendersModule/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} onOpen={setModal} onUpdate={updateModuleRecord}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} serviceOrders={serviceOrders} customers={customerRecords}/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} records={moduleRecords[current] ?? []}/>}</div>
+      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} onImport={importCustomers} customers={customerRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Vendas" ? <SalesPDV customers={customerRecords}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders}/> : current === "Licitações" ? <TendersModule/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} onOpen={setModal} onUpdate={updateModuleRecord}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} serviceOrders={serviceOrders} customers={customerRecords}/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} records={moduleRecords[current] ?? []}/>}</div>
       <footer><span>© 2026 ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
     {modal && <Modal title={modal} customers={customerRecords} catalogRecords={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} supplierRecords={moduleRecords["Fornecedores"] ?? []} close={() => setModal("")} onSave={saveRecord}/>}
