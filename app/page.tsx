@@ -54,6 +54,12 @@ type ServiceOrder = {
   clientSignature?: string;
   technicianSignature?: string;
   catalogItems?: { id: string; name: string; kind: "Serviço" | "Produto" }[];
+  reminderEnabled?: boolean;
+  reminderAmount?: number;
+  reminderUnit?: "Dias" | "Meses";
+  reminderDate?: string;
+  reminderMessage?: string;
+  reminderStatus?: "Pendente" | "Agendado" | "Enviado";
 };
 
 type Customer = {
@@ -80,6 +86,8 @@ type ModuleRecord = {
   paymentInstallments?: PurchaseInstallment[];
   purchaseId?: string;
   installmentNumber?: number;
+  reminderMessage?: string;
+  serviceOrderId?: string;
 };
 
 type PurchaseItem = {
@@ -329,8 +337,9 @@ function SignaturePad({ label, value, onChange }: { label: string; value?: strin
   </div>;
 }
 
-function OrderDetail({ order, close, onUpdate }: { order: ServiceOrder; close: () => void; onUpdate: (order: ServiceOrder) => void }) {
+function OrderDetail({ order, customerPhone, close, onUpdate }: { order: ServiceOrder; customerPhone?: string; close: () => void; onUpdate: (order: ServiceOrder) => void }) {
   const [currentOrder, setCurrentOrder] = useState(order);
+  const [itemsTab, setItemsTab] = useState<"Serviços" | "Produtos">("Serviços");
   const mapsSearch = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.address)}`;
   const mapsEmbed = `https://www.google.com/maps?q=${encodeURIComponent(order.address)}&output=embed`;
   const update = (patch: Partial<ServiceOrder>) => {
@@ -341,6 +350,18 @@ function OrderDetail({ order, close, onUpdate }: { order: ServiceOrder; close: (
   const uploadPhoto = async (field: "photoBefore" | "photoAfter", file?: File) => {
     if (!file) return;
     update({ [field]: await imageFileToDataUrl(file) });
+  };
+  const reminderDate = (amount: number, unit: "Dias" | "Meses", startAt?: string) => {
+    const date = startAt ? new Date(startAt) : new Date();
+    if (unit === "Meses") date.setMonth(date.getMonth() + amount);
+    else date.setDate(date.getDate() + amount);
+    return date.toISOString().slice(0, 10);
+  };
+  const configureReminder = (patch: Partial<ServiceOrder>) => {
+    const amount = Number(patch.reminderAmount ?? currentOrder.reminderAmount ?? 6);
+    const unit = (patch.reminderUnit ?? currentOrder.reminderUnit ?? "Meses") as "Dias" | "Meses";
+    const enabled = Boolean(patch.reminderEnabled ?? currentOrder.reminderEnabled);
+    update({ reminderAmount: amount, reminderUnit: unit, reminderEnabled: enabled, reminderDate: enabled ? reminderDate(amount, unit, currentOrder.checkOutAt) : "", reminderMessage: patch.reminderMessage ?? currentOrder.reminderMessage ?? "Olá! Está na hora de realizar a higienização preventiva do seu ar-condicionado. Vamos agendar?", reminderStatus: enabled ? (currentOrder.checkOutAt ? "Agendado" : "Pendente") : "Pendente", ...patch });
   };
   const formatMoment = (value?: string) => value ? new Date(value).toLocaleString("pt-BR") : "";
   return <div className="modal-layer" role="dialog" aria-modal="true" aria-label={`Ordem ${order.id}`}>
@@ -355,8 +376,13 @@ function OrderDetail({ order, close, onUpdate }: { order: ServiceOrder; close: (
           <article><Activity size={17}/><div><small>SITUAÇÃO</small><strong>{currentOrder.status}</strong></div></article>
         </div>
         <section className="order-items-panel">
-          <div className="execution-head"><div><span>SERVIÇOS DA ORDEM</span><h3>Serviços e itens cadastrados</h3></div><small>{currentOrder.catalogItems?.length ?? 0} item(ns)</small></div>
-          {currentOrder.catalogItems?.length ? <div className="order-item-list">{currentOrder.catalogItems.map(item => <article key={item.id}><span>{item.kind === "Produto" ? <Package size={16}/> : <Wrench size={16}/>}</span><div><b>{item.name}</b><small>{item.kind}</small></div><CheckCircle2 size={16}/></article>)}</div> : <div className="catalog-empty"><Wrench size={19}/><span>Nenhum serviço cadastrado foi vinculado a esta ordem.</span></div>}
+          <div className="order-item-tabs"><button className={itemsTab === "Serviços" ? "active" : ""} onClick={() => setItemsTab("Serviços")}><Wrench size={15}/> Serviços</button><button className={itemsTab === "Produtos" ? "active" : ""} onClick={() => setItemsTab("Produtos")}><Package size={15}/> Produtos e lembrete</button></div>
+          <div className="execution-head"><div><span>{itemsTab === "Serviços" ? "SERVIÇOS DA ORDEM" : "PRODUTOS UTILIZADOS"}</span><h3>{itemsTab === "Serviços" ? "Serviços executados" : "Produtos, materiais e pós-serviço"}</h3></div><small>{currentOrder.catalogItems?.filter(item => item.kind === itemsTab.slice(0, -1)).length ?? 0} item(ns)</small></div>
+          {currentOrder.catalogItems?.some(item => item.kind === itemsTab.slice(0, -1)) ? <div className="order-item-list">{currentOrder.catalogItems.filter(item => item.kind === itemsTab.slice(0, -1)).map(item => <article key={item.id}><span>{item.kind === "Produto" ? <Package size={16}/> : <Wrench size={16}/>}</span><div><b>{item.name}</b><small>{item.kind}</small></div><CheckCircle2 size={16}/></article>)}</div> : <div className="catalog-empty">{itemsTab === "Produtos" ? <Package size={19}/> : <Wrench size={19}/>}<span>Nenhum {itemsTab.toLowerCase()} foi vinculado a esta ordem.</span></div>}
+          {itemsTab === "Produtos" && <div className={`service-reminder ${currentOrder.reminderEnabled ? "enabled" : ""}`}>
+            <div className="reminder-heading"><span><Bell size={18}/></span><div><small>RELACIONAMENTO PÓS-SERVIÇO</small><h4>Lembrete automático para o cliente</h4><p>Após o check-out, o ProAR agenda uma mensagem de manutenção ou higienização.</p></div><label className="reminder-switch"><input type="checkbox" checked={Boolean(currentOrder.reminderEnabled)} onChange={event => configureReminder({ reminderEnabled: event.target.checked })}/><i/></label></div>
+            {currentOrder.reminderEnabled && <div className="reminder-fields"><label>Enviar após<input type="number" min="1" max="60" value={currentOrder.reminderAmount ?? 6} onChange={event => configureReminder({ reminderAmount: Math.max(1, Number(event.target.value) || 1) })}/></label><label>Período<select value={currentOrder.reminderUnit ?? "Meses"} onChange={event => configureReminder({ reminderUnit: event.target.value as "Dias" | "Meses" })}><option>Dias</option><option>Meses</option></select></label><label>Data prevista<input type="date" value={currentOrder.reminderDate ?? reminderDate(6, "Meses", currentOrder.checkOutAt)} onChange={event => update({ reminderDate: event.target.value })}/></label><label className="wide">Mensagem<textarea value={currentOrder.reminderMessage ?? "Olá! Está na hora de realizar a higienização preventiva do seu ar-condicionado. Vamos agendar?"} onChange={event => configureReminder({ reminderMessage: event.target.value })}/></label><div className="reminder-summary"><MessageCircle size={15}/><span><b>{customerPhone || "Cliente sem WhatsApp cadastrado"}</b><small>{currentOrder.checkOutAt ? `Agendado para ${new Date(`${currentOrder.reminderDate}T12:00:00`).toLocaleDateString("pt-BR")}` : "Será agendado automaticamente quando o técnico fizer o check-out."}</small></span></div></div>}
+          </div>}
         </section>
         <section className="order-map">
           <div className="order-map-head"><div><span><MapPin size={16}/></span><div><small>ENDEREÇO DO ATENDIMENTO</small><strong>{order.address || "Endereço não informado"}</strong></div></div>{order.address && <a href={mapsSearch} target="_blank" rel="noreferrer">Abrir no Google Maps <ArrowRight size={13}/></a>}</div>
@@ -366,7 +392,7 @@ function OrderDetail({ order, close, onUpdate }: { order: ServiceOrder; close: (
           <div className="execution-head"><div><span>EXECUÇÃO EM CAMPO</span><h3>Registo do atendimento</h3></div><small>Os dados são sincronizados automaticamente</small></div>
           <div className="check-actions">
             <button type="button" className={currentOrder.checkInAt ? "done" : ""} onClick={() => !currentOrder.checkInAt && update({ checkInAt: new Date().toISOString(), status: "Em andamento", tone: "blue" })}><LogIn size={18}/><span><b>{currentOrder.checkInAt ? "Check-in realizado" : "Fazer check-in"}</b><small>{currentOrder.checkInAt ? formatMoment(currentOrder.checkInAt) : "Registrar chegada ao cliente"}</small></span></button>
-            <button type="button" disabled={!currentOrder.checkInAt} className={currentOrder.checkOutAt ? "done" : ""} onClick={() => !currentOrder.checkOutAt && update({ checkOutAt: new Date().toISOString(), status: "Concluída", tone: "green" })}><LogOut size={18}/><span><b>{currentOrder.checkOutAt ? "Check-out realizado" : "Fazer check-out"}</b><small>{currentOrder.checkOutAt ? formatMoment(currentOrder.checkOutAt) : "Registrar saída do cliente"}</small></span></button>
+            <button type="button" disabled={!currentOrder.checkInAt} className={currentOrder.checkOutAt ? "done" : ""} onClick={() => { if (currentOrder.checkOutAt) return; const checkOutAt = new Date().toISOString(); update({ checkOutAt, status: "Concluída", tone: "green", reminderDate: currentOrder.reminderEnabled ? reminderDate(currentOrder.reminderAmount ?? 6, currentOrder.reminderUnit ?? "Meses", checkOutAt) : currentOrder.reminderDate, reminderStatus: currentOrder.reminderEnabled ? "Agendado" : currentOrder.reminderStatus }); }}><LogOut size={18}/><span><b>{currentOrder.checkOutAt ? "Check-out realizado" : "Fazer check-out"}</b><small>{currentOrder.checkOutAt ? formatMoment(currentOrder.checkOutAt) : "Registrar saída do cliente"}</small></span></button>
           </div>
           <div className="evidence-grid">
             <label className={`upload-box photo-evidence ${currentOrder.photoBefore ? "has-photo" : ""}`}>{currentOrder.photoBefore ? <img src={currentOrder.photoBefore} alt="Antes do serviço"/> : <Camera size={23}/>}<b>Foto antes do serviço</b><small>{currentOrder.photoBefore ? "Toque para substituir" : "Abrir câmera ou galeria"}</small><input type="file" accept="image/*" capture="environment" onChange={event => uploadPhoto("photoBefore", event.target.files?.[0])}/></label>
@@ -1010,11 +1036,23 @@ export default function Home() {
   };
   const updateServiceOrder = (updatedOrder: ServiceOrder) => {
     const updatedOrders = serviceOrders.map(order => order.id === updatedOrder.id ? updatedOrder : order);
+    const reminderId = `LEM-${updatedOrder.id.replace(/\D/g, "")}`;
+    let updatedModules = { ...moduleRecords };
+    const currentReminders = updatedModules.Lembretes ?? [];
+    if (updatedOrder.status === "Concluída" && updatedOrder.reminderEnabled && updatedOrder.reminderDate) {
+      const customer = customerRecords.find(item => item.name === updatedOrder.client);
+      const reminder: ModuleRecord = { id: reminderId, name: `Lembrete pós-serviço • ${updatedOrder.service}`, client: updatedOrder.client, description: updatedOrder.reminderMessage || "Está na hora de realizar a higienização preventiva do seu ar-condicionado.", reminderMessage: updatedOrder.reminderMessage || "Está na hora de realizar a higienização preventiva do seu ar-condicionado.", createdAt: new Date().toLocaleString("pt-BR"), status: "Agendado", date: updatedOrder.reminderDate, category: customer?.phone || "", serviceOrderId: updatedOrder.id };
+      updatedModules = { ...updatedModules, Lembretes: [reminder, ...currentReminders.filter(item => item.id !== reminderId)] };
+    } else if (!updatedOrder.reminderEnabled) {
+      updatedModules = { ...updatedModules, Lembretes: currentReminders.filter(item => item.id !== reminderId) };
+    }
     setServiceOrders(updatedOrders);
+    setModuleRecords(updatedModules);
     setSelectedOrder(updatedOrder);
     localStorage.setItem("proar-v3-service-orders", JSON.stringify(updatedOrders));
-    persistSharedState(customerRecords, updatedOrders, moduleRecords);
-    setSavedMessage(`Ordem ${updatedOrder.id} atualizada e sincronizada.`);
+    localStorage.setItem("proar-v3-module-records", JSON.stringify(updatedModules));
+    persistSharedState(customerRecords, updatedOrders, updatedModules);
+    setSavedMessage(updatedOrder.status === "Concluída" && updatedOrder.reminderEnabled ? `Ordem ${updatedOrder.id} concluída e lembrete agendado.` : `Ordem ${updatedOrder.id} atualizada e sincronizada.`);
     window.setTimeout(() => setSavedMessage(""), 2500);
   };
   const saveRecord = (data: ModalSave) => {
@@ -1197,7 +1235,7 @@ export default function Home() {
       <footer><span>© 2026 ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
     {modal && <Modal title={modal} customers={customerRecords} catalogRecords={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} supplierRecords={moduleRecords["Fornecedores"] ?? []} close={() => setModal("")} onSave={saveRecord}/>}
-    {selectedOrder && <OrderDetail order={selectedOrder} close={() => setSelectedOrder(null)} onUpdate={updateServiceOrder}/>}
+    {selectedOrder && <OrderDetail order={selectedOrder} customerPhone={customerRecords.find(customer => customer.name === selectedOrder.client)?.phone} close={() => setSelectedOrder(null)} onUpdate={updateServiceOrder}/>} 
   </div>;
 }
 
