@@ -1,46 +1,20 @@
-import { NextRequest, NextResponse } from "next/server";
-import { readSession } from "../../../lib/proar-auth";
+import { NextResponse } from "next/server";
+import { db } from "@/db";
+import { systemState } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
-function supabaseConfig() {
-  const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Supabase não configurado.");
-  return { url, key };
-}
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const chave = searchParams.get("chave");
 
-function authorized(request: NextRequest) {
-  return Boolean(readSession(request.cookies.get("proar_session")?.value));
-}
-
-export async function GET(request: NextRequest) {
-  if (!authorized(request)) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
-  try {
-    const { url, key } = supabaseConfig();
-    const response = await fetch(`${url}/rest/v1/proar_state?id=eq.main&select=payload`, {
-      headers: { apikey: key, Authorization: `Bearer ${key}` },
-      cache: "no-store",
-    });
-    if (!response.ok) throw new Error(await response.text());
-    const rows = await response.json();
-    return NextResponse.json({ state: rows[0]?.payload ?? null });
-  } catch {
-    return NextResponse.json({ error: "Não foi possível carregar a base compartilhada." }, { status: 503 });
+  if (!chave) {
+    return NextResponse.json({ error: "Parâmetro chave obrigatório" }, { status: 400 });
   }
-}
 
-export async function PUT(request: NextRequest) {
-  if (!authorized(request)) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
   try {
-    const payload = await request.json();
-    const { url, key } = supabaseConfig();
-    const response = await fetch(`${url}/rest/v1/proar_state?on_conflict=id`, {
-      method: "POST",
-      headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
-      body: JSON.stringify({ id: "main", payload, updated_at: new Date().toISOString() }),
-    });
-    if (!response.ok) throw new Error(await response.text());
-    return NextResponse.json({ saved: true });
-  } catch {
-    return NextResponse.json({ error: "Não foi possível sincronizar os dados." }, { status: 503 });
+    const result = await db.select().from(systemState).where(eq(systemState.chave, chave)).limit(1);
+    return NextResponse.json({ success: true, data: result[0]?.valor || null });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
