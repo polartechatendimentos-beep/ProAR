@@ -616,7 +616,7 @@ function TendersModule() {
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { void load(true); }, []);
+  useEffect(() => { void load(false); }, []);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
