@@ -30,6 +30,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
   ]},
   { label: "OPERAÇÃO", items: [
     { icon: ClipboardList, name: "Ordens de serviço" },
+    { icon: Building2, name: "Obras" },
     { icon: Wrench, name: "Serviços" },
     { icon: Package, name: "Produtos" },
     { icon: Warehouse, name: "Estoque" },
@@ -88,6 +89,12 @@ type ModuleRecord = {
   installmentNumber?: number;
   reminderMessage?: string;
   serviceOrderId?: string;
+  engineer?: string;
+  address?: string;
+  blockLot?: string;
+  endDate?: string;
+  progress?: number;
+  commission?: number;
 };
 
 type PurchaseItem = {
@@ -524,6 +531,7 @@ const moduleStatuses: Record<string, string[]> = {
   "Fornecedores": ["Ativo", "Inativo", "Bloqueado"],
   "Financeiro": ["Em aberto", "Aguardando aprovação", "Vencida", "Paga parcialmente", "Paga", "Recebida", "Cancelada"],
   "Funcionários": ["Ativo", "Em férias", "Afastado", "Inativo"],
+  "Obras": ["Planejamento", "Em andamento", "Pausada", "Aguardando material", "Concluída", "Cancelada"],
 };
 
 const managementTabs: Record<string, string[]> = {
@@ -531,6 +539,7 @@ const managementTabs: Record<string, string[]> = {
   "Fornecedores": ["Visão geral", "Cadastro", "Produtos fornecidos", "Compras", "Avaliação"],
   "Financeiro": ["Visão geral", "Contas a pagar", "Contas a receber", "Fluxo de caixa", "Conciliação"],
   "Funcionários": ["Visão geral", "Equipe", "Funções e permissões", "Comissões", "Histórico"],
+  "Obras": ["Visão geral", "Planejamento", "Execução", "Perdas", "Financeiro", "Histórico"],
 };
 
 const managementFlows: Record<string, { title: string; text: string }[]> = {
@@ -562,6 +571,13 @@ const managementFlows: Record<string, { title: string; text: string }[]> = {
     { title: "Operação", text: "OS, vendas e tarefas" },
     { title: "Histórico", text: "Atividades e comissões" },
   ],
+  "Obras": [
+    { title: "Cadastro", text: "Cliente, endereço e responsáveis" },
+    { title: "Planejamento", text: "Prazo, orçamento e equipe" },
+    { title: "Execução", text: "Serviços, fotos e progresso" },
+    { title: "Controle", text: "Materiais, perdas e ocorrências" },
+    { title: "Conclusão", text: "Financeiro, relatório e entrega" },
+  ],
 };
 
 function downloadCsv(filename: string, rows: string[][]) {
@@ -589,6 +605,7 @@ function Reports({ modules, customers, serviceOrders }: { modules: Record<string
     { title: "Fornecedores", icon: Store, count: filteredModules["Fornecedores"]?.length ?? 0, items: ["Fornecedores ativos", "Histórico de preços", "Avaliação dos fornecedores", "Total comprado"] },
     { title: "Financeiro", icon: WalletCards, count: filteredModules["Financeiro"]?.length ?? 0, items: ["Contas a pagar", "Contas a receber", "Fluxo de caixa", "Resultado por centro de custo"] },
     { title: "Funcionários", icon: BriefcaseBusiness, count: filteredModules["Funcionários"]?.length ?? 0, items: ["Equipe ativa", "Funções e permissões", "Comissões", "Histórico de atividades"] },
+    { title: "Obras", icon: Building2, count: filteredModules["Obras"]?.length ?? 0, items: ["Obras em andamento", "Progresso por obra", "Perdas e ocorrências", "Resultado financeiro"] },
     { title: "Serviços", icon: Wrench, count: serviceOrders.length, items: ["Ordens abertas", "Ordens concluídas", "Serviços por cliente", "Produtividade técnica"] },
     { title: "Clientes", icon: UsersRound, count: customers.length, items: ["Clientes ativos", "Histórico de atendimento", "Faturamento por cliente", "Inadimplência"] },
     { title: "Estoque", icon: Warehouse, count: modules["Produtos"]?.length ?? 0, items: ["Estoque atual", "Produtos sem estoque", "Entradas e saídas", "Valor do estoque"] },
@@ -612,11 +629,15 @@ function GenericModule({ name, onOpen, onDelete, onUpdate, records }: { name: st
     "Compras": "Solicitações, aprovações, recebimentos, estoque e contas a pagar integrados.",
     "Fornecedores": "Cadastro, produtos fornecidos, compras, financeiro, documentos e avaliação.",
     "Financeiro": "Contas a pagar e receber, caixa, bancos, conciliação e centros de custo.",
+    "Obras": "Planeje e acompanhe obras, responsáveis, prazos, execução, perdas, materiais e resultado financeiro.",
   };
   const statuses = moduleStatuses[name] ?? ["Ativo", "Pendente", "Concluído", "Inativo"];
   const tabs = managementTabs[name] ?? ["Visão geral", "Cadastros", "Histórico"];
   const viewMatches = (record: ModuleRecord) => {
     if (activeView === "Visão geral" || activeView === "Histórico" || activeView === "Cadastro" || activeView === "Equipe") return true;
+    if (activeView === "Planejamento") return /Planejamento/i.test(record.status || "");
+    if (activeView === "Execução") return /Em andamento|Pausada|Aguardando material/i.test(record.status || "");
+    if (activeView === "Perdas") return /perda|avaria|ocorrência/i.test(`${record.category} ${record.description}`);
     if (activeView === "Pedidos") return !/Recebida|Cancelada|Devolvida/i.test(record.status || "");
     if (activeView === "Aprovação") return /Aguardando aprovação|Aprovada/i.test(record.status || "");
     if (activeView === "Recebimento") return /Aguardando entrega|Recebida/i.test(record.status || "");
@@ -638,13 +659,13 @@ function GenericModule({ name, onOpen, onDelete, onUpdate, records }: { name: st
   };
   const duplicate = (record: ModuleRecord) => onUpdate(name, { ...record, id: `${name.slice(0,3).toUpperCase()}-${Date.now().toString().slice(-6)}`, name: `${record.name} (cópia)`, status: statuses[0], createdAt: new Date().toLocaleString("pt-BR") });
   return <section className="module-page management-module">
-    <div className="management-hero"><div><span className="section-kicker"><Grid2X2 size={12}/> MÓDULO PROAR</span><h2>{name}</h2><p>{descriptions[name] || `Consulte, cadastre e acompanhe todas as informações de ${name.toLowerCase()} em um só lugar.`}</p></div><div className="management-actions"><button className="outline-btn" onClick={() => window.print()}><FileText size={14}/> Imprimir</button><button className="outline-btn" onClick={exportRecords}><ArrowDownRight size={14}/> Exportar</button><button className="primary-btn" onClick={() => onOpen(`Novo registro • ${name}`)}><Plus size={16}/> {name === "Compras" ? "Nova compra" : name === "Fornecedores" ? "Novo fornecedor" : name === "Financeiro" ? "Novo lançamento" : "Novo registro"}</button></div></div>
+    <div className="management-hero"><div><span className="section-kicker"><Grid2X2 size={12}/> MÓDULO PROAR</span><h2>{name}</h2><p>{descriptions[name] || `Consulte, cadastre e acompanhe todas as informações de ${name.toLowerCase()} em um só lugar.`}</p></div><div className="management-actions"><button className="outline-btn" onClick={() => window.print()}><FileText size={14}/> Imprimir</button><button className="outline-btn" onClick={exportRecords}><ArrowDownRight size={14}/> Exportar</button><button className="primary-btn" onClick={() => onOpen(`Novo registro • ${name}`)}><Plus size={16}/> {name === "Compras" ? "Nova compra" : name === "Fornecedores" ? "Novo fornecedor" : name === "Financeiro" ? "Novo lançamento" : name === "Obras" ? "Nova obra" : "Novo registro"}</button></div></div>
     <div className="management-stats"><article><span><ClipboardList size={18}/></span><div><small>TOTAL DE REGISTROS</small><strong>{records.length}</strong></div></article><article><span><Clock3 size={18}/></span><div><small>PENDENTES / EM ABERTO</small><strong>{records.filter(record => /Rascunho|Aguardando|aberto|Vencida|Pendente/i.test(record.status || "")).length}</strong></div></article><article><span><CircleDollarSign size={18}/></span><div><small>VALOR REGISTRADO</small><strong>R$ {totalValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></div></article></div>
     {managementFlows[name] && <div className="management-flow">{managementFlows[name].map((step, index) => <article key={step.title}><span>{String(index + 1).padStart(2, "0")}</span><div><b>{step.title}</b><small>{step.text}</small></div>{index < managementFlows[name].length - 1 && <ChevronRight size={14}/>}</article>)}</div>}
     <nav className="management-tabs" aria-label={`Áreas de ${name}`}>{tabs.map(tab => <button key={tab} className={activeView === tab ? "active" : ""} onClick={() => setActiveView(tab)}>{tab}</button>)}</nav>
     {name === "Financeiro" && <div className="finance-control-strip"><article><span className="money-icon red"><ArrowDownRight size={17}/></span><div><small>COMPROMISSOS EM ABERTO</small><strong>R$ {openValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></div></article><article><span className="money-icon green"><ArrowUpRight size={17}/></span><div><small>MOVIMENTAÇÃO REALIZADA</small><strong>R$ {records.filter(record => /Paga|Recebida/i.test(record.status || "")).reduce((sum, record) => sum + (record.value ?? 0), 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></div></article><article><span><Landmark size={17}/></span><div><small>CONCILIAÇÃO</small><strong>{records.filter(record => /Paga|Recebida/i.test(record.status || "")).length} movimento(s)</strong></div></article></div>}
     <div className="management-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder={`Pesquisar em ${name.toLowerCase()}...`}/></label><label className="status-filter"><Filter size={14}/><select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option>Todas</option>{statuses.map(status => <option key={status}>{status}</option>)}</select></label></div>
-    {records.length ? <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><ClipboardList size={12}/> {activeView.toUpperCase()}</span><h2>{activeView} de {name.toLowerCase()}</h2><p>{filtered.length} de {records.length} registro(s)</p></div></div><div className="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>NOME / IDENTIFICAÇÃO</th><th>FORNECEDOR / RESPONSÁVEL</th><th>SITUAÇÃO</th><th>VALOR</th><th>DATA</th><th>AÇÕES</th></tr></thead><tbody>{filtered.map(record => <tr key={record.id}><td><b className="order-id">{record.id}</b></td><td><strong>{record.name}</strong><small className="table-description">{name === "Compras" ? `${record.purchaseItems?.length ?? 0} item(ns) • ${record.paymentType ?? "Pagamento não informado"}${record.installments && record.installments > 1 ? ` • ${record.installments}x` : ""}` : record.description || "Sem observações"}</small></td><td>{record.client || "—"}</td><td><span className={`workflow-status ${/Recebida|Paga|Ativo|Concluído/i.test(record.status || "") ? "done" : /Cancelada|Inativo|Bloqueado|Devolvida/i.test(record.status || "") ? "blocked" : ""}`}>{record.status || statuses[0]}</span></td><td><b>R$ {(record.value ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></td><td>{record.date ? new Date(`${record.date}T12:00:00`).toLocaleDateString("pt-BR") : record.createdAt}</td><td><div className="record-actions"><button title="Avançar situação" onClick={() => advance(record)}><CheckCircle2 size={14}/></button>{name === "Compras" && <button title="Duplicar compra" onClick={() => duplicate(record)}><FileText size={14}/></button>}<button title="Imprimir" onClick={() => window.print()}><ReceiptText size={14}/></button><button className="danger" title="Excluir" onClick={() => onDelete(name, record)}><Trash2 size={14}/></button></div></td></tr>)}</tbody></table></div>{!filtered.length && <div className="linked-empty"><Search size={22}/><h4>Nenhum registro encontrado</h4><p>Ajuste a pesquisa ou o filtro de situação.</p></div>}</div> :
+    {records.length ? <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><ClipboardList size={12}/> {activeView.toUpperCase()}</span><h2>{activeView} de {name.toLowerCase()}</h2><p>{filtered.length} de {records.length} registro(s)</p></div></div>{name === "Obras" && <div className="works-grid">{filtered.map(record => <article key={record.id}><header><span><Building2 size={18}/></span><div><small>{record.id}</small><h3>{record.name}</h3></div><em className={`workflow-status ${record.status === "Concluída" ? "done" : record.status === "Cancelada" ? "blocked" : ""}`}>{record.status}</em></header><p><MapPin size={13}/>{record.address || "Endereço não informado"}</p><div className="work-meta"><span><small>CLIENTE</small><b>{record.client || "—"}</b></span><span><small>RESPONSÁVEL</small><b>{record.engineer || "—"}</b></span><span><small>QUADRA / LOTE</small><b>{record.blockLot || "—"}</b></span><span><small>ORÇAMENTO</small><b>R$ {(record.value ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></span></div><div className="work-progress"><span><b>Progresso da obra</b><strong>{record.progress ?? 0}%</strong></span><i><b style={{width:`${Math.min(100, Math.max(0, record.progress ?? 0))}%`}}/></i></div><footer><button onClick={() => advance(record)}><CheckCircle2 size={14}/> Avançar etapa</button><button onClick={() => window.print()}><FileText size={14}/> Relatório</button><button className="danger" onClick={() => onDelete(name, record)}><Trash2 size={14}/></button></footer></article>)}</div>} {name !== "Obras" && <div className="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>NOME / IDENTIFICAÇÃO</th><th>FORNECEDOR / RESPONSÁVEL</th><th>SITUAÇÃO</th><th>VALOR</th><th>DATA</th><th>AÇÕES</th></tr></thead><tbody>{filtered.map(record => <tr key={record.id}><td><b className="order-id">{record.id}</b></td><td><strong>{record.name}</strong><small className="table-description">{name === "Compras" ? `${record.purchaseItems?.length ?? 0} item(ns) • ${record.paymentType ?? "Pagamento não informado"}${record.installments && record.installments > 1 ? ` • ${record.installments}x` : ""}` : record.description || "Sem observações"}</small></td><td>{record.client || "—"}</td><td><span className={`workflow-status ${/Recebida|Paga|Ativo|Concluído/i.test(record.status || "") ? "done" : /Cancelada|Inativo|Bloqueado|Devolvida/i.test(record.status || "") ? "blocked" : ""}`}>{record.status || statuses[0]}</span></td><td><b>R$ {(record.value ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></td><td>{record.date ? new Date(`${record.date}T12:00:00`).toLocaleDateString("pt-BR") : record.createdAt}</td><td><div className="record-actions"><button title="Avançar situação" onClick={() => advance(record)}><CheckCircle2 size={14}/></button>{name === "Compras" && <button title="Duplicar compra" onClick={() => duplicate(record)}><FileText size={14}/></button>}<button title="Imprimir" onClick={() => window.print()}><ReceiptText size={14}/></button><button className="danger" title="Excluir" onClick={() => onDelete(name, record)}><Trash2 size={14}/></button></div></td></tr>)}</tbody></table></div>}{!filtered.length && <div className="linked-empty"><Search size={22}/><h4>Nenhum registro encontrado</h4><p>Ajuste a pesquisa ou o filtro de situação.</p></div>}</div> :
     <div className="empty-grid">{[{t:"Visão geral",i:LayoutDashboard},{t:"Registros recentes",i:Clock3},{t:"Indicadores",i:TrendingUp}].map(({t,i:Icon})=><article className="panel" key={t}><span><Icon size={19}/></span><h3>{t}</h3><p>Use “Novo registro” para adicionar o primeiro cadastro deste módulo.</p><button onClick={() => onOpen(`Novo registro • ${name}`)}>Cadastrar agora <ArrowRight size={12}/></button></article>)}</div>}</section>;
 }
 
@@ -676,6 +697,12 @@ type ModalSave = {
   supplierDoc: string;
   supplierId: string;
   registerSupplier: boolean;
+  engineer: string;
+  workAddress: string;
+  blockLot: string;
+  endDate: string;
+  progress: number;
+  commission: number;
 };
 
 type AuthenticatedUser = { username: string; displayName: string; role?: string; permissions?: string[] };
@@ -765,6 +792,12 @@ function Modal({ title, customers, catalogRecords, supplierRecords, close, onSav
   const [xmlImported, setXmlImported] = useState(false);
   const [supplierId, setSupplierId] = useState("");
   const [supplierDoc, setSupplierDoc] = useState("");
+  const [engineer, setEngineer] = useState("");
+  const [workAddress, setWorkAddress] = useState("");
+  const [blockLot, setBlockLot] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [progress, setProgress] = useState(0);
+  const [commission, setCommission] = useState(0);
   const purchaseTotal = purchaseItems.reduce((total, item) => total + item.quantity * item.unitValue, 0);
   const updatePurchaseItem = (id: string, changes: Partial<PurchaseItem>) => setPurchaseItems(items => items.map(item => item.id === id ? { ...item, ...changes } : item));
   const addPurchaseItem = () => setPurchaseItems(items => [...items, { id: `ITEM-${Date.now()}-${items.length}`, description: "", quantity: 1, unitValue: 0 }]);
@@ -900,6 +933,22 @@ function Modal({ title, customers, catalogRecords, supplierRecords, close, onSav
           <div className="payment-type-options"><label className={paymentType === "À vista" ? "active" : ""}><input type="radio" name="purchase-payment-type" checked={paymentType === "À vista"} onChange={() => { setPaymentType("À vista"); setInstallments(1); setPaymentInstallments([]); }}/><b>À vista</b><small>Um único pagamento</small></label><label className={paymentType === "A prazo" ? "active" : ""}><input type="radio" name="purchase-payment-type" checked={paymentType === "A prazo"} onChange={() => { setPaymentType("A prazo"); setPaymentInstallments([]); }}/><b>A prazo</b><small>Gerar parcelas no financeiro</small></label></div>
           <div className="purchase-payment-fields"><label>Forma de pagamento<select value={paymentMethod} onChange={event => setPaymentMethod(event.target.value)}><option>PIX</option><option>Boleto</option><option>Transferência bancária</option><option>Cartão de crédito</option><option>Cheque</option><option>Dinheiro</option><option>Outros</option></select></label>{paymentType === "A prazo" && <><label>Número de parcelas<input type="number" min="1" max="48" value={installments} onChange={event => { setInstallments(Math.max(1, Math.min(48, Number(event.target.value)))); setPaymentInstallments([]); }}/></label><label>Primeiro vencimento<input type="date" value={firstDueDate} onChange={event => { setFirstDueDate(event.target.value); setPaymentInstallments([]); }}/></label><div className="installment-preview"><small>{paymentInstallments.length ? "PARCELAS IMPORTADAS DO XML" : "VALOR ESTIMADO POR PARCELA"}</small><b>{paymentInstallments.length ? `${paymentInstallments.length} vencimento(s)` : `R$ ${(purchaseTotal / Math.max(installments, 1)).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}</b></div></>}</div>
         </div>}
+        {requestedModule === "Obras" ? <>
+          <div className="wide work-form-intro"><span><Building2 size={20}/></span><div><b>Cadastro e planejamento da obra</b><small>Centralize cliente, localização, responsável técnico, orçamento, prazo e evolução da execução.</small></div></div>
+          <label>Nome da obra<input value={recordName} onChange={event => setRecordName(event.target.value)} placeholder="Ex.: Residencial Jardim Imperial"/></label>
+          <label>Cliente<select value={recordClient} onChange={event => setRecordClient(event.target.value)}><option value="">Selecione o cliente</option>{customers.map(customer => <option key={customer.id} value={customer.name}>{customer.name}</option>)}</select></label>
+          <label className="wide">Endereço da obra<input value={workAddress} onChange={event => setWorkAddress(event.target.value)} placeholder="Rua, número, bairro, cidade e estado"/></label>
+          <label>Quadra / casa / lote<input value={blockLot} onChange={event => setBlockLot(event.target.value)} placeholder="Ex.: Quadra B • Lote 18"/></label>
+          <label>Engenheiro / responsável<input value={engineer} onChange={event => setEngineer(event.target.value)} placeholder="Nome do responsável técnico"/></label>
+          <label>Situação<select value={recordStatus} onChange={event => setRecordStatus(event.target.value)}>{moduleStatuses.Obras.map(status => <option key={status}>{status}</option>)}</select></label>
+          <label>Orçamento previsto<input type="number" min="0" step="0.01" value={recordValue} onChange={event => setRecordValue(event.target.value)} placeholder="R$ 0,00"/></label>
+          <label>Data de início<input type="date" value={date} onChange={event => setDate(event.target.value)}/></label>
+          <label>Previsão de conclusão<input type="date" value={endDate} onChange={event => setEndDate(event.target.value)}/></label>
+          <label>Progresso inicial (%)<input type="number" min="0" max="100" value={progress} onChange={event => setProgress(Math.min(100, Math.max(0, Number(event.target.value))))}/></label>
+          <label>Comissão do responsável (%)<input type="number" min="0" max="100" step="0.1" value={commission || ""} onChange={event => setCommission(Math.min(100, Math.max(0, Number(event.target.value))))} placeholder="Opcional"/></label>
+          <label>Centro de custo / tipo<input value={recordCategory} onChange={event => setRecordCategory(event.target.value)} placeholder="Ex.: Infraestrutura frigorígena"/></label>
+          <label className="wide">Escopo e observações<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="Descreva o escopo, etapas, materiais, equipe e observações da obra..."/></label>
+        </> : <>
         <label>{requestedModule === "Compras" ? "Produto, material ou pedido" : requestedModule === "Financeiro" ? "Descrição do lançamento" : requestedModule === "Fornecedores" ? "Razão social / Nome fantasia" : requestedModule === "Funcionários" ? "Nome completo do funcionário" : "Nome / identificação"}<input value={recordName} onChange={event => setRecordName(event.target.value)} placeholder={requestedModule === "Funcionários" ? "Nome completo" : "Digite o nome do registro"}/></label>
         <label>{requestedModule === "Compras" ? "Fornecedor" : requestedModule === "Financeiro" ? "Cliente ou fornecedor" : requestedModule === "Fornecedores" ? "Responsável comercial" : requestedModule === "Funcionários" ? "Utilizador de acesso" : "Cliente / responsável"}<input value={recordClient} onChange={event => setRecordClient(event.target.value)} placeholder={requestedModule === "Funcionários" ? "Ex.: nome.sobrenome" : "Nome relacionado ao cadastro"}/></label>
         <label>{requestedModule === "Fornecedores" ? "CNPJ / CPF" : requestedModule === "Funcionários" ? "CPF / documento" : "Código / documento"}<input placeholder="Código, CPF, CNPJ ou número interno"/></label>
@@ -907,9 +956,10 @@ function Modal({ title, customers, catalogRecords, supplierRecords, close, onSav
         <label>{requestedModule === "Funcionários" ? "Função / nível de acesso" : requestedModule === "Financeiro" ? "Categoria / centro de custo" : requestedModule === "Compras" ? "Categoria da compra" : "Categoria / centro de custo"}<input value={recordCategory} onChange={event => setRecordCategory(event.target.value)} placeholder={requestedModule === "Funcionários" ? "Ex.: Técnico • acesso às ordens" : "Ex.: Materiais de serviço"}/></label>
         <label>{requestedModule === "Funcionários" ? "Comissão / valor de referência" : requestedModule === "Compras" ? "Valor total calculado" : "Valor total"}<input type="number" min="0" step="0.01" readOnly={requestedModule === "Compras"} value={requestedModule === "Compras" ? purchaseTotal : recordValue} onChange={event => setRecordValue(event.target.value)} placeholder="R$ 0,00"/></label>
         <label>{requestedModule === "Funcionários" ? "Telefone / WhatsApp" : "Telefone / contato"}<input placeholder="(00) 00000-0000"/></label><label>{requestedModule === "Funcionários" ? "Data de admissão" : requestedModule === "Compras" ? "Previsão de entrega" : requestedModule === "Financeiro" ? "Data de vencimento" : "Data"}<input type="date" value={date} onChange={event => setDate(event.target.value)}/></label><label className="wide">{requestedModule === "Funcionários" ? "Permissões e observações" : "Descrição / observações"}<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder={requestedModule === "Funcionários" ? "Informe os módulos autorizados e observações do funcionário..." : "Inclua os detalhes deste cadastro..."}/></label>
+        </>}
       </>}
     </>}
-  </div><div className="modal-actions"><button className="outline-btn" onClick={close}>Cancelar</button><button className="primary-btn" disabled={isNewOrder ? !selectedClient || !tech || !date : isNewCustomer ? !recordName || !address.trim() || !addressValidated : requestedModule === "Compras" ? !recordName || !recordClient || !purchaseItems.some(item => item.description.trim() && item.quantity > 0) || purchaseTotal <= 0 || (paymentType === "A prazo" && !firstDueDate) : (!isLinkedStructure && !recordName)} onClick={() => onSave({ title, name: recordName, client: isNewOrder ? selectedClient : recordClient, doc, contact, phone, address: isNewOrder ? (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "") : address, unit, tech, date, time, description, status: recordStatus, value: requestedModule === "Compras" ? purchaseTotal : Number(recordValue) || 0, category: recordCategory, kind: recordKind, catalogItems: catalogRecords.filter(item => selectedCatalogIds.includes(item.id)).map(item => ({ id: item.id, name: item.name, kind: item.kind || "Serviço" })), purchaseItems: purchaseItems.filter(item => item.description.trim() && item.quantity > 0), paymentType, paymentMethod, installments: paymentType === "A prazo" ? Math.max(1, installments) : 1, firstDueDate, paymentInstallments, xmlImported, supplierDoc, supplierId, registerSupplier: xmlImported && !supplierId })}><CheckCircle2 size={15}/> Salvar registro</button></div></div>
+  </div><div className="modal-actions"><button className="outline-btn" onClick={close}>Cancelar</button><button className="primary-btn" disabled={isNewOrder ? !selectedClient || !tech || !date : isNewCustomer ? !recordName || !address.trim() || !addressValidated : requestedModule === "Compras" ? !recordName || !recordClient || !purchaseItems.some(item => item.description.trim() && item.quantity > 0) || purchaseTotal <= 0 || (paymentType === "A prazo" && !firstDueDate) : requestedModule === "Obras" ? !recordName || !recordClient || !workAddress : (!isLinkedStructure && !recordName)} onClick={() => onSave({ title, name: recordName, client: isNewOrder ? selectedClient : recordClient, doc, contact, phone, address: isNewOrder ? (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "") : address, unit, tech, date, time, description, status: recordStatus, value: requestedModule === "Compras" ? purchaseTotal : Number(recordValue) || 0, category: recordCategory, kind: recordKind, catalogItems: catalogRecords.filter(item => selectedCatalogIds.includes(item.id)).map(item => ({ id: item.id, name: item.name, kind: item.kind || "Serviço" })), purchaseItems: purchaseItems.filter(item => item.description.trim() && item.quantity > 0), paymentType, paymentMethod, installments: paymentType === "A prazo" ? Math.max(1, installments) : 1, firstDueDate, paymentInstallments, xmlImported, supplierDoc, supplierId, registerSupplier: xmlImported && !supplierId, engineer, workAddress, blockLot, endDate, progress, commission })}><CheckCircle2 size={15}/> Salvar registro</button></div></div>
     {servicePickerOpen && <div className="service-picker-layer" role="dialog" aria-modal="true" aria-label="Selecionar serviços"><button type="button" className="service-picker-backdrop" aria-label="Fechar seleção de serviços" onClick={() => setServicePickerOpen(false)}/><section className="service-picker"><header><div><span>CATÁLOGO DE SERVIÇOS</span><h3>Selecionar vários serviços</h3><p>Pesquise e marque todos os itens necessários para esta ordem.</p></div><button type="button" aria-label="Fechar" onClick={() => setServicePickerOpen(false)}><X size={17}/></button></header><label className="service-picker-search"><Search size={17}/><input autoFocus value={serviceSearch} onChange={event => setServiceSearch(event.target.value)} placeholder="Pesquisar por nome ou categoria..."/><small>{visibleServiceOptions.length} resultado(s)</small></label><div className="service-picker-grid">{visibleServiceOptions.map(item => <label key={item.id} className={servicePickerIds.includes(item.id) ? "selected" : ""}><input type="checkbox" checked={servicePickerIds.includes(item.id)} onChange={() => setServicePickerIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])}/><span><Wrench size={17}/></span><div><b>{item.name}</b><small>{item.category || item.description || "Serviço cadastrado"}</small></div><CheckCircle2 size={16}/></label>)}</div>{!visibleServiceOptions.length && <div className="catalog-empty"><Search size={18}/><span>Nenhum serviço encontrado para esta pesquisa.</span></div>}<footer><span><b>{servicePickerIds.length}</b> serviço(s) marcado(s)</span><div><button type="button" className="outline-btn" onClick={() => setServicePickerOpen(false)}>Cancelar</button><button type="button" className="primary-btn" onClick={() => { setSelectedCatalogIds(servicePickerIds); setServicePickerOpen(false); }}><CheckCircle2 size={15}/> Aplicar seleção</button></div></footer></section></div>}
   </div>;
 }
@@ -1048,6 +1098,12 @@ export default function Home() {
         installments: data.installments,
         firstDueDate: data.firstDueDate,
         paymentInstallments: data.paymentInstallments,
+        engineer: data.engineer,
+        address: data.workAddress,
+        blockLot: data.blockLot,
+        endDate: data.endDate,
+        progress: data.progress,
+        commission: data.commission,
       };
       let updatedRecords = { ...moduleRecords, [moduleName]: [record, ...(moduleRecords[moduleName] ?? [])] };
       if (moduleName === "Compras" && data.xmlImported) {
@@ -1108,8 +1164,8 @@ export default function Home() {
     setModal("");
     window.setTimeout(() => setSavedMessage(""), 3500);
   };
-  const titles: Record<string,string> = { "Painel inicial": "Olá", "Clientes": "Gestão de clientes" };
-  const subtitles: Record<string,string> = { "Painel inicial": "Uma visão completa da sua empresa em tempo real.", "Clientes": "Cadastros, unidades, histórico e relacionamento." };
+  const titles: Record<string,string> = { "Painel inicial": "Olá", "Clientes": "Gestão de clientes", "Obras": "Gestão de obras" };
+  const subtitles: Record<string,string> = { "Painel inicial": "Uma visão completa da sua empresa em tempo real.", "Clientes": "Cadastros, unidades, histórico e relacionamento.", "Obras": "Planejamento, execução, perdas, custos e progresso em um único módulo." };
   const logout = async () => {
     await fetch("/api/auth", { method: "DELETE" });
     setAuthenticatedUser(null);
