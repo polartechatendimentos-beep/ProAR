@@ -1,28 +1,9 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  title: "ProAR — Gestão de Serviços",
-  description: "Gestão completa para empresas que prestam serviços.",
-  other: {
-    "codex-preview": "development",
-  },
-  icons: {
-    icon: "/icon.png",
-    shortcut: "/icon.png",
-    apple: "/icon.png",
-  },
+  title: "ProAR - Gestão Autônoma de Licitações & Fiscal",
+  description: "Plataforma de monitoramento de licitações, gestão fiscal e alertas automatizados via WhatsApp",
 };
 
 export default function RootLayout({
@@ -32,9 +13,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">
         {children}
       </body>
     </html>
