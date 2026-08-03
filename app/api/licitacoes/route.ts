@@ -24,23 +24,28 @@ export type PncpTender = {
 
 async function fetchPage(dataFinal: string, uf: string, page: number) {
   const query = new URLSearchParams({ dataFinal, pagina: String(page), tamanhoPagina: "50", uf });
-  const response = await fetch(`${PNCP_URL}?${query}`, { headers: { Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(25000) });
+  const response = await fetch(`${PNCP_URL}?${query}`, { headers: { Accept: "application/json", "User-Agent": "ProAR-Gestao/1.0" }, cache: "no-store", signal: AbortSignal.timeout(25000) });
   if (!response.ok) throw new Error(`PNCP respondeu ${response.status}`);
   const payload = await response.json();
-  return { data: Array.isArray(payload?.data) ? payload.data as PncpTender[] : [], totalPages: Math.min(Number(payload?.totalPaginas ?? 1), 8) };
+  return { data: Array.isArray(payload?.data) ? payload.data as PncpTender[] : [], totalPages: Math.min(Number(payload?.totalPaginas ?? 1), 2) };
 }
 
 export async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radius?: number; all?: boolean; term?: string }) {
   const today = options?.start ?? new Date();
   const end = options?.end ?? new Date(today.getTime() + 60 * 86400000);
   const fmt = (date: Date) => date.toISOString().slice(0, 10).replaceAll("-", "");
-  const calls = ["SP", "MG", "MS", "PR", "GO"].map(async uf => {
-    const first = await fetchPage(fmt(end), uf, 1);
-    const extra = await Promise.all(Array.from({ length: Math.max(0, first.totalPages - 1) }, (_, index) => fetchPage(fmt(end), uf, index + 2).catch(() => ({ data: [], totalPages: 0 }))));
-    return [first.data, ...extra.map(page => page.data)].flat();
-  });
-  const settled = await Promise.allSettled(calls);
-  const raw = settled.flatMap(result => result.status === "fulfilled" ? result.value : []);
+  const raw: PncpTender[] = [];
+  let failed = 0;
+  for (const uf of ["SP", "MG", "MS", "PR", "GO"]) {
+    try {
+      const first = await fetchPage(fmt(end), uf, 1);
+      raw.push(...first.data);
+      for (let page = 2; page <= first.totalPages; page += 1) {
+        try { raw.push(...(await fetchPage(fmt(end), uf, page)).data); }
+        catch (error) { console.warn(`PNCP ${uf} página ${page} indisponível`, error); }
+      }
+    } catch (error) { failed += 1; console.warn(`PNCP ${uf} indisponível`, error); }
+  }
   const radius = options?.radius ?? 300;
   const startTime = new Date(today.toISOString().slice(0, 10) + "T00:00:00-03:00").getTime();
   const endTime = new Date(end.toISOString().slice(0, 10) + "T23:59:59-03:00").getTime();
@@ -59,7 +64,7 @@ export async function searchAutomaticTenders(options?: { start?: Date; end?: Dat
   });
   const unique = Array.from(new Map(filtered.map(item => [item.numeroControlePNCP || `${item.orgaoEntidade?.cnpj}-${item.anoCompra}-${item.sequencialCompra}`, item])).values());
   unique.sort((a, b) => new Date(a.dataEncerramentoProposta ?? 0).getTime() - new Date(b.dataEncerramentoProposta ?? 0).getTime());
-  return { data: unique, failed: settled.filter(result => result.status === "rejected").length };
+  return { data: unique, failed };
 }
 
 export async function GET(request: NextRequest) {
