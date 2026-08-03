@@ -24,10 +24,18 @@ export type PncpTender = {
 
 async function fetchPage(dataFinal: string, uf: string, page: number) {
   const query = new URLSearchParams({ dataFinal, pagina: String(page), tamanhoPagina: "50", uf });
-  const response = await fetch(`${PNCP_URL}?${query}`, { headers: { Accept: "application/json", "User-Agent": "ProAR-Gestao/1.0" }, cache: "no-store", signal: AbortSignal.timeout(25000) });
-  if (!response.ok) throw new Error(`PNCP respondeu ${response.status}`);
-  const payload = await response.json();
-  return { data: Array.isArray(payload?.data) ? payload.data as PncpTender[] : [], totalPages: Math.min(Number(payload?.totalPaginas ?? 1), 2) };
+  let lastStatus = 503;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const response = await fetch(`${PNCP_URL}?${query}`, { headers: { Accept: "application/json" }, next: { revalidate: 300 }, signal: AbortSignal.timeout(25000) });
+    lastStatus = response.status;
+    if (response.ok) {
+      const payload = await response.json();
+      return { data: Array.isArray(payload?.data) ? payload.data as PncpTender[] : [], totalPages: 1 };
+    }
+    if (![429, 502, 503, 504].includes(response.status)) break;
+    await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+  }
+  throw new Error(`PNCP respondeu ${lastStatus}`);
 }
 
 export async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radius?: number; all?: boolean; term?: string }) {
