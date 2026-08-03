@@ -7,7 +7,7 @@ import {
   CheckCircle2, ChevronDown, ChevronRight, CircleDollarSign, ClipboardList,
   Clock3, FileChartColumn, FileText, Filter, Grid2X2, HandCoins, Headphones,
   ArrowLeft, Camera, Contact, Edit3, Eye, EyeOff, Hospital, Landmark, LayoutDashboard, LogIn, LogOut, MapPin,
-  CreditCard, Keyboard, Menu, Minus, MoreHorizontal, Package, Phone, Plus, ReceiptText, ScanBarcode, School, Search, Settings,
+  CreditCard, ExternalLink, Gavel, Keyboard, Menu, Minus, MoreHorizontal, Package, Phone, Plus, ReceiptText, RefreshCw, ScanBarcode, School, Search, Settings,
   ShieldCheck, ShoppingBag, ShoppingCart, Store, TrendingUp, UserCheck, UserRound,
   MessageCircle, PenTool, Tag, Trash2,
   UsersRound, WalletCards, Warehouse, Wrench, X, Zap
@@ -38,6 +38,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     { icon: Store, name: "Fornecedores" },
   ]},
   { label: "GESTÃO", items: [
+    { icon: Gavel, name: "Licitações" },
     { icon: WalletCards, name: "Financeiro" },
     { icon: BriefcaseBusiness, name: "Funcionários" },
     { icon: FileChartColumn, name: "Relatórios" },
@@ -573,6 +574,74 @@ function SalesPDV({ customers }: { customers: Customer[] }) {
   </section>;
 }
 
+type Tender = {
+  numeroControlePNCP?: string;
+  objetoCompra?: string;
+  modalidadeNome?: string;
+  dataEncerramentoProposta?: string;
+  valorTotalEstimado?: number;
+  linkSistemaOrigem?: string;
+  anoCompra?: number;
+  sequencialCompra?: number;
+  distanciaMirassol?: number;
+  orgaoEntidade?: { razaoSocial?: string; cnpj?: string };
+  unidadeOrgao?: { municipioNome?: string; ufSigla?: string; nomeUnidade?: string };
+};
+
+function TendersModule() {
+  const today = new Date().toISOString().slice(0, 10);
+  const sixtyDays = new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10);
+  const [items, setItems] = useState<Tender[]>([]);
+  const [search, setSearch] = useState("");
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(sixtyDays);
+  const [radius, setRadius] = useState("300");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [warning, setWarning] = useState("");
+  const [lastScan, setLastScan] = useState("");
+
+  const load = async (preferMonitor = true) => {
+    setLoading(true); setError(""); setWarning("");
+    try {
+      let response = await fetch(preferMonitor ? "/api/licitacoes?monitor=1" : `/api/licitacoes?dataInicial=${startDate}&dataFinal=${endDate}&raio=${radius}`, { cache: "no-store" });
+      if (!response.ok && preferMonitor) response = await fetch(`/api/licitacoes?dataInicial=${startDate}&dataFinal=${endDate}&raio=${radius}`, { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error || "Não foi possível consultar o PNCP.");
+      setItems(Array.isArray(payload?.data) ? payload.data : []);
+      setWarning(payload?.warning || "");
+      setLastScan(payload?.lastScan || new Date().toISOString());
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Falha ao consultar licitações.");
+    } finally { setLoading(false); }
+  };
+
+  useEffect(() => { void load(true); }, []);
+
+  const filtered = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase("pt-BR");
+    if (!term) return items;
+    return items.filter(item => [item.objetoCompra, item.orgaoEntidade?.razaoSocial, item.unidadeOrgao?.municipioNome, item.modalidadeNome].some(value => value?.toLocaleLowerCase("pt-BR").includes(term)));
+  }, [items, search]);
+  const totalValue = filtered.reduce((sum, item) => sum + Number(item.valorTotalEstimado || 0), 0);
+  const pncpLink = (item: Tender) => item.orgaoEntidade?.cnpj && item.anoCompra && item.sequencialCompra
+    ? `https://pncp.gov.br/app/editais/${item.orgaoEntidade.cnpj}/${item.anoCompra}/${item.sequencialCompra}`
+    : "https://pncp.gov.br/app/editais";
+
+  return <section className="tenders-page">
+    <div className="management-hero tender-hero"><div><span className="section-kicker"><Gavel size={12}/> MONITORAMENTO PÚBLICO</span><h2>Licitações de climatização</h2><p>Busca direcionada para ar-condicionado, refrigeração, PMOC, peças e equipamentos relacionados.</p></div><button className="primary-btn" disabled={loading} onClick={() => void load(false)}><RefreshCw className={loading ? "spinning" : ""} size={15}/>{loading ? "Consultando..." : "Atualizar busca"}</button></div>
+    <div className="tender-kpis"><article><span><Gavel size={17}/></span><div><small>OPORTUNIDADES</small><strong>{filtered.length}</strong></div></article><article><span><CircleDollarSign size={17}/></span><div><small>VALOR ESTIMADO</small><strong>R$ {totalValue.toLocaleString("pt-BR", { notation: "compact", maximumFractionDigits: 1 })}</strong></div></article><article><span><MapPin size={17}/></span><div><small>RAIO DE BUSCA</small><strong>Até {radius} km</strong></div></article><article><span><Clock3 size={17}/></span><div><small>ÚLTIMA CONSULTA</small><strong>{lastScan ? new Date(lastScan).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "Aguardando"}</strong></div></article></div>
+    <div className="panel tender-filters"><label className="tender-search"><Search size={16}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Pesquisar órgão, objeto ou cidade..."/></label><label>De<input type="date" value={startDate} onChange={event => setStartDate(event.target.value)}/></label><label>Até<input type="date" value={endDate} onChange={event => setEndDate(event.target.value)}/></label><label>Distância<select value={radius} onChange={event => setRadius(event.target.value)}><option value="100">Até 100 km</option><option value="200">Até 200 km</option><option value="300">Até 300 km</option></select></label></div>
+    {warning && <div className="tender-alert warning"><AlertTriangle size={16}/>{warning}</div>}
+    {error && <div className="tender-alert error"><AlertTriangle size={16}/><span>{error}</span><button onClick={() => void load(false)}>Tentar novamente</button></div>}
+    {loading ? <div className="panel tender-loading"><RefreshCw className="spinning" size={24}/><strong>Consultando oportunidades no PNCP</strong><p>Aplicando o filtro técnico de climatização e distância.</p></div> : filtered.length ? <div className="tender-grid">{filtered.map((item, index) => {
+      const closing = item.dataEncerramentoProposta ? new Date(item.dataEncerramentoProposta) : null;
+      const days = closing ? Math.ceil((closing.getTime() - Date.now()) / 86400000) : null;
+      return <article className="panel tender-card" key={item.numeroControlePNCP || `${item.objetoCompra}-${index}`}><header><span><Gavel size={15}/>{item.modalidadeNome || "Contratação pública"}</span><em className={days !== null && days <= 7 ? "urgent" : ""}>{days === null ? "Prazo não informado" : days < 0 ? "Encerrada" : `${days} dia(s) restantes`}</em></header><h3>{item.objetoCompra || "Objeto não informado"}</h3><div className="tender-meta"><span><Landmark size={13}/>{item.orgaoEntidade?.razaoSocial || "Órgão não informado"}</span><span><MapPin size={13}/>{item.unidadeOrgao?.municipioNome || "Cidade não informada"}/{item.unidadeOrgao?.ufSigla || "—"} • {item.distanciaMirassol ?? "—"} km</span><span><Clock3 size={13}/>Encerramento: {closing ? closing.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—"}</span></div><footer><strong>R$ {Number(item.valorTotalEstimado || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong><div><a href={pncpLink(item)} target="_blank" rel="noreferrer">Ver no PNCP <ExternalLink size={12}/></a>{item.linkSistemaOrigem && <a href={item.linkSistemaOrigem} target="_blank" rel="noreferrer">Sistema do órgão <ArrowRight size={12}/></a>}</div></footer></article>;
+    })}</div> : !error && <div className="panel linked-empty tender-empty"><Gavel size={26}/><h4>Nenhuma licitação encontrada</h4><p>Não há oportunidades aderentes aos filtros atuais. Ajuste o período ou a distância e atualize a busca.</p></div>}
+  </section>;
+}
+
 const moduleStatuses: Record<string, string[]> = {
   "Compras": ["Rascunho", "Aguardando aprovação", "Aprovada", "Enviada ao fornecedor", "Aguardando entrega", "Recebida parcialmente", "Recebida", "Cancelada", "Devolvida"],
   "Fornecedores": ["Ativo", "Inativo", "Bloqueado"],
@@ -895,7 +964,7 @@ function Modal({ title, customers, catalogRecords, supplierRecords, close, onSav
   const [progress, setProgress] = useState(0);
   const [commission, setCommission] = useState(0);
   const [employeeRole, setEmployeeRole] = useState("Atendimento");
-  const permissionModules = ["Clientes", "Ordens de serviço", "Agenda", "Serviços", "Produtos", "Estoque", "Financeiro", "Relatórios"];
+  const permissionModules = ["Clientes", "Ordens de serviço", "Agenda", "Serviços", "Produtos", "Estoque", "Licitações", "Financeiro", "Relatórios"];
   const permissionActions = ["Visualizar", "Criar", "Editar", "Excluir"] as const;
   const profilePermissions: Record<string, Record<string, (typeof permissionActions)[number][]>> = {
     Administrador: Object.fromEntries(permissionModules.map(module => [module, [...permissionActions]])),
@@ -1282,8 +1351,8 @@ export default function Home() {
     setModal("");
     window.setTimeout(() => setSavedMessage(""), 3500);
   };
-  const titles: Record<string,string> = { "Painel inicial": "Olá", "Clientes": "Gestão de clientes", "Obras": "Gestão de obras" };
-  const subtitles: Record<string,string> = { "Painel inicial": "Uma visão completa da sua empresa em tempo real.", "Clientes": "Cadastros, unidades, histórico e relacionamento.", "Obras": "Planejamento, execução, perdas, custos e progresso em um único módulo." };
+  const titles: Record<string,string> = { "Painel inicial": "Olá", "Clientes": "Gestão de clientes", "Obras": "Gestão de obras", "Licitações": "Central de licitações" };
+  const subtitles: Record<string,string> = { "Painel inicial": "Uma visão completa da sua empresa em tempo real.", "Clientes": "Cadastros, unidades, histórico e relacionamento.", "Obras": "Planejamento, execução, perdas, custos e progresso em um único módulo.", "Licitações": "Oportunidades de climatização e refrigeração encontradas nos portais públicos." };
   const logout = async () => {
     await fetch("/api/auth", { method: "DELETE" });
     setAuthenticatedUser(null);
@@ -1338,7 +1407,7 @@ export default function Home() {
     <main className="main">
       <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNewOrder={() => setModal("Nova ordem de serviço")} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onLogout={logout}/>
       {savedMessage && <div className="save-toast" role="status"><CheckCircle2 size={16}/>{savedMessage}</div>}
-      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} customers={customerRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Vendas" ? <SalesPDV customers={customerRecords}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} onOpen={setModal} onUpdate={updateModuleRecord}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} serviceOrders={serviceOrders} customers={customerRecords}/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} records={moduleRecords[current] ?? []}/>}</div>
+      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} customers={customerRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Vendas" ? <SalesPDV customers={customerRecords}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders}/> : current === "Licitações" ? <TendersModule/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} onOpen={setModal} onUpdate={updateModuleRecord}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} serviceOrders={serviceOrders} customers={customerRecords}/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} records={moduleRecords[current] ?? []}/>}</div>
       <footer><span>© 2026 ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
     {modal && <Modal title={modal} customers={customerRecords} catalogRecords={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} supplierRecords={moduleRecords["Fornecedores"] ?? []} close={() => setModal("")} onSave={saveRecord}/>}
