@@ -17,10 +17,19 @@ export type PncpTender = {
   numeroControlePNCP?: string; objetoCompra?: string; modalidadeNome?: string;
   dataEncerramentoProposta?: string; valorTotalEstimado?: number; linkSistemaOrigem?: string;
   anoCompra?: number; sequencialCompra?: number;
+  usuarioNome?: string; sourcePortal?: "PNCP" | "Compras.gov.br" | "BLL Compras" | "Licitações-e";
   orgaoEntidade?: { razaoSocial?: string; cnpj?: string };
   unidadeOrgao?: { municipioNome?: string; ufSigla?: string; nomeUnidade?: string; codigoIbge?: string };
   distanciaMirassol?: number;
 };
+
+function identifySource(item: PncpTender): PncpTender["sourcePortal"] {
+  const origin = normalize(`${item.linkSistemaOrigem ?? ""} ${item.usuarioNome ?? ""}`);
+  if (/bllcompras|bll compras|bolsa de licitacoes do brasil/.test(origin)) return "BLL Compras";
+  if (/licitacoes-e|licitacoes e|licitacao-e|bb\.com\.br/.test(origin)) return "Licitações-e";
+  if (/comprasnet|compras\.gov|cnetmobile|serpro/.test(origin)) return "Compras.gov.br";
+  return "PNCP";
+}
 
 async function fetchPage(dataFinal: string, uf: string, page: number) {
   const query = new URLSearchParams({ dataFinal, pagina: String(page), tamanhoPagina: "50", uf });
@@ -68,6 +77,7 @@ export async function searchAutomaticTenders(options?: { start?: Date; end?: Dat
     const distance = municipalityDistances[String(item.unidadeOrgao?.codigoIbge ?? "")] ?? cityDistances[normalize(item.unidadeOrgao?.municipioNome ?? "")];
     if (distance === undefined || distance > radius) return false;
     item.distanciaMirassol = distance;
+    item.sourcePortal = identifySource(item);
     return true;
   });
   const unique = Array.from(new Map(filtered.map(item => [item.numeroControlePNCP || `${item.orgaoEntidade?.cnpj}-${item.anoCompra}-${item.sequencialCompra}`, item])).values());
