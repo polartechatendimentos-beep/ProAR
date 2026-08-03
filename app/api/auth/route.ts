@@ -1,20 +1,26 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { authenticate, createSession, readSession } from "../../../lib/proar-auth";
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const { email, senha } = body;
+const COOKIE_NAME = "proar_session";
 
-    if (email === "admin@proar.com.br" && senha === "admin") {
-      return NextResponse.json({
-        success: true,
-        user: { id: 1, email, nome: "Administrador ProAR", role: "admin" },
-        token: "proar-dummy-session-token",
-      });
-    }
+export async function GET(request: NextRequest) {
+  const user = readSession(request.cookies.get(COOKIE_NAME)?.value);
+  return user
+    ? NextResponse.json({ authenticated: true, username: user.username, displayName: user.displayName, role: user.role, permissions: user.permissions })
+    : NextResponse.json({ authenticated: false }, { status: 401 });
+}
 
-    return NextResponse.json({ success: false, message: "Credenciais inválidas" }, { status: 401 });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-  }
+export async function POST(request: NextRequest) {
+  const { username = "", password = "" } = await request.json();
+  const user = authenticate(String(username), String(password));
+  if (!user) return NextResponse.json({ error: "Utilizador ou senha inválidos." }, { status: 401 });
+  const response = NextResponse.json({ authenticated: true, username: user.username, displayName: user.displayName, role: user.role, permissions: user.permissions });
+  response.cookies.set(COOKIE_NAME, createSession(user.username), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 });
+  return response;
+}
+
+export async function DELETE() {
+  const response = NextResponse.json({ authenticated: false });
+  response.cookies.set(COOKIE_NAME, "", { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 0 });
+  return response;
 }
