@@ -9,7 +9,7 @@ import {
   ArrowLeft, Camera, Contact, Edit3, Eye, EyeOff, Hospital, Landmark, LayoutDashboard, LogIn, LogOut, MapPin,
   CreditCard, Keyboard, Menu, Minus, MoreHorizontal, Package, Phone, Plus, ReceiptText, ScanBarcode, School, Search, Settings,
   ShieldCheck, ShoppingBag, ShoppingCart, Store, TrendingUp, UserCheck, UserRound,
-  MessageCircle, Send, Wifi, PenTool, Tag, Trash2,
+  MessageCircle, PenTool, Tag, Trash2,
   UsersRound, WalletCards, Warehouse, Wrench, X, Zap
 } from "lucide-react";
 
@@ -601,81 +601,6 @@ function Reports({ modules, customers, serviceOrders }: { modules: Record<string
   </section>;
 }
 
-type WhatsAppSettings = {
-  active: boolean; phoneNumberId: string; wabaId: string; accessToken: string;
-  apiVersion: string; defaultCountry: string; tenderTo: string;
-  tenderTemplate: string; reminderTemplate: string;
-  tokenConfigured?: boolean; tokenPreview?: string;
-};
-
-const whatsappDefaults: WhatsAppSettings = {
-  active: false, phoneNumberId: "", wabaId: "", accessToken: "", apiVersion: "v23.0",
-  defaultCountry: "55", tenderTo: "5517991567798", tenderTemplate: "nova_licitacao_proar",
-  reminderTemplate: "lembrete_higienizacao",
-};
-
-function WhatsAppSettingsPage() {
-  const [config, setConfig] = useState<WhatsAppSettings>(whatsappDefaults);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-  const update = (field: keyof WhatsAppSettings, value: string | boolean) => setConfig(current => ({ ...current, [field]: value }));
-  useEffect(() => {
-    fetch("/api/whatsapp", { cache: "no-store" }).then(async response => {
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Não foi possível carregar a configuração.");
-      setConfig({ ...whatsappDefaults, ...result, accessToken: "" });
-    }).catch(reason => setError(reason instanceof Error ? reason.message : "Falha ao carregar."))
-      .finally(() => setLoading(false));
-  }, []);
-  const save = async () => {
-    setSaving(true); setMessage(""); setError("");
-    try {
-      const response = await fetch("/api/whatsapp", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(config) });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Não foi possível guardar.");
-      setConfig({ ...whatsappDefaults, ...result, accessToken: "" });
-      setMessage("Configuração do WhatsApp guardada com segurança.");
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Falha ao guardar."); }
-    finally { setSaving(false); }
-  };
-  const test = async () => {
-    setTesting(true); setMessage(""); setError("");
-    try {
-      const response = await fetch("/api/whatsapp", { method: "POST" });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "A Meta recusou a conexão.");
-      setMessage(`Conexão confirmada${result.verified_name ? `: ${result.verified_name}` : ""}${result.display_phone_number ? ` • ${result.display_phone_number}` : ""}.`);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Falha ao testar."); }
-    finally { setTesting(false); }
-  };
-  return <section className="whatsapp-settings">
-    <div className="management-hero whatsapp-hero"><div><span className="section-kicker">CANAIS E AUTOMAÇÕES</span><h2>WhatsApp Business</h2><p>Envie alertas de novas licitações e lembretes de higienização pela API oficial da Meta.</p></div><div className={`whatsapp-state ${config.active && config.tokenConfigured ? "online" : ""}`}><span><MessageCircle size={20}/></span><div><small>ESTADO DA INTEGRAÇÃO</small><b>{config.active ? (config.tokenConfigured ? "Ativa e configurada" : "Aguardando token") : "Desativada"}</b></div></div></div>
-    {loading ? <div className="settings-loading">A carregar configuração segura…</div> : <>
-      {(message || error) && <div className={`whatsapp-feedback ${error ? "error" : "success"}`}>{error ? <AlertTriangle size={16}/> : <CheckCircle2 size={16}/>} {error || message}</div>}
-      <div className="whatsapp-grid">
-        <article className="whatsapp-card"><header><span><Wifi size={19}/></span><div><small>CONEXÃO OFICIAL</small><h3>Credenciais da Meta</h3></div></header><div className="whatsapp-form">
-          <label>Phone Number ID<input value={config.phoneNumberId} onChange={event => update("phoneNumberId", event.target.value)} placeholder="ID do número no WhatsApp Manager"/></label>
-          <label>WhatsApp Business Account ID<input value={config.wabaId} onChange={event => update("wabaId", event.target.value)} placeholder="WABA ID"/></label>
-          <label>Versão da Graph API<input value={config.apiVersion} onChange={event => update("apiVersion", event.target.value)} placeholder="v23.0"/></label>
-          <label>Código do país<input value={config.defaultCountry} onChange={event => update("defaultCountry", event.target.value.replace(/\D/g, ""))} placeholder="55"/></label>
-          <label className="wide">Token permanente<input type="password" autoComplete="new-password" value={config.accessToken} onChange={event => update("accessToken", event.target.value)} placeholder={config.tokenConfigured ? `Token protegido ${config.tokenPreview || ""} • deixe em branco para manter` : "Cole o token permanente da Meta"}/><small>O token é criptografado no servidor e não volta para o navegador.</small></label>
-        </div></article>
-        <article className="whatsapp-card"><header><span><Send size={19}/></span><div><small>ENVIO AUTOMÁTICO</small><h3>Destinos e modelos</h3></div></header><div className="whatsapp-form one-column">
-          <label>Número para alertas de licitação<input value={config.tenderTo} onChange={event => update("tenderTo", event.target.value)} placeholder="5517999999999"/></label>
-          <label>Modelo aprovado — licitações<input value={config.tenderTemplate} onChange={event => update("tenderTemplate", event.target.value)} placeholder="nova_licitacao_proar"/></label>
-          <label>Modelo aprovado — lembrete ao cliente<input value={config.reminderTemplate} onChange={event => update("reminderTemplate", event.target.value)} placeholder="lembrete_higienizacao"/></label>
-          <label className="integration-toggle"><input type="checkbox" checked={config.active} onChange={event => update("active", event.target.checked)}/><span/><div><b>Ativar envios automáticos</b><small>As mensagens só serão enviadas depois de guardar e validar a conexão.</small></div></label>
-        </div></article>
-      </div>
-      <div className="whatsapp-actions"><a className="outline-btn" href="https://developers.facebook.com/documentation/business-messaging/whatsapp/get-started" target="_blank" rel="noreferrer"><MessageCircle size={15}/> Abrir configuração oficial da Meta</a><button className="outline-btn" onClick={test} disabled={testing || !config.tokenConfigured}><Wifi size={15}/> {testing ? "A testar…" : "Testar conexão"}</button><button className="primary-btn" onClick={save} disabled={saving}><ShieldCheck size={15}/> {saving ? "A guardar…" : "Guardar integração"}</button></div>
-      <p className="whatsapp-note"><ShieldCheck size={14}/> Os modelos precisam estar aprovados na Meta e usar o idioma Português (Brasil). Não envie o token por WhatsApp ou pelo chat; cadastre-o somente nesta tela.</p>
-    </>}
-  </section>;
-}
-
 function GenericModule({ name, onOpen, onDelete, onUpdate, records }: { name: string; onOpen: (name: string) => void; onDelete: (moduleName: string, record: ModuleRecord) => void; onUpdate: (moduleName: string, record: ModuleRecord) => void; records: ModuleRecord[] }) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todas");
@@ -827,6 +752,9 @@ function Modal({ title, customers, catalogRecords, supplierRecords, close, onSav
   const [recordCategory, setRecordCategory] = useState("");
   const [recordKind, setRecordKind] = useState<"Serviço" | "Produto">(title.includes("Produtos") ? "Produto" : "Serviço");
   const [selectedCatalogIds, setSelectedCatalogIds] = useState<string[]>([]);
+  const [servicePickerOpen, setServicePickerOpen] = useState(false);
+  const [serviceSearch, setServiceSearch] = useState("");
+  const [servicePickerIds, setServicePickerIds] = useState<string[]>([]);
   const [purchaseItems, setPurchaseItems] = useState<PurchaseItem[]>([{ id: `ITEM-${Date.now()}`, description: "", quantity: 1, unitValue: 0 }]);
   const [paymentType, setPaymentType] = useState<"À vista" | "A prazo">("À vista");
   const [paymentMethod, setPaymentMethod] = useState("PIX");
@@ -893,6 +821,9 @@ function Modal({ title, customers, catalogRecords, supplierRecords, close, onSav
   };
   const parentCustomer = isLinkedStructure ? title.split("•")[1]?.trim() : "";
   const selectedClientData = customers.find(customer => customer.name === selectedClient);
+  const serviceRecords = catalogRecords.filter(item => (item.kind || "Serviço") === "Serviço");
+  const selectedServices = serviceRecords.filter(item => selectedCatalogIds.includes(item.id));
+  const visibleServiceOptions = serviceRecords.filter(item => `${item.name} ${item.description || ""} ${item.category || ""}`.toLocaleLowerCase("pt-BR").includes(serviceSearch.trim().toLocaleLowerCase("pt-BR")));
   const availableUnits = selectedClient ? [
     ...(selectedClientData ? [{ icon: Building2, name: "Endereço principal", type: "Cliente principal", doc: selectedClientData.doc, responsible: selectedClientData.contact, phone: selectedClientData.phone, address: selectedClientData.address, orders: 0 }] : []),
     ...(linkedUnits[selectedClient] ?? []),
@@ -922,9 +853,9 @@ function Modal({ title, customers, catalogRecords, supplierRecords, close, onSav
         <label>Técnico empenhado<select value={tech} onChange={event => setTech(event.target.value)}><option value="">Selecione o técnico</option><option>Tiago Viana</option><option>João Carlos</option><option>Caio Henrique</option><option>Thiago Souza</option><option>Lucas Mendes</option></select></label>
         <label>Prioridade<select><option>Normal</option><option>Alta</option><option>Urgente</option></select></label>
         <div className="wide order-catalog">
-          <div className="execution-head"><div><span>SERVIÇOS CADASTRADOS</span><h3>Selecione os itens da ordem</h3></div><small>{selectedCatalogIds.length} selecionado(s)</small></div>
-          <div className="catalog-check-list">{catalogRecords.filter(item => (item.kind || "Serviço") === "Serviço").map(item => <label key={item.id} className={selectedCatalogIds.includes(item.id) ? "selected" : ""}><input type="checkbox" checked={selectedCatalogIds.includes(item.id)} onChange={() => setSelectedCatalogIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])}/><span><Wrench size={15}/></span><div><b>{item.name}</b><small>{item.description || "Serviço cadastrado"}</small></div><CheckCircle2 size={15}/></label>)}</div>
-          {!catalogRecords.some(item => (item.kind || "Serviço") === "Serviço") && <div className="catalog-empty"><Wrench size={19}/><span>Nenhum serviço cadastrado. Cadastre no menu Serviços para selecionar aqui.</span></div>}
+          <div className="execution-head"><div><span>SERVIÇOS DA ORDEM</span><h3>Itens selecionados</h3></div><div className="catalog-head-actions"><small>{selectedCatalogIds.length} selecionado(s)</small><button type="button" onClick={() => { setServicePickerIds(selectedCatalogIds); setServiceSearch(""); setServicePickerOpen(true); }}><Plus size={14}/> Adicionar serviços</button></div></div>
+          {selectedServices.length ? <div className="selected-service-grid">{selectedServices.map(item => <article key={item.id}><span><Wrench size={16}/></span><div><b>{item.name}</b><small>{item.category || "Serviço cadastrado"}</small></div><button type="button" aria-label={`Remover ${item.name}`} onClick={() => setSelectedCatalogIds(current => current.filter(id => id !== item.id))}><X size={14}/></button></article>)}</div> : <div className="catalog-empty"><Wrench size={19}/><span>Nenhum serviço selecionado. Use “Adicionar serviços” para escolher vários itens.</span></div>}
+          {!serviceRecords.length && <div className="catalog-empty"><Wrench size={19}/><span>Nenhum serviço cadastrado. Cadastre no menu Serviços para selecionar aqui.</span></div>}
         </div>
         <label className="wide">Descrição / solicitação<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="Descreva o atendimento, problema informado ou observações..."/></label>
         <div className="wide execution-notice"><ShieldCheck size={18}/><div><b>Execução disponível após salvar</b><small>Abra a ordem para fazer check-in, check-out, incluir fotos e recolher as duas assinaturas.</small></div></div>
@@ -978,7 +909,9 @@ function Modal({ title, customers, catalogRecords, supplierRecords, close, onSav
         <label>{requestedModule === "Funcionários" ? "Telefone / WhatsApp" : "Telefone / contato"}<input placeholder="(00) 00000-0000"/></label><label>{requestedModule === "Funcionários" ? "Data de admissão" : requestedModule === "Compras" ? "Previsão de entrega" : requestedModule === "Financeiro" ? "Data de vencimento" : "Data"}<input type="date" value={date} onChange={event => setDate(event.target.value)}/></label><label className="wide">{requestedModule === "Funcionários" ? "Permissões e observações" : "Descrição / observações"}<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder={requestedModule === "Funcionários" ? "Informe os módulos autorizados e observações do funcionário..." : "Inclua os detalhes deste cadastro..."}/></label>
       </>}
     </>}
-  </div><div className="modal-actions"><button className="outline-btn" onClick={close}>Cancelar</button><button className="primary-btn" disabled={isNewOrder ? !selectedClient || !tech || !date : isNewCustomer ? !recordName || !address.trim() || !addressValidated : requestedModule === "Compras" ? !recordName || !recordClient || !purchaseItems.some(item => item.description.trim() && item.quantity > 0) || purchaseTotal <= 0 || (paymentType === "A prazo" && !firstDueDate) : (!isLinkedStructure && !recordName)} onClick={() => onSave({ title, name: recordName, client: isNewOrder ? selectedClient : recordClient, doc, contact, phone, address: isNewOrder ? (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "") : address, unit, tech, date, time, description, status: recordStatus, value: requestedModule === "Compras" ? purchaseTotal : Number(recordValue) || 0, category: recordCategory, kind: recordKind, catalogItems: catalogRecords.filter(item => selectedCatalogIds.includes(item.id)).map(item => ({ id: item.id, name: item.name, kind: item.kind || "Serviço" })), purchaseItems: purchaseItems.filter(item => item.description.trim() && item.quantity > 0), paymentType, paymentMethod, installments: paymentType === "A prazo" ? Math.max(1, installments) : 1, firstDueDate, paymentInstallments, xmlImported, supplierDoc, supplierId, registerSupplier: xmlImported && !supplierId })}><CheckCircle2 size={15}/> Salvar registro</button></div></div></div>;
+  </div><div className="modal-actions"><button className="outline-btn" onClick={close}>Cancelar</button><button className="primary-btn" disabled={isNewOrder ? !selectedClient || !tech || !date : isNewCustomer ? !recordName || !address.trim() || !addressValidated : requestedModule === "Compras" ? !recordName || !recordClient || !purchaseItems.some(item => item.description.trim() && item.quantity > 0) || purchaseTotal <= 0 || (paymentType === "A prazo" && !firstDueDate) : (!isLinkedStructure && !recordName)} onClick={() => onSave({ title, name: recordName, client: isNewOrder ? selectedClient : recordClient, doc, contact, phone, address: isNewOrder ? (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "") : address, unit, tech, date, time, description, status: recordStatus, value: requestedModule === "Compras" ? purchaseTotal : Number(recordValue) || 0, category: recordCategory, kind: recordKind, catalogItems: catalogRecords.filter(item => selectedCatalogIds.includes(item.id)).map(item => ({ id: item.id, name: item.name, kind: item.kind || "Serviço" })), purchaseItems: purchaseItems.filter(item => item.description.trim() && item.quantity > 0), paymentType, paymentMethod, installments: paymentType === "A prazo" ? Math.max(1, installments) : 1, firstDueDate, paymentInstallments, xmlImported, supplierDoc, supplierId, registerSupplier: xmlImported && !supplierId })}><CheckCircle2 size={15}/> Salvar registro</button></div></div>
+    {servicePickerOpen && <div className="service-picker-layer" role="dialog" aria-modal="true" aria-label="Selecionar serviços"><button type="button" className="service-picker-backdrop" aria-label="Fechar seleção de serviços" onClick={() => setServicePickerOpen(false)}/><section className="service-picker"><header><div><span>CATÁLOGO DE SERVIÇOS</span><h3>Selecionar vários serviços</h3><p>Pesquise e marque todos os itens necessários para esta ordem.</p></div><button type="button" aria-label="Fechar" onClick={() => setServicePickerOpen(false)}><X size={17}/></button></header><label className="service-picker-search"><Search size={17}/><input autoFocus value={serviceSearch} onChange={event => setServiceSearch(event.target.value)} placeholder="Pesquisar por nome ou categoria..."/><small>{visibleServiceOptions.length} resultado(s)</small></label><div className="service-picker-grid">{visibleServiceOptions.map(item => <label key={item.id} className={servicePickerIds.includes(item.id) ? "selected" : ""}><input type="checkbox" checked={servicePickerIds.includes(item.id)} onChange={() => setServicePickerIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])}/><span><Wrench size={17}/></span><div><b>{item.name}</b><small>{item.category || item.description || "Serviço cadastrado"}</small></div><CheckCircle2 size={16}/></label>)}</div>{!visibleServiceOptions.length && <div className="catalog-empty"><Search size={18}/><span>Nenhum serviço encontrado para esta pesquisa.</span></div>}<footer><span><b>{servicePickerIds.length}</b> serviço(s) marcado(s)</span><div><button type="button" className="outline-btn" onClick={() => setServicePickerOpen(false)}>Cancelar</button><button type="button" className="primary-btn" onClick={() => { setSelectedCatalogIds(servicePickerIds); setServicePickerOpen(false); }}><CheckCircle2 size={15}/> Aplicar seleção</button></div></footer></section></div>}
+  </div>;
 }
 
 export default function Home() {
@@ -1175,7 +1108,7 @@ export default function Home() {
     setModal("");
     window.setTimeout(() => setSavedMessage(""), 3500);
   };
-  const titles: Record<string,string> = { "Painel inicial": "Bom dia, Tiago", "Clientes": "Gestão de clientes" };
+  const titles: Record<string,string> = { "Painel inicial": "Olá", "Clientes": "Gestão de clientes" };
   const subtitles: Record<string,string> = { "Painel inicial": "Uma visão completa da sua empresa em tempo real.", "Clientes": "Cadastros, unidades, histórico e relacionamento." };
   const logout = async () => {
     await fetch("/api/auth", { method: "DELETE" });
@@ -1229,9 +1162,9 @@ export default function Home() {
   return <div className="app-shell">
     <Sidebar current={current} setCurrent={setCurrent} open={menuOpen} close={() => setMenuOpen(false)} permissions={authenticatedUser.permissions}/>
     <main className="main">
-      <Header title={current === "Painel inicial" ? `Bom dia, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNewOrder={() => setModal("Nova ordem de serviço")} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onLogout={logout}/>
+      <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNewOrder={() => setModal("Nova ordem de serviço")} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onLogout={logout}/>
       {savedMessage && <div className="save-toast" role="status"><CheckCircle2 size={16}/>{savedMessage}</div>}
-      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} customers={customerRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Vendas" ? <SalesPDV customers={customerRecords}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders}/> : current === "Configurações" ? <WhatsAppSettingsPage/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} serviceOrders={serviceOrders}/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} records={moduleRecords[current] ?? []}/>}</div>
+      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} customers={customerRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Vendas" ? <SalesPDV customers={customerRecords}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} serviceOrders={serviceOrders}/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} records={moduleRecords[current] ?? []}/>}</div>
       <footer><span>© 2026 ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
     {modal && <Modal title={modal} customers={customerRecords} catalogRecords={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} supplierRecords={moduleRecords["Fornecedores"] ?? []} close={() => setModal("")} onSave={saveRecord}/>}
