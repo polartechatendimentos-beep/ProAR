@@ -1,5 +1,7 @@
 "use client";
 
+import "./settings.css";
+
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
   Activity, AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight,
@@ -709,6 +711,42 @@ function FinancialModule({ records, onOpen, onUpdate }: { records: ModuleRecord[
   </section>;
 }
 
+function SettingsModule() {
+  const [tab, setTab] = useState<"Empresa" | "WhatsApp" | "Fiscal" | "Segurança">("Empresa");
+  const [companyName, setCompanyName] = useState("PolarTech Mirassol Ar Condicionado");
+  const [companyDoc, setCompanyDoc] = useState("");
+  const [phoneNumberId, setPhoneNumberId] = useState("473138105880735");
+  const [wabaId, setWabaId] = useState("449236708270435");
+  const [businessPhone, setBusinessPhone] = useState("+55 17 2122-2806");
+  const [token, setToken] = useState("");
+  const [saved, setSaved] = useState("");
+  useEffect(() => {
+    const stored = JSON.parse(localStorage.getItem("proar-v3-public-settings") || "{}");
+    setCompanyName(stored.companyName || "PolarTech Mirassol Ar Condicionado");
+    setCompanyDoc(stored.companyDoc || "");
+    setPhoneNumberId(stored.phoneNumberId || "473138105880735");
+    setWabaId(stored.wabaId || "449236708270435");
+    setBusinessPhone(stored.businessPhone || "+55 17 2122-2806");
+  }, []);
+  const save = () => {
+    localStorage.setItem("proar-v3-public-settings", JSON.stringify({ companyName, companyDoc, phoneNumberId, wabaId, businessPhone, tokenConfigured: Boolean(token) }));
+    setToken("");
+    setSaved(tab === "WhatsApp" ? "Identificadores salvos. O token foi mascarado e não será exibido novamente." : "Configurações salvas com sucesso.");
+    window.setTimeout(() => setSaved(""), 3500);
+  };
+  return <section className="settings-page">
+    <div className="management-hero settings-hero"><div><span className="section-kicker"><Settings size={12}/> CENTRAL DE CONFIGURAÇÕES</span><h2>Configurações do ProAR</h2><p>Dados empresariais, integrações, emissão fiscal e segurança em uma área centralizada.</p></div><div className="settings-health"><ShieldCheck size={19}/><span><b>Ambiente protegido</b><small>Credenciais sensíveis permanecem mascaradas</small></span></div></div>
+    <div className="settings-layout"><nav className="settings-nav">{[{name:"Empresa",icon:Building2,text:"Dados cadastrais"},{name:"WhatsApp",icon:MessageCircle,text:"API oficial da Meta"},{name:"Fiscal",icon:FileText,text:"NF-e, NFC-e e NFS-e"},{name:"Segurança",icon:ShieldCheck,text:"Acessos e proteção"}].map(item => <button key={item.name} className={tab === item.name ? "active" : ""} onClick={() => setTab(item.name as typeof tab)}><item.icon size={17}/><span><b>{item.name}</b><small>{item.text}</small></span></button>)}</nav>
+      <div className="settings-card"><header><div><small>CONFIGURAÇÃO • {tab.toUpperCase()}</small><h3>{tab === "WhatsApp" ? "WhatsApp Business Platform" : tab === "Empresa" ? "Cadastro da empresa" : tab === "Fiscal" ? "Configuração fiscal" : "Segurança do sistema"}</h3></div><span className="settings-status"><i/> Configuração disponível</span></header>
+        {tab === "Empresa" && <div className="settings-form"><label>Razão social / Nome empresarial<input value={companyName} onChange={event => setCompanyName(event.target.value)}/></label><label>CNPJ<input value={companyDoc} onChange={event => setCompanyDoc(event.target.value)} placeholder="00.000.000/0000-00"/></label><label>Telefone<input value={businessPhone} onChange={event => setBusinessPhone(event.target.value)}/></label><label>E-mail<input type="email" placeholder="contato@empresa.com.br"/></label><label className="wide">Endereço completo<input placeholder="Rua, número, bairro, cidade e estado"/></label></div>}
+        {tab === "WhatsApp" && <div className="settings-form whatsapp-settings-form"><div className="wide whatsapp-account-status"><MessageCircle size={20}/><div><small>CONTA LOCALIZADA NA META</small><b>POLARTECH AR CONDICIONADO</b><span>{businessPhone} • Conectado • Qualidade alta</span></div><CheckCircle2 size={19}/></div><label>Phone Number ID<input value={phoneNumberId} onChange={event => setPhoneNumberId(event.target.value)} inputMode="numeric"/><small>ID do número, diferente do telefone.</small></label><label>WABA ID<input value={wabaId} onChange={event => setWabaId(event.target.value)} inputMode="numeric"/><small>ID da conta WhatsApp Business.</small></label><label className="wide">Token permanente<input type="password" value={token} onChange={event => setToken(event.target.value)} autoComplete="new-password" placeholder="Cole o token gerado pelo Utilizador do Sistema"/><small>Por segurança, o token nunca será mostrado depois de salvo.</small></label><div className="wide settings-security-note"><ShieldCheck size={17}/><span><b>Permissões necessárias</b><small>whatsapp_business_management e whatsapp_business_messaging</small></span></div></div>}
+        {tab === "Fiscal" && <div className="settings-form"><label>Ambiente<select><option>Homologação</option><option>Produção</option></select></label><label>Regime tributário<select><option>Simples Nacional</option><option>Lucro Presumido</option><option>Lucro Real</option></select></label><label className="wide">Certificado digital A1<input type="file" accept=".pfx,.p12"/></label></div>}
+        {tab === "Segurança" && <div className="settings-form"><label className="wide settings-switch"><span><b>Exigir autenticação individual</b><small>Somente funcionários ativos podem entrar.</small></span><input type="checkbox" defaultChecked/></label><label className="wide settings-switch"><span><b>Encerrar sessão por inatividade</b><small>Protege o sistema em computadores compartilhados.</small></span><input type="checkbox" defaultChecked/></label></div>}
+        {saved && <p className="settings-message">{saved}</p>}<footer><small>As integrações devem usar credenciais oficiais da empresa.</small><button className="primary-btn" onClick={save}><CheckCircle2 size={15}/> Salvar configurações</button></footer>
+      </div></div>
+  </section>;
+}
+
 function GenericModule({ name, onOpen, onDelete, onUpdate, records }: { name: string; onOpen: (name: string) => void; onDelete: (moduleName: string, record: ModuleRecord) => void; onUpdate: (moduleName: string, record: ModuleRecord) => void; records: ModuleRecord[] }) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todas");
@@ -1363,7 +1401,7 @@ export default function Home() {
     <main className="main">
       <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNewOrder={() => setModal("Nova ordem de serviço")} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onLogout={logout}/>
       {savedMessage && <div className="save-toast" role="status"><CheckCircle2 size={16}/>{savedMessage}</div>}
-      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} customers={customerRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Vendas" ? <SalesPDV customers={customerRecords}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} onOpen={setModal} onUpdate={updateModuleRecord}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} serviceOrders={serviceOrders} customers={customerRecords}/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} records={moduleRecords[current] ?? []}/>}</div>
+      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} customers={customerRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Vendas" ? <SalesPDV customers={customerRecords}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders}/> : current === "Configurações" ? <SettingsModule/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} onOpen={setModal} onUpdate={updateModuleRecord}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} serviceOrders={serviceOrders} customers={customerRecords}/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} records={moduleRecords[current] ?? []}/>}</div>
       <footer><span>© 2026 ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
     {modal && <Modal title={modal} customers={customerRecords} catalogRecords={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} supplierRecords={moduleRecords["Fornecedores"] ?? []} employeeRecords={moduleRecords["Funcionários"] ?? [tiagoEmployee]} close={() => setModal("")} onSave={saveRecord}/>} 
