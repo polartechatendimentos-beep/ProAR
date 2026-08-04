@@ -7,7 +7,7 @@ import {
   CheckCircle2, ChevronDown, ChevronRight, CircleDollarSign, ClipboardList,
   Clock3, FileChartColumn, FileText, Filter, Grid2X2, HandCoins, Headphones,
   ArrowLeft, Camera, Contact, Edit3, Eye, EyeOff, Hospital, Landmark, LayoutDashboard, LogIn, LogOut, MapPin,
-  CreditCard, ExternalLink, Gavel, Keyboard, Menu, Minus, MoreHorizontal, Package, Phone, Plus, ReceiptText, RefreshCw, ScanBarcode, School, Search, Settings,
+  CreditCard, Keyboard, Menu, Minus, MoreHorizontal, Package, Phone, Plus, ReceiptText, ScanBarcode, School, Search, Settings,
   ShieldCheck, ShoppingBag, ShoppingCart, Store, TrendingUp, UserCheck, UserRound,
   MessageCircle, PenTool, Tag, Trash2,
   UsersRound, WalletCards, Warehouse, Wrench, X, Zap
@@ -38,7 +38,6 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     { icon: Store, name: "Fornecedores" },
   ]},
   { label: "GESTÃO", items: [
-    { icon: Gavel, name: "Licitações" },
     { icon: WalletCards, name: "Financeiro" },
     { icon: BriefcaseBusiness, name: "Funcionários" },
     { icon: FileChartColumn, name: "Relatórios" },
@@ -55,7 +54,7 @@ type ServiceOrder = {
   photoAfter?: string;
   clientSignature?: string;
   technicianSignature?: string;
-  catalogItems?: { id: string; name: string; kind: "Serviço" | "Produto"; value?: number }[];
+  catalogItems?: { id: string; name: string; kind: "Serviço" | "Produto" }[];
   reminderEnabled?: boolean;
   reminderAmount?: number;
   reminderUnit?: "Dias" | "Meses";
@@ -70,7 +69,6 @@ type ServiceOrder = {
 type Customer = {
   id: string; name: string; doc: string; contact: string; phone: string;
   address: string; units: number; status: string;
-  email?: string; fantasy?: string; personType?: string;
 };
 
 type ModuleRecord = {
@@ -110,7 +108,8 @@ type ModuleRecord = {
   discountValue?: number;
   employeeRole?: string;
   employeePermissions?: Record<string, ("Visualizar" | "Criar" | "Editar" | "Excluir")[]>;
-  catalogItems?: { id: string; name: string; kind: "Serviço" | "Produto"; value?: number }[];
+  employeeUsername?: string;
+  employeePasswordHash?: string;
 };
 
 type PurchaseItem = {
@@ -126,6 +125,7 @@ type PurchaseInstallment = { number: string; dueDate: string; value: number };
 
 const orders: ServiceOrder[] = [];
 const customers: Customer[] = [];
+const tiagoEmployee: ModuleRecord = { id: "FUN-000001", name: "Tiago Viana", client: "tiago.viana", description: "Funcionário e técnico responsável", createdAt: "Cadastro principal", status: "Ativo", category: "Técnico", employeeRole: "Técnico de Campo", employeePermissions: { Clientes: ["Visualizar"], "Ordens de serviço": ["Visualizar", "Editar"], Agenda: ["Visualizar", "Editar"], Serviços: ["Visualizar"] }, employeeUsername: "tiago.viana" };
 const linkedUnits: Record<string, { icon: IconType; name: string; type: string; doc: string; responsible: string; phone: string; address: string; orders: number }[]> = {};
 const linkedSectors: Record<string, { icon: IconType; name: string; type: string; doc: string; responsible: string; phone: string; address: string; orders: number }[]> = {};
 
@@ -247,31 +247,13 @@ function CustomerDetail({ customerName, customers, onBack, onOpen }: { customerN
   </section>;
 }
 
-function parseSemicolonCsv(source: string) {
-  const rows: string[][] = []; let row: string[] = []; let field = ""; let quoted = false;
-  for (let index = 0; index < source.length; index += 1) {
-    const character = source[index];
-    if (character === '"') {
-      if (quoted && source[index + 1] === '"') { field += '"'; index += 1; }
-      else quoted = !quoted;
-    } else if (character === ";" && !quoted) { row.push(field.trim()); field = ""; }
-    else if ((character === "\n" || character === "\r") && !quoted) {
-      if (character === "\r" && source[index + 1] === "\n") index += 1;
-      row.push(field.trim()); field = ""; if (row.some(Boolean)) rows.push(row); row = [];
-    } else field += character;
-  }
-  if (field || row.length) { row.push(field.trim()); if (row.some(Boolean)) rows.push(row); }
-  const headers = (rows.shift() ?? []).map(header => header.replace(/^\uFEFF/, "").trim());
-  return rows.map(values => Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""])));
-}
-
-function Customers({ onOpen, onDelete, onImport, customers }: { onOpen: (name: string) => void; onDelete: (customer: Customer) => void; onImport: (file: File) => Promise<void>; customers: Customer[] }) {
+function Customers({ onOpen, onDelete, customers }: { onOpen: (name: string) => void; onDelete: (customer: Customer) => void; customers: Customer[] }) {
   const [query, setQuery] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState("");
   const filtered = useMemo(() => customers.filter(c => `${c.name} ${c.doc} ${c.contact}`.toLowerCase().includes(query.toLowerCase())), [query, customers]);
   if (selectedCustomer) return <CustomerDetail customerName={selectedCustomer} customers={customers} onBack={() => setSelectedCustomer("")} onOpen={onOpen}/>;
   return <section className="module-page">
-    <div className="module-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Pesquisar cliente, CPF ou CNPJ..." /></label><button className="outline-btn"><Filter size={14}/> Filtros</button><label className="outline-btn customer-import-button"><ArrowDownRight size={14}/> Importar CSV<input type="file" accept=".csv,text/csv" onChange={async event => { const file = event.target.files?.[0]; if (file) await onImport(file); event.target.value = ""; }}/></label><button className="primary-btn" onClick={() => onOpen("Novo cliente")}><Plus size={16}/> Novo cliente</button></div>
+    <div className="module-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Pesquisar cliente, CPF ou CNPJ..." /></label><button className="outline-btn"><Filter size={14}/> Filtros</button><button className="primary-btn" onClick={() => onOpen("Novo cliente")}><Plus size={16}/> Novo cliente</button></div>
     <div className="module-summary">
       <article><span><UsersRound size={19}/></span><div><small>CLIENTES ATIVOS</small><strong>{customers.filter(item => item.status === "Ativo").length}</strong><em>Cadastros reais</em></div></article>
       <article><span><Building2 size={19}/></span><div><small>UNIDADES CADASTRADAS</small><strong>{customers.reduce((total, item) => total + item.units, 0)}</strong><em>Vinculadas aos clientes</em></div></article>
@@ -288,14 +270,11 @@ function serviceOrderReviewDate(order: ServiceOrder) {
   return date.toISOString().slice(0, 10);
 }
 
-function quickPrintServiceOrder(order: ServiceOrder, customer?: Customer) {
+function quickPrintServiceOrder(order: ServiceOrder) {
   const popup = window.open("", "_blank", "width=900,height=700");
   if (!popup) return;
   const safe = (value?: string) => String(value || "—").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[character] || character);
-  const image = (source: string | undefined, alt: string) => source && (/^data:image\//.test(source) || /^https:\/\//.test(source)) ? `<img src="${source}" alt="${safe(alt)}">` : `<div class="empty">Não adicionada</div>`;
-  const duration = order.checkInAt && order.checkOutAt ? `${Math.max(0, Math.round((new Date(order.checkOutAt).getTime() - new Date(order.checkInAt).getTime()) / 60000))} minutos` : "Em aberto";
-  const items = order.catalogItems?.length ? order.catalogItems.map((item, index) => `<tr><td>${String(index + 1).padStart(2, "0")}</td><td><b>${safe(item.name)}</b><small>${safe(item.kind)}</small></td><td>Realizado</td></tr>`).join("") : `<tr><td>01</td><td><b>${safe(order.service || "Atendimento técnico")}</b></td><td>Realizado</td></tr>`;
-  popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${safe(order.id)}</title><style>@page{size:A4;margin:10mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#202832;margin:0;font-size:10px}.header{display:grid;grid-template-columns:155px 1fr;gap:20px;align-items:start}.header img{width:145px;height:90px;object-fit:contain}.company h1{font-size:19px;font-weight:500;margin:0 0 5px}.company>b{font-size:12px}.company p{margin:2px 0;font-size:9px}.title{display:flex;justify-content:space-between;border:1px solid #303840;padding:8px;margin:12px 0}.block{margin-top:10px;break-inside:avoid}.block h2{font-size:9px;text-align:center;background:#aeb3b8;border:1px solid #303840;margin:0;padding:4px}.grid{display:grid;grid-template-columns:1fr 1fr;border-left:1px solid #303840}.field{display:grid;grid-template-columns:105px 1fr;min-height:27px;border-right:1px solid #303840;border-bottom:1px solid #303840}.field.wide{grid-column:1/-1}.field small{display:flex;align-items:center;border-right:1px solid #303840;padding:5px;font-weight:bold}.field b{padding:5px;font-weight:normal}table{width:100%;border-collapse:collapse}td{border:1px solid #303840;padding:6px}td:first-child{width:35px;text-align:center}td:last-child{width:80px;text-align:center;color:#168452;font-weight:bold}td small{display:block;color:#718096;margin-top:2px}.photos,.signatures{display:grid;grid-template-columns:1fr 1fr;gap:8px}.figure{border:1px solid #303840;text-align:center;overflow:hidden}.figure img,.figure .empty{display:block;width:100%;height:230px;object-fit:contain;background:#fff}.figure .empty{display:grid;place-items:center;color:#8c98a7}.figure label{display:block;border-top:1px solid #303840;padding:6px;font-weight:bold}.signatures .figure img,.signatures .figure .empty{height:105px}.signatures .figure label span{display:block;font-weight:normal;margin-top:3px}footer{margin-top:14px;padding-top:7px;border-top:1px solid #303840;display:flex;justify-content:space-between;font-size:8px}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}</style></head><body><header class="header"><img src="/proar-logo.png" alt="ProAR"><div class="company"><h1>Ordem de Serviço</h1><b>POLARTECH AR CONDICIONADO</b><p><b>Telefone:</b> 17 2122-2806</p><p><b>CNPJ:</b> 45.823.828/0001-88</p><p><b>E-mail:</b> atendimentos@polartechsolucoes.com.br</p><p><b>Endereço:</b> Rua São Pedro, 2184, Sala 01, Centro, Mirassol - SP</p></div></header><div class="title"><b>${safe(order.client)}</b><strong>Ordem ${safe(order.id)}</strong></div><section class="block"><h2>Informações do cliente</h2><div class="grid"><div class="field"><small>CLIENTE</small><b>${safe(order.client)}</b></div><div class="field"><small>CPF / CNPJ</small><b>${safe(customer?.doc)}</b></div><div class="field"><small>TELEFONE</small><b>${safe(customer?.phone)}</b></div><div class="field"><small>E-MAIL</small><b>${safe(customer?.email)}</b></div><div class="field wide"><small>UNIDADE / SETOR</small><b>${safe(order.unit)}</b></div></div></section><section class="block"><h2>Informações da atividade</h2><div class="grid"><div class="field"><small>TÉCNICO</small><b>${safe(order.tech)}</b></div><div class="field"><small>SITUAÇÃO</small><b>${safe(order.status)}</b></div><div class="field"><small>DATA / HORÁRIO</small><b>${safe(order.date)} • ${safe(order.time)}</b></div><div class="field"><small>DURAÇÃO</small><b>${duration}</b></div><div class="field"><small>CHECK-IN</small><b>${safe(order.checkInAt ? new Date(order.checkInAt).toLocaleString("pt-BR") : "Não realizado")}</b></div><div class="field"><small>CHECK-OUT</small><b>${safe(order.checkOutAt ? new Date(order.checkOutAt).toLocaleString("pt-BR") : "Não realizado")}</b></div><div class="field wide"><small>ENDEREÇO</small><b>${safe(order.address)}</b></div></div></section><section class="block"><h2>Serviços e produtos</h2><table>${items}</table></section><section class="block"><h2>Registo fotográfico</h2><div class="photos"><div class="figure">${image(order.photoBefore,"Antes do serviço")}<label>ANTES DO SERVIÇO</label></div><div class="figure">${image(order.photoAfter,"Depois do serviço")}<label>DEPOIS DO SERVIÇO</label></div></div></section><section class="block"><h2>Assinaturas</h2><div class="signatures"><div class="figure">${image(order.clientSignature,"Assinatura do cliente")}<label>ASSINATURA DO CLIENTE<span>${safe(order.client)}</span></label></div><div class="figure">${image(order.technicianSignature,"Assinatura do técnico")}<label>ASSINATURA DO TÉCNICO<span>${safe(order.tech)}</span></label></div></div></section><footer><span>ProAR - Gestão de Serviços</span><span>Documento gerado em ${new Date().toLocaleString("pt-BR")}</span></footer><script>window.addEventListener('load',async()=>{const images=[...document.images];await Promise.all(images.map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.onload=img.onerror=resolve})));setTimeout(()=>window.print(),350)});</script></body></html>`);
+  popup.document.write(`<!doctype html><html><head><title>${safe(order.id)}</title><style>body{font-family:Arial;color:#17304f;padding:32px}header{display:flex;justify-content:space-between;border-bottom:3px solid #1768df;padding-bottom:18px}h1{margin:0;color:#1768df}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:24px 0}.box{border:1px solid #dce5ef;border-radius:8px;padding:12px}.box small{display:block;color:#76879b;margin-bottom:5px}.service{padding:18px;background:#f4f8fd;border-radius:10px}footer{margin-top:35px;border-top:1px solid #dce5ef;padding-top:12px;font-size:12px;color:#76879b}@media print{body{padding:10mm}}</style></head><body><header><div><small>POLARTECH • PROAR</small><h1>Ordem de Serviço</h1></div><strong>${safe(order.id)}</strong></header><div class="grid"><div class="box"><small>CLIENTE</small><b>${safe(order.client)}</b></div><div class="box"><small>UNIDADE</small><b>${safe(order.unit)}</b></div><div class="box"><small>DATA / HORÁRIO</small><b>${safe(order.date)} • ${safe(order.time)}</b></div><div class="box"><small>TÉCNICO</small><b>${safe(order.tech)}</b></div><div class="box"><small>ENDEREÇO</small><b>${safe(order.address)}</b></div><div class="box"><small>SITUAÇÃO</small><b>${safe(order.status)}</b></div></div><section class="service"><small>SERVIÇO PRESTADO</small><h2>${safe(order.service)}</h2></section><footer>Documento gerado pelo ProAR — Gestão de Serviços</footer><script>window.onload=()=>window.print()</script></body></html>`);
   popup.document.close();
 }
 
@@ -323,7 +302,7 @@ function ServiceOrders({ onOpen, onSelect, onDelete, serviceOrders, customers }:
       <article><span><CheckCircle2 size={19}/></span><div><small>FINALIZADAS</small><strong>{serviceOrders.filter(item => item.status === "Concluída").length}</strong><em>Total registrado</em></div></article>
       <article><span><Bell size={19}/></span><div><small>REVISÕES PRÓXIMAS</small><strong>{reviewAlerts.length}</strong><em>Alertas preventivos</em></div></article>
     </div>
-    <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><Wrench size={12}/> OPERAÇÃO TÉCNICA</span><h2>Ordens de serviço</h2><p>Duplo clique para abrir • PDF e WhatsApp disponíveis em um clique.</p></div><button>Exportar <ChevronDown size={13}/></button></div><div className="table-wrap"><table><thead><tr><th>ORDEM</th><th>CLIENTE / LOCAL</th><th>DATA / HORÁRIO</th><th>REVISÃO</th><th>TÉCNICO</th><th>SITUAÇÃO</th><th>AÇÕES RÁPIDAS</th></tr></thead><tbody>{serviceOrders.map(order => { const reviewDate = serviceOrderReviewDate(order); return <tr className="clickable-row" title="Clique duas vezes para abrir a ordem" onDoubleClick={() => onSelect(order)} key={`manage-${order.id}`}><td><b className="order-id">{order.id}</b></td><td><div className="client-cell"><span>{order.avatar}</span><div><strong>{order.client}</strong><small>{order.unit}</small></div></div></td><td>{order.date ? new Date(`${order.date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem data"} • {order.time || "Sem horário"}</td><td>{reviewDate ? <span className="review-date"><Bell size={12}/>{new Date(`${reviewDate}T12:00:00`).toLocaleDateString("pt-BR")}</span> : "—"}</td><td><div className="tech"><span>{order.tech.split(" ").map(name => name[0]).slice(0,2).join("")}</span>{order.tech}</div></td><td><span className={`status ${order.tone}`}><i/> {order.status}</span></td><td><div className="row-actions quick-order-actions"><button title="Abrir OS" onClick={() => onSelect(order)}><Eye size={14}/></button><button title="Imprimir PDF" onClick={() => quickPrintServiceOrder(order, customers.find(customer => customer.name === order.client))}><FileText size={14}/></button><button className="whatsapp-action" title="Enviar por WhatsApp" onClick={() => sendWhatsApp(order)}><MessageCircle size={14}/></button><button className="delete-action" aria-label={`Excluir ${order.id}`} onClick={() => onDelete(order)}><Trash2 size={14}/></button></div></td></tr>; })}</tbody></table></div>{!serviceOrders.length && <div className="linked-empty"><ClipboardList size={22}/><h4>Nenhuma ordem cadastrada</h4><p>Crie uma nova ordem para iniciar a operação.</p></div>}</div>
+    <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><Wrench size={12}/> OPERAÇÃO TÉCNICA</span><h2>Ordens de serviço</h2><p>Duplo clique para abrir • PDF e WhatsApp disponíveis em um clique.</p></div><button>Exportar <ChevronDown size={13}/></button></div><div className="table-wrap"><table><thead><tr><th>ORDEM</th><th>CLIENTE / LOCAL</th><th>DATA / HORÁRIO</th><th>REVISÃO</th><th>TÉCNICO</th><th>SITUAÇÃO</th><th>AÇÕES RÁPIDAS</th></tr></thead><tbody>{serviceOrders.map(order => { const reviewDate = serviceOrderReviewDate(order); return <tr className="clickable-row" title="Clique duas vezes para abrir a ordem" onDoubleClick={() => onSelect(order)} key={`manage-${order.id}`}><td><b className="order-id">{order.id}</b></td><td><div className="client-cell"><span>{order.avatar}</span><div><strong>{order.client}</strong><small>{order.unit}</small></div></div></td><td>{order.date ? new Date(`${order.date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem data"} • {order.time || "Sem horário"}</td><td>{reviewDate ? <span className="review-date"><Bell size={12}/>{new Date(`${reviewDate}T12:00:00`).toLocaleDateString("pt-BR")}</span> : "—"}</td><td><div className="tech"><span>{order.tech.split(" ").map(name => name[0]).slice(0,2).join("")}</span>{order.tech}</div></td><td><span className={`status ${order.tone}`}><i/> {order.status}</span></td><td><div className="row-actions quick-order-actions"><button title="Abrir OS" onClick={() => onSelect(order)}><Eye size={14}/></button><button title="Imprimir PDF" onClick={() => quickPrintServiceOrder(order)}><FileText size={14}/></button><button className="whatsapp-action" title="Enviar por WhatsApp" onClick={() => sendWhatsApp(order)}><MessageCircle size={14}/></button><button className="delete-action" aria-label={`Excluir ${order.id}`} onClick={() => onDelete(order)}><Trash2 size={14}/></button></div></td></tr>; })}</tbody></table></div>{!serviceOrders.length && <div className="linked-empty"><ClipboardList size={22}/><h4>Nenhuma ordem cadastrada</h4><p>Crie uma nova ordem para iniciar a operação.</p></div>}</div>
   </section>;
 }
 
@@ -411,7 +390,7 @@ function SignaturePad({ label, value, onChange }: { label: string; value?: strin
   </div>;
 }
 
-function OrderDetail({ order, customer, close, onUpdate }: { order: ServiceOrder; customer?: Customer; close: () => void; onUpdate: (order: ServiceOrder) => void }) {
+function OrderDetail({ order, customerPhone, close, onUpdate }: { order: ServiceOrder; customerPhone?: string; close: () => void; onUpdate: (order: ServiceOrder) => void }) {
   const [currentOrder, setCurrentOrder] = useState(order);
   const [itemsTab, setItemsTab] = useState<"Serviços" | "Produtos">("Serviços");
   const mapsSearch = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.address)}`;
@@ -459,7 +438,7 @@ function OrderDetail({ order, customer, close, onUpdate }: { order: ServiceOrder
           {currentOrder.catalogItems?.some(item => item.kind === itemsTab.slice(0, -1)) ? <div className="order-item-list">{currentOrder.catalogItems.filter(item => item.kind === itemsTab.slice(0, -1)).map(item => <article key={item.id}><span>{item.kind === "Produto" ? <Package size={16}/> : <Wrench size={16}/>}</span><div><b>{item.name}</b><small>{item.kind}</small></div><CheckCircle2 size={16}/></article>)}</div> : <div className="catalog-empty">{itemsTab === "Produtos" ? <Package size={19}/> : <Wrench size={19}/>}<span>Nenhum {itemsTab.toLowerCase()} foi vinculado a esta ordem.</span></div>}
           {itemsTab === "Produtos" && <div className={`service-reminder ${currentOrder.reminderEnabled ? "enabled" : ""}`}>
             <div className="reminder-heading"><span><Bell size={18}/></span><div><small>RELACIONAMENTO PÓS-SERVIÇO</small><h4>Lembrete automático para o cliente</h4><p>Após o check-out, o ProAR agenda uma mensagem de manutenção ou higienização.</p></div><label className="reminder-switch"><input type="checkbox" checked={Boolean(currentOrder.reminderEnabled)} onChange={event => configureReminder({ reminderEnabled: event.target.checked })}/><i/></label></div>
-            {currentOrder.reminderEnabled && <div className="reminder-fields"><label>Enviar após<input type="number" min="1" max="60" value={currentOrder.reminderAmount ?? 6} onChange={event => configureReminder({ reminderAmount: Math.max(1, Number(event.target.value) || 1) })}/></label><label>Período<select value={currentOrder.reminderUnit ?? "Meses"} onChange={event => configureReminder({ reminderUnit: event.target.value as "Dias" | "Meses" })}><option>Dias</option><option>Meses</option></select></label><label>Data prevista<input type="date" value={currentOrder.reminderDate ?? reminderDate(6, "Meses", currentOrder.checkOutAt)} onChange={event => update({ reminderDate: event.target.value })}/></label><label className="wide">Mensagem<textarea value={currentOrder.reminderMessage ?? "Olá! Está na hora de realizar a higienização preventiva do seu ar-condicionado. Vamos agendar?"} onChange={event => configureReminder({ reminderMessage: event.target.value })}/></label><div className="reminder-summary"><MessageCircle size={15}/><span><b>{customer?.phone || "Cliente sem WhatsApp cadastrado"}</b><small>{currentOrder.checkOutAt ? `Agendado para ${new Date(`${currentOrder.reminderDate}T12:00:00`).toLocaleDateString("pt-BR")}` : "Será agendado automaticamente quando o técnico fizer o check-out."}</small></span></div></div>}
+            {currentOrder.reminderEnabled && <div className="reminder-fields"><label>Enviar após<input type="number" min="1" max="60" value={currentOrder.reminderAmount ?? 6} onChange={event => configureReminder({ reminderAmount: Math.max(1, Number(event.target.value) || 1) })}/></label><label>Período<select value={currentOrder.reminderUnit ?? "Meses"} onChange={event => configureReminder({ reminderUnit: event.target.value as "Dias" | "Meses" })}><option>Dias</option><option>Meses</option></select></label><label>Data prevista<input type="date" value={currentOrder.reminderDate ?? reminderDate(6, "Meses", currentOrder.checkOutAt)} onChange={event => update({ reminderDate: event.target.value })}/></label><label className="wide">Mensagem<textarea value={currentOrder.reminderMessage ?? "Olá! Está na hora de realizar a higienização preventiva do seu ar-condicionado. Vamos agendar?"} onChange={event => configureReminder({ reminderMessage: event.target.value })}/></label><div className="reminder-summary"><MessageCircle size={15}/><span><b>{customerPhone || "Cliente sem WhatsApp cadastrado"}</b><small>{currentOrder.checkOutAt ? `Agendado para ${new Date(`${currentOrder.reminderDate}T12:00:00`).toLocaleDateString("pt-BR")}` : "Será agendado automaticamente quando o técnico fizer o check-out."}</small></span></div></div>}
           </div>}
         </section>
         <section className="order-map">
@@ -484,15 +463,13 @@ function OrderDetail({ order, customer, close, onUpdate }: { order: ServiceOrder
       </div>
       <div className="modal-actions"><button className="outline-btn" onClick={close}>Fechar</button><button className="primary-btn" onClick={() => window.print()}><FileText size={15}/> Imprimir ordem</button></div>
       <article className="print-service-order">
-        <header className="print-order-header"><img src="/proar-logo.png" alt="ProAR — Gestão de Serviços"/><div className="print-company"><h1>Ordem de Serviço</h1><strong>POLARTECH AR CONDICIONADO</strong><p><b>Telefone:</b> 17 2122-2806</p><p><b>CNPJ:</b> 45.823.828/0001-88</p><p><b>E-mail:</b> atendimentos@polartechsolucoes.com.br</p><p><b>Endereço:</b> Rua São Pedro, 2184, Sala 01, Centro, Mirassol - SP</p></div></header>
-        <div className="print-order-title"><strong>{currentOrder.client}</strong><b>Ordem {currentOrder.id}</b></div>
-        <section className="print-block print-table"><h2>Informações do cliente</h2><div className="print-info-grid"><div><small>CLIENTE</small><strong>{currentOrder.client}</strong></div><div><small>CPF / CNPJ</small><strong>{customer?.doc || "Não informado"}</strong></div><div><small>TELEFONE</small><strong>{customer?.phone || "Não informado"}</strong></div><div><small>E-MAIL</small><strong>{customer?.email || "Não informado"}</strong></div><div className="wide"><small>UNIDADE / SETOR</small><strong>{currentOrder.unit || "Unidade principal"}</strong></div></div></section>
-        <section className="print-block print-table"><h2>Informações da atividade</h2><div className="print-info-grid"><div><small>TÉCNICO RESPONSÁVEL</small><strong>{currentOrder.tech || "Não informado"}</strong></div><div><small>SITUAÇÃO</small><strong>{currentOrder.status}</strong></div><div><small>DATA / HORÁRIO</small><strong>{currentOrder.date ? new Date(`${currentOrder.date}T12:00:00`).toLocaleDateString("pt-BR") : "Não informada"} às {currentOrder.time || "--:--"}</strong></div><div><small>CHECK-IN</small><strong>{currentOrder.checkInAt ? formatMoment(currentOrder.checkInAt) : "Não realizado"}</strong></div><div><small>CHECK-OUT</small><strong>{currentOrder.checkOutAt ? formatMoment(currentOrder.checkOutAt) : "Não realizado"}</strong></div><div><small>DURAÇÃO</small><strong>{currentOrder.checkInAt && currentOrder.checkOutAt ? `${Math.max(0, Math.round((new Date(currentOrder.checkOutAt).getTime() - new Date(currentOrder.checkInAt).getTime()) / 60000))} minutos` : "Em aberto"}</strong></div><div className="full"><small>ENDEREÇO</small><strong>{currentOrder.address || "Não informado"}</strong></div></div></section>
-        <section className="print-block print-table"><h2>Serviços prestados</h2>{currentOrder.catalogItems?.length ? <div className="print-service-list">{currentOrder.catalogItems.map((item, index) => <div key={item.id}><b>{String(index + 1).padStart(2, "0")}</b><span><strong>{item.name}</strong><small>{item.kind}</small></span><em>Realizado</em></div>)}</div> : <p className="print-description">{currentOrder.service || "Atendimento técnico"}</p>}</section>
+        <header className="print-order-header"><img src="/proar-logo.png" alt="ProAR — Gestão de Serviços"/><div><span>ORDEM DE SERVIÇO</span><h1>{currentOrder.id}</h1><p>Documento técnico de atendimento</p></div></header>
+        <section className="print-order-status"><div><small>SITUAÇÃO</small><strong>{currentOrder.status}</strong></div><div><small>DATA AGENDADA</small><strong>{currentOrder.date ? new Date(`${currentOrder.date}T12:00:00`).toLocaleDateString("pt-BR") : "Não informada"}</strong></div><div><small>HORÁRIO</small><strong>{currentOrder.time || "Não informado"}</strong></div></section>
+        <section className="print-block"><h2>Cliente e local do atendimento</h2><div className="print-info-grid"><div><small>CLIENTE</small><strong>{currentOrder.client}</strong></div><div><small>UNIDADE / SETOR</small><strong>{currentOrder.unit || "Unidade principal"}</strong></div><div className="wide"><small>ENDEREÇO</small><strong>{currentOrder.address || "Não informado"}</strong></div><div><small>TÉCNICO RESPONSÁVEL</small><strong>{currentOrder.tech || "Não informado"}</strong></div><div><small>CHECK-IN</small><strong>{currentOrder.checkInAt ? formatMoment(currentOrder.checkInAt) : "Não realizado"}</strong></div><div><small>CHECK-OUT</small><strong>{currentOrder.checkOutAt ? formatMoment(currentOrder.checkOutAt) : "Não realizado"}</strong></div></div></section>
+        <section className="print-block"><h2>Serviços prestados</h2>{currentOrder.catalogItems?.length ? <div className="print-service-list">{currentOrder.catalogItems.map((item, index) => <div key={item.id}><b>{String(index + 1).padStart(2, "0")}</b><span><strong>{item.name}</strong><small>{item.kind}</small></span></div>)}</div> : <p className="print-description">{currentOrder.service || "Atendimento técnico"}</p>}</section>
         <section className="print-block print-evidence"><h2>Registo fotográfico</h2><div><figure>{currentOrder.photoBefore ? <img src={currentOrder.photoBefore} alt="Antes do serviço"/> : <div>Foto não adicionada</div>}<figcaption>ANTES DO SERVIÇO</figcaption></figure><figure>{currentOrder.photoAfter ? <img src={currentOrder.photoAfter} alt="Depois do serviço"/> : <div>Foto não adicionada</div>}<figcaption>DEPOIS DO SERVIÇO</figcaption></figure></div></section>
         <section className="print-block print-signatures"><h2>Confirmação do atendimento</h2><div><figure>{currentOrder.clientSignature ? <img src={currentOrder.clientSignature} alt="Assinatura do cliente"/> : <div/>}<figcaption><strong>Assinatura do cliente</strong><span>{currentOrder.client}</span></figcaption></figure><figure>{currentOrder.technicianSignature ? <img src={currentOrder.technicianSignature} alt="Assinatura do técnico"/> : <div/>}<figcaption><strong>Assinatura do técnico responsável</strong><span>{currentOrder.tech}</span></figcaption></figure></div></section>
-        <section className="print-block print-observations"><h2>Observações</h2><p>Atendimento {currentOrder.status.toLowerCase()}. As imagens e assinaturas abaixo fazem parte deste relatório técnico.</p></section>
-        <footer className="print-order-footer"><span>ProAR - Gestão de Serviços</span><span>Documento gerado em {new Date().toLocaleString("pt-BR")}</span></footer>
+        <footer className="print-order-footer"><span>ProAR — Gestão de Serviços</span><span>Documento gerado em {new Date().toLocaleString("pt-BR")}</span></footer>
       </article>
     </div>
   </div>;
@@ -501,7 +478,9 @@ function OrderDetail({ order, customer, close, onUpdate }: { order: ServiceOrder
 type SaleItem = { id: string; name: string; code: string; price: number; kind: "Produto" | "Serviço" };
 type CartItem = SaleItem & { quantity: number };
 
-function SalesPDV({ customers, records }: { customers: Customer[]; records: ModuleRecord[] }) {
+const quickSaleCatalog: SaleItem[] = [];
+
+function SalesPDV({ customers }: { customers: Customer[] }) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"itens" | "cliente" | "pagamento" | "opcoes">("itens");
@@ -510,9 +489,7 @@ function SalesPDV({ customers, records }: { customers: Customer[]; records: Modu
   const [customer, setCustomer] = useState("");
   const [payment, setPayment] = useState("PIX");
   const [notice, setNotice] = useState("");
-  const [fullscreen, setFullscreen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
-  const quickSaleCatalog: SaleItem[] = useMemo(() => records.filter(item => item.status !== "Inativo").map(item => ({ id: item.id, name: item.name, code: item.id, price: item.value ?? 0, kind: item.kind ?? "Produto" })), [records]);
   const filteredCatalog = quickSaleCatalog.filter(item => `${item.name} ${item.code} ${item.kind}`.toLowerCase().includes(search.toLowerCase()));
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const total = Math.max(0, subtotal - discount);
@@ -562,10 +539,10 @@ function SalesPDV({ customers, records }: { customers: Customer[]; records: Modu
     return () => window.removeEventListener("keydown", onKeyDown);
   });
 
-  return <section className={`pdv-page ${fullscreen ? "pdv-fullscreen" : ""}`}>
+  return <section className="pdv-page">
     <div className="pdv-command">
       <div><span className="section-kicker"><ShoppingBag size={12}/> VENDA RÁPIDA</span><h2>PDV ProAR</h2><p>Produtos e serviços em um fluxo direto, sem campos desnecessários.</p></div>
-      <div className="pdv-shortcuts"><button onClick={() => setFullscreen(value => !value)}><Grid2X2 size={14}/>{fullscreen ? "Sair da tela cheia" : "Maximizar PDV"}</button><button onClick={() => setShortcutsOpen(true)}><Keyboard size={14}/><kbd>F1</kbd> Atalhos</button><span>Caixa aberto</span></div>
+      <div className="pdv-shortcuts"><button onClick={() => setShortcutsOpen(true)}><Keyboard size={14}/><kbd>F1</kbd> Atalhos</button><span>Caixa aberto</span></div>
     </div>
     {notice && <div className="pdv-notice"><CheckCircle2 size={15}/>{notice}<button onClick={() => setNotice("")}><X size={13}/></button></div>}
     <nav className="pdv-tabs" aria-label="Etapas da venda">
@@ -599,79 +576,10 @@ function SalesPDV({ customers, records }: { customers: Customer[]; records: Modu
   </section>;
 }
 
-type Tender = {
-  numeroControlePNCP?: string;
-  objetoCompra?: string;
-  modalidadeNome?: string;
-  dataEncerramentoProposta?: string;
-  valorTotalEstimado?: number;
-  linkSistemaOrigem?: string;
-  anoCompra?: number;
-  sequencialCompra?: number;
-  distanciaMirassol?: number;
-  sourcePortal?: "PNCP" | "Compras.gov.br" | "BLL Compras" | "Licitações-e";
-  orgaoEntidade?: { razaoSocial?: string; cnpj?: string };
-  unidadeOrgao?: { municipioNome?: string; ufSigla?: string; nomeUnidade?: string };
-};
-
-function TendersModule() {
-  const today = new Date().toISOString().slice(0, 10);
-  const sixtyDays = new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10);
-  const [items, setItems] = useState<Tender[]>([]);
-  const [search, setSearch] = useState("");
-  const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(sixtyDays);
-  const [radius, setRadius] = useState("300");
-  const [source, setSource] = useState("Todas as fontes");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [warning, setWarning] = useState("");
-  const [lastScan, setLastScan] = useState("");
-
-  const load = async (preferMonitor = true) => {
-    setLoading(true); setError(""); setWarning("");
-    try {
-      let response = await fetch(preferMonitor ? "/api/licitacoes?monitor=1" : `/api/licitacoes?dataInicial=${startDate}&dataFinal=${endDate}&raio=${radius}`, { cache: "no-store" });
-      if (!response.ok && preferMonitor) response = await fetch(`/api/licitacoes?dataInicial=${startDate}&dataFinal=${endDate}&raio=${radius}`, { cache: "no-store" });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload?.error || "Não foi possível consultar o PNCP.");
-      setItems(Array.isArray(payload?.data) ? payload.data : []);
-      setWarning(payload?.warning || "");
-      setLastScan(payload?.lastScan || new Date().toISOString());
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Falha ao consultar licitações.");
-    } finally { setLoading(false); }
-  };
-
-  useEffect(() => { void load(false); }, []);
-
-  const filtered = useMemo(() => {
-    const term = search.trim().toLocaleLowerCase("pt-BR");
-    return items.filter(item => (source === "Todas as fontes" || (item.sourcePortal || "PNCP") === source) && (!term || [item.objetoCompra, item.orgaoEntidade?.razaoSocial, item.unidadeOrgao?.municipioNome, item.modalidadeNome].some(value => value?.toLocaleLowerCase("pt-BR").includes(term))));
-  }, [items, search, source]);
-  const totalValue = filtered.reduce((sum, item) => sum + Number(item.valorTotalEstimado || 0), 0);
-  const pncpLink = (item: Tender) => item.orgaoEntidade?.cnpj && item.anoCompra && item.sequencialCompra
-    ? `https://pncp.gov.br/app/editais/${item.orgaoEntidade.cnpj}/${item.anoCompra}/${item.sequencialCompra}`
-    : "https://pncp.gov.br/app/editais";
-
-  return <section className="tenders-page">
-    <div className="management-hero tender-hero"><div><span className="section-kicker"><Gavel size={12}/> MONITORAMENTO PÚBLICO</span><h2>Licitações de climatização</h2><p>Busca direcionada para ar-condicionado, refrigeração, PMOC, peças e equipamentos relacionados.</p></div><button className="primary-btn" disabled={loading} onClick={() => void load(false)}><RefreshCw className={loading ? "spinning" : ""} size={15}/>{loading ? "Consultando..." : "Atualizar busca"}</button></div>
-    <div className="tender-kpis"><article><span><Gavel size={17}/></span><div><small>OPORTUNIDADES</small><strong>{filtered.length}</strong></div></article><article><span><CircleDollarSign size={17}/></span><div><small>VALOR ESTIMADO</small><strong>R$ {totalValue.toLocaleString("pt-BR", { notation: "compact", maximumFractionDigits: 1 })}</strong></div></article><article><span><MapPin size={17}/></span><div><small>RAIO DE BUSCA</small><strong>Até {radius} km</strong></div></article><article><span><Clock3 size={17}/></span><div><small>ÚLTIMA CONSULTA</small><strong>{lastScan ? new Date(lastScan).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "Aguardando"}</strong></div></article></div>
-    <div className="panel tender-filters"><label className="tender-search"><Search size={16}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Pesquisar órgão, objeto ou cidade..."/></label><label>Fonte<select value={source} onChange={event => setSource(event.target.value)}><option>Todas as fontes</option><option>PNCP</option><option>Compras.gov.br</option><option>BLL Compras</option><option>Licitações-e</option></select></label><label>De<input type="date" value={startDate} onChange={event => setStartDate(event.target.value)}/></label><label>Até<input type="date" value={endDate} onChange={event => setEndDate(event.target.value)}/></label><label>Distância<select value={radius} onChange={event => setRadius(event.target.value)}><option value="100">Até 100 km</option><option value="200">Até 200 km</option><option value="300">Até 300 km</option></select></label></div>
-    {warning && <div className="tender-alert warning"><AlertTriangle size={16}/>{warning}</div>}
-    {error && <div className="tender-alert error"><AlertTriangle size={16}/><span>{error}</span><button onClick={() => void load(false)}>Tentar novamente</button></div>}
-    {loading ? <div className="panel tender-loading"><RefreshCw className="spinning" size={24}/><strong>Consultando oportunidades no PNCP</strong><p>Aplicando o filtro técnico de climatização e distância.</p></div> : filtered.length ? <div className="tender-grid">{filtered.map((item, index) => {
-      const closing = item.dataEncerramentoProposta ? new Date(item.dataEncerramentoProposta) : null;
-      const days = closing ? Math.ceil((closing.getTime() - Date.now()) / 86400000) : null;
-      return <article className="panel tender-card" key={item.numeroControlePNCP || `${item.objetoCompra}-${index}`}><header><span><Gavel size={15}/>{item.modalidadeNome || "Contratação pública"}<b className={`tender-source source-${(item.sourcePortal || "PNCP").toLowerCase().replace(/[^a-z]/g, "")}`}>{item.sourcePortal || "PNCP"}</b></span><em className={days !== null && days <= 7 ? "urgent" : ""}>{days === null ? "Prazo não informado" : days < 0 ? "Encerrada" : `${days} dia(s) restantes`}</em></header><h3>{item.objetoCompra || "Objeto não informado"}</h3><div className="tender-meta"><span><Landmark size={13}/>{item.orgaoEntidade?.razaoSocial || "Órgão não informado"}</span><span><MapPin size={13}/>{item.unidadeOrgao?.municipioNome || "Cidade não informada"}/{item.unidadeOrgao?.ufSigla || "—"} • {item.distanciaMirassol ?? "—"} km</span><span><Clock3 size={13}/>Encerramento: {closing ? closing.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—"}</span></div><footer><strong>R$ {Number(item.valorTotalEstimado || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong><div><a href={pncpLink(item)} target="_blank" rel="noreferrer">Ver no PNCP <ExternalLink size={12}/></a>{item.linkSistemaOrigem && <a href={item.linkSistemaOrigem} target="_blank" rel="noreferrer">Abrir no {item.sourcePortal || "sistema do órgão"} <ArrowRight size={12}/></a>}</div></footer></article>;
-    })}</div> : !error && <div className="panel linked-empty tender-empty"><Gavel size={26}/><h4>Nenhuma licitação encontrada</h4><p>Não há oportunidades aderentes aos filtros atuais. Ajuste o período ou a distância e atualize a busca.</p></div>}
-  </section>;
-}
-
 const moduleStatuses: Record<string, string[]> = {
   "Compras": ["Rascunho", "Aguardando aprovação", "Aprovada", "Enviada ao fornecedor", "Aguardando entrega", "Recebida parcialmente", "Recebida", "Cancelada", "Devolvida"],
   "Fornecedores": ["Ativo", "Inativo", "Bloqueado"],
-  "Financeiro": ["Em aberto", "Aguardando aprovação", "Vencida", "Baixa parcial", "Paga", "Recebida", "Cancelada"],
+  "Financeiro": ["Em aberto", "Aguardando aprovação", "Vencida", "Paga parcialmente", "Paga", "Recebida", "Cancelada"],
   "Funcionários": ["Ativo", "Em férias", "Afastado", "Inativo"],
   "Obras": ["Planejamento", "Em andamento", "Pausada", "Aguardando material", "Concluída", "Cancelada"],
 };
@@ -768,68 +676,6 @@ function Reports({ modules, customers, serviceOrders }: { modules: Record<string
   </section>;
 }
 
-type SettingsTab = "Empresa" | "Fiscal" | "WhatsApp" | "Certificado A1";
-
-function SettingsModule() {
-  const [tab, setTab] = useState<SettingsTab>("Empresa");
-  const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [company, setCompany] = useState<Record<string, string>>({ companyName: "POLARTECH AR CONDICIONADO", fantasyName: "PolarTech", cnpj: "45.823.828/0001-88", phone: "17 2122-2806", email: "atendimentos@polartechsolucoes.com.br", address: "Rua São Pedro, 2184, Sala 01, Centro, Mirassol - SP", municipalRegistration: "", stateRegistration: "" });
-  const [fiscal, setFiscal] = useState<Record<string, string>>({ environment: "Homologação", regime: "Simples Nacional", nfeSeries: "1", nfseSeries: "1", municipalCode: "", serviceCode: "" });
-  const [whatsapp, setWhatsapp] = useState<Record<string, string | boolean>>({ active: false, phoneNumberId: "", wabaId: "", accessToken: "", apiVersion: "v23.0", tenderTo: "5517991567798", tenderTemplate: "nova_licitacao_proar", reminderTemplate: "lembrete_higienizacao" });
-  const [certificate, setCertificate] = useState<Record<string, string> | null>(null);
-  const [certificateFile, setCertificateFile] = useState<File | null>(null);
-  const [certificatePassword, setCertificatePassword] = useState("");
-
-  useEffect(() => {
-    Promise.all([fetch("/api/fiscal-config").then(async response => response.ok ? response.json() : null), fetch("/api/whatsapp").then(async response => response.ok ? response.json() : null)]).then(([fiscalData, whatsappData]) => {
-      if (fiscalData) { setCompany(current => ({ ...current, ...(fiscalData.company ?? {}) })); setFiscal(current => ({ ...current, ...(fiscalData.nfe ?? {}), ...(fiscalData.nfse ?? {}) })); setCertificate(fiscalData.certificate); }
-      if (whatsappData) setWhatsapp(current => ({ ...current, ...whatsappData, accessToken: "" }));
-    }).catch(() => setMessage("Não foi possível carregar uma das integrações."));
-  }, []);
-
-  const saveSettings = async () => {
-    setBusy(true); setMessage("");
-    try {
-      const endpoint = tab === "WhatsApp" ? "/api/whatsapp" : "/api/fiscal-config";
-      const body = tab === "WhatsApp" ? whatsapp : { company, nfe: fiscal, nfse: fiscal };
-      const response = await fetch(endpoint, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Falha ao guardar");
-      setMessage("Configuração guardada com segurança.");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Não foi possível guardar."); }
-    finally { setBusy(false); }
-  };
-  const importCertificate = async () => {
-    if (!certificateFile || !certificatePassword) return setMessage("Selecione o certificado A1 e informe a senha.");
-    setBusy(true); setMessage("");
-    try {
-      const form = new FormData(); form.append("certificate", certificateFile); form.append("password", certificatePassword);
-      const response = await fetch("/api/fiscal-config", { method: "POST", body: form }); const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Falha ao importar certificado");
-      setCertificate(result.certificate); setCertificatePassword(""); setMessage("Certificado A1 importado e validado.");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Não foi possível importar."); }
-    finally { setBusy(false); }
-  };
-  const updateCompany = (key: string, value: string) => setCompany(current => ({ ...current, [key]: value }));
-  const updateFiscal = (key: string, value: string) => setFiscal(current => ({ ...current, [key]: value }));
-  const updateWhatsapp = (key: string, value: string | boolean) => setWhatsapp(current => ({ ...current, [key]: value }));
-
-  return <div className="settings-page">
-    <div className="management-hero settings-hero"><div><span className="section-kicker"><Settings size={12}/> ADMINISTRAÇÃO DO SISTEMA</span><h2>Configurações do ProAR</h2><p>Dados da empresa, emissão fiscal, WhatsApp oficial e certificado digital em um único local seguro.</p></div><div className="settings-health"><ShieldCheck size={19}/><span><b>Ambiente protegido</b><small>Informações sensíveis são armazenadas criptografadas</small></span></div></div>
-    <div className="settings-layout"><aside className="settings-nav">{(["Empresa", "Fiscal", "WhatsApp", "Certificado A1"] as SettingsTab[]).map(item => <button className={tab === item ? "active" : ""} onClick={() => { setTab(item); setMessage(""); }} key={item}>{item === "Empresa" ? <Building2 size={17}/> : item === "Fiscal" ? <ReceiptText size={17}/> : item === "WhatsApp" ? <MessageCircle size={17}/> : <ShieldCheck size={17}/>}<span><b>{item}</b><small>{item === "Empresa" ? "Identificação e endereço" : item === "Fiscal" ? "NF-e, NFC-e e NFS-e" : item === "WhatsApp" ? "Meta Cloud API" : "Arquivo .pfx ou .p12"}</small></span><ChevronRight size={14}/></button>)}</aside>
-      <section className="settings-card">
-        <header><div><small>CONFIGURAÇÃO</small><h3>{tab}</h3></div><span className="settings-status"><i/> {tab === "Certificado A1" ? certificate ? "Configurado" : "Pendente" : "Disponível"}</span></header>
-        {tab === "Empresa" && <div className="settings-form"><label>Razão social<input value={company.companyName || ""} onChange={event => updateCompany("companyName", event.target.value)}/></label><label>Nome fantasia<input value={company.fantasyName || ""} onChange={event => updateCompany("fantasyName", event.target.value)}/></label><label>CNPJ<input value={company.cnpj || ""} onChange={event => updateCompany("cnpj", event.target.value)}/></label><label>Inscrição municipal<input value={company.municipalRegistration || ""} onChange={event => updateCompany("municipalRegistration", event.target.value)}/></label><label>Telefone<input value={company.phone || ""} onChange={event => updateCompany("phone", event.target.value)}/></label><label>E-mail<input type="email" value={company.email || ""} onChange={event => updateCompany("email", event.target.value)}/></label><label className="wide">Endereço completo<input value={company.address || ""} onChange={event => updateCompany("address", event.target.value)}/></label></div>}
-        {tab === "Fiscal" && <div className="settings-form"><label>Ambiente<select value={fiscal.environment || "Homologação"} onChange={event => updateFiscal("environment", event.target.value)}><option>Homologação</option><option>Produção</option></select></label><label>Regime tributário<select value={fiscal.regime || "Simples Nacional"} onChange={event => updateFiscal("regime", event.target.value)}><option>Simples Nacional</option><option>Lucro Presumido</option><option>Lucro Real</option></select></label><label>Série NF-e / NFC-e<input value={fiscal.nfeSeries || ""} onChange={event => updateFiscal("nfeSeries", event.target.value)}/></label><label>Série NFS-e<input value={fiscal.nfseSeries || ""} onChange={event => updateFiscal("nfseSeries", event.target.value)}/></label><label>Código municipal<input value={fiscal.municipalCode || ""} onChange={event => updateFiscal("municipalCode", event.target.value)}/></label><label>Código do serviço<input value={fiscal.serviceCode || ""} onChange={event => updateFiscal("serviceCode", event.target.value)}/></label></div>}
-        {tab === "WhatsApp" && <div className="settings-form"><label className="settings-switch wide"><span><b>Ativar WhatsApp oficial</b><small>Habilita notificações e lembretes automáticos</small></span><input type="checkbox" checked={Boolean(whatsapp.active)} onChange={event => updateWhatsapp("active", event.target.checked)}/></label><label>Phone Number ID<input value={String(whatsapp.phoneNumberId || "")} onChange={event => updateWhatsapp("phoneNumberId", event.target.value)} placeholder="ID fornecido pela Meta"/></label><label>WABA ID<input value={String(whatsapp.wabaId || "")} onChange={event => updateWhatsapp("wabaId", event.target.value)} placeholder="ID da conta WhatsApp Business"/></label><label className="wide">Token permanente<input type="password" value={String(whatsapp.accessToken || "")} onChange={event => updateWhatsapp("accessToken", event.target.value)} placeholder={whatsapp.tokenConfigured ? "Token configurado - deixe vazio para manter" : "Cole o token permanente"}/></label><label>Modelo de licitação<input value={String(whatsapp.tenderTemplate || "")} onChange={event => updateWhatsapp("tenderTemplate", event.target.value)}/></label><label>Modelo de lembrete<input value={String(whatsapp.reminderTemplate || "")} onChange={event => updateWhatsapp("reminderTemplate", event.target.value)}/></label></div>}
-        {tab === "Certificado A1" && <div className="certificate-panel">{certificate && <article><ShieldCheck size={22}/><div><small>CERTIFICADO ATUAL</small><b>{certificate.fileName}</b><span>{certificate.subject}</span><em>Válido até {certificate.validTo ? new Date(certificate.validTo).toLocaleDateString("pt-BR") : "data não informada"}</em></div></article>}<div className="settings-form"><label className="wide certificate-upload"><FileText size={21}/><span><b>{certificateFile?.name || "Selecionar certificado A1"}</b><small>Formatos aceitos: .pfx ou .p12, até 2 MB</small></span><input type="file" accept=".pfx,.p12" onChange={event => setCertificateFile(event.target.files?.[0] || null)}/></label><label className="wide">Senha do certificado<input type="password" value={certificatePassword} onChange={event => setCertificatePassword(event.target.value)} autoComplete="new-password"/></label></div></div>}
-        {message && <div className={`settings-message ${/não|falha|pendente/i.test(message) ? "error" : ""}`}>{message}</div>}
-        <footer><small>Alterações auditadas pelo utilizador autenticado.</small><button className="primary-btn" disabled={busy} onClick={tab === "Certificado A1" ? importCertificate : saveSettings}><CheckCircle2 size={15}/>{busy ? "A guardar..." : tab === "Certificado A1" ? "Importar e validar" : "Guardar configurações"}</button></footer>
-      </section></div>
-  </div>;
-}
-
 function FinancialModule({ records, onOpen, onUpdate }: { records: ModuleRecord[]; onOpen: (name: string) => void; onUpdate: (moduleName: string, record: ModuleRecord) => void }) {
   const [view, setView] = useState<"Títulos" | "Fluxo de caixa">("Títulos");
   const [settling, setSettling] = useState<ModuleRecord | null>(null);
@@ -851,19 +697,19 @@ function FinancialModule({ records, onOpen, onUpdate }: { records: ModuleRecord[
     const finalValue = Math.max(0, amount + interest - discount);
     const accumulated = (settling.settledValue ?? 0) + finalValue;
     const isPaid = accumulated >= (settling.value ?? 0);
-    onUpdate("Financeiro", { ...settling, transactionType: payable(settling) ? "Pagar" : "Receber", settledValue: accumulated, settlementDate: new Date().toISOString().slice(0, 10), settlementMethod: method, settlementAccount: account, interestValue: (settling.interestValue ?? 0) + interest, discountValue: (settling.discountValue ?? 0) + discount, status: isPaid ? (payable(settling) ? "Paga" : "Recebida") : "Baixa parcial" });
+    onUpdate("Financeiro", { ...settling, transactionType: payable(settling) ? "Pagar" : "Receber", settledValue: accumulated, settlementDate: new Date().toISOString().slice(0, 10), settlementMethod: method, settlementAccount: account, interestValue: (settling.interestValue ?? 0) + interest, discountValue: (settling.discountValue ?? 0) + discount, status: isPaid ? (payable(settling) ? "Paga" : "Recebida") : (payable(settling) ? "Paga parcialmente" : "Recebida parcialmente") });
     setSettling(null);
   };
   return <section className="module-page financial-module">
     <div className="management-hero"><div><span className="section-kicker"><WalletCards size={12}/> CONTROLE FINANCEIRO</span><h2>Financeiro e fluxo de caixa</h2><p>Separe compromissos previstos da movimentação efetivamente liquidada.</p></div><div className="management-actions"><button className="outline-btn" onClick={() => window.print()}><FileText size={14}/> Relatório</button><button className="primary-btn" onClick={() => onOpen("Novo registro • Financeiro")}><Plus size={15}/> Novo lançamento</button></div></div>
     <div className="finance-kpis"><article><small>A RECEBER</small><strong>R$ {total(open.filter(record => !payable(record))).toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong><span>Previsto</span></article><article><small>A PAGAR</small><strong>R$ {total(open.filter(payable)).toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong><span>Previsto</span></article><article><small>ENTRADAS REALIZADAS</small><strong>R$ {total(incoming).toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong><span>Liquidado</span></article><article><small>SALDO REALIZADO</small><strong>R$ {(total(incoming)-total(outgoing)).toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong><span>Caixa e bancos</span></article></div>
     <nav className="management-tabs"><button className={view === "Títulos" ? "active" : ""} onClick={() => setView("Títulos")}>Contas a pagar e receber</button><button className={view === "Fluxo de caixa" ? "active" : ""} onClick={() => setView("Fluxo de caixa")}>Fluxo de caixa</button></nav>
-    {view === "Fluxo de caixa" ? <div className="cashflow-panel panel"><div className="panel-head"><div><span className="section-kicker"><ChartNoAxesCombined size={12}/> PREVISTO × REALIZADO</span><h2>Movimentação consolidada</h2><p>Comparativo dos títulos cadastrados e efetivamente baixados.</p></div></div><div className="cashflow-chart">{[{label:"Receitas previstas",value:total(open.filter(record => !payable(record))),tone:"blue"},{label:"Receitas realizadas",value:total(incoming),tone:"green"},{label:"Despesas previstas",value:total(open.filter(payable)),tone:"orange"},{label:"Despesas realizadas",value:total(outgoing),tone:"red"}].map(item => <div key={item.label}><span><b>{item.label}</b><strong>R$ {item.value.toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong></span><i><b className={item.tone} style={{width:`${Math.max(2,item.value/maxChart*100)}%`}}/></i></div>)}</div><div className="cashflow-balance"><span>Saldo acumulado realizado</span><strong>R$ {(total(incoming)-total(outgoing)).toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong></div></div> : <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><ReceiptText size={12}/> TÍTULOS</span><h2>Liquidação de contas</h2><p>{open.length} título(s) aguardando baixa</p></div></div><div className="table-wrap"><table><thead><tr><th>DESCRIÇÃO</th><th>TIPO</th><th>VENCIMENTO</th><th>VALOR</th><th>LIQUIDADO</th><th>SITUAÇÃO</th><th>AÇÃO</th></tr></thead><tbody>{records.map(record => { const terminal = ["Paga", "Recebida", "Cancelada"].includes(record.status || ""); return <tr key={record.id}><td><strong>{record.name}</strong><small className="table-description">{record.client || record.category}</small></td><td>{payable(record) ? "A pagar" : "A receber"}</td><td>{record.date ? new Date(`${record.date}T12:00:00`).toLocaleDateString("pt-BR") : "—"}</td><td><b>R$ {(record.value ?? 0).toLocaleString("pt-BR", {minimumFractionDigits:2})}</b></td><td>R$ {(record.settledValue ?? 0).toLocaleString("pt-BR", {minimumFractionDigits:2})}</td><td><span className={`workflow-status ${terminal ? "done" : record.status === "Baixa parcial" ? "partial" : ""}`}>{record.status || "Em aberto"}</span></td><td>{!terminal ? <button className="settle-button" onClick={() => startSettlement(record)}><HandCoins size={14}/> Dar baixa</button> : <span className="settled-label"><CheckCircle2 size={13}/> Liquidado</span>}</td></tr>})}</tbody></table></div>{!records.length && <div className="linked-empty"><WalletCards size={22}/><h4>Nenhum lançamento financeiro</h4><p>Cadastre uma conta a pagar ou receber.</p></div>}</div>}
+    {view === "Fluxo de caixa" ? <div className="cashflow-panel panel"><div className="panel-head"><div><span className="section-kicker"><ChartNoAxesCombined size={12}/> PREVISTO × REALIZADO</span><h2>Movimentação consolidada</h2><p>Comparativo dos títulos cadastrados e efetivamente baixados.</p></div></div><div className="cashflow-chart">{[{label:"Receitas previstas",value:total(open.filter(record => !payable(record))),tone:"blue"},{label:"Receitas realizadas",value:total(incoming),tone:"green"},{label:"Despesas previstas",value:total(open.filter(payable)),tone:"orange"},{label:"Despesas realizadas",value:total(outgoing),tone:"red"}].map(item => <div key={item.label}><span><b>{item.label}</b><strong>R$ {item.value.toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong></span><i><b className={item.tone} style={{width:`${Math.max(2,item.value/maxChart*100)}%`}}/></i></div>)}</div><div className="cashflow-balance"><span>Saldo acumulado realizado</span><strong>R$ {(total(incoming)-total(outgoing)).toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong></div></div> : <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><ReceiptText size={12}/> TÍTULOS</span><h2>Liquidação de contas</h2><p>{open.length} título(s) aguardando baixa</p></div></div><div className="table-wrap"><table><thead><tr><th>DESCRIÇÃO</th><th>TIPO</th><th>VENCIMENTO</th><th>VALOR</th><th>LIQUIDADO</th><th>SITUAÇÃO</th><th>AÇÃO</th></tr></thead><tbody>{records.map(record => <tr key={record.id}><td><strong>{record.name}</strong><small className="table-description">{record.client || record.category}</small></td><td>{payable(record) ? "A pagar" : "A receber"}</td><td>{record.date ? new Date(`${record.date}T12:00:00`).toLocaleDateString("pt-BR") : "—"}</td><td><b>R$ {(record.value ?? 0).toLocaleString("pt-BR", {minimumFractionDigits:2})}</b></td><td>R$ {(record.settledValue ?? 0).toLocaleString("pt-BR", {minimumFractionDigits:2})}</td><td><span className={`workflow-status ${/Paga|Recebida/i.test(record.status || "") ? "done" : ""}`}>{record.status || "Em aberto"}</span></td><td>{!/Paga|Recebida|Cancelada/i.test(record.status || "") ? <button className="settle-button" onClick={() => startSettlement(record)}><HandCoins size={14}/> Dar baixa</button> : <span className="settled-label"><CheckCircle2 size={13}/> Liquidado</span>}</td></tr>)}</tbody></table></div>{!records.length && <div className="linked-empty"><WalletCards size={22}/><h4>Nenhum lançamento financeiro</h4><p>Cadastre uma conta a pagar ou receber.</p></div>}</div>}
     {settling && <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Baixar título"><button className="modal-backdrop" onClick={() => setSettling(null)} aria-label="Fechar"/><div className="modal settlement-modal"><div className="modal-head"><div><span>BAIXA FINANCEIRA</span><h2>{settling.name}</h2><p>Liquidação parcial ou total com rastreabilidade.</p></div><button onClick={() => setSettling(null)}><X size={18}/></button></div><div className="settlement-form"><label>Valor da baixa<input type="number" min="0" step="0.01" value={amount} onChange={event => setAmount(Number(event.target.value)||0)}/></label><label>Juros / multa<input type="number" min="0" step="0.01" value={interest} onChange={event => setInterest(Number(event.target.value)||0)}/></label><label>Desconto<input type="number" min="0" step="0.01" value={discount} onChange={event => setDiscount(Number(event.target.value)||0)}/></label><label>Forma de pagamento<select value={method} onChange={event => setMethod(event.target.value)}><option>Pix</option><option>Boleto</option><option>Cartão de crédito</option><option>Cartão de débito</option><option>Dinheiro</option><option>Transferência</option></select></label><label>Conta / caixa de destino<select value={account} onChange={event => setAccount(event.target.value)}><option>Conta bancária</option><option>Caixa</option><option>Conta digital</option><option>Cartão</option></select></label><div className="settlement-total"><span>VALOR EFETIVO</span><strong>R$ {Math.max(0,amount+interest-discount).toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong></div></div><div className="modal-actions"><button className="outline-btn" onClick={() => setSettling(null)}>Cancelar</button><button className="primary-btn" onClick={settle}><CheckCircle2 size={15}/> Confirmar baixa</button></div></div></div>}
   </section>;
 }
 
-function GenericModule({ name, onOpen, onDelete, onUpdate, onConvertBudget, records }: { name: string; onOpen: (name: string) => void; onDelete: (moduleName: string, record: ModuleRecord) => void; onUpdate: (moduleName: string, record: ModuleRecord) => void; onConvertBudget?: (record: ModuleRecord, target: "Pedido" | "Ordem de serviço") => void; records: ModuleRecord[] }) {
+function GenericModule({ name, onOpen, onDelete, onUpdate, records }: { name: string; onOpen: (name: string) => void; onDelete: (moduleName: string, record: ModuleRecord) => void; onUpdate: (moduleName: string, record: ModuleRecord) => void; records: ModuleRecord[] }) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todas");
   const [activeView, setActiveView] = useState("Visão geral");
@@ -905,7 +751,6 @@ function GenericModule({ name, onOpen, onDelete, onUpdate, onConvertBudget, reco
     onUpdate(name, { ...record, status: statuses[Math.min(currentIndex + 1, statuses.length - 1)] });
   };
   const duplicate = (record: ModuleRecord) => onUpdate(name, { ...record, id: `${name.slice(0,3).toUpperCase()}-${Date.now().toString().slice(-6)}`, name: `${record.name} (cópia)`, status: statuses[0], createdAt: new Date().toLocaleString("pt-BR") });
-  const budgetActions = name === "Orçamentos" ? filtered : [];
   return <section className="module-page management-module">
     <div className="management-hero"><div><span className="section-kicker"><Grid2X2 size={12}/> MÓDULO PROAR</span><h2>{name}</h2><p>{descriptions[name] || `Consulte, cadastre e acompanhe todas as informações de ${name.toLowerCase()} em um só lugar.`}</p></div><div className="management-actions"><button className="outline-btn" onClick={() => window.print()}><FileText size={14}/> Imprimir</button><button className="outline-btn" onClick={exportRecords}><ArrowDownRight size={14}/> Exportar</button><button className="primary-btn" onClick={() => onOpen(`Novo registro • ${name}`)}><Plus size={16}/> {name === "Compras" ? "Nova compra" : name === "Fornecedores" ? "Novo fornecedor" : name === "Financeiro" ? "Novo lançamento" : name === "Obras" ? "Nova obra" : "Novo registro"}</button></div></div>
     <div className="management-stats"><article><span><ClipboardList size={18}/></span><div><small>TOTAL DE REGISTROS</small><strong>{records.length}</strong></div></article><article><span><Clock3 size={18}/></span><div><small>PENDENTES / EM ABERTO</small><strong>{records.filter(record => /Rascunho|Aguardando|aberto|Vencida|Pendente/i.test(record.status || "")).length}</strong></div></article><article><span><CircleDollarSign size={18}/></span><div><small>VALOR REGISTRADO</small><strong>R$ {totalValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></div></article></div>
@@ -913,7 +758,6 @@ function GenericModule({ name, onOpen, onDelete, onUpdate, onConvertBudget, reco
     <nav className="management-tabs" aria-label={`Áreas de ${name}`}>{tabs.map(tab => <button key={tab} className={activeView === tab ? "active" : ""} onClick={() => setActiveView(tab)}>{tab}</button>)}</nav>
     {name === "Financeiro" && <div className="finance-control-strip"><article><span className="money-icon red"><ArrowDownRight size={17}/></span><div><small>COMPROMISSOS EM ABERTO</small><strong>R$ {openValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></div></article><article><span className="money-icon green"><ArrowUpRight size={17}/></span><div><small>MOVIMENTAÇÃO REALIZADA</small><strong>R$ {records.filter(record => /Paga|Recebida/i.test(record.status || "")).reduce((sum, record) => sum + (record.value ?? 0), 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></div></article><article><span><Landmark size={17}/></span><div><small>CONCILIAÇÃO</small><strong>{records.filter(record => /Paga|Recebida/i.test(record.status || "")).length} movimento(s)</strong></div></article></div>}
     <div className="management-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder={`Pesquisar em ${name.toLowerCase()}...`}/></label><label className="status-filter"><Filter size={14}/><select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option>Todas</option>{statuses.map(status => <option key={status}>{status}</option>)}</select></label></div>
-    {budgetActions.length > 0 && <div className="budget-conversion-grid">{budgetActions.map(record => <article key={record.id}><div><small>{record.id}</small><strong>{record.name}</strong><span>{record.catalogItems?.length ?? 0} item(ns) • R$ {(record.value ?? 0).toLocaleString("pt-BR", {minimumFractionDigits: 2})}</span></div><button onClick={() => onConvertBudget?.(record, "Pedido")}><ShoppingBag size={14}/> Gerar pedido</button><button onClick={() => onConvertBudget?.(record, "Ordem de serviço")}><Wrench size={14}/> Gerar OS</button></article>)}</div>}
     {records.length ? <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><ClipboardList size={12}/> {activeView.toUpperCase()}</span><h2>{activeView} de {name.toLowerCase()}</h2><p>{filtered.length} de {records.length} registro(s){catalogEditable ? " • Clique duas vezes para editar" : ""}</p></div></div>{name === "Obras" && <div className="works-grid">{filtered.map(record => <article key={record.id}><header><span><Building2 size={18}/></span><div><small>{record.id}</small><h3>{record.name}</h3></div><em className={`workflow-status ${record.status === "Concluída" ? "done" : record.status === "Cancelada" ? "blocked" : ""}`}>{record.status}</em></header><p><MapPin size={13}/>{record.address || "Endereço não informado"}</p><div className="work-meta"><span><small>CLIENTE</small><b>{record.client || "—"}</b></span><span><small>RESPONSÁVEL</small><b>{record.engineer || "—"}</b></span><span><small>QUADRA / LOTE</small><b>{record.blockLot || "—"}</b></span><span><small>ORÇAMENTO</small><b>R$ {(record.value ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></span></div><div className="work-progress"><span><b>Progresso da obra</b><strong>{record.progress ?? 0}%</strong></span><i><b style={{width:`${Math.min(100, Math.max(0, record.progress ?? 0))}%`}}/></i></div><footer><button onClick={() => advance(record)}><CheckCircle2 size={14}/> Avançar etapa</button><button onClick={() => window.print()}><FileText size={14}/> Relatório</button><button className="danger" onClick={() => onDelete(name, record)}><Trash2 size={14}/></button></footer></article>)}</div>} {name !== "Obras" && <div className="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>NOME / IDENTIFICAÇÃO</th><th>FORNECEDOR / RESPONSÁVEL</th><th>SITUAÇÃO</th><th>VALOR</th><th>DATA</th><th>AÇÕES</th></tr></thead><tbody>{filtered.map(record => <tr key={record.id} className={catalogEditable ? "editable-row" : ""} title={catalogEditable ? "Clique duas vezes para editar" : undefined} onDoubleClick={() => catalogEditable && setEditingCatalogRecord({ ...record })}><td><b className="order-id">{record.id}</b></td><td><strong>{record.name}</strong><small className="table-description">{name === "Compras" ? `${record.purchaseItems?.length ?? 0} item(ns) • ${record.paymentType ?? "Pagamento não informado"}${record.installments && record.installments > 1 ? ` • ${record.installments}x` : ""}` : catalogEditable ? `${record.category || record.kind || "Cadastro"} • Custo R$ ${(record.cost ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : record.description || "Sem observações"}</small></td><td>{record.client || "—"}</td><td><span className={`workflow-status ${/Recebida|Paga|Ativo|Concluído/i.test(record.status || "") ? "done" : /Cancelada|Inativo|Bloqueado|Devolvida/i.test(record.status || "") ? "blocked" : ""}`}>{record.status || statuses[0]}</span></td><td><b>R$ {(record.value ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></td><td>{record.date ? new Date(`${record.date}T12:00:00`).toLocaleDateString("pt-BR") : record.createdAt}</td><td><div className="record-actions">{catalogEditable && <button title="Editar cadastro" onClick={() => setEditingCatalogRecord({ ...record })}><Edit3 size={14}/></button>}<button title="Avançar situação" onClick={() => advance(record)}><CheckCircle2 size={14}/></button>{name === "Compras" && <button title="Duplicar compra" onClick={() => duplicate(record)}><FileText size={14}/></button>}<button title="Imprimir" onClick={() => window.print()}><ReceiptText size={14}/></button><button className="danger" title="Excluir" onClick={() => onDelete(name, record)}><Trash2 size={14}/></button></div></td></tr>)}</tbody></table></div>}{!filtered.length && <div className="linked-empty"><Search size={22}/><h4>Nenhum registro encontrado</h4><p>Ajuste a pesquisa ou o filtro de situação.</p></div>}</div> :
     <div className="empty-grid">{[{t:"Visão geral",i:LayoutDashboard},{t:"Registros recentes",i:Clock3},{t:"Indicadores",i:TrendingUp}].map(({t,i:Icon})=><article className="panel" key={t}><span><Icon size={19}/></span><h3>{t}</h3><p>Use “Novo registro” para adicionar o primeiro cadastro deste módulo.</p><button onClick={() => onOpen(`Novo registro • ${name}`)}>Cadastrar agora <ArrowRight size={12}/></button></article>)}</div>}
     {editingCatalogRecord && <div className="modal-layer catalog-edit-layer" role="dialog" aria-modal="true" aria-label={`Editar ${editingCatalogRecord.name}`}><button className="modal-backdrop" aria-label="Fechar edição" onClick={() => setEditingCatalogRecord(null)}/><div className="modal catalog-edit-modal"><div className="modal-head"><div><span>EDIÇÃO RÁPIDA • {name.toUpperCase()}</span><h2>{editingCatalogRecord.name}</h2><p>Altere nome, preço e custo do cadastro.</p></div><button onClick={() => setEditingCatalogRecord(null)} aria-label="Fechar"><X size={18}/></button></div><div className="catalog-edit-form"><label className="wide">Nome / identificação<input autoFocus value={editingCatalogRecord.name} onChange={event => setEditingCatalogRecord(record => record ? { ...record, name: event.target.value } : record)}/></label><label>Preço de venda<input type="number" min="0" step="0.01" value={editingCatalogRecord.value ?? ""} onChange={event => setEditingCatalogRecord(record => record ? { ...record, value: Number(event.target.value) || 0 } : record)}/></label><label>Preço de custo<input type="number" min="0" step="0.01" value={editingCatalogRecord.cost ?? ""} onChange={event => setEditingCatalogRecord(record => record ? { ...record, cost: Number(event.target.value) || 0 } : record)}/></label><label>Categoria<input value={editingCatalogRecord.category ?? ""} onChange={event => setEditingCatalogRecord(record => record ? { ...record, category: event.target.value } : record)}/></label><label>Situação<select value={editingCatalogRecord.status ?? "Ativo"} onChange={event => setEditingCatalogRecord(record => record ? { ...record, status: event.target.value } : record)}><option>Ativo</option><option>Inativo</option><option>Pendente</option></select></label><label className="wide">Descrição / observações<textarea value={editingCatalogRecord.description ?? ""} onChange={event => setEditingCatalogRecord(record => record ? { ...record, description: event.target.value } : record)}/></label><div className="wide catalog-margin-preview"><span><CircleDollarSign size={18}/><div><small>MARGEM BRUTA ESTIMADA</small><b>R$ {Math.max(0, (editingCatalogRecord.value ?? 0) - (editingCatalogRecord.cost ?? 0)).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></div></span><strong>{editingCatalogRecord.value ? `${Math.max(0, (((editingCatalogRecord.value ?? 0) - (editingCatalogRecord.cost ?? 0)) / editingCatalogRecord.value) * 100).toFixed(1)}%` : "0%"}</strong></div></div><div className="modal-actions"><button className="outline-btn" onClick={() => setEditingCatalogRecord(null)}>Cancelar</button><button className="primary-btn" disabled={!editingCatalogRecord.name.trim()} onClick={() => { onUpdate(name, editingCatalogRecord); setEditingCatalogRecord(null); }}><CheckCircle2 size={15}/> Salvar alterações</button></div></div></div>}
@@ -937,7 +781,7 @@ type ModalSave = {
   value: number;
   category: string;
   kind: "Serviço" | "Produto";
-  catalogItems: { id: string; name: string; kind: "Serviço" | "Produto"; value?: number }[];
+  catalogItems: { id: string; name: string; kind: "Serviço" | "Produto" }[];
   purchaseItems: PurchaseItem[];
   paymentType: "À vista" | "A prazo";
   paymentMethod: string;
@@ -957,9 +801,17 @@ type ModalSave = {
   cost: number;
   employeeRole: string;
   employeePermissions: Record<string, ("Visualizar" | "Criar" | "Editar" | "Excluir")[]>;
+  employeeUsername?: string;
+  employeePassword?: string;
 };
 
 type AuthenticatedUser = { username: string; displayName: string; role?: string; permissions?: string[] };
+
+async function passwordHash(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, "0")).join("");
+}
 
 function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }) {
   const [username, setUsername] = useState("");
@@ -981,7 +833,13 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
       if (!response.ok) throw new Error(result.error || "Não foi possível entrar.");
       onLogin({ username: result.username, displayName: result.displayName, role: result.role, permissions: result.permissions });
     } catch (loginError) {
-      setError(loginError instanceof Error ? loginError.message : "Não foi possível entrar.");
+      const modules = JSON.parse(localStorage.getItem("proar-v3-module-records") || "{}") as Record<string, ModuleRecord[]>;
+      const normalized = username.trim().toLocaleLowerCase("pt-BR");
+      const employee = (modules.Funcionários ?? []).find(item => item.status !== "Inativo" && item.employeeUsername?.toLocaleLowerCase("pt-BR") === normalized);
+      if (employee?.employeePasswordHash && employee.employeePasswordHash === await passwordHash(password)) {
+        const permissions = Object.entries(employee.employeePermissions ?? {}).filter(([, actions]) => actions.includes("Visualizar")).map(([module]) => module);
+        onLogin({ username: employee.employeeUsername || normalized, displayName: employee.name, role: employee.employeeRole || "Utilizador", permissions });
+      } else setError(loginError instanceof Error ? loginError.message : "Não foi possível entrar.");
     } finally {
       setLoading(false);
     }
@@ -1008,7 +866,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
   </main>;
 }
 
-function Modal({ title, customers, catalogRecords, supplierRecords, close, onSave }: { title: string; customers: Customer[]; catalogRecords: ModuleRecord[]; supplierRecords: ModuleRecord[]; close: () => void; onSave: (data: ModalSave) => void }) {
+function Modal({ title, customers, catalogRecords, supplierRecords, employeeRecords, close, onSave }: { title: string; customers: Customer[]; catalogRecords: ModuleRecord[]; supplierRecords: ModuleRecord[]; employeeRecords: ModuleRecord[]; close: () => void; onSave: (data: ModalSave) => void | Promise<void> }) {
   const isLinkedStructure = title.startsWith("Nova unidade, filial ou setor");
   const isNewOrder = title === "Nova ordem de serviço";
   const isNewCustomer = title === "Novo cliente";
@@ -1028,7 +886,6 @@ function Modal({ title, customers, catalogRecords, supplierRecords, close, onSav
   const [date, setDate] = useState("");
   const [description, setDescription] = useState("");
   const requestedModule = title.includes("•") ? title.split("•").pop()!.trim() : title.replace(/^Novo(a)?\s+/i, "");
-  const isBudget = requestedModule === "Orçamentos";
   const [recordStatus, setRecordStatus] = useState(moduleStatuses[requestedModule]?.[0] ?? "Ativo");
   const [recordValue, setRecordValue] = useState("");
   const [recordCost, setRecordCost] = useState("");
@@ -1055,7 +912,9 @@ function Modal({ title, customers, catalogRecords, supplierRecords, close, onSav
   const [progress, setProgress] = useState(0);
   const [commission, setCommission] = useState(0);
   const [employeeRole, setEmployeeRole] = useState("Atendimento");
-  const permissionModules = ["Clientes", "Ordens de serviço", "Agenda", "Serviços", "Produtos", "Estoque", "Licitações", "Financeiro", "Relatórios"];
+  const [employeeUsername, setEmployeeUsername] = useState("");
+  const [employeePassword, setEmployeePassword] = useState("");
+  const permissionModules = ["Clientes", "Ordens de serviço", "Agenda", "Serviços", "Produtos", "Estoque", "Financeiro", "Relatórios"];
   const permissionActions = ["Visualizar", "Criar", "Editar", "Excluir"] as const;
   const profilePermissions: Record<string, Record<string, (typeof permissionActions)[number][]>> = {
     Administrador: Object.fromEntries(permissionModules.map(module => [module, [...permissionActions]])),
@@ -1064,12 +923,8 @@ function Modal({ title, customers, catalogRecords, supplierRecords, close, onSav
     Atendimento: Object.fromEntries(permissionModules.map(module => [module, ["Clientes", "Ordens de serviço", "Agenda", "Serviços"].includes(module) ? ["Visualizar", "Criar", "Editar"] : []])),
   };
   const [employeePermissions, setEmployeePermissions] = useState<Record<string, (typeof permissionActions)[number][]>>(profilePermissions.Atendimento);
-  const applyEmployeeRole = (role: string) => { setEmployeeRole(role); setEmployeePermissions(Object.fromEntries(Object.entries(profilePermissions[role]).map(([module, actions]) => [module, [...actions]]))); setRecordCategory(role); };
-  const setPermission = (module: string, action: (typeof permissionActions)[number], checked: boolean) => setEmployeePermissions(current => {
-    const actions = current[module] ?? [];
-    return { ...current, [module]: checked ? Array.from(new Set([...actions, action])) : actions.filter(item => item !== action) };
-  });
-  const setModulePermissions = (module: string, checked: boolean) => setEmployeePermissions(current => ({ ...current, [module]: checked ? [...permissionActions] : [] }));
+  const applyEmployeeRole = (role: string) => { setEmployeeRole(role); setEmployeePermissions(profilePermissions[role]); setRecordCategory(role); };
+  const togglePermission = (module: string, action: (typeof permissionActions)[number]) => setEmployeePermissions(current => ({ ...current, [module]: current[module]?.includes(action) ? current[module].filter(item => item !== action) : [...(current[module] ?? []), action] }));
   const purchaseTotal = purchaseItems.reduce((total, item) => total + item.quantity * item.unitValue, 0);
   const updatePurchaseItem = (id: string, changes: Partial<PurchaseItem>) => setPurchaseItems(items => items.map(item => item.id === id ? { ...item, ...changes } : item));
   const addPurchaseItem = () => setPurchaseItems(items => [...items, { id: `ITEM-${Date.now()}-${items.length}`, description: "", quantity: 1, unitValue: 0 }]);
@@ -1128,9 +983,7 @@ function Modal({ title, customers, catalogRecords, supplierRecords, close, onSav
   const selectedClientData = customers.find(customer => customer.name === selectedClient);
   const serviceRecords = catalogRecords.filter(item => (item.kind || "Serviço") === "Serviço");
   const selectedServices = serviceRecords.filter(item => selectedCatalogIds.includes(item.id));
-  const selectedBudgetItems = catalogRecords.filter(item => selectedCatalogIds.includes(item.id));
-  const pickerRecords = isBudget ? catalogRecords : serviceRecords;
-  const visibleServiceOptions = pickerRecords.filter(item => `${item.name} ${item.description || ""} ${item.category || ""} ${item.kind || ""}`.toLocaleLowerCase("pt-BR").includes(serviceSearch.trim().toLocaleLowerCase("pt-BR")));
+  const visibleServiceOptions = serviceRecords.filter(item => `${item.name} ${item.description || ""} ${item.category || ""}`.toLocaleLowerCase("pt-BR").includes(serviceSearch.trim().toLocaleLowerCase("pt-BR")));
   const availableUnits = selectedClient ? [
     ...(selectedClientData ? [{ icon: Building2, name: "Endereço principal", type: "Cliente principal", doc: selectedClientData.doc, responsible: selectedClientData.contact, phone: selectedClientData.phone, address: selectedClientData.address, orders: 0 }] : []),
     ...(linkedUnits[selectedClient] ?? []),
@@ -1157,7 +1010,7 @@ function Modal({ title, customers, catalogRecords, supplierRecords, close, onSav
         <label className="wide">Endereço do atendimento<input value={unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? ""} readOnly placeholder="Carregado pelo cadastro do cliente"/></label>
         <label>Data do atendimento<input type="date" value={date} onInput={event => setDate(event.currentTarget.value)} onChange={event => setDate(event.target.value)}/></label>
         <label>Horário<input type="time" value={time} onChange={event => setTime(event.target.value)}/></label>
-        <label>Técnico empenhado<select value={tech} onChange={event => setTech(event.target.value)}><option value="">Selecione o técnico</option><option>Tiago Viana</option><option>João Carlos</option><option>Caio Henrique</option><option>Thiago Souza</option><option>Lucas Mendes</option></select></label>
+        <label>Técnico empenhado<select value={tech} onChange={event => setTech(event.target.value)}><option value="">Selecione o técnico</option>{employeeRecords.filter(employee => employee.status !== "Inativo" && /técnico|tecnico/i.test(`${employee.employeeRole} ${employee.category}`)).map(employee => <option key={employee.id} value={employee.name}>{employee.name}</option>)}</select></label>
         <label>Prioridade<select><option>Normal</option><option>Alta</option><option>Urgente</option></select></label>
         <div className="wide order-catalog">
           <div className="execution-head"><div><span>SERVIÇOS DA ORDEM</span><h3>Itens selecionados</h3></div><div className="catalog-head-actions"><small>{selectedCatalogIds.length} selecionado(s)</small><button type="button" onClick={() => { setServicePickerIds(selectedCatalogIds); setServiceSearch(""); setServicePickerOpen(true); }}><Plus size={14}/> Adicionar serviços</button></div></div>
@@ -1180,8 +1033,7 @@ function Modal({ title, customers, catalogRecords, supplierRecords, close, onSav
         <label className="wide">Observações<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="Informações adicionais do cliente..."/></label>
       </> : <>
         {isCatalogRegistration && <div className="wide kind-selector"><span>TIPO DO CADASTRO</span><label className={recordKind === "Serviço" ? "active" : ""}><input type="radio" name="record-kind" checked={recordKind === "Serviço"} onChange={() => setRecordKind("Serviço")}/><Wrench size={17}/><div><b>Serviço</b><small>Será disponibilizado nas ordens de serviço</small></div></label><label className={recordKind === "Produto" ? "active" : ""}><input type="radio" name="record-kind" checked={recordKind === "Produto"} onChange={() => setRecordKind("Produto")}/><Package size={17}/><div><b>Produto</b><small>Item físico, peça ou material de estoque</small></div></label></div>}
-        {managementFlows[requestedModule] && <div className="wide module-form-guidance"><span><Grid2X2 size={18}/></span><div><b>Cadastro integrado de {requestedModule.toLowerCase()}</b><small>Ao salvar, o registro ficará disponível nas abas, filtros e relatórios deste fluxo.</small></div></div>}
-        {isBudget && <div className="wide budget-items-editor"><div className="execution-head"><div><span>ITENS DO ORÇAMENTO</span><h3>Produtos e serviços</h3></div><div className="catalog-head-actions"><small>{selectedBudgetItems.length} item(ns)</small><button type="button" onClick={() => { setServicePickerIds(selectedCatalogIds); setServiceSearch(""); setServicePickerOpen(true); }}><Plus size={14}/> Adicionar itens</button></div></div>{selectedBudgetItems.length ? <div className="budget-item-grid">{selectedBudgetItems.map(item => <article key={item.id}><span className={item.kind === "Produto" ? "product" : "service"}>{item.kind === "Produto" ? <Package size={16}/> : <Wrench size={16}/>}</span><div><b>{item.name}</b><small>{item.kind || "Serviço"} • {item.category || "Sem categoria"}</small></div><strong>R$ {(item.value ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong><button type="button" aria-label={`Remover ${item.name}`} onClick={() => setSelectedCatalogIds(current => current.filter(id => id !== item.id))}><X size={14}/></button></article>)}</div> : <div className="catalog-empty"><ShoppingCart size={19}/><span>Nenhum item adicionado. Selecione produtos e serviços cadastrados.</span></div>}<div className="budget-items-total"><span>TOTAL DOS ITENS</span><strong>R$ {selectedBudgetItems.reduce((sum, item) => sum + (item.value ?? 0), 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong><button type="button" onClick={() => setRecordValue(String(selectedBudgetItems.reduce((sum, item) => sum + (item.value ?? 0), 0)))}>Usar no orçamento</button></div></div>}
+        {managementFlows[requestedModule] && <div className="wide module-form-guidance"><span><Grid2X2 size={18}/></span><div><b>Cadastro integrado de ${requestedModule.toLowerCase()}</b><small>Ao salvar, o registro ficará disponível nas abas, filtros e relatórios deste fluxo.</small></div></div>}
         {requestedModule === "Compras" && <div className="wide purchase-xml-import">
           <span className="purchase-xml-icon"><FileText size={21}/></span><div><b>Importar XML da NF-e</b><small>Preenche automaticamente fornecedor, nota fiscal, itens, valores e parcelas do Contas a Pagar.</small>{xmlImportStatus && <em className={xmlImportStatus.startsWith("Não") ? "error" : "success"}>{xmlImportStatus}</em>}</div>
           <label className="xml-upload-button"><FileText size={15}/> Selecionar XML<input type="file" accept=".xml,text/xml,application/xml" onChange={event => { void importPurchaseXml(event.target.files?.[0]); event.currentTarget.value = ""; }}/></label>
@@ -1225,20 +1077,20 @@ function Modal({ title, customers, catalogRecords, supplierRecords, close, onSav
           <label className="wide">Escopo e observações<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="Descreva o escopo, etapas, materiais, equipe e observações da obra..."/></label>
         </> : <>
         <label>{requestedModule === "Compras" ? "Produto, material ou pedido" : requestedModule === "Financeiro" ? "Descrição do lançamento" : requestedModule === "Fornecedores" ? "Razão social / Nome fantasia" : requestedModule === "Funcionários" ? "Nome completo do funcionário" : "Nome / identificação"}<input value={recordName} onChange={event => setRecordName(event.target.value)} placeholder={requestedModule === "Funcionários" ? "Nome completo" : "Digite o nome do registro"}/></label>
-        <label>{requestedModule === "Compras" ? "Fornecedor" : requestedModule === "Financeiro" ? "Cliente ou fornecedor" : requestedModule === "Fornecedores" ? "Responsável comercial" : requestedModule === "Funcionários" ? "Utilizador de acesso" : "Cliente / responsável"}<input value={recordClient} onChange={event => setRecordClient(event.target.value)} placeholder={requestedModule === "Funcionários" ? "Ex.: nome.sobrenome" : "Nome relacionado ao cadastro"}/></label>
+        {requestedModule === "Orçamentos" ? <label>Cliente cadastrado<select value={recordClient} onChange={event => setRecordClient(event.target.value)}><option value="">Selecione o cliente</option>{customers.map(customer => <option key={customer.id} value={customer.name}>{customer.name} • {customer.doc || "Sem documento"}</option>)}</select></label> : requestedModule === "Funcionários" ? <label>Função / cargo<input value={recordCategory} onChange={event => setRecordCategory(event.target.value)} placeholder="Ex.: Técnico de climatização"/></label> : <label>{requestedModule === "Compras" ? "Fornecedor" : requestedModule === "Financeiro" ? "Cliente ou fornecedor" : requestedModule === "Fornecedores" ? "Responsável comercial" : "Cliente / responsável"}<input value={recordClient} onChange={event => setRecordClient(event.target.value)} placeholder="Nome relacionado ao cadastro"/></label>}
         <label>{requestedModule === "Fornecedores" ? "CNPJ / CPF" : requestedModule === "Funcionários" ? "CPF / documento" : "Código / documento"}<input placeholder="Código, CPF, CNPJ ou número interno"/></label>
         <label>Situação<select value={recordStatus} onChange={event => setRecordStatus(event.target.value)}>{(moduleStatuses[requestedModule] ?? ["Ativo", "Pendente", "Concluído", "Inativo"]).map(status => <option key={status}>{status}</option>)}</select></label>
-        {requestedModule === "Funcionários" ? <label>Perfil de acesso<select value={employeeRole} onChange={event => applyEmployeeRole(event.target.value)}><option>Administrador</option><option>Financeiro</option><option>Técnico de Campo</option><option>Atendimento</option></select></label> : <label>{requestedModule === "Financeiro" ? "Categoria / centro de custo" : requestedModule === "Compras" ? "Categoria da compra" : "Categoria / centro de custo"}<input value={recordCategory} onChange={event => setRecordCategory(event.target.value)} placeholder="Ex.: Materiais de serviço"/></label>}
+        {requestedModule === "Funcionários" ? <><label>Perfil de acesso<select value={employeeRole} onChange={event => applyEmployeeRole(event.target.value)}><option>Administrador</option><option>Financeiro</option><option>Técnico de Campo</option><option>Atendimento</option></select></label><label>Nome de utilizador<input autoComplete="off" value={employeeUsername} onChange={event => { const value = event.target.value.toLocaleLowerCase("pt-BR").replace(/\s+/g, "."); setEmployeeUsername(value); setRecordClient(value); }} placeholder="Ex.: tiago.viana"/></label><label>Senha de acesso<input type="password" autoComplete="new-password" value={employeePassword} onChange={event => { const value = event.target.value; setEmployeePassword(value); void passwordHash(value).then(hash => setDescription(`AUTH:${hash}`)); }} placeholder="Mínimo de 4 caracteres"/></label></> : <label>{requestedModule === "Financeiro" ? "Categoria / centro de custo" : requestedModule === "Compras" ? "Categoria da compra" : "Categoria / centro de custo"}<input value={recordCategory} onChange={event => setRecordCategory(event.target.value)} placeholder="Ex.: Materiais de serviço"/></label>}
         <label>{requestedModule === "Funcionários" ? "Comissão / valor de referência" : requestedModule === "Compras" ? "Valor total calculado" : isCatalogRegistration ? "Preço de venda" : "Valor total"}<input type="number" min="0" step="0.01" readOnly={requestedModule === "Compras"} value={requestedModule === "Compras" ? purchaseTotal : recordValue} onChange={event => setRecordValue(event.target.value)} placeholder="R$ 0,00"/></label>
         {isCatalogRegistration && <label>Preço de custo<input type="number" min="0" step="0.01" value={recordCost} onChange={event => setRecordCost(event.target.value)} placeholder="R$ 0,00"/></label>}
         <label>{requestedModule === "Funcionários" ? "Telefone / WhatsApp" : "Telefone / contato"}<input placeholder="(00) 00000-0000"/></label><label>{requestedModule === "Funcionários" ? "Data de admissão" : requestedModule === "Compras" ? "Previsão de entrega" : requestedModule === "Financeiro" ? "Data de vencimento" : "Data"}<input type="date" value={date} onChange={event => setDate(event.target.value)}/></label>
-        {requestedModule === "Funcionários" && <div className="wide permission-matrix"><div className="permission-head"><div><span>MATRIZ DE PERMISSÕES</span><h3>Acesso por módulo</h3></div><small>{Object.values(employeePermissions).reduce((total, actions) => total + actions.length, 0)} permissão(ões) marcada(s). As escolhas são cumulativas.</small></div><div className="permission-table"><div className="permission-row permission-labels"><b>MÓDULO / TODAS</b>{permissionActions.map(action => <b key={action}>{action}</b>)}</div>{permissionModules.map(module => <div className="permission-row" key={module}><label className="permission-module"><input type="checkbox" checked={permissionActions.every(action => employeePermissions[module]?.includes(action))} onChange={event => setModulePermissions(module, event.target.checked)}/><span/><strong>{module}</strong></label>{permissionActions.map(action => <label title={`${action} em ${module}`} key={`${module}-${action}`}><input type="checkbox" checked={employeePermissions[module]?.includes(action) ?? false} onChange={event => setPermission(module, action, event.target.checked)}/><span/></label>)}</div>)}</div></div>}
+        {requestedModule === "Funcionários" && <div className="wide permission-matrix"><div className="permission-head"><div><span>MATRIZ DE PERMISSÕES</span><h3>Acesso por módulo</h3></div><small>O menu e as ações respeitam o perfil selecionado.</small></div><div className="permission-table"><div className="permission-row permission-labels"><b>MÓDULO</b>{permissionActions.map(action => <b key={action}>{action}</b>)}</div>{permissionModules.map(module => <div className="permission-row" key={module}><strong>{module}</strong>{permissionActions.map(action => <label key={action}><input type="checkbox" checked={employeePermissions[module]?.includes(action) ?? false} onChange={() => togglePermission(module, action)}/><span/></label>)}</div>)}</div></div>}
         <label className="wide">Descrição / observações<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder={requestedModule === "Funcionários" ? "Observações internas sobre o funcionário..." : "Inclua os detalhes deste cadastro..."}/></label>
         </>}
       </>}
     </>}
-  </div><div className="modal-actions"><button className="outline-btn" onClick={close}>Cancelar</button><button className="primary-btn" disabled={isNewOrder ? !selectedClient || !tech || !date : isNewCustomer ? !recordName || !address.trim() || !addressValidated : requestedModule === "Compras" ? !recordName || !recordClient || !purchaseItems.some(item => item.description.trim() && item.quantity > 0) || purchaseTotal <= 0 || (paymentType === "A prazo" && !firstDueDate) : requestedModule === "Obras" ? !recordName || !recordClient || !workAddress : (!isLinkedStructure && !recordName)} onClick={() => onSave({ title, name: recordName, client: isNewOrder ? selectedClient : recordClient, doc, contact, phone, address: isNewOrder ? (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "") : address, unit, tech, date, time, description, status: recordStatus, value: requestedModule === "Compras" ? purchaseTotal : Number(recordValue) || 0, category: recordCategory, kind: recordKind, catalogItems: catalogRecords.filter(item => selectedCatalogIds.includes(item.id)).map(item => ({ id: item.id, name: item.name, kind: item.kind || "Serviço", value: item.value ?? 0 })), purchaseItems: purchaseItems.filter(item => item.description.trim() && item.quantity > 0), paymentType, paymentMethod, installments: paymentType === "A prazo" ? Math.max(1, installments) : 1, firstDueDate, paymentInstallments, xmlImported, supplierDoc, supplierId, registerSupplier: xmlImported && !supplierId, engineer, workAddress, blockLot, endDate, progress, commission, cost: Number(recordCost) || 0, employeeRole, employeePermissions })}><CheckCircle2 size={15}/> Salvar registro</button></div></div>
-    {servicePickerOpen && <div className="service-picker-layer" role="dialog" aria-modal="true" aria-label={isBudget ? "Selecionar produtos e serviços" : "Selecionar serviços"}><button type="button" className="service-picker-backdrop" aria-label="Fechar seleção" onClick={() => setServicePickerOpen(false)}/><section className="service-picker"><header><div><span>{isBudget ? "CATÁLOGO DE PRODUTOS E SERVIÇOS" : "CATÁLOGO DE SERVIÇOS"}</span><h3>{isBudget ? "Adicionar itens ao orçamento" : "Selecionar vários serviços"}</h3><p>{isBudget ? "Marque todos os produtos e serviços que farão parte da proposta." : "Pesquise e marque todos os itens necessários para esta ordem."}</p></div><button type="button" aria-label="Fechar" onClick={() => setServicePickerOpen(false)}><X size={17}/></button></header><label className="service-picker-search"><Search size={17}/><input autoFocus value={serviceSearch} onChange={event => setServiceSearch(event.target.value)} placeholder="Pesquisar por nome, tipo ou categoria..."/><small>{visibleServiceOptions.length} resultado(s)</small></label><div className="service-picker-grid">{visibleServiceOptions.map(item => <label key={item.id} className={servicePickerIds.includes(item.id) ? "selected" : ""}><input type="checkbox" checked={servicePickerIds.includes(item.id)} onChange={() => setServicePickerIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])}/><span>{item.kind === "Produto" ? <Package size={17}/> : <Wrench size={17}/>}</span><div><b>{item.name}</b><small>{item.kind || "Serviço"} • {item.category || item.description || "Sem categoria"}</small></div><CheckCircle2 size={16}/></label>)}</div>{!visibleServiceOptions.length && <div className="catalog-empty"><Search size={18}/><span>Nenhum item encontrado para esta pesquisa.</span></div>}<footer><span><b>{servicePickerIds.length}</b> item(ns) marcado(s)</span><div><button type="button" className="outline-btn" onClick={() => setServicePickerOpen(false)}>Cancelar</button><button type="button" className="primary-btn" onClick={() => { setSelectedCatalogIds(servicePickerIds); setServicePickerOpen(false); }}><CheckCircle2 size={15}/> Aplicar seleção</button></div></footer></section></div>}
+  </div><div className="modal-actions"><button className="outline-btn" onClick={close}>Cancelar</button><button className="primary-btn" disabled={isNewOrder ? !selectedClient || !tech || !date : isNewCustomer ? !recordName || !address.trim() || !addressValidated : requestedModule === "Compras" ? !recordName || !recordClient || !purchaseItems.some(item => item.description.trim() && item.quantity > 0) || purchaseTotal <= 0 || (paymentType === "A prazo" && !firstDueDate) : requestedModule === "Obras" ? !recordName || !recordClient || !workAddress : (!isLinkedStructure && !recordName)} onClick={() => onSave({ title, name: recordName, client: isNewOrder ? selectedClient : recordClient, doc, contact, phone, address: isNewOrder ? (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "") : address, unit, tech, date, time, description, status: recordStatus, value: requestedModule === "Compras" ? purchaseTotal : Number(recordValue) || 0, category: recordCategory, kind: recordKind, catalogItems: catalogRecords.filter(item => selectedCatalogIds.includes(item.id)).map(item => ({ id: item.id, name: item.name, kind: item.kind || "Serviço" })), purchaseItems: purchaseItems.filter(item => item.description.trim() && item.quantity > 0), paymentType, paymentMethod, installments: paymentType === "A prazo" ? Math.max(1, installments) : 1, firstDueDate, paymentInstallments, xmlImported, supplierDoc, supplierId, registerSupplier: xmlImported && !supplierId, engineer, workAddress, blockLot, endDate, progress, commission, cost: Number(recordCost) || 0, employeeRole, employeePermissions })}><CheckCircle2 size={15}/> Salvar registro</button></div></div>
+    {servicePickerOpen && <div className="service-picker-layer" role="dialog" aria-modal="true" aria-label="Selecionar serviços"><button type="button" className="service-picker-backdrop" aria-label="Fechar seleção de serviços" onClick={() => setServicePickerOpen(false)}/><section className="service-picker"><header><div><span>CATÁLOGO DE SERVIÇOS</span><h3>Selecionar vários serviços</h3><p>Pesquise e marque todos os itens necessários para esta ordem.</p></div><button type="button" aria-label="Fechar" onClick={() => setServicePickerOpen(false)}><X size={17}/></button></header><label className="service-picker-search"><Search size={17}/><input autoFocus value={serviceSearch} onChange={event => setServiceSearch(event.target.value)} placeholder="Pesquisar por nome ou categoria..."/><small>{visibleServiceOptions.length} resultado(s)</small></label><div className="service-picker-grid">{visibleServiceOptions.map(item => <label key={item.id} className={servicePickerIds.includes(item.id) ? "selected" : ""}><input type="checkbox" checked={servicePickerIds.includes(item.id)} onChange={() => setServicePickerIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])}/><span><Wrench size={17}/></span><div><b>{item.name}</b><small>{item.category || item.description || "Serviço cadastrado"}</small></div><CheckCircle2 size={16}/></label>)}</div>{!visibleServiceOptions.length && <div className="catalog-empty"><Search size={18}/><span>Nenhum serviço encontrado para esta pesquisa.</span></div>}<footer><span><b>{servicePickerIds.length}</b> serviço(s) marcado(s)</span><div><button type="button" className="outline-btn" onClick={() => setServicePickerOpen(false)}>Cancelar</button><button type="button" className="primary-btn" onClick={() => { setSelectedCatalogIds(servicePickerIds); setServicePickerOpen(false); }}><CheckCircle2 size={15}/> Aplicar seleção</button></div></footer></section></div>}
   </div>;
 }
 
@@ -1251,7 +1103,7 @@ export default function Home() {
   const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null);
   const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>(orders);
   const [customerRecords, setCustomerRecords] = useState<Customer[]>(customers);
-  const [moduleRecords, setModuleRecords] = useState<Record<string, ModuleRecord[]>>({});
+  const [moduleRecords, setModuleRecords] = useState<Record<string, ModuleRecord[]>>({ Funcionários: [tiagoEmployee] });
   const [savedMessage, setSavedMessage] = useState("");
   useEffect(() => {
     fetch("/api/auth").then(async response => response.ok ? response.json() : null).then(result => {
@@ -1268,7 +1120,11 @@ export default function Home() {
         if (state) {
           setServiceOrders(state.serviceOrders ?? []);
           setCustomerRecords(state.customers ?? []);
-          setModuleRecords(state.moduleRecords ?? {});
+          const loadedModules = state.moduleRecords ?? {};
+          const blockedFictitious = ["João Carlos", "Caio Henrique", "Thiago Souza", "Lucas Mendes"];
+          const realEmployees = (loadedModules.Funcionários ?? []).filter((employee: ModuleRecord) => !blockedFictitious.includes(employee.name));
+          const employees = realEmployees.some((employee: ModuleRecord) => employee.name === "Tiago Viana") ? realEmployees : [tiagoEmployee, ...realEmployees];
+          setModuleRecords({ ...loadedModules, Funcionários: employees });
           return;
         }
         const localState = {
@@ -1294,46 +1150,6 @@ export default function Home() {
     }).then(response => {
       if (!response.ok) setSavedMessage("Registro mantido neste aparelho, mas a sincronização falhou.");
     });
-  };
-  const importCustomers = async (file: File) => {
-    const records = parseSemicolonCsv(await file.text());
-    const supplierRows = records.filter(record => String(record["Tipo contato"] ?? "").toLocaleLowerCase("pt-BR").includes("fornecedor"));
-    const eligible = records.filter(record => !String(record["Tipo contato"] ?? "").toLocaleLowerCase("pt-BR").includes("fornecedor") && String(record.Nome ?? "").trim());
-    const existingKeys = new Set(customerRecords.flatMap(customer => {
-      const document = customer.doc.replace(/\D/g, "");
-      return [document ? `doc:${document}` : "", `name:${customer.name.trim().toLocaleLowerCase("pt-BR")}`].filter(Boolean);
-    }));
-    const imported: Customer[] = [];
-    let duplicates = 0;
-    for (const record of eligible) {
-      const name = String(record.Nome ?? "").replace(/\s+/g, " ").trim();
-      const document = String(record["CNPJ / CPF"] ?? "").trim();
-      const documentDigits = document.replace(/\D/g, "");
-      const keys = [documentDigits ? `doc:${documentDigits}` : "", `name:${name.toLocaleLowerCase("pt-BR")}`].filter(Boolean);
-      if (keys.some(key => existingKeys.has(key))) { duplicates += 1; continue; }
-      keys.forEach(key => existingKeys.add(key));
-      const address = [record["Endereço"], record.Número, record.Complemento, record.Bairro, record.Cidade, record.UF, record.CEP]
-        .map(value => String(value ?? "").trim()).filter(Boolean).join(", ");
-      imported.push({
-        id: `CLI-${String(record.ID || Date.now()).replace(/\D/g, "").slice(-10) || Date.now()}`,
-        name,
-        fantasy: String(record.Fantasia ?? "").trim(),
-        doc: document,
-        contact: String(record.Contatos ?? "").trim(),
-        phone: String(record.Celular || record.Fone || "").trim(),
-        email: String(record["E-mail"] || record["E-mail para envio NFe"] || "").trim().toLocaleLowerCase("pt-BR"),
-        personType: String(record["Tipo pessoa"] ?? "").trim(),
-        address,
-        units: 1,
-        status: /^inativo$/i.test(String(record.Situação ?? "")) ? "Inativo" : "Ativo",
-      });
-    }
-    const updatedCustomers = [...customerRecords, ...imported];
-    setCustomerRecords(updatedCustomers);
-    localStorage.setItem("proar-v3-customers", JSON.stringify(updatedCustomers));
-    persistSharedState(updatedCustomers, serviceOrders, moduleRecords);
-    setSavedMessage(`${imported.length} cliente(s) importado(s) • ${supplierRows.length} fornecedor(es) descartado(s) • ${duplicates} duplicado(s) ignorado(s).`);
-    window.setTimeout(() => setSavedMessage(""), 7000);
   };
   const updateServiceOrder = (updatedOrder: ServiceOrder) => {
     const updatedOrders = serviceOrders.map(order => order.id === updatedOrder.id ? updatedOrder : order);
@@ -1406,7 +1222,7 @@ export default function Home() {
         id: `${moduleName.slice(0, 3).toUpperCase()}-${Date.now().toString().slice(-6)}`,
         name: data.name || moduleName,
         client: data.client,
-        description: data.description,
+        description: moduleName === "Funcionários" && data.description.startsWith("AUTH:") ? "Acesso individual ao sistema configurado." : data.description,
         createdAt: new Date().toLocaleString("pt-BR"),
         kind: requestedModule === "Serviços" || requestedModule === "Produtos" ? data.kind : undefined,
         status: data.status,
@@ -1429,7 +1245,8 @@ export default function Home() {
         transactionType: moduleName === "Financeiro" ? (/pagar|despesa|fornecedor/i.test(`${data.name} ${data.category}`) ? "Pagar" : "Receber") : undefined,
         employeeRole: moduleName === "Funcionários" ? data.employeeRole : undefined,
         employeePermissions: moduleName === "Funcionários" ? data.employeePermissions : undefined,
-        catalogItems: moduleName === "Orçamentos" ? data.catalogItems : undefined,
+        employeeUsername: moduleName === "Funcionários" ? data.client : undefined,
+        employeePasswordHash: moduleName === "Funcionários" && data.description.startsWith("AUTH:") ? data.description.slice(5) : undefined,
       };
       let updatedRecords = { ...moduleRecords, [moduleName]: [record, ...(moduleRecords[moduleName] ?? [])] };
       if (moduleName === "Compras" && data.xmlImported) {
@@ -1490,8 +1307,8 @@ export default function Home() {
     setModal("");
     window.setTimeout(() => setSavedMessage(""), 3500);
   };
-  const titles: Record<string,string> = { "Painel inicial": "Olá", "Clientes": "Gestão de clientes", "Obras": "Gestão de obras", "Licitações": "Central de licitações" };
-  const subtitles: Record<string,string> = { "Painel inicial": "Uma visão completa da sua empresa em tempo real.", "Clientes": "Cadastros, unidades, histórico e relacionamento.", "Obras": "Planejamento, execução, perdas, custos e progresso em um único módulo.", "Licitações": "Oportunidades de climatização e refrigeração encontradas nos portais públicos." };
+  const titles: Record<string,string> = { "Painel inicial": "Olá", "Clientes": "Gestão de clientes", "Obras": "Gestão de obras" };
+  const subtitles: Record<string,string> = { "Painel inicial": "Uma visão completa da sua empresa em tempo real.", "Clientes": "Cadastros, unidades, histórico e relacionamento.", "Obras": "Planejamento, execução, perdas, custos e progresso em um único módulo." };
   const logout = async () => {
     await fetch("/api/auth", { method: "DELETE" });
     setAuthenticatedUser(null);
@@ -1539,29 +1356,6 @@ export default function Home() {
     setSavedMessage(moduleName === "Compras" && record.status === "Recebida" ? "Compra recebida: estoque e conta a pagar atualizados." : "Registro atualizado e sincronizado.");
     window.setTimeout(() => setSavedMessage(""), 3000);
   };
-  const convertBudget = (record: ModuleRecord, target: "Pedido" | "Ordem de serviço") => {
-    if (target === "Pedido") {
-      const order: ModuleRecord = { ...record, id: `PED-${Date.now().toString().slice(-6)}`, name: `Pedido • ${record.name}`, status: "Pedido confirmado", category: "Convertido de orçamento", createdAt: new Date().toLocaleString("pt-BR") };
-      const updatedModules = { ...moduleRecords, Vendas: [order, ...(moduleRecords.Vendas ?? [])] };
-      setModuleRecords(updatedModules);
-      localStorage.setItem("proar-v3-module-records", JSON.stringify(updatedModules));
-      persistSharedState(customerRecords, serviceOrders, updatedModules);
-      setCurrent("Vendas");
-      setSavedMessage(`Orçamento ${record.id} transformado em pedido ${order.id}.`);
-    } else {
-      const sequence = Math.max(15499, ...serviceOrders.map(order => Number(order.id.replace(/\D/g, "")) || 0)) + 1;
-      const customer = customerRecords.find(item => item.name === record.client);
-      const serviceItems = (record.catalogItems ?? []).filter(item => item.kind === "Serviço");
-      const order: ServiceOrder = { id: `#OS-${String(sequence).padStart(5, "0")}`, client: record.client || "Cliente não informado", unit: "Unidade principal", service: serviceItems.length ? serviceItems.map(item => item.name).join(", ") : record.name, tech: "Não definido", date: new Date().toISOString().slice(0, 10), time: "A definir", address: customer?.address || "", status: "Aberta", tone: "blue", avatar: (record.client || "OS").split(" ").map(word => word[0]).slice(0, 2).join("").toUpperCase(), catalogItems: record.catalogItems ?? [], lastMaintenanceDate: new Date().toISOString().slice(0, 10), reviewPeriodMonths: 6, notifyDaysBefore: 15 };
-      const updatedOrders = [order, ...serviceOrders];
-      setServiceOrders(updatedOrders);
-      localStorage.setItem("proar-v3-service-orders", JSON.stringify(updatedOrders));
-      persistSharedState(customerRecords, updatedOrders, moduleRecords);
-      setCurrent("Ordens de serviço");
-      setSavedMessage(`Orçamento ${record.id} transformado na ordem ${order.id}.`);
-    }
-    window.setTimeout(() => setSavedMessage(""), 3500);
-  };
   if (checkingSession) return <div className="session-loading"><div className="brand-mark brand-logo"><img src="/icon.png" alt="ProAR"/></div><p>A carregar o ProAR...</p></div>;
   if (!authenticatedUser) return <LoginScreen onLogin={setAuthenticatedUser}/>;
   return <div className="app-shell">
@@ -1569,11 +1363,11 @@ export default function Home() {
     <main className="main">
       <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNewOrder={() => setModal("Nova ordem de serviço")} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onLogout={logout}/>
       {savedMessage && <div className="save-toast" role="status"><CheckCircle2 size={16}/>{savedMessage}</div>}
-      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} onImport={importCustomers} customers={customerRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} records={[...(moduleRecords.Produtos ?? []), ...(moduleRecords.Serviços ?? [])]}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders}/> : current === "Configurações" ? <SettingsModule/> : current === "Licitações" ? <TendersModule/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} onOpen={setModal} onUpdate={updateModuleRecord}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} serviceOrders={serviceOrders} customers={customerRecords}/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvertBudget={convertBudget} records={moduleRecords[current] ?? []}/>}</div>
+      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} customers={customerRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Vendas" ? <SalesPDV customers={customerRecords}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} onOpen={setModal} onUpdate={updateModuleRecord}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} serviceOrders={serviceOrders} customers={customerRecords}/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} records={moduleRecords[current] ?? []}/>}</div>
       <footer><span>© 2026 ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
-    {modal && <Modal title={modal} customers={customerRecords} catalogRecords={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} supplierRecords={moduleRecords["Fornecedores"] ?? []} close={() => setModal("")} onSave={saveRecord}/>}
-    {selectedOrder && <OrderDetail order={selectedOrder} customer={customerRecords.find(customer => customer.name === selectedOrder.client)} close={() => setSelectedOrder(null)} onUpdate={updateServiceOrder}/>}
+    {modal && <Modal title={modal} customers={customerRecords} catalogRecords={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} supplierRecords={moduleRecords["Fornecedores"] ?? []} employeeRecords={moduleRecords["Funcionários"] ?? [tiagoEmployee]} close={() => setModal("")} onSave={saveRecord}/>} 
+    {selectedOrder && <OrderDetail order={selectedOrder} customerPhone={customerRecords.find(customer => customer.name === selectedOrder.client)?.phone} close={() => setSelectedOrder(null)} onUpdate={updateServiceOrder}/>} 
   </div>;
 }
 
