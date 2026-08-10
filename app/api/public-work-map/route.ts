@@ -8,6 +8,17 @@ const safeCompany = (value: unknown) => String(value || "polartech-principal").r
 const headers = (key: string) => ({ apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" });
 
 export async function GET(request: NextRequest) {
+  const requestedCompany = request.nextUrl.searchParams.get("company");
+  if (requestedCompany) {
+    if (!readSession(request.cookies.get(COOKIE_NAME)?.value)) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
+    const { url, key } = config();
+    if (!url || !key) return NextResponse.json({ error: "Base de dados indisponível." }, { status: 503 });
+    const id = `workmap-${safeCompany(requestedCompany)}`;
+    const response = await fetch(`${url}/rest/v1/proar_state?id=eq.${encodeURIComponent(id)}&select=payload`, { headers: headers(key), cache: "no-store" });
+    if (!response.ok) return NextResponse.json({ error: "Não foi possível carregar o mapa compartilhado." }, { status: 502 });
+    const rows = await response.json() as { payload?: Record<string, unknown> }[];
+    return NextResponse.json({ map: rows[0]?.payload ?? null });
+  }
   const token = request.nextUrl.searchParams.get("token")?.trim();
   if (!token || token.length < 20) return NextResponse.json({ error: "Link de acompanhamento inválido." }, { status: 400 });
   const { url, key } = config();
