@@ -4,6 +4,7 @@ import "./settings.css";
 import "./multiempresa.css";
 import "./obra-142.css";
 import "./workflow-fixes.css";
+import "./access-offline.css";
 import { IMPORTED_SERVICES } from "../lib/imported-services";
 
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
@@ -207,7 +208,7 @@ const tiagoEmployee: ModuleRecord = { id: "FUN-000001", name: "Tiago Viana", cli
 const linkedUnits: Record<string, { icon: IconType; name: string; type: string; doc: string; responsible: string; phone: string; address: string; orders: number }[]> = {};
 const linkedSectors: Record<string, { icon: IconType; name: string; type: string; doc: string; responsible: string; phone: string; address: string; orders: number }[]> = {};
 
-function Header({ title, subtitle, onMenu, onNewOrder, userName, userRole, onLogout }: { title: string; subtitle: string; onMenu: () => void; onNewOrder: () => void; userName: string; userRole: string; onLogout: () => void }) {
+function Header({ title, subtitle, onMenu, onNewOrder, userName, userRole, onSwitchUser, online }: { title: string; subtitle: string; onMenu: () => void; onNewOrder: () => void; userName: string; userRole: string; onSwitchUser: () => void; online: boolean }) {
   const today = new Date();
   return <header className="topbar">
     <div className="headline">
@@ -217,11 +218,11 @@ function Header({ title, subtitle, onMenu, onNewOrder, userName, userRole, onLog
     </div>
     <div className="top-actions">
       <label className="global-search"><Search size={16}/><input aria-label="Pesquisa global" placeholder="Pesquisar no ProAR..." /><kbd>⌘ K</kbd></label>
-      <div className="header-status"><span><ShieldCheck size={14}/></span><div><b>Sistema operacional</b><small>{today.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "short" })}</small></div></div>
+      <div className={`header-status ${online ? "" : "offline"}`}><span>{online ? <ShieldCheck size={14}/> : <Database size={14}/>}</span><div><b>{online ? "Sistema operacional" : "Modo offline"}</b><small>{online ? today.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "short" }) : "Dados guardados no aparelho"}</small></div></div>
       <button className="icon-btn notification-button" aria-label="Notificações"><Bell size={18}/><i/></button>
       <button className="primary-btn" onClick={onNewOrder}><Plus size={17}/> Nova ordem</button>
       <div className="profile"><div className="profile-avatar">{userName.split(" ").map(word => word[0]).slice(0,2).join("").toUpperCase()}<span /></div><div><strong>{userName}</strong><small>{userRole}</small></div></div>
-      <button className="icon-btn" aria-label="Sair do sistema" title="Sair do sistema" onClick={onLogout}><LogOut size={18}/></button>
+      <button className="switch-user-btn" aria-label="Trocar utilizador" title="Trocar utilizador" onClick={onSwitchUser}><UserRound size={15}/><span>Trocar</span><LogOut size={14}/></button>
     </div>
   </header>;
 }
@@ -908,6 +909,7 @@ function HousesWorkModule({ companyId }: { companyId: string }) {
   const [note, setNote] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
   const [historyHouse, setHistoryHouse] = useState<HouseWorkItem | null>(null);
+  const [reportNotice, setReportNotice] = useState("");
   useEffect(() => {
     const stored = localStorage.getItem(storageKey);
     if (!stored) { const initial = createHouses(); setHouses(initial); localStorage.setItem(storageKey, JSON.stringify(initial)); return; }
@@ -937,12 +939,69 @@ function HousesWorkModule({ companyId }: { companyId: string }) {
   const completion = houses.length ? Math.round(completed / houses.length * 100) : 0;
   const grouped = HOUSE_BLOCKS.map(({ block }) => ({ block, houses: visible.filter(house => house.block === block) })).filter(group => group.houses.length);
   const statusColor = (status: HouseWorkStatus) => HOUSE_STATUSES.find(item => item.name === status)?.color ?? "#64748b";
+  const createWorkReport = async (selectedHouses: HouseWorkItem[], reportTitle: string) => {
+    const { jsPDF } = await import("jspdf");
+    const pdf = new jsPDF({ unit: "mm", format: "a4" });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    let y = 0;
+    const header = () => {
+      pdf.setFillColor(14, 62, 128); pdf.rect(0, 0, pageWidth, 27, "F");
+      pdf.setTextColor(255, 255, 255); pdf.setFont("helvetica", "bold"); pdf.setFontSize(15); pdf.text("POLARTECH — RELATÓRIO DE OBRA", 14, 12);
+      pdf.setFont("helvetica", "normal"); pdf.setFontSize(8); pdf.text(reportTitle, 14, 19);
+      pdf.text(`Gerado em ${new Date().toLocaleString("pt-BR")}`, pageWidth - 14, 19, { align: "right" });
+      pdf.setTextColor(35, 55, 78); y = 35;
+    };
+    const ensureSpace = (height: number) => { if (y + height > pageHeight - 18) { pdf.addPage(); header(); } };
+    header();
+    for (const house of selectedHouses) {
+      ensureSpace(24);
+      pdf.setFillColor(238, 246, 255); pdf.roundedRect(12, y, pageWidth - 24, 16, 2, 2, "F");
+      pdf.setFont("helvetica", "bold"); pdf.setFontSize(11); pdf.setTextColor(16, 91, 178); pdf.text(`QUADRA ${house.block} • CASA / LOTE ${String(house.lot).padStart(2, "0")}`, 16, y + 7);
+      pdf.setFontSize(8); pdf.setTextColor(50, 70, 92); pdf.text(`Situação atual: ${house.status}`, 16, y + 12); y += 21;
+      const history = [...(house.history ?? [])].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      if (!history.length) { pdf.setFont("helvetica", "italic"); pdf.setFontSize(8); pdf.setTextColor(115, 130, 145); pdf.text("Nenhuma alteração registrada para esta casa.", 16, y); y += 9; }
+      for (const [index, update] of history.entries()) {
+        const photos = update.photos?.length ? update.photos : update.photo ? [update.photo] : [];
+        ensureSpace(photos.length ? 67 : 27);
+        pdf.setDrawColor(216, 228, 239); pdf.line(16, y, pageWidth - 16, y); y += 6;
+        pdf.setFont("helvetica", "bold"); pdf.setFontSize(9); pdf.setTextColor(37, 61, 86); pdf.text(`${String(index + 1).padStart(2, "0")} • ${update.status}`, 16, y);
+        pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5); pdf.setTextColor(105, 122, 140); pdf.text(new Date(update.createdAt).toLocaleString("pt-BR"), pageWidth - 16, y, { align: "right" }); y += 6;
+        if (update.note) { pdf.setTextColor(55, 73, 93); const lines = pdf.splitTextToSize(`Observações: ${update.note}`, pageWidth - 32) as string[]; pdf.text(lines, 16, y); y += lines.length * 4 + 3; }
+        else { pdf.setTextColor(125, 139, 153); pdf.text("Sem observações.", 16, y); y += 6; }
+        for (let photoIndex = 0; photoIndex < photos.length; photoIndex += 2) {
+          ensureSpace(45);
+          photos.slice(photoIndex, photoIndex + 2).forEach((photo, column) => { try { pdf.addImage(photo, photo.startsWith("data:image/png") ? "PNG" : "JPEG", 16 + column * 89, y, 84, 40, undefined, "FAST"); } catch {} });
+          y += 44;
+        }
+        y += 3;
+      }
+      y += 3;
+    }
+    const pages = pdf.getNumberOfPages();
+    for (let page = 1; page <= pages; page += 1) { pdf.setPage(page); pdf.setDrawColor(220, 229, 238); pdf.line(12, pageHeight - 12, pageWidth - 12, pageHeight - 12); pdf.setFontSize(7); pdf.setTextColor(110, 126, 143); pdf.text("ProAR — Gestão de Serviços • PolarTech", 14, pageHeight - 7); pdf.text(`Página ${page} de ${pages}`, pageWidth - 14, pageHeight - 7, { align: "right" }); }
+    const safeTitle = reportTitle.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
+    return { pdf, filename: `relatorio-${safeTitle}.pdf` };
+  };
+  const issueWorkReport = async (selectedHouses: HouseWorkItem[], reportTitle: string, share = false) => {
+    setReportNotice("A gerar relatório com fotos e histórico...");
+    try {
+      const { pdf, filename } = await createWorkReport(selectedHouses, reportTitle);
+      if (share) {
+        const file = new File([pdf.output("blob")], filename, { type: "application/pdf" });
+        if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) { await navigator.share({ title: reportTitle, text: `Segue o ${reportTitle} da PolarTech.`, files: [file] }); setReportNotice("Relatório compartilhado com sucesso."); }
+        else { pdf.save(filename); window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`Segue o ${reportTitle} da PolarTech. O PDF foi baixado e deve ser anexado a esta conversa.`)}`, "_blank", "noopener,noreferrer"); setReportNotice("PDF baixado. Anexe o arquivo na conversa aberta do WhatsApp."); }
+      } else { pdf.save(filename); setReportNotice("Relatório PDF gerado com sucesso."); }
+    } catch (error) { if ((error as Error)?.name !== "AbortError") setReportNotice("Não foi possível gerar o relatório. Tente novamente."); }
+    window.setTimeout(() => setReportNotice(""), 5000);
+  };
   return <section className="houses-app">
     <div className="houses-hero"><div><span className="section-kicker"><House size={12}/> CONTROLE DE EXECUÇÃO</span><h2>Obra — 142 Casas</h2><p>Acompanhamento individual por quadra e lote, com evidências e histórico de execução.</p></div><div className="houses-progress"><div><small>PROGRESSO GERAL</small><strong>{completion}%</strong></div><i><b style={{ width: `${completion}%` }}/></i><span>{completed} finalizadas de {houses.length} casas cadastradas</span></div></div>
     <div className="houses-kpis"><article><span><House size={18}/></span><div><small>TOTAL CADASTRADO</small><strong>{houses.length}</strong><em>11 quadras</em></div></article>{HOUSE_STATUSES.map(status => <article key={status.name}><i style={{background:status.color}}/><div><small>{status.name}</small><strong>{houses.filter(house => house.status === status.name).length}</strong><em>{Math.round(houses.filter(house => house.status === status.name).length / houses.length * 100)}% da obra</em></div></article>)}</div>
     <div className="houses-toolbar"><label><Search size={15}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar quadra ou lote..."/></label><select value={blockFilter} onChange={event => setBlockFilter(event.target.value)}><option>Todas</option>{HOUSE_BLOCKS.map(item => <option key={item.block}>{item.block}</option>)}</select><select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option>Todos</option>{HOUSE_STATUSES.map(item => <option key={item.name}>{item.name}</option>)}</select><span>{visible.length} casa(s) exibida(s)</span></div>
     <div className="houses-legend">{HOUSE_STATUSES.map(status => <span key={status.name}><i style={{background:status.color}}/>{status.name}</span>)}</div>
-    <div className="block-list">{grouped.map(group => <section className="block-section" key={group.block}><header><div><span>QUADRA</span><strong>{group.block}</strong></div><p>{group.houses.length} lote(s) exibido(s)</p><b>{houses.filter(house => house.block === group.block && house.status === "FIM").length}/{houses.filter(house => house.block === group.block).length} concluídas</b></header><div className="house-grid">{group.houses.map(house => <article key={house.id} style={{"--house-color":statusColor(house.status)} as React.CSSProperties} onDoubleClick={() => openUpdate(house)}><div className="house-card-top"><span><House size={15}/></span><div><small>QUADRA {house.block}</small><h3>Lote {String(house.lot).padStart(2,"0")}</h3></div>{house.photo && <img src={house.photo} alt={`Casa ${house.id}`}/>}</div><div className="house-status"><i/><span>{house.status}</span></div>{house.note && <p>{house.note}</p>}<small className="house-date">{house.updatedAt ? `Atualizado em ${new Date(house.updatedAt).toLocaleString("pt-BR")}` : "Sem alterações registradas"}</small><footer><button onClick={() => openUpdate(house)}><Edit3 size={13}/> Alterar status</button><button disabled={!house.history?.length} onClick={() => setHistoryHouse(house)}><History size={13}/> Histórico</button></footer></article>)}</div></section>)}</div>
+    {reportNotice && <div className="work-report-notice"><FileText size={15}/>{reportNotice}</div>}
+    <div className="block-list">{grouped.map(group => { const completeBlock = houses.filter(house => house.block === group.block); return <section className="block-section" key={group.block}><header><div><span>QUADRA</span><strong>{group.block}</strong></div><p>{group.houses.length} lote(s) exibido(s)</p><b>{completeBlock.filter(house => house.status === "FIM").length}/{completeBlock.length} concluídas</b><div className="block-report-actions"><button onClick={() => issueWorkReport(completeBlock, `Relatório completo da Quadra ${group.block}`)}><FileText size={13}/> PDF da quadra</button><button onClick={() => issueWorkReport(completeBlock, `Relatório completo da Quadra ${group.block}`, true)}><MessageCircle size={13}/> WhatsApp</button></div></header><div className="house-grid">{group.houses.map(house => <article key={house.id} style={{"--house-color":statusColor(house.status)} as React.CSSProperties} onDoubleClick={() => openUpdate(house)}><div className="house-card-top"><span><House size={15}/></span><div><small>QUADRA {house.block}</small><h3>Lote {String(house.lot).padStart(2,"0")}</h3></div>{house.photo && <img src={house.photo} alt={`Casa ${house.id}`}/>}</div><div className="house-status"><i/><span>{house.status}</span></div>{house.note && <p>{house.note}</p>}<small className="house-date">{house.updatedAt ? `Atualizado em ${new Date(house.updatedAt).toLocaleString("pt-BR")}` : "Sem alterações registradas"}</small><footer><button onClick={() => openUpdate(house)} title="Alterar status"><Edit3 size={13}/></button><button disabled={!house.history?.length} onClick={() => setHistoryHouse(house)} title="Histórico"><History size={13}/></button><button onClick={() => issueWorkReport([house], `Relatório da Quadra ${house.block} — Casa ${String(house.lot).padStart(2, "0")}`)} title="Gerar PDF"><FileText size={13}/></button><button onClick={() => issueWorkReport([house], `Relatório da Quadra ${house.block} — Casa ${String(house.lot).padStart(2, "0")}`, true)} title="Enviar pelo WhatsApp"><MessageCircle size={13}/></button></footer></article>)}</div></section>; })}</div>
     {!visible.length && <div className="linked-empty"><Search size={22}/><h4>Nenhuma casa encontrada</h4><p>Altere os filtros para visualizar outros lotes.</p></div>}
     {editing && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={() => setEditing(null)} aria-label="Fechar"/><div className="modal house-update-modal"><div className="modal-head"><div><span>ATUALIZAÇÃO DA OBRA</span><h2>Quadra {editing.block} • Lote {String(editing.lot).padStart(2,"0")}</h2><p>Registre o novo status, até 5 fotos e observações do serviço.</p></div><button onClick={() => setEditing(null)}><X size={18}/></button></div><div className="house-update-body"><label>Novo status<select value={nextStatus} onChange={event => setNextStatus(event.target.value as HouseWorkStatus)}>{HOUSE_STATUSES.map(status => <option key={status.name}>{status.name}</option>)}</select></label><div className="status-preview" style={{"--preview-color":statusColor(nextStatus)} as React.CSSProperties}><i/><span>{nextStatus}</span></div><div className="house-photo-area"><label className={`house-photo-upload ${photos.length ? "has-photo" : ""}`}><ImageIcon size={25}/><b>{photos.length ? `${photos.length} de 5 fotos selecionadas` : "Anexar fotos da etapa"}</b><small>Câmera ou galeria • máximo de 5 fotos</small><input type="file" accept="image/*" multiple onChange={event => readPhotos(event.target.files)}/></label>{photos.length > 0 && <div className="house-photo-grid">{photos.map((photo,index) => <figure key={`${photo.slice(-20)}-${index}`}><img src={photo} alt={`Evidência ${index + 1}`}/><button type="button" aria-label={`Remover foto ${index + 1}`} onClick={() => setPhotos(current => current.filter((_,photoIndex) => photoIndex !== index))}><X size={12}/></button></figure>)}</div>}</div><label>Observações<textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Descreva o serviço executado, pendências ou materiais utilizados..."/></label></div><div className="modal-actions"><button className="outline-btn" onClick={() => setEditing(null)}>Cancelar</button><button className="primary-btn" onClick={saveUpdate}><CheckCircle2 size={15}/> Salvar alteração</button></div></div></div>}
     {historyHouse && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={() => setHistoryHouse(null)} aria-label="Fechar"/><div className="modal house-history-modal"><div className="modal-head"><div><span>HISTÓRICO DA CASA</span><h2>Quadra {historyHouse.block} • Lote {String(historyHouse.lot).padStart(2,"0")}</h2><p>{historyHouse.history.length} alteração(ões) registrada(s)</p></div><button onClick={() => setHistoryHouse(null)}><X size={18}/></button></div><div className="house-timeline">{historyHouse.history.map(item => <article key={item.id}><i style={{background:statusColor(item.status)}}/><div><header><strong>{item.status}</strong><time>{new Date(item.createdAt).toLocaleString("pt-BR")}</time></header>{item.note && <p>{item.note}</p>}<div className="house-history-photos">{(item.photos?.length ? item.photos : item.photo ? [item.photo] : []).map((photo,index) => <img key={index} src={photo} alt={`Foto da atualização ${index + 1}`}/>)}</div></div></article>)}</div><div className="modal-actions"><button className="primary-btn" onClick={() => setHistoryHouse(null)}>Fechar histórico</button></div></div></div>}
@@ -1361,6 +1420,11 @@ export default function Home() {
   const [savedMessage, setSavedMessage] = useState("");
   const [companies, setCompanies] = useState<TenantCompany[]>([DEFAULT_COMPANY]);
   const [activeCompany, setActiveCompany] = useState<TenantCompany>(DEFAULT_COMPANY);
+  const [online, setOnline] = useState(true);
+  const handleLogin = (user: AuthenticatedUser) => {
+    setAuthenticatedUser(user);
+    localStorage.setItem("proar-offline-session", JSON.stringify({ user, expiresAt: Date.now() + 12 * 60 * 60 * 1000 }));
+  };
   useEffect(() => {
     const storedCompanies = JSON.parse(localStorage.getItem("proar-v4-companies") || "[]") as TenantCompany[];
     const available = storedCompanies.length ? storedCompanies : [DEFAULT_COMPANY];
@@ -1386,10 +1450,22 @@ export default function Home() {
     window.setTimeout(() => setSavedMessage(""), 3000);
   };
   useEffect(() => {
+    setOnline(navigator.onLine);
+    const onOnline = () => setOnline(true);
+    const onOffline = () => setOnline(false);
+    window.addEventListener("online", onOnline); window.addEventListener("offline", onOffline);
     fetch("/api/auth").then(async response => response.ok ? response.json() : null).then(result => {
-      if (result?.authenticated) setAuthenticatedUser({ username: result.username, displayName: result.displayName, role: result.role, permissions: result.permissions });
+      if (result?.authenticated) handleLogin({ username: result.username, displayName: result.displayName, role: result.role, permissions: result.permissions });
+    }).catch(() => {
+      try { const cached = JSON.parse(localStorage.getItem("proar-offline-session") || "null"); if (cached?.user && cached.expiresAt > Date.now()) setAuthenticatedUser(cached.user); } catch {}
     }).finally(() => setCheckingSession(false));
+    return () => { window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); };
   }, []);
+  useEffect(() => {
+    if (!authenticatedUser) return;
+    const visibleModules = navGroups.flatMap(group => group.items.map(item => item.name)).filter(name => authenticatedUser.permissions?.includes("*") || authenticatedUser.permissions?.includes(name));
+    if (visibleModules.length && !visibleModules.includes(current)) setCurrent(visibleModules[0]);
+  }, [authenticatedUser, current]);
   useEffect(() => {
     if (!authenticatedUser) return;
     const loadSharedState = async () => {
@@ -1445,14 +1521,31 @@ export default function Home() {
     localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(nextCustomers));
     localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(nextOrders));
     localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(nextModules));
+    const payload = { companyId: activeCompany.id, customers: nextCustomers, serviceOrders: nextOrders, moduleRecords: nextModules };
     fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ companyId: activeCompany.id, customers: nextCustomers, serviceOrders: nextOrders, moduleRecords: nextModules }),
+      body: JSON.stringify(payload),
     }).then(response => {
-      if (!response.ok) setSavedMessage("Registro mantido neste aparelho, mas a sincronização falhou.");
+      if (!response.ok) throw new Error();
+    }).catch(() => {
+      const queue = JSON.parse(localStorage.getItem("proar-offline-queue") || "[]");
+      localStorage.setItem("proar-offline-queue", JSON.stringify([...queue.filter((item: { companyId: string }) => item.companyId !== activeCompany.id), { companyId: activeCompany.id, payload, createdAt: new Date().toISOString() }]));
+      setSavedMessage("Alteração guardada offline. Será sincronizada quando a internet voltar.");
     });
   };
+  useEffect(() => {
+    if (!online || !authenticatedUser) return;
+    const synchronize = async () => {
+      const queue = JSON.parse(localStorage.getItem("proar-offline-queue") || "[]") as { companyId: string; payload: unknown }[];
+      if (!queue.length) return;
+      const pending: typeof queue = [];
+      for (const item of queue) { try { const response = await fetch(`/api/state?company=${encodeURIComponent(item.companyId)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item.payload) }); if (!response.ok) pending.push(item); } catch { pending.push(item); } }
+      localStorage.setItem("proar-offline-queue", JSON.stringify(pending));
+      if (!pending.length) { setSavedMessage("Dados offline sincronizados com sucesso."); window.setTimeout(() => setSavedMessage(""), 3500); }
+    };
+    void synchronize();
+  }, [online, authenticatedUser]);
   const updateServiceOrder = (updatedOrder: ServiceOrder) => {
     const updatedOrders = serviceOrders.map(order => order.id === updatedOrder.id ? updatedOrder : order);
     const reminderId = `LEM-${updatedOrder.id.replace(/\D/g, "")}`;
@@ -1641,7 +1734,8 @@ export default function Home() {
   const titles: Record<string,string> = { "Painel inicial": "Olá", "Clientes": "Gestão de clientes", "Obras": "Gestão de obras" };
   const subtitles: Record<string,string> = { "Painel inicial": "Uma visão completa da sua empresa em tempo real.", "Clientes": "Cadastros, unidades, histórico e relacionamento.", "Obras": "Planejamento, execução, perdas, custos e progresso em um único módulo." };
   const logout = async () => {
-    await fetch("/api/auth", { method: "DELETE" });
+    try { await fetch("/api/auth", { method: "DELETE" }); } catch {}
+    localStorage.removeItem("proar-offline-session");
     setAuthenticatedUser(null);
   };
   const deleteCustomer = (customer: Customer) => {
@@ -1688,11 +1782,11 @@ export default function Home() {
     window.setTimeout(() => setSavedMessage(""), 3000);
   };
   if (checkingSession) return <div className="session-loading"><div className="brand-mark brand-logo"><img src="/icon.png" alt="ProAR"/></div><p>A carregar o ProAR...</p></div>;
-  if (!authenticatedUser) return <LoginScreen onLogin={setAuthenticatedUser}/>;
+  if (!authenticatedUser) return <LoginScreen onLogin={handleLogin}/>;
   return <div className="app-shell">
     <Sidebar current={current} setCurrent={setCurrent} open={menuOpen} close={() => setMenuOpen(false)} permissions={authenticatedUser.permissions}/>
     <main className="main">
-      <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNewOrder={() => setModal("Nova ordem de serviço")} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onLogout={logout}/>
+      <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNewOrder={() => setModal("Nova ordem de serviço")} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onSwitchUser={logout} online={online}/>
       {savedMessage && <div className="save-toast" role="status"><CheckCircle2 size={16}/>{savedMessage}</div>}
       <div className="company-context"><Building2 size={13}/><span>{activeCompany.tradeName}</span><small>{activeCompany.cnpj || "CNPJ pendente"} • {activeCompany.city}/{activeCompany.state}</small></div>
       <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={record => updateModuleRecord("Unidades e setores",record)} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders}/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} onOpen={setModal} onUpdate={updateModuleRecord}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} serviceOrders={serviceOrders} customers={customerRecords}/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []}/>}</div>
