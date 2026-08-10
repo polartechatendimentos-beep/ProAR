@@ -4,6 +4,7 @@ import "./settings.css";
 import "./multiempresa.css";
 import "./obra-142.css";
 import "./workflow-fixes.css";
+import { IMPORTED_SERVICES } from "../lib/imported-services";
 
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
@@ -180,6 +181,13 @@ type ModuleRecord = {
   employeeUsername?: string;
   employeePasswordHash?: string;
 };
+
+function mergeImportedServices(modules: Record<string, ModuleRecord[]>) {
+  const existing = modules.Serviços ?? [];
+  const existingNames = new Set(existing.map(item => item.name.trim().toLocaleUpperCase("pt-BR").replace(/\s+/g, " ")));
+  const additions = IMPORTED_SERVICES.filter(item => !existingNames.has(item.name.trim().toLocaleUpperCase("pt-BR").replace(/\s+/g, " "))).map(item => ({ ...item } as ModuleRecord));
+  return additions.length ? { ...modules, Serviços: [...existing, ...additions] } : modules;
+}
 
 type PurchaseItem = {
   id: string;
@@ -1381,23 +1389,22 @@ export default function Home() {
         if (state) {
           setServiceOrders(state.serviceOrders ?? []);
           setCustomerRecords(state.customers ?? []);
-          const loadedModules = state.moduleRecords ?? {};
+          const loadedModules = mergeImportedServices(state.moduleRecords ?? {});
           const blockedFictitious = ["João Carlos", "Caio Henrique", "Thiago Souza", "Lucas Mendes"];
           const realEmployees = (loadedModules.Funcionários ?? []).filter((employee: ModuleRecord) => !blockedFictitious.includes(employee.name));
           const employees = realEmployees.some((employee: ModuleRecord) => employee.name === "Tiago Viana") ? realEmployees : [tiagoEmployee, ...realEmployees];
-          setModuleRecords({ ...loadedModules, Funcionários: employees });
+          const migratedModules = { ...loadedModules, Funcionários: employees };
+          setModuleRecords(migratedModules);
           localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(state.serviceOrders ?? []));
           localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(state.customers ?? []));
-          localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify({ ...loadedModules, Funcionários: employees }));
-          if (migratedFrom === "main") {
-            await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...state, moduleRecords: { ...loadedModules, Funcionários: employees } }) });
-          }
+          localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(migratedModules));
+          await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...state, moduleRecords: migratedModules, migratedFrom: migratedFrom ?? undefined }) });
           return;
         }
         const localState = {
           serviceOrders: readCompanyStorage(activeCompany.id, "service-orders", []),
           customers: readCompanyStorage(activeCompany.id, "customers", []),
-          moduleRecords: readCompanyStorage(activeCompany.id, "module-records", {}),
+          moduleRecords: mergeImportedServices(readCompanyStorage(activeCompany.id, "module-records", {}) as Record<string, ModuleRecord[]>),
         };
         await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(localState) });
         setServiceOrders(localState.serviceOrders);
@@ -1406,7 +1413,7 @@ export default function Home() {
       } catch {
         const localOrders = readCompanyStorage(activeCompany.id, "service-orders", []) as ServiceOrder[];
         const localCustomers = readCompanyStorage(activeCompany.id, "customers", []) as Customer[];
-        const localModules = readCompanyStorage(activeCompany.id, "module-records", {}) as Record<string, ModuleRecord[]>;
+        const localModules = mergeImportedServices(readCompanyStorage(activeCompany.id, "module-records", {}) as Record<string, ModuleRecord[]>);
         setServiceOrders(localOrders);
         setCustomerRecords(localCustomers);
         setModuleRecords({ ...localModules, Funcionários: localModules.Funcionários?.length ? localModules.Funcionários : [tiagoEmployee] });
