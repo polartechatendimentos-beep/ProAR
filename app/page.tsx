@@ -916,13 +916,24 @@ function HousesWorkModule({ companyId }: { companyId: string }) {
   useEffect(() => {
     setShareToken(localStorage.getItem(shareKey) || "");
     const stored = localStorage.getItem(storageKey);
-    if (!stored) { const initial = createHouses(); setHouses(initial); localStorage.setItem(storageKey, JSON.stringify(initial)); return; }
-    try {
-      const parsed = JSON.parse(stored) as HouseWorkItem[];
-      const byId = new Map(parsed.map(item => [item.id, item]));
-      setHouses(createHouses().map(item => byId.get(item.id) ?? item));
-    } catch { setHouses(createHouses()); }
-  }, [storageKey]);
+    const localHouses = (() => { if (!stored) return createHouses(); try { const parsed = JSON.parse(stored) as HouseWorkItem[]; const byId = new Map(parsed.map(item => [item.id, item])); return createHouses().map(item => byId.get(item.id) ?? item); } catch { return createHouses(); } })();
+    setHouses(localHouses); localStorage.setItem(storageKey, JSON.stringify(localHouses));
+    const loadSharedMap = async () => {
+      try {
+        const response = await fetch(`/api/public-work-map?company=${encodeURIComponent(companyId)}`, { cache: "no-store" });
+        const result = await response.json(); if (!response.ok) throw new Error();
+        if (result.map?.houses?.length) {
+          const shared = result.map.houses as HouseWorkItem[];
+          const localLatest = Math.max(0, ...localHouses.map(house => house.updatedAt ? new Date(house.updatedAt).getTime() : 0));
+          const sharedLatest = new Date(result.map.updatedAt || 0).getTime();
+          if (localLatest > sharedLatest) void publishPublicMap(localHouses).catch(() => localStorage.setItem(`${shareKey}:pending`, "1"));
+          else { setHouses(shared); localStorage.setItem(storageKey, JSON.stringify(shared)); }
+          if (result.map.token) { setShareToken(result.map.token); localStorage.setItem(shareKey, result.map.token); }
+        } else { void publishPublicMap(localHouses).catch(() => localStorage.setItem(`${shareKey}:pending`, "1")); }
+      } catch { /* mantém a cópia offline deste aparelho */ }
+    };
+    void loadSharedMap();
+  }, [storageKey, companyId]);
   const publishPublicMap = async (next: HouseWorkItem[]) => {
     try {
       const response = await fetch("/api/public-work-map", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ companyId, title: "Acompanhamento da obra — 142 Casas", houses: next }) });
@@ -930,7 +941,7 @@ function HousesWorkModule({ companyId }: { companyId: string }) {
       setShareToken(result.token); localStorage.setItem(shareKey, result.token); localStorage.removeItem(`${shareKey}:pending`); return result.token as string;
     } catch { localStorage.setItem(`${shareKey}:pending`, "1"); throw new Error("Não foi possível atualizar o link agora."); }
   };
-  const persist = (next: HouseWorkItem[]) => { setHouses(next); localStorage.setItem(storageKey, JSON.stringify(next)); if (shareToken) void publishPublicMap(next).catch(() => setReportNotice("Alteração guardada offline. O mapa público será atualizado quando a internet voltar.")); };
+  const persist = (next: HouseWorkItem[]) => { setHouses(next); localStorage.setItem(storageKey, JSON.stringify(next)); void publishPublicMap(next).catch(() => setReportNotice("Alteração guardada offline. Android, sistema principal e mapa do cliente serão sincronizados quando a internet voltar.")); };
   useEffect(() => {
     const synchronize = () => { if (navigator.onLine && shareToken && localStorage.getItem(`${shareKey}:pending`)) void publishPublicMap(houses).catch(() => {}); };
     window.addEventListener("online", synchronize); synchronize(); return () => window.removeEventListener("online", synchronize);
