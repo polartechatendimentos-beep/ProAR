@@ -169,6 +169,7 @@ type ModuleRecord = {
   progress?: number;
   commission?: number;
   cost?: number;
+  unitOfMeasure?: string;
   transactionType?: "Pagar" | "Receber";
   settledValue?: number;
   settlementDate?: string;
@@ -556,7 +557,7 @@ function OrderDetail({ order, customerPhone, company, close, onUpdate }: { order
   </div>;
 }
 
-type SaleItem = { id: string; name: string; code: string; price: number; kind: "Produto" | "Serviço" };
+type SaleItem = { id: string; name: string; code: string; price: number; kind: "Produto" | "Serviço"; unit: string };
 type CartItem = SaleItem & { quantity: number };
 
 function SalesPDV({ customers, records }: { customers: Customer[]; records: ModuleRecord[] }) {
@@ -569,9 +570,10 @@ function SalesPDV({ customers, records }: { customers: Customer[]; records: Modu
   const [payment, setPayment] = useState("PIX");
   const [notice, setNotice] = useState("");
   const [fullScreen, setFullScreen] = useState(false);
+  const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
   const pdvRef = useRef<HTMLElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const quickSaleCatalog: SaleItem[] = records.filter(item => (item.kind === "Produto" || item.kind === "Serviço") && item.status !== "Inativo").map(item => ({ id:item.id, name:item.name, code:item.id, price:item.value ?? 0, kind:item.kind! }));
+  const quickSaleCatalog: SaleItem[] = records.filter(item => (item.kind === "Produto" || item.kind === "Serviço") && item.status !== "Inativo").map(item => ({ id:item.id, name:item.name, code:item.id, price:item.value ?? 0, kind:item.kind!, unit:item.unitOfMeasure || (item.kind === "Serviço" ? "serviço" : "un") }));
   const filteredCatalog = quickSaleCatalog.filter(item => `${item.name} ${item.code} ${item.kind}`.toLowerCase().includes(search.toLowerCase()));
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const total = Math.max(0, subtotal - discount);
@@ -580,9 +582,20 @@ function SalesPDV({ customers, records }: { customers: Customer[]; records: Modu
     const existing = current.find(record => record.id === item.id);
     return existing ? current.map(record => record.id === item.id ? { ...record, quantity: record.quantity + 1 } : record) : [...current, { ...item, quantity: 1 }];
   });
+  const formatQuantity = (value: number) => value.toLocaleString("pt-BR", { maximumFractionDigits: 3 });
   const changeQuantity = (id: string, amount: number) => setCart(current => current
-    .map(item => item.id === id ? { ...item, quantity: item.quantity + amount } : item)
+    .map(item => item.id === id ? { ...item, quantity: Math.round((item.quantity + amount) * 1000) / 1000 } : item)
     .filter(item => item.quantity > 0));
+  const typeQuantity = (id: string, raw: string) => {
+    setQuantityDrafts(current => ({ ...current, [id]: raw }));
+    const quantity = Number(raw.trim().replace(",", "."));
+    if (Number.isFinite(quantity) && quantity > 0) setCart(current => current.map(item => item.id === id ? { ...item, quantity: Math.round(quantity * 1000) / 1000 } : item));
+  };
+  const confirmQuantity = (item: CartItem) => {
+    const raw = quantityDrafts[item.id];
+    const quantity = raw === undefined ? item.quantity : Number(raw.trim().replace(",", "."));
+    setQuantityDrafts(current => ({ ...current, [item.id]: Number.isFinite(quantity) && quantity > 0 ? formatQuantity(Math.round(quantity * 1000) / 1000) : formatQuantity(item.quantity) }));
+  };
   const finishSale = () => {
     if (!cart.length) {
       setNotice("Adicione pelo menos um item à venda.");
@@ -644,7 +657,7 @@ function SalesPDV({ customers, records }: { customers: Customer[]; records: Modu
           <div className="pdv-catalog">{filteredCatalog.map(item => <button key={item.id} onClick={() => addItem(item)}>
             <span className={item.kind === "Serviço" ? "service" : "product"}>{item.kind === "Serviço" ? <Wrench size={17}/> : <Package size={17}/>}</span>
             <div><small>{item.code} • {item.kind}</small><strong>{item.name}</strong></div>
-            <b>R$ {item.price.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b><Plus size={16}/>
+            <b>R$ {item.price.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} / {item.unit}</b><Plus size={16}/>
           </button>)}</div>
           {!filteredCatalog.length && <div className="linked-empty"><Package size={23}/><h4>Nenhum produto ou serviço cadastrado</h4><p>Cadastre os itens reais nos módulos Produtos e Serviços.</p></div>}
         </>}
@@ -653,8 +666,8 @@ function SalesPDV({ customers, records }: { customers: Customer[]; records: Modu
         {activeTab === "opcoes" && <div className="pdv-hidden-panel"><div className="pdv-panel-title"><Tag size={20}/><div><h3>Opções da venda</h3><p>Recursos menos utilizados ficam ocultos aqui.</p></div></div><label>Desconto em reais<input type="number" min="0" max={subtotal} value={discount || ""} onChange={event => setDiscount(Number(event.target.value))} placeholder="R$ 0,00"/></label><label>Observações<textarea placeholder="Informações adicionais para o comprovante..."/></label></div>}
       </div>
       <aside className="pdv-cart panel">
-        <div className="pdv-cart-head"><div><ReceiptText size={17}/><span><strong>Venda atual</strong><small>{cart.reduce((sum, item) => sum + item.quantity, 0)} item(ns)</small></span></div>{cart.length > 0 && <button onClick={() => setCart([])}><Trash2 size={13}/> Limpar</button>}</div>
-        <div className="pdv-cart-items">{cart.length ? cart.map(item => <article key={item.id}><div><small>{item.code}</small><strong>{item.name}</strong><span>R$ {item.price.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div><div className="quantity"><button onClick={() => changeQuantity(item.id, -1)}><Minus size={12}/></button><b>{item.quantity}</b><button onClick={() => changeQuantity(item.id, 1)}><Plus size={12}/></button></div><b>R$ {(item.price * item.quantity).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></article>) : <div className="pdv-empty"><ShoppingCart size={29}/><strong>Carrinho vazio</strong><p>Selecione um produto ou serviço para iniciar.</p></div>}</div>
+        <div className="pdv-cart-head"><div><ReceiptText size={17}/><span><strong>Venda atual</strong><small>{formatQuantity(cart.reduce((sum, item) => sum + item.quantity, 0))} item(ns)</small></span></div>{cart.length > 0 && <button onClick={() => setCart([])}><Trash2 size={13}/> Limpar</button>}</div>
+        <div className="pdv-cart-items">{cart.length ? cart.map(item => <article key={item.id}><div><small>{item.code}</small><strong>{item.name}</strong><span>R$ {item.price.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} / {item.unit}</span></div><div className="quantity"><button onClick={() => changeQuantity(item.id, -1)} aria-label="Diminuir quantidade"><Minus size={12}/></button><label><input inputMode="decimal" value={quantityDrafts[item.id] ?? formatQuantity(item.quantity)} onChange={event => typeQuantity(item.id, event.target.value)} onBlur={() => confirmQuantity(item)} aria-label={`Quantidade de ${item.name}`}/><small>{item.unit}</small></label><button onClick={() => changeQuantity(item.id, 1)} aria-label="Aumentar quantidade"><Plus size={12}/></button></div><b>R$ {(item.price * item.quantity).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></article>) : <div className="pdv-empty"><ShoppingCart size={29}/><strong>Carrinho vazio</strong><p>Selecione um produto ou serviço para iniciar.</p></div>}</div>
         <div className="pdv-summary"><p><span>Subtotal</span><b>R$ {subtotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></p>{discount > 0 && <p className="discount"><span>Desconto</span><b>− R$ {discount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></p>}<div><span>TOTAL</span><strong>R$ {total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></div><small>{customer || "Consumidor final"} • {payment}</small><button className="finish-sale" disabled={!cart.length} onClick={finishSale}><CheckCircle2 size={17}/> Finalizar venda <kbd>F10</kbd></button></div>
       </aside>
     </div>
