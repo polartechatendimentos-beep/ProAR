@@ -1369,7 +1369,15 @@ export default function Home() {
         if (activeCompany.status === "Bloqueada") throw new Error("blocked");
         const response = await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { cache: "no-store" });
         if (!response.ok) throw new Error();
-        const { state, migratedFrom } = await response.json();
+        let { state, migratedFrom } = await response.json();
+        if (!state && activeCompany.id !== "main") {
+          const legacyResponse = await fetch("/api/state?company=main", { cache: "no-store" });
+          if (legacyResponse.ok) {
+            const legacyResult = await legacyResponse.json();
+            state = legacyResult.state;
+            if (state) migratedFrom = "main";
+          }
+        }
         if (state) {
           setServiceOrders(state.serviceOrders ?? []);
           setCustomerRecords(state.customers ?? []);
