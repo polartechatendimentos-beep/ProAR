@@ -20,7 +20,7 @@ import {
   CreditCard, Keyboard, Menu, Minus, MoreHorizontal, Package, Phone, Plus, ReceiptText, ScanBarcode, School, Search, Settings,
   ShieldCheck, ShoppingBag, ShoppingCart, Store, TrendingUp, UserCheck, UserRound,
   MessageCircle, PenTool, Tag, Trash2, Database, LockKeyhole, UnlockKeyhole, ImagePlus,
-  UsersRound, WalletCards, Warehouse, Wrench, X, Zap, House, History, ImageIcon
+  UsersRound, WalletCards, Warehouse, Wrench, X, Zap, House, History, ImageIcon, RefreshCw
 } from "lucide-react";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
