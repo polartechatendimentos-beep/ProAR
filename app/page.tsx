@@ -78,8 +78,8 @@ type Customer = {
 };
 
 type HouseWorkStatus = "AG FRIGORÍGENA" | "AG VENTO KIT" | "VENTOKIT E FRIGORÍGENA OK" | "AG ACABAMENTO" | "AG EXAUSTOR" | "AG TAMPA FRIGORÍGENA" | "FIM";
-type HouseWorkUpdate = { id: string; status: HouseWorkStatus; note: string; photo?: string; createdAt: string };
-type HouseWorkItem = { id: string; block: string; lot: number; status: HouseWorkStatus; photo?: string; note?: string; updatedAt?: string; history: HouseWorkUpdate[] };
+type HouseWorkUpdate = { id: string; status: HouseWorkStatus; note: string; photo?: string; photos?: string[]; createdAt: string };
+type HouseWorkItem = { id: string; block: string; lot: number; status: HouseWorkStatus; photo?: string; photos?: string[]; note?: string; updatedAt?: string; history: HouseWorkUpdate[] };
 
 const HOUSE_BLOCKS = [
   { block: "A", houses: 5 }, { block: "B", houses: 24 }, { block: "C1", houses: 16 },
@@ -124,6 +124,18 @@ const DEFAULT_COMPANY: TenantCompany = {
 };
 
 const companyStorageKey = (companyId: string, resource: string) => `proar-v4:${companyId}:${resource}`;
+const legacyStorageKeys: Record<string, string> = {
+  "service-orders": "proar-v3-service-orders",
+  customers: "proar-v3-customers",
+  "module-records": "proar-v3-module-records",
+};
+
+function readCompanyStorage(companyId: string, resource: string, fallback: unknown) {
+  const current = localStorage.getItem(companyStorageKey(companyId, resource));
+  const legacy = legacyStorageKeys[resource] ? localStorage.getItem(legacyStorageKeys[resource]) : null;
+  try { return JSON.parse(current ?? legacy ?? JSON.stringify(fallback)); }
+  catch { return fallback; }
+}
 const normalizeCnpj = (value: string) => value.replace(/\D/g, "").slice(0, 14);
 const formatCnpj = (value: string) => normalizeCnpj(value).replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2}).*/, "$1.$2.$3/$4-$5");
 const companyIdFromCnpj = (cnpj: string) => normalizeCnpj(cnpj) || `empresa-${Date.now()}`;
@@ -873,7 +885,7 @@ function HousesWorkModule({ companyId }: { companyId: string }) {
   const [editing, setEditing] = useState<HouseWorkItem | null>(null);
   const [nextStatus, setNextStatus] = useState<HouseWorkStatus>("AG FRIGORÍGENA");
   const [note, setNote] = useState("");
-  const [photo, setPhoto] = useState("");
+  const [photos, setPhotos] = useState<string[]>([]);
   const [historyHouse, setHistoryHouse] = useState<HouseWorkItem | null>(null);
   useEffect(() => {
     const stored = localStorage.getItem(storageKey);
@@ -885,13 +897,18 @@ function HousesWorkModule({ companyId }: { companyId: string }) {
     } catch { setHouses(createHouses()); }
   }, [storageKey]);
   const persist = (next: HouseWorkItem[]) => { setHouses(next); localStorage.setItem(storageKey, JSON.stringify(next)); };
-  const openUpdate = (house: HouseWorkItem) => { setEditing(house); setNextStatus(house.status); setNote(""); setPhoto(""); };
-  const readPhoto = async (file?: File) => { if (file) setPhoto(await imageFileToDataUrl(file)); };
+  const openUpdate = (house: HouseWorkItem) => { setEditing(house); setNextStatus(house.status); setNote(""); setPhotos([]); };
+  const readPhotos = async (files?: FileList | null) => {
+    const selected = Array.from(files ?? []).slice(0, Math.max(0, 5 - photos.length));
+    if (!selected.length) return;
+    const encoded = await Promise.all(selected.map(file => imageFileToDataUrl(file)));
+    setPhotos(current => [...current, ...encoded].slice(0, 5));
+  };
   const saveUpdate = () => {
     if (!editing) return;
     const createdAt = new Date().toISOString();
-    const update: HouseWorkUpdate = { id: `${editing.id}-${Date.now()}`, status: nextStatus, note: note.trim(), photo: photo || undefined, createdAt };
-    const next = houses.map(item => item.id === editing.id ? { ...item, status: nextStatus, note: note.trim() || item.note, photo: photo || item.photo, updatedAt: createdAt, history: [update, ...(item.history ?? [])] } : item);
+    const update: HouseWorkUpdate = { id: `${editing.id}-${Date.now()}`, status: nextStatus, note: note.trim(), photo: photos[0] || undefined, photos: photos.length ? photos : undefined, createdAt };
+    const next = houses.map(item => item.id === editing.id ? { ...item, status: nextStatus, note: note.trim() || item.note, photo: photos[0] || item.photo, photos: photos.length ? photos : item.photos, updatedAt: createdAt, history: [update, ...(item.history ?? [])] } : item);
     persist(next); setEditing(null);
   };
   const visible = houses.filter(house => (blockFilter === "Todas" || house.block === blockFilter) && (statusFilter === "Todos" || house.status === statusFilter) && `${house.block} ${house.lot} ${house.id}`.toLowerCase().includes(query.toLowerCase()));
@@ -906,8 +923,8 @@ function HousesWorkModule({ companyId }: { companyId: string }) {
     <div className="houses-legend">{HOUSE_STATUSES.map(status => <span key={status.name}><i style={{background:status.color}}/>{status.name}</span>)}</div>
     <div className="block-list">{grouped.map(group => <section className="block-section" key={group.block}><header><div><span>QUADRA</span><strong>{group.block}</strong></div><p>{group.houses.length} lote(s) exibido(s)</p><b>{houses.filter(house => house.block === group.block && house.status === "FIM").length}/{houses.filter(house => house.block === group.block).length} concluídas</b></header><div className="house-grid">{group.houses.map(house => <article key={house.id} style={{"--house-color":statusColor(house.status)} as React.CSSProperties} onDoubleClick={() => openUpdate(house)}><div className="house-card-top"><span><House size={15}/></span><div><small>QUADRA {house.block}</small><h3>Lote {String(house.lot).padStart(2,"0")}</h3></div>{house.photo && <img src={house.photo} alt={`Casa ${house.id}`}/>}</div><div className="house-status"><i/><span>{house.status}</span></div>{house.note && <p>{house.note}</p>}<small className="house-date">{house.updatedAt ? `Atualizado em ${new Date(house.updatedAt).toLocaleString("pt-BR")}` : "Sem alterações registradas"}</small><footer><button onClick={() => openUpdate(house)}><Edit3 size={13}/> Alterar status</button><button disabled={!house.history?.length} onClick={() => setHistoryHouse(house)}><History size={13}/> Histórico</button></footer></article>)}</div></section>)}</div>
     {!visible.length && <div className="linked-empty"><Search size={22}/><h4>Nenhuma casa encontrada</h4><p>Altere os filtros para visualizar outros lotes.</p></div>}
-    {editing && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={() => setEditing(null)} aria-label="Fechar"/><div className="modal house-update-modal"><div className="modal-head"><div><span>ATUALIZAÇÃO DA OBRA</span><h2>Quadra {editing.block} • Lote {String(editing.lot).padStart(2,"0")}</h2><p>Registre o novo status, foto e observações do serviço.</p></div><button onClick={() => setEditing(null)}><X size={18}/></button></div><div className="house-update-body"><label>Novo status<select value={nextStatus} onChange={event => setNextStatus(event.target.value as HouseWorkStatus)}>{HOUSE_STATUSES.map(status => <option key={status.name}>{status.name}</option>)}</select></label><div className="status-preview" style={{"--preview-color":statusColor(nextStatus)} as React.CSSProperties}><i/><span>{nextStatus}</span></div><label className={`house-photo-upload ${photo ? "has-photo" : ""}`}>{photo ? <img src={photo} alt="Evidência"/> : <ImageIcon size={25}/>}<b>{photo ? "Foto pronta para anexar" : "Anexar foto da etapa"}</b><small>Câmera ou galeria do aparelho</small><input type="file" accept="image/*" capture="environment" onChange={event => readPhoto(event.target.files?.[0])}/></label><label>Observações<textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Descreva o serviço executado, pendências ou materiais utilizados..."/></label></div><div className="modal-actions"><button className="outline-btn" onClick={() => setEditing(null)}>Cancelar</button><button className="primary-btn" onClick={saveUpdate}><CheckCircle2 size={15}/> Salvar alteração</button></div></div></div>}
-    {historyHouse && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={() => setHistoryHouse(null)} aria-label="Fechar"/><div className="modal house-history-modal"><div className="modal-head"><div><span>HISTÓRICO DA CASA</span><h2>Quadra {historyHouse.block} • Lote {String(historyHouse.lot).padStart(2,"0")}</h2><p>{historyHouse.history.length} alteração(ões) registrada(s)</p></div><button onClick={() => setHistoryHouse(null)}><X size={18}/></button></div><div className="house-timeline">{historyHouse.history.map(item => <article key={item.id}><i style={{background:statusColor(item.status)}}/><div><header><strong>{item.status}</strong><time>{new Date(item.createdAt).toLocaleString("pt-BR")}</time></header>{item.note && <p>{item.note}</p>}{item.photo && <img src={item.photo} alt="Foto da atualização"/>}</div></article>)}</div><div className="modal-actions"><button className="primary-btn" onClick={() => setHistoryHouse(null)}>Fechar histórico</button></div></div></div>}
+    {editing && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={() => setEditing(null)} aria-label="Fechar"/><div className="modal house-update-modal"><div className="modal-head"><div><span>ATUALIZAÇÃO DA OBRA</span><h2>Quadra {editing.block} • Lote {String(editing.lot).padStart(2,"0")}</h2><p>Registre o novo status, até 5 fotos e observações do serviço.</p></div><button onClick={() => setEditing(null)}><X size={18}/></button></div><div className="house-update-body"><label>Novo status<select value={nextStatus} onChange={event => setNextStatus(event.target.value as HouseWorkStatus)}>{HOUSE_STATUSES.map(status => <option key={status.name}>{status.name}</option>)}</select></label><div className="status-preview" style={{"--preview-color":statusColor(nextStatus)} as React.CSSProperties}><i/><span>{nextStatus}</span></div><div className="house-photo-area"><label className={`house-photo-upload ${photos.length ? "has-photo" : ""}`}><ImageIcon size={25}/><b>{photos.length ? `${photos.length} de 5 fotos selecionadas` : "Anexar fotos da etapa"}</b><small>Câmera ou galeria • máximo de 5 fotos</small><input type="file" accept="image/*" multiple onChange={event => readPhotos(event.target.files)}/></label>{photos.length > 0 && <div className="house-photo-grid">{photos.map((photo,index) => <figure key={`${photo.slice(-20)}-${index}`}><img src={photo} alt={`Evidência ${index + 1}`}/><button type="button" aria-label={`Remover foto ${index + 1}`} onClick={() => setPhotos(current => current.filter((_,photoIndex) => photoIndex !== index))}><X size={12}/></button></figure>)}</div>}</div><label>Observações<textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Descreva o serviço executado, pendências ou materiais utilizados..."/></label></div><div className="modal-actions"><button className="outline-btn" onClick={() => setEditing(null)}>Cancelar</button><button className="primary-btn" onClick={saveUpdate}><CheckCircle2 size={15}/> Salvar alteração</button></div></div></div>}
+    {historyHouse && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={() => setHistoryHouse(null)} aria-label="Fechar"/><div className="modal house-history-modal"><div className="modal-head"><div><span>HISTÓRICO DA CASA</span><h2>Quadra {historyHouse.block} • Lote {String(historyHouse.lot).padStart(2,"0")}</h2><p>{historyHouse.history.length} alteração(ões) registrada(s)</p></div><button onClick={() => setHistoryHouse(null)}><X size={18}/></button></div><div className="house-timeline">{historyHouse.history.map(item => <article key={item.id}><i style={{background:statusColor(item.status)}}/><div><header><strong>{item.status}</strong><time>{new Date(item.createdAt).toLocaleString("pt-BR")}</time></header>{item.note && <p>{item.note}</p>}<div className="house-history-photos">{(item.photos?.length ? item.photos : item.photo ? [item.photo] : []).map((photo,index) => <img key={index} src={photo} alt={`Foto da atualização ${index + 1}`}/>)}</div></div></article>)}</div><div className="modal-actions"><button className="primary-btn" onClick={() => setHistoryHouse(null)}>Fechar histórico</button></div></div></div>}
   </section>;
 }
 
@@ -1352,7 +1369,7 @@ export default function Home() {
         if (activeCompany.status === "Bloqueada") throw new Error("blocked");
         const response = await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { cache: "no-store" });
         if (!response.ok) throw new Error();
-        const { state } = await response.json();
+        const { state, migratedFrom } = await response.json();
         if (state) {
           setServiceOrders(state.serviceOrders ?? []);
           setCustomerRecords(state.customers ?? []);
@@ -1361,21 +1378,27 @@ export default function Home() {
           const realEmployees = (loadedModules.Funcionários ?? []).filter((employee: ModuleRecord) => !blockedFictitious.includes(employee.name));
           const employees = realEmployees.some((employee: ModuleRecord) => employee.name === "Tiago Viana") ? realEmployees : [tiagoEmployee, ...realEmployees];
           setModuleRecords({ ...loadedModules, Funcionários: employees });
+          localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(state.serviceOrders ?? []));
+          localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(state.customers ?? []));
+          localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify({ ...loadedModules, Funcionários: employees }));
+          if (migratedFrom === "main") {
+            await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...state, moduleRecords: { ...loadedModules, Funcionários: employees } }) });
+          }
           return;
         }
         const localState = {
-          serviceOrders: JSON.parse(localStorage.getItem(companyStorageKey(activeCompany.id, "service-orders")) ?? "[]"),
-          customers: JSON.parse(localStorage.getItem(companyStorageKey(activeCompany.id, "customers")) ?? "[]"),
-          moduleRecords: JSON.parse(localStorage.getItem(companyStorageKey(activeCompany.id, "module-records")) ?? "{}"),
+          serviceOrders: readCompanyStorage(activeCompany.id, "service-orders", []),
+          customers: readCompanyStorage(activeCompany.id, "customers", []),
+          moduleRecords: readCompanyStorage(activeCompany.id, "module-records", {}),
         };
         await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(localState) });
         setServiceOrders(localState.serviceOrders);
         setCustomerRecords(localState.customers);
         setModuleRecords(localState.moduleRecords);
       } catch {
-        const localOrders = JSON.parse(localStorage.getItem(companyStorageKey(activeCompany.id, "service-orders")) ?? "[]");
-        const localCustomers = JSON.parse(localStorage.getItem(companyStorageKey(activeCompany.id, "customers")) ?? "[]");
-        const localModules = JSON.parse(localStorage.getItem(companyStorageKey(activeCompany.id, "module-records")) ?? "{}");
+        const localOrders = readCompanyStorage(activeCompany.id, "service-orders", []) as ServiceOrder[];
+        const localCustomers = readCompanyStorage(activeCompany.id, "customers", []) as Customer[];
+        const localModules = readCompanyStorage(activeCompany.id, "module-records", {}) as Record<string, ModuleRecord[]>;
         setServiceOrders(localOrders);
         setCustomerRecords(localCustomers);
         setModuleRecords({ ...localModules, Funcionários: localModules.Funcionários?.length ? localModules.Funcionários : [tiagoEmployee] });
@@ -1644,5 +1667,3 @@ export default function Home() {
     {selectedOrder && <OrderDetail order={selectedOrder} customerPhone={customerRecords.find(customer => customer.name === selectedOrder.client)?.phone} company={activeCompany} close={() => setSelectedOrder(null)} onUpdate={updateServiceOrder}/>}
   </div>;
 }
-
-
