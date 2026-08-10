@@ -5,6 +5,7 @@ import "./multiempresa.css";
 import "./obra-142.css";
 import "./workflow-fixes.css";
 import "./access-offline.css";
+import "./public-work-share.css";
 import { IMPORTED_SERVICES } from "../lib/imported-services";
 
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
@@ -899,6 +900,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
 
 function HousesWorkModule({ companyId }: { companyId: string }) {
   const storageKey = companyStorageKey(companyId, "obra-142-casas");
+  const shareKey = companyStorageKey(companyId, "obra-142-public-token");
   const createHouses = () => HOUSE_BLOCKS.flatMap(({ block, houses }) => Array.from({ length: houses }, (_, index): HouseWorkItem => ({ id: `${block}-${String(index + 1).padStart(2, "0")}`, block, lot: index + 1, status: "AG FRIGORÍGENA", history: [] })));
   const [houses, setHouses] = useState<HouseWorkItem[]>(createHouses);
   const [blockFilter, setBlockFilter] = useState("Todas");
@@ -910,7 +912,9 @@ function HousesWorkModule({ companyId }: { companyId: string }) {
   const [photos, setPhotos] = useState<string[]>([]);
   const [historyHouse, setHistoryHouse] = useState<HouseWorkItem | null>(null);
   const [reportNotice, setReportNotice] = useState("");
+  const [shareToken, setShareToken] = useState("");
   useEffect(() => {
+    setShareToken(localStorage.getItem(shareKey) || "");
     const stored = localStorage.getItem(storageKey);
     if (!stored) { const initial = createHouses(); setHouses(initial); localStorage.setItem(storageKey, JSON.stringify(initial)); return; }
     try {
@@ -919,7 +923,27 @@ function HousesWorkModule({ companyId }: { companyId: string }) {
       setHouses(createHouses().map(item => byId.get(item.id) ?? item));
     } catch { setHouses(createHouses()); }
   }, [storageKey]);
-  const persist = (next: HouseWorkItem[]) => { setHouses(next); localStorage.setItem(storageKey, JSON.stringify(next)); };
+  const publishPublicMap = async (next: HouseWorkItem[]) => {
+    try {
+      const response = await fetch("/api/public-work-map", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ companyId, title: "Acompanhamento da obra — 142 Casas", houses: next }) });
+      const result = await response.json(); if (!response.ok) throw new Error(result.error);
+      setShareToken(result.token); localStorage.setItem(shareKey, result.token); localStorage.removeItem(`${shareKey}:pending`); return result.token as string;
+    } catch { localStorage.setItem(`${shareKey}:pending`, "1"); throw new Error("Não foi possível atualizar o link agora."); }
+  };
+  const persist = (next: HouseWorkItem[]) => { setHouses(next); localStorage.setItem(storageKey, JSON.stringify(next)); if (shareToken) void publishPublicMap(next).catch(() => setReportNotice("Alteração guardada offline. O mapa público será atualizado quando a internet voltar.")); };
+  useEffect(() => {
+    const synchronize = () => { if (navigator.onLine && shareToken && localStorage.getItem(`${shareKey}:pending`)) void publishPublicMap(houses).catch(() => {}); };
+    window.addEventListener("online", synchronize); synchronize(); return () => window.removeEventListener("online", synchronize);
+  }, [shareToken, houses]);
+  const sharePublicMap = async () => {
+    setReportNotice("A publicar o mapa da obra...");
+    try {
+      const token = shareToken || await publishPublicMap(houses); const url = `${window.location.origin}/obra/${token}`;
+      if (navigator.share) await navigator.share({ title: "Acompanhamento da obra — PolarTech", text: "Acompanhe em tempo real o andamento de cada casa da obra.", url });
+      else { await navigator.clipboard.writeText(url); setReportNotice("Link copiado. Pode enviá-lo ao cliente pelo WhatsApp."); window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`Acompanhe em tempo real o andamento da obra: ${url}`)}`, "_blank", "noopener,noreferrer"); }
+    } catch (error) { if ((error as Error)?.name !== "AbortError") setReportNotice((error as Error)?.message || "Não foi possível compartilhar o mapa."); }
+    window.setTimeout(() => setReportNotice(""), 5000);
+  };
   const openUpdate = (house: HouseWorkItem) => { setEditing(house); setNextStatus(house.status); setNote(""); setPhotos([]); };
   const readPhotos = async (files?: FileList | null) => {
     const selected = Array.from(files ?? []).slice(0, Math.max(0, 5 - photos.length));
@@ -996,7 +1020,7 @@ function HousesWorkModule({ companyId }: { companyId: string }) {
     window.setTimeout(() => setReportNotice(""), 5000);
   };
   return <section className="houses-app">
-    <div className="houses-hero"><div><span className="section-kicker"><House size={12}/> CONTROLE DE EXECUÇÃO</span><h2>Obra — 142 Casas</h2><p>Acompanhamento individual por quadra e lote, com evidências e histórico de execução.</p></div><div className="houses-progress"><div><small>PROGRESSO GERAL</small><strong>{completion}%</strong></div><i><b style={{ width: `${completion}%` }}/></i><span>{completed} finalizadas de {houses.length} casas cadastradas</span></div></div>
+    <div className="houses-hero"><div><span className="section-kicker"><House size={12}/> CONTROLE DE EXECUÇÃO</span><h2>Obra — 142 Casas</h2><p>Acompanhamento individual por quadra e lote, com evidências e histórico de execução.</p></div><div className="houses-public-share"><span><MapPin size={18}/></span><div><small>ACESSO DO CLIENTE</small><b>{shareToken ? "Mapa público ativo" : "Criar link de acompanhamento"}</b><em>{shareToken ? "Atualização automática em tempo real" : "O cliente verá somente o andamento da obra"}</em></div><button onClick={sharePublicMap}><MessageCircle size={14}/>{shareToken ? "Enviar link" : "Criar e enviar"}</button>{shareToken && <a href={`/obra/${shareToken}`} target="_blank" rel="noreferrer"><Eye size={14}/> Visualizar</a>}</div><div className="houses-progress"><div><small>PROGRESSO GERAL</small><strong>{completion}%</strong></div><i><b style={{ width: `${completion}%` }}/></i><span>{completed} finalizadas de {houses.length} casas cadastradas</span></div></div>
     <div className="houses-kpis"><article><span><House size={18}/></span><div><small>TOTAL CADASTRADO</small><strong>{houses.length}</strong><em>11 quadras</em></div></article>{HOUSE_STATUSES.map(status => <article key={status.name}><i style={{background:status.color}}/><div><small>{status.name}</small><strong>{houses.filter(house => house.status === status.name).length}</strong><em>{Math.round(houses.filter(house => house.status === status.name).length / houses.length * 100)}% da obra</em></div></article>)}</div>
     <div className="houses-toolbar"><label><Search size={15}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar quadra ou lote..."/></label><select value={blockFilter} onChange={event => setBlockFilter(event.target.value)}><option>Todas</option>{HOUSE_BLOCKS.map(item => <option key={item.block}>{item.block}</option>)}</select><select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option>Todos</option>{HOUSE_STATUSES.map(item => <option key={item.name}>{item.name}</option>)}</select><span>{visible.length} casa(s) exibida(s)</span></div>
     <div className="houses-legend">{HOUSE_STATUSES.map(status => <span key={status.name}><i style={{background:status.color}}/>{status.name}</span>)}</div>
