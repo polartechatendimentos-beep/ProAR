@@ -925,7 +925,7 @@ function HousesWorkModule({ companyId }: { companyId: string }) {
         if (result.map?.houses?.length) {
           const shared = result.map.houses as HouseWorkItem[];
           const localLatest = Math.max(0, ...localHouses.map(house => house.updatedAt ? new Date(house.updatedAt).getTime() : 0));
-          const sharedLatest = new Date(result.map.updatedAt || 0).getTime();
+          const sharedLatest = Math.max(0, ...shared.map(house => house.updatedAt ? new Date(house.updatedAt).getTime() : 0));
           if (localLatest > sharedLatest) void publishPublicMap(localHouses).catch(() => localStorage.setItem(`${shareKey}:pending`, "1"));
           else { setHouses(shared); localStorage.setItem(storageKey, JSON.stringify(shared)); }
           if (result.map.token) { setShareToken(result.map.token); localStorage.setItem(shareKey, result.map.token); }
