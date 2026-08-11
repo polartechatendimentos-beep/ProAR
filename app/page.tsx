@@ -986,6 +986,8 @@ function HousesWorkModule({ companyId, responsibleUser = "Utilizador do ProAR" }
   const [historyUpdate, setHistoryUpdate] = useState<HouseWorkUpdate | null>(null);
   const [reportNotice, setReportNotice] = useState("");
   const [shareToken, setShareToken] = useState("");
+  const [serverRevision, setServerRevision] = useState(0);
+  const [mapOnline, setMapOnline] = useState(true);
   const [workManagerOpen, setWorkManagerOpen] = useState(false);
   const [newWorkName, setNewWorkName] = useState("");
   const [newBlocks, setNewBlocks] = useState<WorkBlock[]>([{block:"A",houses:1}]);
@@ -1000,40 +1002,31 @@ function HousesWorkModule({ companyId, responsibleUser = "Utilizador do ProAR" }
     } catch { setProjects([RESERVA_IMPERIAL]); }
     setProjectsReady(true);
   },[projectsKey,selectedProjectKey]);
-  useEffect(() => {
-    if (!projectsReady) return;
-    setShareToken(localStorage.getItem(shareKey) || "");
-    const stored = localStorage.getItem(storageKey);
-    const localHouses = (() => { if (!stored) return createHouses(); try { const parsed = JSON.parse(stored) as HouseWorkItem[]; const byId = new Map(parsed.map(item => [item.id, item])); return createHouses().map(item => byId.get(item.id) ?? item); } catch { return createHouses(); } })();
-    setHouses(localHouses); localStorage.setItem(storageKey, JSON.stringify(localHouses));
-    const loadSharedMap = async () => {
-      try {
-        const response = await fetch(`/api/public-work-map?company=${encodeURIComponent(companyId)}&work=${encodeURIComponent(activeProject.id)}`, { cache: "no-store" });
-        const result = await response.json(); if (!response.ok) throw new Error();
-        if (result.map?.houses?.length) {
-          const sharedRows = result.map.houses as HouseWorkItem[]; const sharedById = new Map(sharedRows.map(item=>[item.id,item])); const shared = createHouses().map(item=>sharedById.get(item.id) ?? item);
-          const localLatest = Math.max(0, ...localHouses.map(house => house.updatedAt ? new Date(house.updatedAt).getTime() : 0));
-          const sharedLatest = Math.max(0, ...shared.map(house => house.updatedAt ? new Date(house.updatedAt).getTime() : 0));
-          if (localLatest > sharedLatest) void publishPublicMap(localHouses).catch(() => localStorage.setItem(`${shareKey}:pending`, "1"));
-          else { setHouses(shared); localStorage.setItem(storageKey, JSON.stringify(shared)); }
-          if (result.map.token) { setShareToken(result.map.token); localStorage.setItem(shareKey, result.map.token); }
-        } else { void publishPublicMap(localHouses).catch(() => localStorage.setItem(`${shareKey}:pending`, "1")); }
-      } catch { /* mantém a cópia offline deste aparelho */ }
-    };
-    void loadSharedMap();
-  }, [storageKey, companyId, projectsReady, activeProject.id]);
-  const publishPublicMap = async (next: HouseWorkItem[]) => {
-    try {
-      const response = await fetch("/api/public-work-map", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ companyId, workId: activeProject.id, title: `Acompanhamento da obra — ${activeProject.name}`, houses: next }) });
-      const result = await response.json(); if (!response.ok) throw new Error(result.error);
-      setShareToken(result.token); localStorage.setItem(shareKey, result.token); localStorage.removeItem(`${shareKey}:pending`); return result.token as string;
-    } catch { localStorage.setItem(`${shareKey}:pending`, "1"); throw new Error("Não foi possível atualizar o link agora."); }
+  const mergeWorkRows = (rows: HouseWorkItem[]) => { const byId=new Map(rows.map(item=>[item.id,item])); return createHouses().map(item=>byId.get(item.id)??item); };
+  const applyServerMap = (map: { houses?: HouseWorkItem[]; token?: string; revision?: number }) => { const authoritative=mergeWorkRows(map.houses??[]); setHouses(authoritative); localStorage.setItem(storageKey,JSON.stringify(authoritative)); setServerRevision(Number(map.revision||0)); setMapOnline(true); if(map.token){setShareToken(map.token);localStorage.setItem(shareKey,map.token);} return authoritative; };
+  const fetchServerMap = async () => { if(!navigator.onLine) throw new Error("offline"); const response=await fetch(`/api/public-work-map?company=${encodeURIComponent(companyId)}&work=${encodeURIComponent(activeProject.id)}&refresh=${Date.now()}`,{cache:"no-store"}); const result=await response.json(); if(!response.ok) throw new Error(result.error||"Falha no banco online"); if(result.map?.houses?.length) applyServerMap(result.map); return result.map as {houses?:HouseWorkItem[];token?:string;revision?:number}|null; };
+  const publishPublicMap = async (next: HouseWorkItem[], force=false) => {
+    if(!navigator.onLine){localStorage.setItem(`${shareKey}:pending`,"1");setMapOnline(false);throw new Error("Dispositivo sem internet.");}
+    const response=await fetch("/api/public-work-map",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({companyId,workId:activeProject.id,title:`Acompanhamento da obra — ${activeProject.name}`,houses:next,baseRevision:serverRevision,force})});
+    const result=await response.json();
+    if(response.status===409&&result.map){applyServerMap(result.map);localStorage.removeItem(`${shareKey}:pending`);throw new Error("O banco online tinha uma versão mais recente e foi mantido como principal.");}
+    if(!response.ok){localStorage.setItem(`${shareKey}:pending`,"1");throw new Error(result.error||"Não foi possível atualizar o banco online.");}
+    setServerRevision(Number(result.map?.revision||serverRevision+1));setMapOnline(true);setShareToken(result.token);localStorage.setItem(shareKey,result.token);localStorage.setItem(storageKey,JSON.stringify(next));localStorage.removeItem(`${shareKey}:pending`);return result.token as string;
   };
-  const persist = (next: HouseWorkItem[]) => { setHouses(next); localStorage.setItem(storageKey, JSON.stringify(next)); void publishPublicMap(next).catch(() => setReportNotice("Alteração guardada offline. Android, sistema principal e mapa do cliente serão sincronizados quando a internet voltar.")); };
   useEffect(() => {
-    const synchronize = () => { if (navigator.onLine && shareToken && localStorage.getItem(`${shareKey}:pending`)) void publishPublicMap(houses).catch(() => {}); };
-    window.addEventListener("online", synchronize); synchronize(); return () => window.removeEventListener("online", synchronize);
-  }, [shareToken, houses]);
+    if(!projectsReady)return;
+    setShareToken(localStorage.getItem(shareKey)||"");setServerRevision(0);
+    const stored=localStorage.getItem(storageKey);const localHouses=(()=>{if(!stored)return createHouses();try{return mergeWorkRows(JSON.parse(stored) as HouseWorkItem[]);}catch{return createHouses();}})();
+    if(!navigator.onLine){setHouses(localHouses);setMapOnline(false);setReportNotice("Modo offline: mostrando a cópia deste aparelho.");return;}
+    setHouses(createHouses());setMapOnline(true);
+    void fetchServerMap().then(map=>{if(!map) return publishPublicMap(localHouses,true);}).catch(()=>{setMapOnline(false);setReportNotice("Banco online indisponível. A cópia local não foi enviada nem definida como principal.");});
+  },[storageKey,companyId,projectsReady,activeProject.id]);
+  const persist = (next: HouseWorkItem[]) => { setHouses(next);localStorage.setItem(storageKey,JSON.stringify(next));if(!navigator.onLine){localStorage.setItem(`${shareKey}:pending`,"1");setMapOnline(false);setReportNotice("Sem internet: alteração guardada somente neste aparelho.");return;}void publishPublicMap(next).then(()=>setReportNotice("Alteração salva no banco online e atualizada para todos os dispositivos.")).catch(error=>setReportNotice(error.message)); };
+  useEffect(() => {
+    const synchronize=()=>{if(!navigator.onLine){setMapOnline(false);return;}if(localStorage.getItem(`${shareKey}:pending`))void publishPublicMap(houses).catch(error=>setReportNotice(error.message));else void fetchServerMap().catch(()=>setMapOnline(false));};
+    const timer=window.setInterval(()=>{if(navigator.onLine&&!localStorage.getItem(`${shareKey}:pending`))void fetchServerMap().catch(()=>setMapOnline(false));},20000);
+    window.addEventListener("online",synchronize);window.addEventListener("offline",synchronize);return()=>{window.clearInterval(timer);window.removeEventListener("online",synchronize);window.removeEventListener("offline",synchronize);};
+  },[shareKey,houses,serverRevision,activeProject.id]);
   const sharePublicMap = async () => {
     setReportNotice("A publicar o mapa da obra...");
     try {
@@ -1045,11 +1038,11 @@ function HousesWorkModule({ companyId, responsibleUser = "Utilizador do ProAR" }
   };
   const refreshWorkMap = async () => {
     setReportNotice("A atualizar o mapa pelo banco principal...");
-    try { const response = await fetch(`/api/public-work-map?company=${encodeURIComponent(companyId)}&work=${encodeURIComponent(activeProject.id)}&refresh=${Date.now()}`, { cache:"no-store" }); const result = await response.json(); if (!response.ok || !result.map?.houses?.length) throw new Error(); const sharedRows = result.map.houses as HouseWorkItem[]; const sharedById=new Map(sharedRows.map(item=>[item.id,item])); const shared=createHouses().map(item=>sharedById.get(item.id)??item); setHouses(shared); localStorage.setItem(storageKey,JSON.stringify(shared)); if(result.map.token){setShareToken(result.map.token);localStorage.setItem(shareKey,result.map.token);} setReportNotice("Mapa, progresso e histórico atualizados pelo banco principal."); }
-    catch { setReportNotice("Não foi possível atualizar o mapa. A cópia deste aparelho foi mantida."); }
+    try { await fetchServerMap();localStorage.removeItem(`${shareKey}:pending`);setReportNotice("Banco online carregado. Esta é a versão principal."); }
+    catch { setReportNotice(navigator.onLine?"Banco online indisponível; nenhum dado local foi enviado.":"Dispositivo sem internet. A cópia offline foi mantida."); }
     window.setTimeout(()=>setReportNotice(""),4500);
   };
-  const sendWorkMap = async () => { setReportNotice("A enviar mapa e progresso ao banco principal..."); try { await publishPublicMap(houses); setReportNotice("Mapa, progresso e histórico enviados com sucesso."); } catch { setReportNotice("Falha no envio. As alterações continuam guardadas neste aparelho."); } window.setTimeout(()=>setReportNotice(""),4500); };
+  const sendWorkMap = async () => { setReportNotice("A definir esta versão como base principal online..."); try { await publishPublicMap(houses,true);setReportNotice("Esta versão foi definida como principal no banco online."); } catch(error){setReportNotice((error as Error).message);} window.setTimeout(()=>setReportNotice(""),4500); };
   const createWorkProject = () => {
     const name = newWorkName.trim(); const blocks = newBlocks.filter(item => item.block.trim() && item.houses > 0).map(item => ({block:item.block.trim().toUpperCase(),houses:Math.max(1,Math.floor(item.houses))}));
     if (!name || !blocks.length) { setReportNotice("Informe o nome da obra e pelo menos uma quadra."); return; }
@@ -1065,6 +1058,20 @@ function HousesWorkModule({ companyId, responsibleUser = "Utilizador do ProAR" }
     setPhotos(current => ({ ...current, [label]: encoded }));
   };
   const readIncidentPhoto = async (file?: File) => { if (file) setIncidentPhoto(await imageFileToDataUrl(file)); };
+  const replaceHistoryPhoto = async (label: string, file?: File) => {
+    if (!file || !historyHouse || !historyUpdate) return;
+    const url = await imageFileToDataUrl(file);
+    const nextUpdate: HouseWorkUpdate = {...historyUpdate,photos:normalizeStagePhotos(historyUpdate.photos,historyUpdate.photo,historyUpdate.status).map(photo=>photo.label===label?{...photo,url}:photo)};
+    const nextHouse: HouseWorkItem = {...historyHouse,updatedAt:new Date().toISOString(),history:(historyHouse.history??[]).map(update=>update.id===historyUpdate.id?nextUpdate:update)};
+    const next=houses.map(item=>item.id===nextHouse.id?nextHouse:item);
+    persist(next);setHistoryHouse(nextHouse);setHistoryUpdate(nextUpdate);
+  };
+  const replaceIncidentPhoto = async (incidentId: string, file?: File) => {
+    if (!file || !editing) return;
+    const photo=await imageFileToDataUrl(file);const updatedAt=new Date().toISOString();
+    const nextHouse: HouseWorkItem={...editing,updatedAt,incidents:(editing.incidents??[]).map(incident=>incident.id===incidentId?{...incident,photo}:incident)};
+    const next=houses.map(item=>item.id===editing.id?nextHouse:item);persist(next);setEditing(nextHouse);setReportNotice("Foto da ocorrência substituída e salva no banco online.");
+  };
   const saveIncident = () => {
     if (!editing) return;
     if (!incidentPhoto) { setReportNotice("Anexe uma foto da perda ou do roubo."); return; }
@@ -1091,9 +1098,14 @@ function HousesWorkModule({ companyId, responsibleUser = "Utilizador do ProAR" }
   };
   const visible = houses.filter(house => (blockFilter === "Todas" || house.block === blockFilter) && (statusFilter === "Todos" || normalizeHouseStatus(house.status) === statusFilter) && `${house.block} ${house.lot} ${house.id} ${house.name ?? ""}`.toLowerCase().includes(query.toLowerCase()));
   const completed = houses.filter(house => normalizeHouseStatus(house.status) === "SERVIÇO CONCLUÍDO").length;
-  const completion = houses.length ? Math.round(completed / houses.length * 100) : 0;
+  const stageProgress = houses.reduce((sum,house)=>{const index=HOUSE_STATUSES.findIndex(stage=>stage.name===normalizeHouseStatus(house.status));return sum+Math.max(0,index);},0);
+  const completion = houses.length ? Math.round(stageProgress / (houses.length * (HOUSE_STATUSES.length - 1)) * 100) : 0;
   const grouped = [...activeProject.blocks.map(({ block }) => ({ block, houses: visible.filter(house => house.block === block) })),{block:"Áreas Comuns",houses:visible.filter(house=>house.kind === "common")}].filter(group => group.houses.length);
   const statusColor = (status: HouseWorkStatus | LegacyHouseWorkStatus) => HOUSE_STATUSES.find(item => item.name === normalizeHouseStatus(status))?.color ?? "#64748b";
+  const houseProgress = (status: HouseWorkStatus | LegacyHouseWorkStatus) => {
+    const index=HOUSE_STATUSES.findIndex(stage=>stage.name===normalizeHouseStatus(status));
+    return Math.round(Math.max(0,index)/(HOUSE_STATUSES.length-1)*100);
+  };
   const createWorkReport = async (selectedHouses: HouseWorkItem[], reportTitle: string) => {
     const { jsPDF } = await import("jspdf");
     const pdf = new jsPDF({ unit: "mm", format: "a4" });
@@ -1162,12 +1174,18 @@ function HousesWorkModule({ companyId, responsibleUser = "Utilizador do ProAR" }
     <div className="houses-toolbar"><label><Search size={15}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar quadra, casa ou área comum..."/></label><select value={blockFilter} onChange={event => setBlockFilter(event.target.value)}><option>Todas</option>{activeProject.blocks.map(item => <option key={item.block}>{item.block}</option>)}{activeProject.commonAreas.length > 0 && <option>Áreas Comuns</option>}</select><select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option>Todos</option>{HOUSE_STATUSES.map(item => <option key={item.name}>{item.name}</option>)}</select><span>{visible.length} unidade(s) exibida(s)</span></div>
     <div className="houses-legend">{HOUSE_STATUSES.map(status => <span key={status.name}><i style={{background:status.color}}/>{status.name}</span>)}</div>
     {reportNotice && <div className="work-report-notice"><FileText size={15}/>{reportNotice}</div>}
-    <div className="block-list">{grouped.map(group => { const completeBlock = houses.filter(house => house.block === group.block); return <section className="block-section" key={group.block}><header><div><span>{group.block === "Áreas Comuns" ? "ÁREA" : "QUADRA"}</span><strong>{group.block}</strong></div><p>{group.houses.length} unidade(s) exibida(s)</p><b>{completeBlock.filter(house => normalizeHouseStatus(house.status) === "SERVIÇO CONCLUÍDO").length}/{completeBlock.length} concluídas</b><div className="block-report-actions"><button onClick={() => issueWorkReport(completeBlock, `Relatório completo da Quadra ${group.block}`)}><FileText size={13}/> PDF da quadra</button><button onClick={() => issueWorkReport(completeBlock, `Relatório completo da Quadra ${group.block}`, true)}><MessageCircle size={13}/> WhatsApp</button></div></header><div className="house-grid">{group.houses.map(house => <article key={house.id} style={{"--house-color":statusColor(house.status)} as React.CSSProperties} onDoubleClick={() => openUpdate(house)}><div className="house-card-top"><span><House size={15}/></span><div><small>{house.kind === "common" ? "ÁREA COMUM" : `QUADRA ${house.block}`}</small><h3>{house.kind === "common" ? house.name : `Lote ${String(house.lot).padStart(2,"0")}`}</h3></div>{house.photo && <img src={house.photo} alt={`Casa ${house.id}`}/>}</div><div className="house-status"><i/><span>{normalizeHouseStatus(house.status)}</span></div>{house.note && <p>{house.note}</p>}<small className="house-date">{house.updatedAt ? `Atualizado em ${new Date(house.updatedAt).toLocaleString("pt-BR")}` : "Sem alterações registradas"}</small><footer><button onClick={() => openUpdate(house)} title="Alterar status"><Edit3 size={13}/></button><button disabled={!house.history?.length} onClick={() => setHistoryHouse(house)} title="Histórico"><History size={13}/></button><button onClick={() => issueWorkReport([house], `Relatório da Quadra ${house.block} — Casa ${String(house.lot).padStart(2, "0")}`)} title="Gerar PDF"><FileText size={13}/></button><button onClick={() => issueWorkReport([house], `Relatório da Quadra ${house.block} — Casa ${String(house.lot).padStart(2, "0")}`, true)} title="Enviar pelo WhatsApp"><MessageCircle size={13}/></button></footer></article>)}</div></section>; })}</div>
+    <div className="block-list">{grouped.map(group => { const completeBlock = houses.filter(house => house.block === group.block); return <section className="block-section" key={group.block}><header><div><span>{group.block === "Áreas Comuns" ? "ÁREA" : "QUADRA"}</span><strong>{group.block}</strong></div><p>{group.houses.length} unidade(s) exibida(s)</p><b>{completeBlock.filter(house => normalizeHouseStatus(house.status) === "SERVIÇO CONCLUÍDO").length}/{completeBlock.length} concluídas</b><div className="block-report-actions"><button onClick={() => issueWorkReport(completeBlock, `Relatório completo da Quadra ${group.block}`)}><FileText size={13}/> PDF da quadra</button><button onClick={() => issueWorkReport(completeBlock, `Relatório completo da Quadra ${group.block}`, true)}><MessageCircle size={13}/> WhatsApp</button></div></header><div className="house-grid">{group.houses.map(house => <article key={house.id} style={{"--house-color":statusColor(house.status)} as React.CSSProperties} onDoubleClick={() => openUpdate(house)}><div className="house-card-top"><span><House size={15}/></span><div><small>{house.kind === "common" ? "ÁREA COMUM" : `QUADRA ${house.block}`}</small><h3>{house.kind === "common" ? house.name : `Lote ${String(house.lot).padStart(2,"0")}`}</h3></div>{house.photo && <img src={house.photo} alt={`Casa ${house.id}`}/>}</div>
+<div className="house-status"><i/><span>{normalizeHouseStatus(house.status)}</span></div><div className="house-mini-progress"><i><b style={{width:`${houseProgress(house.status)}%`}}/></i><small>{houseProgress(house.status)}%</small></div>
+{house.note && <p>{house.note}</p>}<small className="house-date">{house.updatedAt ? `Atualizado em ${new Date(house.updatedAt).toLocaleString("pt-BR")}` : "Sem alterações registradas"}</small><footer><button onClick={() => openUpdate(house)} title="Alterar status"><Edit3 size={13}/></button><button disabled={!house.history?.length} onClick={() => setHistoryHouse(house)} title="Histórico"><History size={13}/></button><button onClick={() => issueWorkReport([house], `Relatório da Quadra ${house.block} — Casa ${String(house.lot).padStart(2, "0")}`)} title="Gerar PDF"><FileText size={13}/></button><button onClick={() => issueWorkReport([house], `Relatório da Quadra ${house.block} — Casa ${String(house.lot).padStart(2, "0")}`, true)} title="Enviar pelo WhatsApp"><MessageCircle size={13}/></button></footer></article>)}</div></section>; })}</div>
     {!visible.length && <div className="linked-empty"><Search size={22}/><h4>Nenhuma casa encontrada</h4><p>Altere os filtros para visualizar outros lotes.</p></div>}
     {workManagerOpen && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={()=>setWorkManagerOpen(false)} aria-label="Fechar"/><div className="modal work-register-modal"><div className="modal-head"><div><span>GERENCIADOR DE OBRAS</span><h2>Cadastrar nova obra</h2><p>Defina as quadras, a quantidade de casas e as áreas comuns.</p></div><button onClick={()=>setWorkManagerOpen(false)}><X size={18}/></button></div><div className="work-register-body"><label className="wide">Nome da obra<input value={newWorkName} onChange={event=>setNewWorkName(event.target.value)} placeholder="Ex.: Residencial Primavera"/></label><section className="work-config-section"><header><div><b>Quadras e casas</b><small>Informe a identificação e a quantidade de casas de cada quadra.</small></div><button type="button" onClick={()=>setNewBlocks(current=>[...current,{block:String.fromCharCode(65+current.length),houses:1}])}><Plus size={13}/> Quadra</button></header>{newBlocks.map((item,index)=><div className="work-config-row" key={index}><label>Quadra<input value={item.block} onChange={event=>setNewBlocks(current=>current.map((block,i)=>i===index?{...block,block:event.target.value}:block))}/></label><label>Quantidade de casas<input type="number" min="1" value={item.houses} onChange={event=>setNewBlocks(current=>current.map((block,i)=>i===index?{...block,houses:Math.max(1,Number(event.target.value)||1)}:block))}/></label><button type="button" disabled={newBlocks.length===1} onClick={()=>setNewBlocks(current=>current.filter((_,i)=>i!==index))}><Trash2 size={14}/></button></div>)}</section><section className="work-config-section"><header><div><b>Áreas comuns</b><small>Adicione a quantidade necessária e dê um nome para cada área.</small></div><button type="button" onClick={()=>setNewCommonAreas(current=>[...current,""])}><Plus size={13}/> Área comum</button></header>{newCommonAreas.length===0?<p className="work-config-empty">Nenhuma área comum adicionada.</p>:newCommonAreas.map((name,index)=><div className="work-config-row common" key={index}><label>Nome da área comum<input value={name} onChange={event=>setNewCommonAreas(current=>current.map((area,i)=>i===index?event.target.value:area))} placeholder="Ex.: Academia, salão de festas..."/></label><button type="button" onClick={()=>setNewCommonAreas(current=>current.filter((_,i)=>i!==index))}><Trash2 size={14}/></button></div>)}</section></div><div className="modal-actions"><button className="outline-btn" onClick={()=>setWorkManagerOpen(false)}>Cancelar</button><button className="primary-btn" onClick={createWorkProject}><CheckCircle2 size={15}/> Cadastrar obra</button></div></div></div>}
-    {editing && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={() => setEditing(null)} aria-label="Fechar"/><div className="modal house-update-modal"><div className="modal-head"><div><span>ATUALIZAÇÃO DA OBRA</span><h2>Quadra {editing.block} • Casa {String(editing.lot).padStart(2,"0")}</h2><p>Status atual: {normalizeHouseStatus(editing.status)} • Responsável: {responsibleUser}</p></div><button onClick={() => setEditing(null)}><X size={18}/></button></div><div className="house-modal-tabs"><button className={houseModalTab === "Etapa" ? "active" : ""} onClick={()=>setHouseModalTab("Etapa")}><CheckCircle2 size={14}/> Etapa da obra</button><button className={houseModalTab === "Perdas e Roubos" ? "active warning" : ""} onClick={()=>setHouseModalTab("Perdas e Roubos")}><AlertTriangle size={14}/> Perdas e Roubos {editing.incidents?.length ? <span>{editing.incidents.length}</span> : null}</button></div>{houseModalTab === "Etapa" ? <><div className="house-stage-progress">{HOUSE_STATUSES.map((stage,index) => { const activeIndex = HOUSE_STATUSES.findIndex(item => item.name === nextStatus); return <div key={stage.name} className={index <= activeIndex ? "active" : ""}><i>{index < activeIndex ? <CheckCircle2 size={12}/> : index + 1}</i><span>{stage.name}</span></div>; })}</div><div className="house-update-body"><label>Novo status<select value={nextStatus} onChange={event => { setNextStatus(event.target.value as HouseWorkStatus); setPhotos({}); }}>{HOUSE_STATUSES.map(status => <option key={status.name}>{status.name}</option>)}</select></label><div className="status-preview" style={{"--preview-color":statusColor(nextStatus)} as React.CSSProperties}><i/><span>{nextStatus}</span></div>{HOUSE_STAGE_PHOTOS[nextStatus].length > 0 && <div className="stage-photo-slots wide">{HOUSE_STAGE_PHOTOS[nextStatus].map(label => <label className={photos[label] ? "filled" : ""} key={label}>{photos[label] ? <img src={photos[label]} alt={label}/> : <ImageIcon size={22}/>}<b>{label}</b><small>{photos[label] ? "Foto pronta • toque para substituir" : HOUSE_STAGE_OPTIONAL_PHOTOS.includes(nextStatus) ? "Foto opcional" : "Foto obrigatória"}</small><input type="file" accept="image/*" capture="environment" onChange={event => void readStagePhoto(label,event.target.files?.[0])}/>{photos[label] && <button type="button" onClick={event => { event.preventDefault(); setPhotos(current => { const next = {...current}; delete next[label]; return next; }); }}><X size={12}/> Remover</button>}</label>)}</div>}<label className="wide">Observação da etapa<textarea value={note} onChange={event => setNote(event.target.value)} placeholder={nextStatus === "AG. TUBULAÇÃO FORÇADA" ? "Informe os detalhes da tubulação forçada..." : "Descreva o serviço executado, pendências ou materiais utilizados..."}/><small>A observação poderá ser consultada no histórico permanente da casa.</small></label>{nextStatus === "SERVIÇO CONCLUÍDO" && <div className="completion-warning wide"><CheckCircle2 size={19}/><span><b>Finalização da casa</b><small>Ao confirmar, o sistema registrará automaticamente data, horário e {responsibleUser} como responsável.</small></span></div>}</div><div className="modal-actions"><button className="outline-btn" onClick={() => setEditing(null)}>Cancelar</button><button className="primary-btn" onClick={saveUpdate}><CheckCircle2 size={15}/> {nextStatus === "SERVIÇO CONCLUÍDO" ? "Concluir casa" : "Salvar etapa"}</button></div></> : <><div className="incident-register-body"><div className="incident-form"><label>Tipo da ocorrência<select value={incidentType} onChange={event=>setIncidentType(event.target.value as "Perda" | "Roubo")}><option>Perda</option><option>Roubo</option></select></label><label className="incident-photo-upload">{incidentPhoto ? <img src={incidentPhoto} alt="Foto da ocorrência"/> : <><Camera size={25}/><b>Anexar foto da ocorrência</b><small>Câmera ou galeria • foto obrigatória</small></>}<input type="file" accept="image/*" capture="environment" onChange={event=>void readIncidentPhoto(event.target.files?.[0])}/></label><label className="wide">Observação<textarea value={incidentNote} onChange={event=>setIncidentNote(event.target.value)} placeholder="Descreva o item perdido ou roubado e os detalhes da ocorrência..."/></label></div><section className="incident-history"><header><b>Registros desta unidade</b><small>{editing.incidents?.length ?? 0} ocorrência(s)</small></header>{editing.incidents?.length ? editing.incidents.map(incident=><article key={incident.id}><img src={incident.photo} alt={incident.type}/><div><strong>{incident.type}</strong><time>{new Date(incident.createdAt).toLocaleString("pt-BR")}</time><p>{incident.note || "Sem observação."}</p><small>Responsável: {incident.responsible}</small></div></article>) : <div className="incident-empty"><AlertTriangle size={20}/><span>Nenhuma perda ou roubo registrado nesta unidade.</span></div>}</section></div><div className="modal-actions"><button className="outline-btn" onClick={() => setEditing(null)}>Fechar</button><button className="danger-primary-btn" onClick={saveIncident}><Camera size={15}/> Registrar {incidentType.toLowerCase()}</button></div></>}</div></div>}
+    {editing && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={() => setEditing(null)} aria-label="Fechar"/><div className="modal house-update-modal"><div className="modal-head"><div><span>ATUALIZAÇÃO DA OBRA</span><h2>Quadra {editing.block} • Casa {String(editing.lot).padStart(2,"0")}</h2><p>Status atual: {normalizeHouseStatus(editing.status)} • Responsável: {responsibleUser}</p></div><button onClick={() => setEditing(null)}><X size={18}/></button></div><div className="house-modal-tabs"><button className={houseModalTab === "Etapa" ? "active" : ""} onClick={()=>setHouseModalTab("Etapa")}><CheckCircle2 size={14}/> Etapa da obra</button><button className={houseModalTab === "Perdas e Roubos" ? "active warning" : ""} onClick={()=>setHouseModalTab("Perdas e Roubos")}><AlertTriangle size={14}/> Perdas e Roubos {editing.incidents?.length ? <span>{editing.incidents.length}</span> : null}</button></div>{houseModalTab === "Etapa" ? <><div className="house-stage-progress">{HOUSE_STATUSES.map((stage,index) => { const activeIndex = HOUSE_STATUSES.findIndex(item => item.name === nextStatus); return <div key={stage.name} className={index <= activeIndex ? "active" : ""}><i>{index < activeIndex ? <CheckCircle2 size={12}/> : index + 1}</i><span>{stage.name}</span></div>; })}</div><div className="house-update-body"><label>Novo status<select value={nextStatus} onChange={event => { setNextStatus(event.target.value as HouseWorkStatus); setPhotos({}); }}>{HOUSE_STATUSES.map(status => <option key={status.name}>{status.name}</option>)}</select></label><div className="status-preview" style={{"--preview-color":statusColor(nextStatus)} as React.CSSProperties}><i/><span>{nextStatus}</span></div>{HOUSE_STAGE_PHOTOS[nextStatus].length > 0 && <div className="stage-photo-slots wide">{HOUSE_STAGE_PHOTOS[nextStatus].map(label => <label className={photos[label] ? "filled" : ""} key={label}>{photos[label] ? <img src={photos[label]} alt={label}/> : <ImageIcon size={22}/>}<b>{label}</b><small>{photos[label] ? "Foto pronta • toque para substituir" : HOUSE_STAGE_OPTIONAL_PHOTOS.includes(nextStatus) ? "Foto opcional" : "Foto obrigatória"}</small><input type="file" accept="image/*" capture="environment" onChange={event => void readStagePhoto(label,event.target.files?.[0])}/>{photos[label] && <button type="button" onClick={event => { event.preventDefault(); setPhotos(current => { const next = {...current}; delete next[label]; return next; }); }}><X size={12}/> Remover</button>}</label>)}</div>}<label className="wide">Observação da etapa<textarea value={note} onChange={event => setNote(event.target.value)} placeholder={nextStatus === "AG. TUBULAÇÃO FORÇADA" ? "Informe os detalhes da tubulação forçada..." : "Descreva o serviço executado, pendências ou materiais utilizados..."}/><small>A observação poderá ser consultada no histórico permanente da casa.</small></label>{nextStatus === "SERVIÇO CONCLUÍDO" && <div className="completion-warning wide"><CheckCircle2 size={19}/><span><b>Finalização da casa</b><small>Ao confirmar, o sistema registrará automaticamente data, horário e {responsibleUser} como responsável.</small></span></div>}</div><div className="modal-actions"><button className="outline-btn" onClick={() => setEditing(null)}>Cancelar</button><button className="primary-btn" onClick={saveUpdate}><CheckCircle2 size={15}/> {nextStatus === "SERVIÇO CONCLUÍDO" ? "Concluir casa" : "Salvar etapa"}</button></div></> : <><div className="incident-register-body"><div className="incident-form"><label>Tipo da ocorrência<select value={incidentType} onChange={event=>setIncidentType(event.target.value as "Perda" | "Roubo")}><option>Perda</option><option>Roubo</option></select></label><label className="incident-photo-upload">{incidentPhoto ? <img src={incidentPhoto} alt="Foto da ocorrência"/> : <><Camera size={25}/><b>Anexar foto da ocorrência</b><small>Câmera ou galeria • foto obrigatória</small></>}<input type="file" accept="image/*" capture="environment" onChange={event=>void readIncidentPhoto(event.target.files?.[0])}/></label><label className="wide">Observação<textarea value={incidentNote} onChange={event=>setIncidentNote(event.target.value)} placeholder="Descreva o item perdido ou roubado e os detalhes da ocorrência..."/></label></div><section className="incident-history"><header><b>Registros desta unidade</b><small>{editing.incidents?.length ?? 0} ocorrência(s)</small></header>{editing.incidents?.length ? editing.incidents.map(incident=>
+<article key={incident.id}><label className="replaceable-photo"><img src={incident.photo} alt={incident.type}/><span>Alterar foto</span><input type="file" accept="image/*" capture="environment" onChange={event=>void replaceIncidentPhoto(incident.id,event.target.files?.[0])}/></label>
+<div><strong>{incident.type}</strong><time>{new Date(incident.createdAt).toLocaleString("pt-BR")}</time><p>{incident.note || "Sem observação."}</p><small>Responsável: {incident.responsible}</small></div></article>) : <div className="incident-empty"><AlertTriangle size={20}/><span>Nenhuma perda ou roubo registrado nesta unidade.</span></div>}</section></div><div className="modal-actions"><button className="outline-btn" onClick={() => setEditing(null)}>Fechar</button><button className="danger-primary-btn" onClick={saveIncident}><Camera size={15}/> Registrar {incidentType.toLowerCase()}</button></div></>}</div></div>}
     {historyHouse && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={() => setHistoryHouse(null)} aria-label="Fechar"/><div className="modal house-history-modal"><div className="modal-head"><div><span>HISTÓRICO DA CASA</span><h2>Quadra {historyHouse.block} • Casa {String(historyHouse.lot).padStart(2,"0")}</h2><p>{historyHouse.history.length} alteração(ões) permanente(s) • clique numa etapa para ver os detalhes</p></div><button onClick={() => setHistoryHouse(null)}><X size={18}/></button></div><div className="house-timeline">{historyHouse.history.map(item => { const itemPhotos = normalizeStagePhotos(item.photos,item.photo,item.status); return <article key={item.id} onClick={() => setHistoryUpdate(item)} tabIndex={0}><i style={{background:statusColor(item.status)}}/><div><header><strong>{normalizeHouseStatus(item.status)} — Concluído</strong><time>{new Date(item.createdAt).toLocaleString("pt-BR")}</time></header><p>Responsável: {item.responsible || "Não informado no registro antigo"}</p><small>{itemPhotos.length} foto(s) anexada(s){item.note ? " • com observação" : ""}</small></div></article>; })}</div><div className="modal-actions"><button className="outline-btn" onClick={() => issueWorkReport([historyHouse], `Relatório da Quadra ${historyHouse.block} — Casa ${String(historyHouse.lot).padStart(2,"0")}`)}><FileText size={14}/> Relatório completo</button><button className="primary-btn" onClick={() => setHistoryHouse(null)}>Fechar histórico</button></div></div></div>}
-    {historyUpdate && <div className="modal-layer house-history-detail-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={() => setHistoryUpdate(null)} aria-label="Fechar"/><div className="modal house-history-detail"><div className="modal-head"><div><span>DETALHES DA ETAPA</span><h2>{normalizeHouseStatus(historyUpdate.status)}</h2><p>{new Date(historyUpdate.createdAt).toLocaleString("pt-BR")} • {historyUpdate.responsible || "Responsável não informado"}</p></div><button onClick={() => setHistoryUpdate(null)}><X size={18}/></button></div><div className="history-detail-body">{normalizeStagePhotos(historyUpdate.photos,historyUpdate.photo,historyUpdate.status).map(photo => <figure key={photo.label}><img src={photo.url} alt={photo.label}/><figcaption>{photo.label}</figcaption></figure>)}{!normalizeStagePhotos(historyUpdate.photos,historyUpdate.photo,historyUpdate.status).length && <div className="no-stage-photos"><ImageIcon size={22}/><span>Nenhuma foto exigida ou anexada nesta etapa.</span></div>}<div className="history-detail-note"><b>Observações da etapa</b><p>{historyUpdate.note || "Nenhuma observação registrada."}</p></div></div><div className="modal-actions"><button className="primary-btn" onClick={() => setHistoryUpdate(null)}>Fechar detalhes</button></div></div></div>}
+    {historyUpdate && <div className="modal-layer house-history-detail-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={() => setHistoryUpdate(null)} aria-label="Fechar"/><div className="modal house-history-detail"><div className="modal-head"><div><span>DETALHES DA ETAPA</span><h2>{normalizeHouseStatus(historyUpdate.status)}</h2><p>{new Date(historyUpdate.createdAt).toLocaleString("pt-BR")} • {historyUpdate.responsible || "Responsável não informado"}</p></div><button onClick={() => setHistoryUpdate(null)}><X size={18}/></button></div><div className="history-detail-body">{normalizeStagePhotos(historyUpdate.photos,historyUpdate.photo,historyUpdate.status).map(photo => 
+<figure key={photo.label}><img src={photo.url} alt={photo.label}/><figcaption>{photo.label}</figcaption><label className="replace-history-photo"><Edit3 size={12}/> Alterar foto<input type="file" accept="image/*" capture="environment" onChange={event=>void replaceHistoryPhoto(photo.label,event.target.files?.[0])}/></label></figure>
+)}{!normalizeStagePhotos(historyUpdate.photos,historyUpdate.photo,historyUpdate.status).length && <div className="no-stage-photos"><ImageIcon size={22}/><span>Nenhuma foto exigida ou anexada nesta etapa.</span></div>}<div className="history-detail-note"><b>Observações da etapa</b><p>{historyUpdate.note || "Nenhuma observação registrada."}</p></div></div><div className="modal-actions"><button className="primary-btn" onClick={() => setHistoryUpdate(null)}>Fechar detalhes</button></div></div></div>}
   </section>;
 }
 
@@ -1584,6 +1602,7 @@ export default function Home() {
   const [companies, setCompanies] = useState<TenantCompany[]>([DEFAULT_COMPANY]);
   const [activeCompany, setActiveCompany] = useState<TenantCompany>(DEFAULT_COMPANY);
   const [online, setOnline] = useState(true);
+  const [stateRevision, setStateRevision] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const handleLogin = (user: AuthenticatedUser) => {
     setAuthenticatedUser(user);
@@ -1635,6 +1654,7 @@ export default function Home() {
     const loadSharedState = async () => {
       try {
         if (activeCompany.status === "Bloqueada") throw new Error("blocked");
+        if (!navigator.onLine) throw new Error("offline");
         const response = await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { cache: "no-store" });
         if (!response.ok) throw new Error();
         let { state, migratedFrom } = await response.json();
@@ -1647,6 +1667,7 @@ export default function Home() {
           }
         }
         if (state) {
+          setStateRevision(Number(state._revision || 0));
           setServiceOrders(state.serviceOrders ?? []);
           setCustomerRecords(state.customers ?? []);
           const loadedModules = mergeImportedServices(state.moduleRecords ?? {});
@@ -1658,7 +1679,6 @@ export default function Home() {
           localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(state.serviceOrders ?? []));
           localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(state.customers ?? []));
           localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(migratedModules));
-          await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...state, moduleRecords: migratedModules, migratedFrom: migratedFrom ?? undefined }) });
           return;
         }
         const localState = {
@@ -1666,11 +1686,13 @@ export default function Home() {
           customers: readCompanyStorage(activeCompany.id, "customers", []),
           moduleRecords: mergeImportedServices(readCompanyStorage(activeCompany.id, "module-records", {}) as Record<string, ModuleRecord[]>),
         };
-        await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(localState) });
+        const initialResponse=await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({...localState,_force:true}) });
+        const initialResult=await initialResponse.json();if(initialResponse.ok)setStateRevision(Number(initialResult.state?._revision||1));
         setServiceOrders(localState.serviceOrders);
         setCustomerRecords(localState.customers);
         setModuleRecords(localState.moduleRecords);
       } catch {
+        if (navigator.onLine) { setSavedMessage("Banco online indisponível. Nenhuma cópia local foi enviada ou definida como principal."); return; }
         const localOrders = readCompanyStorage(activeCompany.id, "service-orders", []) as ServiceOrder[];
         const localCustomers = readCompanyStorage(activeCompany.id, "customers", []) as Customer[];
         const localModules = mergeImportedServices(readCompanyStorage(activeCompany.id, "module-records", {}) as Record<string, ModuleRecord[]>);
@@ -1685,17 +1707,22 @@ export default function Home() {
     localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(nextCustomers));
     localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(nextOrders));
     localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(nextModules));
-    const payload = { companyId: activeCompany.id, customers: nextCustomers, serviceOrders: nextOrders, moduleRecords: nextModules };
+    const payload = { companyId: activeCompany.id, customers: nextCustomers, serviceOrders: nextOrders, moduleRecords: nextModules, _baseRevision: stateRevision };
+    if (!navigator.onLine) {
+      const queue = JSON.parse(localStorage.getItem("proar-offline-queue") || "[]");
+      localStorage.setItem("proar-offline-queue", JSON.stringify([...queue.filter((item: { companyId: string }) => item.companyId !== activeCompany.id), { companyId: activeCompany.id, payload, createdAt: new Date().toISOString() }]));
+      setSavedMessage("Sem internet: alteração guardada somente neste aparelho."); return;
+    }
     fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-    }).then(response => {
-      if (!response.ok) throw new Error();
+    }).then(async response => {
+      const result=await response.json();
+      if (response.status===409 && result.state) { setCustomerRecords(result.state.customers??[]);setServiceOrders(result.state.serviceOrders??[]);setModuleRecords(mergeImportedServices(result.state.moduleRecords??{}));setStateRevision(Number(result.state._revision||0));setSavedMessage("A versão mais recente do banco online foi mantida.");return; }
+      if (!response.ok) throw new Error();setStateRevision(Number(result.state?._revision||stateRevision+1));
     }).catch(() => {
-      const queue = JSON.parse(localStorage.getItem("proar-offline-queue") || "[]");
-      localStorage.setItem("proar-offline-queue", JSON.stringify([...queue.filter((item: { companyId: string }) => item.companyId !== activeCompany.id), { companyId: activeCompany.id, payload, createdAt: new Date().toISOString() }]));
-      setSavedMessage("Alteração guardada offline. Será sincronizada quando a internet voltar.");
+      setSavedMessage("Falha no banco online. A cópia local não substituirá a versão principal.");
     });
   };
   const pullFromDatabase = async () => {
@@ -1705,6 +1732,7 @@ export default function Home() {
       const response = await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}&refresh=${Date.now()}`, { cache: "no-store" });
       const result = await response.json(); if (!response.ok || !result.state) throw new Error();
       const nextCustomers = result.state.customers ?? []; const nextOrders = result.state.serviceOrders ?? []; const nextModules = mergeImportedServices(result.state.moduleRecords ?? {});
+      setStateRevision(Number(result.state._revision||0));
       setCustomerRecords(nextCustomers); setServiceOrders(nextOrders); setModuleRecords(nextModules);
       localStorage.setItem(companyStorageKey(activeCompany.id,"customers"),JSON.stringify(nextCustomers)); localStorage.setItem(companyStorageKey(activeCompany.id,"service-orders"),JSON.stringify(nextOrders)); localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(nextModules));
       setSavedMessage("Aplicativo atualizado com os dados do banco principal.");
@@ -1715,8 +1743,8 @@ export default function Home() {
     if (!online) { setSavedMessage("Sem internet. As alterações continuam guardadas neste aparelho."); return; }
     setSyncing(true); setSavedMessage("A enviar as alterações para o banco principal...");
     try {
-      const response = await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({companyId:activeCompany.id,customers:customerRecords,serviceOrders,moduleRecords}) });
-      if (!response.ok) throw new Error(); localStorage.removeItem("proar-offline-queue"); setSavedMessage("Alterações enviadas ao banco principal com sucesso.");
+      const response = await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({companyId:activeCompany.id,customers:customerRecords,serviceOrders,moduleRecords,_force:true}) });
+      const result=await response.json();if (!response.ok) throw new Error(); setStateRevision(Number(result.state?._revision||stateRevision+1));localStorage.removeItem("proar-offline-queue"); setSavedMessage("Esta versão foi definida como banco principal com sucesso.");
     } catch { setSavedMessage("Falha no envio. As alterações permanecem guardadas no aparelho."); }
     finally { setSyncing(false); window.setTimeout(() => setSavedMessage(""),4000); }
   };
