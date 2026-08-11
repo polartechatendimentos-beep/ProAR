@@ -1,4 +1,4 @@
-import type { Metadata, Viewport } from "next";
+import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -13,11 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ProAR — Gestão de Serviços",
-  description: "Gestão completa para empresas que prestam serviços.",
-  applicationName: "ProAR",
-  manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "ProAR" },
+  title: "ProAR Gestão de Serviços — BY TAV's",
+  description: "ProAR Gestão de Serviços — BY TAV's | Sistema de Gestão Operacional, Comercial e Financeira.",
   other: {
     "codex-preview": "development",
   },
@@ -26,13 +23,6 @@ export const metadata: Metadata = {
     shortcut: "/icon.png",
     apple: "/icon.png",
   },
-};
-
-export const viewport: Viewport = {
-  themeColor: "#0757c8",
-  width: "device-width",
-  initialScale: 1,
-  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -46,8 +36,8 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {children}
-        <script dangerouslySetInnerHTML={{ __html: `if('serviceWorker' in navigator){let reloading=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!reloading){reloading=true;location.reload()}});window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').then(r=>{r.update();if(r.waiting)r.waiting.postMessage('SKIP_WAITING');r.addEventListener('updatefound',()=>{const w=r.installing;if(w)w.addEventListener('statechange',()=>{if(w.state==='installed'&&navigator.serviceWorker.controller)w.postMessage('SKIP_WAITING')})})}).catch(()=>{}));}` }} />
       </body>
     </html>
   );
 }
+

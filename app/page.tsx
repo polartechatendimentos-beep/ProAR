@@ -75,11 +75,19 @@ type ServiceOrder = {
   lastMaintenanceDate?: string;
   reviewPeriodMonths?: 3 | 6 | 12;
   notifyDaysBefore?: number;
+  nfseStatus?: "Não emitida" | "Processando" | "Emitida" | "Erro" | "Cancelada";
+  nfseNumber?: string;
+  nfseVerificationCode?: string;
+  nfseIssuedAt?: string;
+  nfseValue?: number;
 };
 
 type Customer = {
   id: string; name: string; doc: string; contact: string; phone: string;
   address: string; units: number; status: string;
+  creditLimit?: number;
+  balancePosted?: number;
+  financialStatus?: "Liberado" | "Alerta" | "Somente à vista" | "Bloqueado";
 };
 
 type HouseWorkStatus = "AG. FRIGORÍGENA" | "AG. ACABAMENTO" | "AG. TUBULAÇÃO FORÇADA" | "AG. EXAUSTOR" | "AG. TAMPA FRIGORÍGENA" | "SERVIÇO CONCLUÍDO";
@@ -190,6 +198,10 @@ type ModuleRecord = {
   installmentNumber?: number;
   reminderMessage?: string;
   serviceOrderId?: string;
+  unit?: string;
+  phone?: string;
+  contact?: string;
+  doc?: string;
   engineer?: string;
   address?: string;
   blockLot?: string;
@@ -248,7 +260,7 @@ function Header({ title, subtitle, onMenu, onNewOrder, userName, userRole, onSwi
       <label className="global-search"><Search size={16}/><input aria-label="Pesquisa global" placeholder="Pesquisar no ProAR..." /><kbd>⌘ K</kbd></label>
       <div className={`header-status ${online ? "" : "offline"}`}><span>{online ? <ShieldCheck size={14}/> : <Database size={14}/>}</span><div><b>{online ? "Sistema operacional" : "Modo offline"}</b><small>{online ? today.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "short" }) : "Dados guardados no aparelho"}</small></div></div>
       <button className="icon-btn notification-button" aria-label="Notificações"><Bell size={18}/><i/></button>
-      <div className="manual-sync"><button disabled={!online || syncing} onClick={onPull} title="Atualizar dados deste aparelho"><ArrowDownRight size={14}/><span>{syncing ? "Sincronizando" : "Atualizar"}</span></button><button disabled={!online || syncing} onClick={onPush} title="Enviar alterações ao banco principal"><ArrowUpRight size={14}/><span>Enviar</span></button></div>
+      <div className="manual-sync"><button disabled={!online || syncing} onClick={onPull} title="Atualizar dados deste aparelho"><ArrowDownRight size={14}/><span>{syncing ? "Sincronizando" : "Atualizar"}</span></button><button disabled={!online || syncing} onClick={onPush} title="Enviar alterações ao banco principal"><RefreshCw size={14}/><span>Sincronizar</span></button></div>
       <button className="primary-btn" onClick={onNewOrder}><Plus size={17}/> Nova ordem</button>
       <div className="profile"><div className="profile-avatar">{userName.split(" ").map(word => word[0]).slice(0,2).join("").toUpperCase()}<span /></div><div><strong>{userName}</strong><small>{userRole}</small></div></div>
       <button className="switch-user-btn" aria-label="Trocar utilizador" title="Trocar utilizador" onClick={onSwitchUser}><UserRound size={15}/><span>Trocar</span><LogOut size={14}/></button>
@@ -324,14 +336,14 @@ function CustomerDetail({ customerName, customers, structures, canEdit, onBack, 
   const units = linkedUnits[customerName] ?? [
     { icon: Building2, name: "Matriz", type: "Unidade principal", doc: customer.doc, responsible: customer.contact, phone: customer.phone, address: customer.address, orders: 0 },
   ];
-  const sectors = structures.filter(item => item.client === customerName).map(item => ({ icon: Building2, name:item.name, type:item.category || "Setor", doc:item.description || "", responsible:"", phone:"", address:item.address || "", orders:0 }));
+  const sectors = structures.filter(item => item.client === customerName).map(item => ({ icon: Building2, name:item.name, type:item.category || "Setor", doc:item.doc || item.description || "", responsible:item.contact || "", phone:item.phone || "", address:item.address || "", orders:0 }));
   const [editingStructure, setEditingStructure] = useState<ModuleRecord | null>(null);
   const linkedRecords = [...units, ...sectors].filter((record, index, list) => list.findIndex(item => item.name === record.name) === index);
   const structureLimit = 20;
   const canAddStructure = linkedRecords.length < structureLimit;
   const [tab, setTab] = useState("Cadastro de unidade e setor");
   const [sectorQuery, setSectorQuery] = useState("");
-  const tabs = ["Dados gerais", "Cadastro de unidade e setor", "Equipamentos", "Serviços", "Ordens de serviço", "Financeiro", "Documentos"];
+  const tabs = ["Dados gerais", "Cadastro de unidade e setor", "Equipamentos", "Serviços executados", "Ordens de serviço", "Orçamentos", "Pedidos e vendas", "Financeiro", "Documentos", "Histórico"];
   const isStructureTab = tab === "Cadastro de unidade e setor";
   const filteredSectors = sectors.filter(sector => `${sector.name} ${sector.type} ${sector.responsible} ${sector.doc}`.toLowerCase().includes(sectorQuery.toLowerCase()));
   return <section className="client-detail">
@@ -352,7 +364,7 @@ function CustomerDetail({ customerName, customers, structures, canEdit, onBack, 
         <div className="sector-list-head"><div><span className="section-kicker"><Grid2X2 size={12}/> SETORES DO CLIENTE</span><h3>Lista de setores</h3><p>Consulte rapidamente todos os setores vinculados a {customer.name}.</p></div><label><Search size={14}/><input value={sectorQuery} onChange={event => setSectorQuery(event.target.value)} placeholder="Buscar setor..."/></label></div>
         {filteredSectors.length ? <div className="table-wrap"><table><thead><tr><th>SETOR / FILIAL</th><th>TIPO</th><th>CNPJ</th><th>RESPONSÁVEL</th><th>TELEFONE</th><th>SITUAÇÃO</th><th /></tr></thead><tbody>{filteredSectors.map(({icon: Icon, ...sector}) => <tr key={`list-${sector.name}`}><td><div className="sector-name"><span><Icon size={15}/></span><strong>{sector.name}</strong></div></td><td>{sector.type}</td><td>{sector.doc}</td><td>{sector.responsible}</td><td>{sector.phone}</td><td><span className="status green"><i/> Ativo</span></td><td><button className="open-client">Abrir histórico <ChevronRight size={13}/></button></td></tr>)}</tbody></table></div> : <div className="sector-list-empty"><Search size={18}/><span>Nenhum setor encontrado.</span></div>}
       </section>
-      {editingStructure && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={() => setEditingStructure(null)} aria-label="Fechar"/><div className="modal catalog-edit-modal"><div className="modal-head"><div><span>ALTERAR SETOR / FILIAL</span><h2>{editingStructure.name}</h2><p>Vinculado a {customerName}</p></div><button onClick={() => setEditingStructure(null)}><X size={18}/></button></div><div className="catalog-edit-form"><label>Nome<input value={editingStructure.name} onChange={event => setEditingStructure({...editingStructure,name:event.target.value})}/></label><label>Tipo<select value={editingStructure.category || "Setor"} onChange={event => setEditingStructure({...editingStructure,category:event.target.value})}><option>Setor</option><option>Unidade</option><option>Filial</option><option>Empresa vinculada</option></select></label><label className="wide">Endereço<input value={editingStructure.address || ""} onChange={event => setEditingStructure({...editingStructure,address:event.target.value})}/></label><label className="wide">CNPJ / observações<input value={editingStructure.description || ""} onChange={event => setEditingStructure({...editingStructure,description:event.target.value})}/></label></div><div className="modal-actions"><button className="outline-btn" onClick={() => setEditingStructure(null)}>Cancelar</button><button className="primary-btn" onClick={() => {onUpdateStructure(editingStructure);setEditingStructure(null);}}><CheckCircle2 size={15}/> Salvar alterações</button></div></div></div>}
+      {editingStructure && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={() => setEditingStructure(null)} aria-label="Fechar"/><div className="modal catalog-edit-modal"><div className="modal-head"><div><span>ALTERAR SETOR / FILIAL</span><h2>{editingStructure.name}</h2><p>Vinculado a {customerName}</p></div><button onClick={() => setEditingStructure(null)}><X size={18}/></button></div><div className="catalog-edit-form"><label>Nome<input value={editingStructure.name} onChange={event => setEditingStructure({...editingStructure,name:event.target.value})}/></label><label>Tipo<select value={editingStructure.category || "Setor"} onChange={event => setEditingStructure({...editingStructure,category:event.target.value})}><option>Setor</option><option>Unidade</option><option>Filial</option><option>Empresa vinculada</option></select></label><label className="wide">Endereço<input value={editingStructure.address || ""} onChange={event => setEditingStructure({...editingStructure,address:event.target.value})}/></label><label>CNPJ<input value={editingStructure.doc || editingStructure.description || ""} onChange={event => setEditingStructure({...editingStructure,doc:event.target.value})}/></label><label>Responsável<input value={editingStructure.contact || ""} onChange={event => setEditingStructure({...editingStructure,contact:event.target.value})}/></label><label>Telefone<input value={editingStructure.phone || ""} onChange={event => setEditingStructure({...editingStructure,phone:event.target.value})}/></label><label className="wide">Observações<input value={editingStructure.description || ""} onChange={event => setEditingStructure({...editingStructure,description:event.target.value})}/></label></div><div className="modal-actions"><button className="outline-btn" onClick={() => setEditingStructure(null)}>Cancelar</button><button className="primary-btn" onClick={() => {onUpdateStructure(editingStructure);setEditingStructure(null);}}><CheckCircle2 size={15}/> Salvar alterações</button></div></div></div>}
     </div> : <div className="tab-placeholder panel"><span><Grid2X2 size={22}/></span><h3>{tab}</h3><p>Informações de {tab.toLowerCase()} vinculadas exclusivamente a este cliente.</p></div>}
   </section>;
 }
@@ -371,7 +383,7 @@ function Customers({ onOpen, onDelete, onUpdate, onUpdateStructure, canEdit, cus
       <article><span><HandCoins size={19}/></span><div><small>FATURAMENTO NO MÊS</small><strong>R$ 0,00</strong><em>Sem vendas lançadas</em></div></article>
     </div>
     <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><UsersRound size={12}/> CARTEIRA</span><h2>Clientes cadastrados</h2><p>{filtered.length} registro(s) encontrado(s) • {canEdit ? "Duplo clique para alterar" : "Somente consulta"}</p></div><button>Exportar <ChevronDown size={13}/></button></div><div className="table-wrap"><table><thead><tr><th>CLIENTE</th><th>CPF / CNPJ</th><th>RESPONSÁVEL</th><th>TELEFONE</th><th>ENDEREÇO</th><th>SITUAÇÃO</th><th>AÇÕES</th></tr></thead><tbody>{filtered.map(c => <tr key={c.id} onDoubleClick={() => canEdit && setEditingCustomer({...c})}><td><div className="client-cell"><span>{c.name.split(" ").map(x => x[0]).slice(0,2).join("")}</span><strong>{c.name}</strong></div></td><td>{c.doc || "—"}</td><td>{c.contact || "—"}</td><td>{c.phone || "—"}</td><td>{c.address || "—"}</td><td><span className="status green"><i/> {c.status}</span></td><td><div className="row-actions"><button className="open-client" onClick={() => setSelectedCustomer(c.name)}>Abrir <ChevronRight size={14}/></button>{canEdit && <button onClick={() => setEditingCustomer({...c})} title="Alterar"><Edit3 size={14}/></button>}<button className="delete-action" aria-label={`Excluir ${c.name}`} onClick={() => onDelete(c)}><Trash2 size={14}/></button></div></td></tr>)}</tbody></table></div>{!filtered.length && <div className="linked-empty"><UsersRound size={22}/><h4>Nenhum cliente cadastrado</h4><p>Use “Novo cliente” para iniciar sua base real.</p></div>}</div>
-    {editingCustomer && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={() => setEditingCustomer(null)} aria-label="Fechar"/><div className="modal catalog-edit-modal"><div className="modal-head"><div><span>ALTERAR CLIENTE</span><h2>{editingCustomer.name}</h2><p>Atualize cadastro, endereço e situação.</p></div><button onClick={() => setEditingCustomer(null)}><X size={18}/></button></div><div className="catalog-edit-form"><label>Nome / razão social<input value={editingCustomer.name} onChange={event => setEditingCustomer({...editingCustomer,name:event.target.value})}/></label><label>CPF / CNPJ<input value={editingCustomer.doc} onChange={event => setEditingCustomer({...editingCustomer,doc:event.target.value})}/></label><label>Responsável<input value={editingCustomer.contact} onChange={event => setEditingCustomer({...editingCustomer,contact:event.target.value})}/></label><label>Telefone<input value={editingCustomer.phone} onChange={event => setEditingCustomer({...editingCustomer,phone:event.target.value})}/></label><label className="wide">Endereço completo<input value={editingCustomer.address} onChange={event => setEditingCustomer({...editingCustomer,address:event.target.value})}/></label><label>Situação<select value={editingCustomer.status} onChange={event => setEditingCustomer({...editingCustomer,status:event.target.value})}><option>Ativo</option><option>Inativo</option></select></label></div><div className="modal-actions"><button className="outline-btn" onClick={() => setEditingCustomer(null)}>Cancelar</button><button className="primary-btn" onClick={() => {onUpdate(editingCustomer);setEditingCustomer(null);}}><CheckCircle2 size={15}/> Salvar alterações</button></div></div></div>}
+    {editingCustomer && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={() => setEditingCustomer(null)} aria-label="Fechar"/><div className="modal catalog-edit-modal"><div className="modal-head"><div><span>ALTERAR CLIENTE</span><h2>{editingCustomer.name}</h2><p>Atualize cadastro, endereço e situação.</p></div><button onClick={() => setEditingCustomer(null)}><X size={18}/></button></div><div className="catalog-edit-form"><label>Nome / razão social<input value={editingCustomer.name} onChange={event => setEditingCustomer({...editingCustomer,name:event.target.value})}/></label><label>CPF / CNPJ<input value={editingCustomer.doc} onChange={event => setEditingCustomer({...editingCustomer,doc:event.target.value})}/></label><label>Responsável<input value={editingCustomer.contact} onChange={event => setEditingCustomer({...editingCustomer,contact:event.target.value})}/></label><label>Telefone<input value={editingCustomer.phone} onChange={event => setEditingCustomer({...editingCustomer,phone:event.target.value})}/></label><label className="wide">Endereço completo<input value={editingCustomer.address} onChange={event => setEditingCustomer({...editingCustomer,address:event.target.value})}/></label><label>Situação<select value={editingCustomer.status} onChange={event => setEditingCustomer({...editingCustomer,status:event.target.value})}><option>Ativo</option><option>Inativo</option></select></label><label>Limite de crédito<input type="number" min="0" step="0.01" value={editingCustomer.creditLimit ?? 0} onChange={event => setEditingCustomer({...editingCustomer,creditLimit:Math.max(0,Number(event.target.value)||0)})}/></label><label>Saldo lançado<input type="number" min="0" step="0.01" value={editingCustomer.balancePosted ?? 0} onChange={event => setEditingCustomer({...editingCustomer,balancePosted:Math.max(0,Number(event.target.value)||0)})}/></label><label>Situação financeira<select value={editingCustomer.financialStatus ?? "Liberado"} onChange={event => setEditingCustomer({...editingCustomer,financialStatus:event.target.value as Customer["financialStatus"]})}><option>Liberado</option><option>Alerta</option><option>Somente à vista</option><option>Bloqueado</option></select></label></div><div className="modal-actions"><button className="outline-btn" onClick={() => setEditingCustomer(null)}>Cancelar</button><button className="primary-btn" onClick={() => {onUpdate(editingCustomer);setEditingCustomer(null);}}><CheckCircle2 size={15}/> Salvar alterações</button></div></div></div>}
   </section>;
 }
 
@@ -390,7 +402,7 @@ function quickPrintServiceOrder(order: ServiceOrder) {
   popup.document.close();
 }
 
-function ServiceOrders({ onOpen, onSelect, onDelete, serviceOrders, customers }: { onOpen: (name: string) => void; onSelect: (order: ServiceOrder) => void; onDelete: (order: ServiceOrder) => void; serviceOrders: ServiceOrder[]; customers: Customer[] }) {
+function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders, customers }: { onOpen: (name: string) => void; onSelect: (order: ServiceOrder) => void; onDelete: (order: ServiceOrder) => void; onUpdate: (order: ServiceOrder) => void; serviceOrders: ServiceOrder[]; customers: Customer[] }) {
   const today = new Date().toISOString().slice(0, 10);
   const reviewAlerts = serviceOrders.filter(order => {
     const reviewDate = serviceOrderReviewDate(order);
@@ -406,6 +418,23 @@ function ServiceOrders({ onOpen, onSelect, onDelete, serviceOrders, customers }:
     const message = `Olá ${order.client}, segue sua Ordem de Serviço nº ${order.id} da PolarTech. Serviço: ${order.service}. Acesse o ProAR para consultar o documento completo.`;
     window.open(`https://wa.me/${internationalPhone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
   };
+  const emitNfse = async (order: ServiceOrder) => {
+    const customer = customers.find(item => item.name === order.client);
+    if (!customer?.doc) return window.alert("Cadastre o CPF/CNPJ do cliente antes de emitir a NFS-e.");
+    const rawValue = window.prompt("Valor da NFS-e (R$):", String(order.nfseValue || ""));
+    if (rawValue === null) return;
+    const value = Number(rawValue.replace(",", "."));
+    if (!Number.isFinite(value) || value <= 0) return window.alert("Informe um valor válido.");
+    onUpdate({ ...order, nfseStatus:"Processando", nfseValue:value });
+    try {
+      const response = await fetch("/api/nfse/issue", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ serviceOrderId:order.id, customer:{ name:order.client, document:customer.doc, unit:order.unit, address:order.address }, service:{ description:order.service, value } }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Falha na emissão");
+      const provider = result.result || {};
+      onUpdate({ ...order, nfseStatus:"Emitida", nfseValue:value, nfseNumber:String(provider.number || provider.numero || provider.nfseNumber || ""), nfseVerificationCode:String(provider.verificationCode || provider.codigoVerificacao || ""), nfseIssuedAt:new Date().toISOString() });
+      window.alert(`NFS-e emitida com sucesso${provider.number || provider.numero ? `: ${provider.number || provider.numero}` : "."}`);
+    } catch (error) { onUpdate({ ...order, nfseStatus:"Erro", nfseValue:value }); window.alert(error instanceof Error ? error.message : "Não foi possível emitir a NFS-e."); }
+  };
   return <section className="module-page service-orders">
     <div className="module-toolbar"><label className="list-search"><Search size={15}/><input placeholder="Pesquisar ordem, cliente ou técnico..."/></label><button className="outline-btn"><Filter size={14}/> Filtros</button><button className="primary-btn" onClick={() => onOpen("Nova ordem de serviço")}><Plus size={16}/> Nova ordem de serviço</button></div>
     <div className="module-summary">
@@ -414,7 +443,7 @@ function ServiceOrders({ onOpen, onSelect, onDelete, serviceOrders, customers }:
       <article><span><CheckCircle2 size={19}/></span><div><small>FINALIZADAS</small><strong>{serviceOrders.filter(item => item.status === "Concluída").length}</strong><em>Total registrado</em></div></article>
       <article><span><Bell size={19}/></span><div><small>REVISÕES PRÓXIMAS</small><strong>{reviewAlerts.length}</strong><em>Alertas preventivos</em></div></article>
     </div>
-    <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><Wrench size={12}/> OPERAÇÃO TÉCNICA</span><h2>Ordens de serviço</h2><p>Duplo clique para abrir • PDF e WhatsApp disponíveis em um clique.</p></div><button>Exportar <ChevronDown size={13}/></button></div><div className="table-wrap"><table><thead><tr><th>ORDEM</th><th>CLIENTE / LOCAL</th><th>DATA / HORÁRIO</th><th>REVISÃO</th><th>TÉCNICO</th><th>SITUAÇÃO</th><th>AÇÕES RÁPIDAS</th></tr></thead><tbody>{serviceOrders.map(order => { const reviewDate = serviceOrderReviewDate(order); return <tr className="clickable-row" title="Clique duas vezes para abrir a ordem" onDoubleClick={() => onSelect(order)} key={`manage-${order.id}`}><td><b className="order-id">{order.id}</b></td><td><div className="client-cell"><span>{order.avatar}</span><div><strong>{order.client}</strong><small>{order.unit}</small></div></div></td><td>{order.date ? new Date(`${order.date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem data"} • {order.time || "Sem horário"}</td><td>{reviewDate ? <span className="review-date"><Bell size={12}/>{new Date(`${reviewDate}T12:00:00`).toLocaleDateString("pt-BR")}</span> : "—"}</td><td><div className="tech"><span>{order.tech.split(" ").map(name => name[0]).slice(0,2).join("")}</span>{order.tech}</div></td><td><span className={`status ${order.tone}`}><i/> {order.status}</span></td><td><div className="row-actions quick-order-actions"><button title="Abrir OS" onClick={() => onSelect(order)}><Eye size={14}/></button><button title="Imprimir PDF" onClick={() => quickPrintServiceOrder(order)}><FileText size={14}/></button><button className="whatsapp-action" title="Enviar por WhatsApp" onClick={() => sendWhatsApp(order)}><MessageCircle size={14}/></button><button className="delete-action" aria-label={`Excluir ${order.id}`} onClick={() => onDelete(order)}><Trash2 size={14}/></button></div></td></tr>; })}</tbody></table></div>{!serviceOrders.length && <div className="linked-empty"><ClipboardList size={22}/><h4>Nenhuma ordem cadastrada</h4><p>Crie uma nova ordem para iniciar a operação.</p></div>}</div>
+    <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><Wrench size={12}/> OPERAÇÃO TÉCNICA</span><h2>Ordens de serviço</h2><p>Duplo clique para abrir • PDF e WhatsApp disponíveis em um clique.</p></div><button>Exportar <ChevronDown size={13}/></button></div><div className="table-wrap"><table><thead><tr><th>ORDEM</th><th>CLIENTE / LOCAL</th><th>DATA / HORÁRIO</th><th>REVISÃO</th><th>TÉCNICO</th><th>SITUAÇÃO</th><th>AÇÕES RÁPIDAS</th></tr></thead><tbody>{serviceOrders.map(order => { const reviewDate = serviceOrderReviewDate(order); return <tr className="clickable-row" title="Clique duas vezes para abrir a ordem" onDoubleClick={() => onSelect(order)} key={`manage-${order.id}`}><td><b className="order-id">{order.id}</b></td><td><div className="client-cell"><span>{order.avatar}</span><div><strong>{order.client}</strong><small>{order.unit}</small></div></div></td><td>{order.date ? new Date(`${order.date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem data"} • {order.time || "Sem horário"}</td><td>{reviewDate ? <span className="review-date"><Bell size={12}/>{new Date(`${reviewDate}T12:00:00`).toLocaleDateString("pt-BR")}</span> : "—"}</td><td><div className="tech"><span>{order.tech.split(" ").map(name => name[0]).slice(0,2).join("")}</span>{order.tech}</div></td><td><span className={`status ${order.tone}`}><i/> {order.status}</span></td><td><div className="row-actions quick-order-actions"><button title="Abrir OS" onClick={() => onSelect(order)}><Eye size={14}/></button><button title="Imprimir PDF" onClick={() => quickPrintServiceOrder(order)}><FileText size={14}/></button><button className="whatsapp-action" title="Enviar por WhatsApp" onClick={() => sendWhatsApp(order)}><MessageCircle size={14}/></button><button title={order.nfseStatus === "Emitida" ? `NFS-e ${order.nfseNumber || "emitida"}` : "Emitir NFS-e de serviço"} onClick={() => void emitNfse(order)}><ReceiptText size={14}/></button><button className="delete-action" aria-label={`Excluir ${order.id}`} onClick={() => onDelete(order)}><Trash2 size={14}/></button></div></td></tr>; })}</tbody></table></div>{!serviceOrders.length && <div className="linked-empty"><ClipboardList size={22}/><h4>Nenhuma ordem cadastrada</h4><p>Crie uma nova ordem para iniciar a operação.</p></div>}</div>
   </section>;
 }
 
@@ -502,9 +531,10 @@ function SignaturePad({ label, value, onChange }: { label: string; value?: strin
   </div>;
 }
 
-function OrderDetail({ order, customerPhone, company, close, onUpdate }: { order: ServiceOrder; customerPhone?: string; company: TenantCompany; close: () => void; onUpdate: (order: ServiceOrder) => void }) {
+function OrderDetail({ order, customerPhone, company, catalog, close, onUpdate }: { order: ServiceOrder; customerPhone?: string; company: TenantCompany; catalog: ModuleRecord[]; close: () => void; onUpdate: (order: ServiceOrder) => void }) {
   const [currentOrder, setCurrentOrder] = useState(order);
   const [itemsTab, setItemsTab] = useState<"Serviços" | "Produtos">("Serviços");
+  const [itemSearch, setItemSearch] = useState("");
   const mapsSearch = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.address)}`;
   const mapsEmbed = `https://www.google.com/maps?q=${encodeURIComponent(order.address)}&output=embed`;
   const update = (patch: Partial<ServiceOrder>) => {
@@ -528,6 +558,13 @@ function OrderDetail({ order, customerPhone, company, close, onUpdate }: { order
     const enabled = Boolean(patch.reminderEnabled ?? currentOrder.reminderEnabled);
     update({ reminderAmount: amount, reminderUnit: unit, reminderEnabled: enabled, reminderDate: enabled ? reminderDate(amount, unit, currentOrder.checkOutAt) : "", reminderMessage: patch.reminderMessage ?? currentOrder.reminderMessage ?? "Olá! Está na hora de realizar a higienização preventiva do seu ar-condicionado. Vamos agendar?", reminderStatus: enabled ? (currentOrder.checkOutAt ? "Agendado" : "Pendente") : "Pendente", ...patch });
   };
+  const addCatalogItem = (item: ModuleRecord) => {
+    const kind = item.kind || "Serviço";
+    if (currentOrder.catalogItems?.some(existing => existing.id === item.id)) return;
+    update({ catalogItems: [...(currentOrder.catalogItems ?? []), { id:item.id, name:item.name, kind }] });
+  };
+  const removeCatalogItem = (id: string) => update({ catalogItems: (currentOrder.catalogItems ?? []).filter(item => item.id !== id) });
+  const availableCatalogItems = catalog.filter(item => (item.kind || "Serviço") === itemsTab.slice(0,-1) && !currentOrder.catalogItems?.some(existing => existing.id === item.id) && `${item.name} ${item.description || ""}`.toLowerCase().includes(itemSearch.toLowerCase()));
   const formatMoment = (value?: string) => value ? new Date(value).toLocaleString("pt-BR") : "";
   return <div className="modal-layer" role="dialog" aria-modal="true" aria-label={`Ordem ${order.id}`}>
     <button className="modal-backdrop" onClick={close} aria-label="Fechar ordem"/>
@@ -547,7 +584,8 @@ function OrderDetail({ order, customerPhone, company, close, onUpdate }: { order
         <section className="order-items-panel">
           <div className="order-item-tabs"><button className={itemsTab === "Serviços" ? "active" : ""} onClick={() => setItemsTab("Serviços")}><Wrench size={15}/> Serviços</button><button className={itemsTab === "Produtos" ? "active" : ""} onClick={() => setItemsTab("Produtos")}><Package size={15}/> Produtos e lembrete</button></div>
           <div className="execution-head"><div><span>{itemsTab === "Serviços" ? "SERVIÇOS DA ORDEM" : "PRODUTOS UTILIZADOS"}</span><h3>{itemsTab === "Serviços" ? "Serviços executados" : "Produtos, materiais e pós-serviço"}</h3></div><small>{currentOrder.catalogItems?.filter(item => item.kind === itemsTab.slice(0, -1)).length ?? 0} item(ns)</small></div>
-          {currentOrder.catalogItems?.some(item => item.kind === itemsTab.slice(0, -1)) ? <div className="order-item-list">{currentOrder.catalogItems.filter(item => item.kind === itemsTab.slice(0, -1)).map(item => <article key={item.id}><span>{item.kind === "Produto" ? <Package size={16}/> : <Wrench size={16}/>}</span><div><b>{item.name}</b><small>{item.kind}</small></div><CheckCircle2 size={16}/></article>)}</div> : <div className="catalog-empty">{itemsTab === "Produtos" ? <Package size={19}/> : <Wrench size={19}/>}<span>Nenhum {itemsTab.toLowerCase()} foi vinculado a esta ordem.</span></div>}
+          {currentOrder.catalogItems?.some(item => item.kind === itemsTab.slice(0, -1)) ? <div className="order-item-list">{currentOrder.catalogItems.filter(item => item.kind === itemsTab.slice(0, -1)).map(item => <article key={item.id}><span>{item.kind === "Produto" ? <Package size={16}/> : <Wrench size={16}/>}</span><div><b>{item.name}</b><small>{item.kind} • incluído na OS</small></div><button type="button" className="delete-action" title="Remover item" onClick={() => removeCatalogItem(item.id)}><Trash2 size={14}/></button></article>)}</div> : <div className="catalog-empty">{itemsTab === "Produtos" ? <Package size={19}/> : <Wrench size={19}/>}<span>Nenhum {itemsTab.toLowerCase()} foi vinculado a esta ordem.</span></div>}
+          <div className="order-add-items"><label><Search size={14}/><input value={itemSearch} onChange={event => setItemSearch(event.target.value)} placeholder={`Buscar ${itemsTab.toLowerCase()} para adicionar após o lançamento...`}/></label>{itemSearch && <div className="order-add-results">{availableCatalogItems.slice(0,8).map(item => <button type="button" key={item.id} onClick={() => {addCatalogItem(item);setItemSearch("");}}><Plus size={13}/><span><b>{item.name}</b><small>{item.category || item.kind || "Cadastro"}</small></span></button>)}{!availableCatalogItems.length && <small>Nenhum item disponível.</small>}</div>}</div>
           {itemsTab === "Produtos" && <div className={`service-reminder ${currentOrder.reminderEnabled ? "enabled" : ""}`}>
             <div className="reminder-heading"><span><Bell size={18}/></span><div><small>RELACIONAMENTO PÓS-SERVIÇO</small><h4>Lembrete automático para o cliente</h4><p>Após o check-out, o ProAR agenda uma mensagem de manutenção ou higienização.</p></div><label className="reminder-switch"><input type="checkbox" checked={Boolean(currentOrder.reminderEnabled)} onChange={event => configureReminder({ reminderEnabled: event.target.checked })}/><i/></label></div>
             {currentOrder.reminderEnabled && <div className="reminder-fields"><label>Enviar após<input type="number" min="1" max="60" value={currentOrder.reminderAmount ?? 6} onChange={event => configureReminder({ reminderAmount: Math.max(1, Number(event.target.value) || 1) })}/></label><label>Período<select value={currentOrder.reminderUnit ?? "Meses"} onChange={event => configureReminder({ reminderUnit: event.target.value as "Dias" | "Meses" })}><option>Dias</option><option>Meses</option></select></label><label>Data prevista<input type="date" value={currentOrder.reminderDate ?? reminderDate(6, "Meses", currentOrder.checkOutAt)} onChange={event => update({ reminderDate: event.target.value })}/></label><label className="wide">Mensagem<textarea value={currentOrder.reminderMessage ?? "Olá! Está na hora de realizar a higienização preventiva do seu ar-condicionado. Vamos agendar?"} onChange={event => configureReminder({ reminderMessage: event.target.value })}/></label><div className="reminder-summary"><MessageCircle size={15}/><span><b>{customerPhone || "Cliente sem WhatsApp cadastrado"}</b><small>{currentOrder.checkOutAt ? `Agendado para ${new Date(`${currentOrder.reminderDate}T12:00:00`).toLocaleDateString("pt-BR")}` : "Será agendado automaticamente quando o técnico fizer o check-out."}</small></span></div></div>}
@@ -587,11 +625,12 @@ function OrderDetail({ order, customerPhone, company, close, onUpdate }: { order
   </div>;
 }
 
-function BudgetPDV({ customers, catalog, budgets, onSave, onConvert, onDelete }: { customers: Customer[]; catalog: ModuleRecord[]; budgets: ModuleRecord[]; onSave: (record: ModuleRecord) => void; onConvert: (record: ModuleRecord, target: "Pedido" | "Ordem de serviço") => void; onDelete: (record: ModuleRecord) => void }) {
+function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert, onDelete }: { customers: Customer[]; structures: ModuleRecord[]; catalog: ModuleRecord[]; budgets: ModuleRecord[]; onSave: (record: ModuleRecord) => void; onConvert: (record: ModuleRecord, target: "Pedido" | "Ordem de serviço") => void; onDelete: (record: ModuleRecord) => void }) {
   const [cart, setCart] = useState<PurchaseItem[]>([]);
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState<"Todos" | "Produto" | "Serviço">("Todos");
   const [customer, setCustomer] = useState("");
+  const [unit, setUnit] = useState("Matriz");
   const [validity, setValidity] = useState(7);
   const [discount, setDiscount] = useState(0);
   const [payment, setPayment] = useState("PIX");
@@ -605,10 +644,11 @@ function BudgetPDV({ customers, catalog, budgets, onSave, onConvert, onDelete }:
   const save = () => {
     if (!customer || !cart.length) { setNotice("Selecione o cliente e adicione pelo menos um produto ou serviço."); return; }
     const validUntil = new Date(); validUntil.setDate(validUntil.getDate() + validity);
-    const record: ModuleRecord = { id:`ORC-${Date.now().toString().slice(-6)}`, name:`Orçamento • ${customer}`, client:customer, description:`Condição: ${payment}${observations ? ` • ${observations}` : ""}`, createdAt:new Date().toLocaleString("pt-BR"), date:new Date().toISOString().slice(0,10), endDate:validUntil.toISOString().slice(0,10), status:"Em elaboração", value:total, category:"Produtos e serviços", purchaseItems:cart, paymentMethod:payment };
-    onSave(record); setCart([]); setDiscount(0); setObservations(""); setNotice(`${record.id} salvo com sucesso.`);
+    const record: ModuleRecord = { id:`ORC-${Date.now().toString().slice(-6)}`, name:`Orçamento • ${customer}`, client:customer, unit, description:`Condição: ${payment}${observations ? ` • ${observations}` : ""}`, createdAt:new Date().toLocaleString("pt-BR"), date:new Date().toISOString().slice(0,10), endDate:validUntil.toISOString().slice(0,10), status:"Em elaboração", value:total, category:"Produtos e serviços", purchaseItems:cart, paymentMethod:payment };
+    onSave(record); setCart([]); setDiscount(0); setObservations(""); setUnit("Matriz"); setNotice(`${record.id} salvo com sucesso.`);
   };
-  return <section className="budget-pdv"><div className="budget-pdv-hero"><div><span className="section-kicker"><FileText size={12}/> ORÇAMENTO RÁPIDO</span><h2>Orçamento no formato PDV</h2><p>Adicione produtos e serviços, calcule os valores e converta sem redigitação.</p></div><div><label>Cliente<select value={customer} onChange={event => setCustomer(event.target.value)}><option value="">Selecionar cliente</option>{customers.map(item => <option key={item.id}>{item.name}</option>)}</select></label><label>Validade<select value={validity} onChange={event => setValidity(Number(event.target.value))}><option value={7}>7 dias</option><option value={15}>15 dias</option><option value={30}>30 dias</option><option value={60}>60 dias</option></select></label></div></div>{notice && <div className="pdv-notice"><CheckCircle2 size={15}/>{notice}<button onClick={() => setNotice("")}><X size={13}/></button></div>}<div className="budget-pdv-layout"><div className="budget-catalog panel"><div className="budget-search"><label><Search size={17}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Pesquisar produto ou serviço..."/></label><div>{(["Todos","Produto","Serviço"] as const).map(kind => <button className={kindFilter === kind ? "active" : ""} key={kind} onClick={() => setKindFilter(kind)}>{kind}</button>)}</div></div><div className="budget-catalog-grid">{items.map(item => <button key={item.id} onClick={() => add(item)}><span className={item.kind === "Produto" ? "product" : "service"}>{item.kind === "Produto" ? <Package size={17}/> : <Wrench size={17}/>}</span><div><small>{item.id} • {item.kind}</small><b>{item.name}</b><em>{item.category || "Sem categoria"}</em></div><strong>R$ {(item.value ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong><Plus size={15}/></button>)}</div>{!items.length && <div className="linked-empty"><Search size={20}/><h4>Nenhum item encontrado</h4></div>}</div><aside className="budget-cart panel"><header><div><ShoppingCart size={17}/><span><b>Itens do orçamento</b><small>{cart.length} cadastro(s)</small></span></div>{cart.length > 0 && <button onClick={() => setCart([])}><Trash2 size={13}/> Limpar</button>}</header><div className="budget-cart-list">{cart.map(item => <article key={item.id}><div><small>{item.kind}</small><b>{item.description}</b><input type="number" min="0" step="0.01" value={item.unitValue} onChange={event => update(item.id,{unitValue:Number(event.target.value)})}/></div><label>Qtd.<input type="number" min="0.001" step="0.001" value={item.quantity} onChange={event => update(item.id,{quantity:Number(event.target.value)})}/></label><strong>R$ {(item.quantity*item.unitValue).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong><button onClick={() => setCart(current => current.filter(record => record.id !== item.id))}><Trash2 size={13}/></button></article>)}{!cart.length && <div className="pdv-empty"><ShoppingCart size={26}/><strong>Orçamento vazio</strong><p>Selecione produtos ou serviços no catálogo.</p></div>}</div><div className="budget-totals"><label>Forma de pagamento<select value={payment} onChange={event => setPayment(event.target.value)}>{["PIX","Dinheiro","Cartão de crédito","Cartão de débito","Boleto","Transferência","A combinar"].map(item => <option key={item}>{item}</option>)}</select></label><label>Desconto<input type="number" min="0" max={subtotal} value={discount || ""} onChange={event => setDiscount(Number(event.target.value))} placeholder="R$ 0,00"/></label><label className="wide">Observações<textarea value={observations} onChange={event => setObservations(event.target.value)} placeholder="Prazo, garantia e condições..."/></label><p><span>Subtotal</span><b>R$ {subtotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></p><div><span>TOTAL</span><strong>R$ {total.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div><button className="primary-btn" disabled={!customer || !cart.length} onClick={save}><CheckCircle2 size={16}/> Salvar orçamento</button></div></aside></div><div className="budget-saved panel"><header><div><span className="section-kicker"><History size={12}/> ORÇAMENTOS SALVOS</span><h3>Conversão rápida</h3></div><small>{budgets.length} orçamento(s)</small></header>{budgets.length ? <div>{budgets.map(record => <article key={record.id}><span><b>{record.id}</b><strong>{record.client}</strong><small>{record.purchaseItems?.length ?? 0} item(ns) • {record.endDate ? `Válido até ${new Date(`${record.endDate}T12:00:00`).toLocaleDateString("pt-BR")}` : record.createdAt}</small></span><em>{record.status}</em><b>R$ {(record.value ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</b><button onClick={() => onConvert(record,"Pedido")}><ShoppingBag size={14}/> Converter em venda</button><button onClick={() => onConvert(record,"Ordem de serviço")}><ClipboardList size={14}/> Converter em OS</button><button className="danger" onClick={() => onDelete(record)}><Trash2 size={14}/></button></article>)}</div> : <div className="linked-empty"><FileText size={22}/><h4>Nenhum orçamento salvo</h4></div>}</div></section>;
+  const customerUnits = customer ? [{name:"Matriz",category:"Matriz"}, ...structures.filter(item => item.client === customer)] : [];
+  return <section className="budget-pdv"><div className="budget-pdv-hero"><div><span className="section-kicker"><FileText size={12}/> ORÇAMENTO RÁPIDO</span><h2>Orçamento no formato PDV</h2><p>Adicione produtos e serviços, calcule os valores e converta sem redigitação.</p></div><div><label>Cliente<select value={customer} onChange={event => {setCustomer(event.target.value);setUnit("Matriz");}}><option value="">Selecionar cliente</option>{customers.map(item => <option key={item.id}>{item.name}</option>)}</select></label>{customer && <label>Unidade / filial / setor<select value={unit} onChange={event => setUnit(event.target.value)}>{customerUnits.map(item => <option key={item.name} value={item.name}>{item.name} • {item.category || "Unidade"}</option>)}</select></label>}<label>Validade<select value={validity} onChange={event => setValidity(Number(event.target.value))}><option value={7}>7 dias</option><option value={15}>15 dias</option><option value={30}>30 dias</option><option value={60}>60 dias</option></select></label></div></div>{notice && <div className="pdv-notice"><CheckCircle2 size={15}/>{notice}<button onClick={() => setNotice("")}><X size={13}/></button></div>}<div className="budget-pdv-layout"><div className="budget-catalog panel"><div className="budget-search"><label><Search size={17}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Pesquisar produto ou serviço..."/></label><div>{(["Todos","Produto","Serviço"] as const).map(kind => <button className={kindFilter === kind ? "active" : ""} key={kind} onClick={() => setKindFilter(kind)}>{kind}</button>)}</div></div><div className="budget-catalog-grid">{items.map(item => <button key={item.id} onClick={() => add(item)}><span className={item.kind === "Produto" ? "product" : "service"}>{item.kind === "Produto" ? <Package size={17}/> : <Wrench size={17}/>}</span><div><small>{item.id} • {item.kind}</small><b>{item.name}</b><em>{item.category || "Sem categoria"}</em></div><strong>R$ {(item.value ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong><Plus size={15}/></button>)}</div>{!items.length && <div className="linked-empty"><Search size={20}/><h4>Nenhum item encontrado</h4></div>}</div><aside className="budget-cart panel"><header><div><ShoppingCart size={17}/><span><b>Itens do orçamento</b><small>{cart.length} cadastro(s)</small></span></div>{cart.length > 0 && <button onClick={() => setCart([])}><Trash2 size={13}/> Limpar</button>}</header><div className="budget-cart-list">{cart.map(item => <article key={item.id}><div><small>{item.kind}</small><b>{item.description}</b><input type="number" min="0" step="0.01" value={item.unitValue} onChange={event => update(item.id,{unitValue:Number(event.target.value)})}/></div><label>Qtd.<input type="number" min="0.001" step="0.001" value={item.quantity} onChange={event => update(item.id,{quantity:Number(event.target.value)})}/></label><strong>R$ {(item.quantity*item.unitValue).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong><button onClick={() => setCart(current => current.filter(record => record.id !== item.id))}><Trash2 size={13}/></button></article>)}{!cart.length && <div className="pdv-empty"><ShoppingCart size={26}/><strong>Orçamento vazio</strong><p>Selecione produtos ou serviços no catálogo.</p></div>}</div><div className="budget-totals"><label>Forma de pagamento<select value={payment} onChange={event => setPayment(event.target.value)}>{["PIX","Dinheiro","Cartão de crédito","Cartão de débito","Boleto","Transferência","A combinar"].map(item => <option key={item}>{item}</option>)}</select></label><label>Desconto<input type="number" min="0" max={subtotal} value={discount || ""} onChange={event => setDiscount(Number(event.target.value))} placeholder="R$ 0,00"/></label><label className="wide">Observações<textarea value={observations} onChange={event => setObservations(event.target.value)} placeholder="Prazo, garantia e condições..."/></label><p><span>Subtotal</span><b>R$ {subtotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></p><div><span>TOTAL</span><strong>R$ {total.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div><button className="primary-btn" disabled={!customer || !cart.length} onClick={save}><CheckCircle2 size={16}/> Salvar orçamento</button></div></aside></div><div className="budget-saved panel"><header><div><span className="section-kicker"><History size={12}/> ORÇAMENTOS SALVOS</span><h3>Conversão rápida</h3></div><small>{budgets.length} orçamento(s)</small></header>{budgets.length ? <div>{budgets.map(record => <article key={record.id}><span><b>{record.id}</b><strong>{record.client}</strong><small>{record.purchaseItems?.length ?? 0} item(ns) • {record.endDate ? `Válido até ${new Date(`${record.endDate}T12:00:00`).toLocaleDateString("pt-BR")}` : record.createdAt}</small></span><em>{record.status}</em><b>R$ {(record.value ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</b><button onClick={() => onConvert(record,"Pedido")}><ShoppingBag size={14}/> Converter em venda</button><button onClick={() => onConvert(record,"Ordem de serviço")}><ClipboardList size={14}/> Converter em OS</button><button className="danger" onClick={() => onDelete(record)}><Trash2 size={14}/></button></article>)}</div> : <div className="linked-empty"><FileText size={22}/><h4>Nenhum orçamento salvo</h4></div>}</div></section>;
 }
 
 type Tender = { numeroControlePNCP?: string; objetoCompra?: string; modalidadeNome?: string; dataEncerramentoProposta?: string; valorTotalEstimado?: number; linkSistemaOrigem?: string; sourcePortal?: string; distanciaMirassol?: number; orgaoEntidade?: { razaoSocial?: string }; unidadeOrgao?: { municipioNome?: string; ufSigla?: string } };
@@ -624,13 +664,14 @@ function BiddingModule() {
 type SaleItem = { id: string; name: string; code: string; price: number; kind: "Produto" | "Serviço"; unit: string };
 type CartItem = SaleItem & { quantity: number };
 
-function SalesPDV({ customers, records }: { customers: Customer[]; records: ModuleRecord[] }) {
+function SalesPDV({ customers, structures, records, onSave }: { customers: Customer[]; structures: ModuleRecord[]; records: ModuleRecord[]; onSave: (record: ModuleRecord) => void }) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"itens" | "cliente" | "pagamento" | "opcoes">("itens");
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [discount, setDiscount] = useState(0);
   const [customer, setCustomer] = useState("");
+  const [unit, setUnit] = useState("Matriz");
   const [payment, setPayment] = useState("PIX");
   const [notice, setNotice] = useState("");
   const [fullScreen, setFullScreen] = useState(false);
@@ -641,6 +682,8 @@ function SalesPDV({ customers, records }: { customers: Customer[]; records: Modu
   const filteredCatalog = quickSaleCatalog.filter(item => `${item.name} ${item.code} ${item.kind}`.toLowerCase().includes(search.toLowerCase()));
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const total = Math.max(0, subtotal - discount);
+  const selectedCustomer = customers.find(item => item.name === customer);
+  const customerUnits = customer ? [{name:"Matriz",category:"Matriz"}, ...structures.filter(item => item.client === customer)] : [];
 
   const addItem = (item: SaleItem) => setCart(current => {
     const existing = current.find(record => record.id === item.id);
@@ -665,23 +708,14 @@ function SalesPDV({ customers, records }: { customers: Customer[]; records: Modu
       setNotice("Adicione pelo menos um item à venda.");
       return;
     }
-    const sale = {
-      id: `VEN-${Date.now().toString().slice(-6)}`,
-      customer: customer || "Consumidor final",
-      payment,
-      subtotal,
-      discount,
-      total,
-      items: cart,
-      createdAt: new Date().toLocaleString("pt-BR"),
+    if (selectedCustomer?.financialStatus === "Bloqueado") { setNotice("Cliente bloqueado pelo financeiro. A venda não pode ser concluída."); return; }
+    if (selectedCustomer?.creditLimit && (selectedCustomer.balancePosted ?? 0) + total > selectedCustomer.creditLimit && payment === "Boleto") { setNotice("Limite de crédito excedido para venda a prazo. Solicite liberação do financeiro."); return; }
+    const sale: ModuleRecord = {
+      id: `VEN-${Date.now().toString().slice(-6)}`, name:`Venda • ${customer || "Consumidor final"}`, client:customer || "Consumidor final", unit, paymentMethod:payment, value:total, status:"Pedido confirmado", category:"Venda PDV", description:`Subtotal R$ ${subtotal.toLocaleString("pt-BR",{minimumFractionDigits:2})} • desconto R$ ${discount.toLocaleString("pt-BR",{minimumFractionDigits:2})}`, purchaseItems:cart.map(item=>({id:item.id,productId:item.id,description:item.name,quantity:item.quantity,unitValue:item.price,kind:item.kind})), createdAt:new Date().toLocaleString("pt-BR"), date:new Date().toISOString().slice(0,10)
     };
-    const previous = JSON.parse(localStorage.getItem("proar-v3-pdv-sales") || "[]");
-    localStorage.setItem("proar-v3-pdv-sales", JSON.stringify([sale, ...previous]));
-    setCart([]);
-    setDiscount(0);
-    setCustomer("");
-    setActiveTab("itens");
-    setNotice(`Venda ${sale.id} finalizada — R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.`);
+    onSave(sale);
+    setCart([]); setDiscount(0); setCustomer(""); setUnit("Matriz"); setActiveTab("itens");
+    setNotice(`Venda ${sale.id} finalizada e sincronizada — R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.`);
   };
 
   useEffect(() => {
@@ -725,7 +759,7 @@ function SalesPDV({ customers, records }: { customers: Customer[]; records: Modu
           </button>)}</div>
           {!filteredCatalog.length && <div className="linked-empty"><Package size={23}/><h4>Nenhum produto ou serviço cadastrado</h4><p>Cadastre os itens reais nos módulos Produtos e Serviços.</p></div>}
         </>}
-        {activeTab === "cliente" && <div className="pdv-hidden-panel"><div className="pdv-panel-title"><UserRound size={20}/><div><h3>Cliente da venda</h3><p>Opcional para vendas rápidas.</p></div></div><label>Selecionar cliente<select value={customer} onChange={event => setCustomer(event.target.value)}><option value="">Consumidor final</option>{customers.map(item => <option key={item.doc} value={item.name}>{item.name} • {item.doc}</option>)}</select></label><button className="outline-btn"><Plus size={14}/> Cadastro rápido</button></div>}
+        {activeTab === "cliente" && <div className="pdv-hidden-panel"><div className="pdv-panel-title"><UserRound size={20}/><div><h3>Cliente da venda</h3><p>Opcional para vendas rápidas.</p></div></div><label>Selecionar cliente<select value={customer} onChange={event => {setCustomer(event.target.value);setUnit("Matriz");}}><option value="">Consumidor final</option>{customers.map(item => <option key={item.doc} value={item.name}>{item.name} • {item.doc}</option>)}</select></label>{customer && <><label>Unidade / filial / setor<select value={unit} onChange={event=>setUnit(event.target.value)}>{customerUnits.map(item=><option key={item.name} value={item.name}>{item.name} • {item.category || "Unidade"}</option>)}</select></label><div className={`credit-check ${selectedCustomer?.financialStatus === "Bloqueado" ? "blocked" : ""}`}><CircleDollarSign size={17}/><div><b>Crédito</b><small>Disponível R$ {Math.max(0,(selectedCustomer?.creditLimit ?? 0)-(selectedCustomer?.balancePosted ?? 0)).toLocaleString("pt-BR",{minimumFractionDigits:2})}</small></div><strong>{selectedCustomer?.financialStatus ?? "Liberado"}</strong></div></>}<button className="outline-btn"><Plus size={14}/> Cadastro rápido</button></div>}
         {activeTab === "pagamento" && <div className="pdv-hidden-panel"><div className="pdv-panel-title"><CreditCard size={20}/><div><h3>Forma de pagamento</h3><p>Escolha uma opção para concluir.</p></div></div><div className="payment-grid">{["PIX", "Dinheiro", "Cartão de débito", "Cartão de crédito", "Boleto", "Transferência"].map(option => <button className={payment === option ? "active" : ""} key={option} onClick={() => setPayment(option)}>{option}</button>)}</div></div>}
         {activeTab === "opcoes" && <div className="pdv-hidden-panel"><div className="pdv-panel-title"><Tag size={20}/><div><h3>Opções da venda</h3><p>Recursos menos utilizados ficam ocultos aqui.</p></div></div><label>Desconto em reais<input type="number" min="0" max={subtotal} value={discount || ""} onChange={event => setDiscount(Number(event.target.value))} placeholder="R$ 0,00"/></label><label>Observações<textarea placeholder="Informações adicionais para o comprovante..."/></label></div>}
       </div>
@@ -874,7 +908,7 @@ function FinancialModule({ records, onOpen, onUpdate }: { records: ModuleRecord[
 }
 
 function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectCompany }: { companies: TenantCompany[]; activeCompany: TenantCompany; onCompaniesChange: (companies: TenantCompany[]) => void; onSelectCompany: (company: TenantCompany) => void }) {
-  const [tab, setTab] = useState<"Empresa" | "Gerenciador" | "WhatsApp" | "Fiscal" | "Segurança">("Empresa");
+  const [tab, setTab] = useState<"Empresa" | "WhatsApp" | "Fiscal" | "Segurança">("Empresa");
   const [companyName, setCompanyName] = useState(activeCompany.legalName);
   const [tradeName, setTradeName] = useState(activeCompany.tradeName);
   const [companyDoc, setCompanyDoc] = useState(activeCompany.cnpj);
@@ -948,14 +982,13 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
   const cities = ["Mirassol", "São José do Rio Preto", "Olímpia", "Monte Aprazível", "Bálsamo", "Jaci", "Bady Bassitt", "Neves Paulista", "Barretos"];
   return <section className="settings-page">
     <div className="management-hero settings-hero"><div><span className="section-kicker"><Settings size={12}/> CENTRAL DE CONFIGURAÇÕES</span><h2>Configurações do ProAR</h2><p>Dados empresariais, integrações, emissão fiscal e segurança em uma área centralizada.</p></div><div className="settings-health"><ShieldCheck size={19}/><span><b>Ambiente protegido</b><small>Credenciais sensíveis permanecem mascaradas</small></span></div></div>
-    <div className="settings-layout"><nav className="settings-nav">{[{name:"Empresa",icon:Building2,text:"Dados e logomarca"},{name:"Gerenciador",icon:Database,text:"Empresas e bloqueios"},{name:"WhatsApp",icon:MessageCircle,text:"API oficial da Meta"},{name:"Fiscal",icon:FileText,text:"NF-e, NFC-e e NFS-e"},{name:"Segurança",icon:ShieldCheck,text:"Acessos e proteção"}].map(item => <button key={item.name} className={tab === item.name ? "active" : ""} onClick={() => setTab(item.name as typeof tab)}><item.icon size={17}/><span><b>{item.name}</b><small>{item.text}</small></span></button>)}</nav>
-      <div className="settings-card"><header><div><small>CONFIGURAÇÃO • {tab.toUpperCase()}</small><h3>{tab === "WhatsApp" ? "WhatsApp Business Platform" : tab === "Empresa" ? "Cadastro da empresa" : tab === "Gerenciador" ? "Gerenciador multiempresa" : tab === "Fiscal" ? "Configuração fiscal" : "Segurança do sistema"}</h3></div><span className="settings-status"><i/> Configuração disponível</span></header>
+    <div className="settings-layout"><nav className="settings-nav">{[{name:"Empresa",icon:Building2,text:"Dados e logomarca"},{name:"WhatsApp",icon:MessageCircle,text:"API oficial da Meta"},{name:"Fiscal",icon:FileText,text:"NF-e, NFC-e e NFS-e"},{name:"Segurança",icon:ShieldCheck,text:"Acessos e proteção"}].map(item => <button key={item.name} className={tab === item.name ? "active" : ""} onClick={() => setTab(item.name as typeof tab)}><item.icon size={17}/><span><b>{item.name}</b><small>{item.text}</small></span></button>)}</nav>
+      <div className="settings-card"><header><div><small>CONFIGURAÇÃO • {tab.toUpperCase()}</small><h3>{tab === "WhatsApp" ? "WhatsApp Business Platform" : tab === "Empresa" ? "Cadastro da empresa" : tab === "Fiscal" ? "Configuração fiscal" : "Segurança do sistema"}</h3></div><span className="settings-status"><i/> Configuração disponível</span></header>
         {tab === "Empresa" && <div className="settings-form company-settings-form"><label>Razão social / Nome empresarial<input value={companyName} onChange={event => setCompanyName(event.target.value)}/></label><label>Nome fantasia<input value={tradeName} onChange={event => setTradeName(event.target.value)}/></label><label>CNPJ<input value={companyDoc} onChange={event => setCompanyDoc(formatCnpj(event.target.value))} placeholder="00.000.000/0000-00"/></label><label>Telefone<input value={businessPhone} onChange={event => setBusinessPhone(event.target.value)}/></label><label>E-mail<input type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="contato@empresa.com.br"/></label><label>Cidade<input list="proar-cities" value={city} onChange={event => setCity(event.target.value)} placeholder="Selecione ou digite a cidade"/><datalist id="proar-cities">{cities.map(item => <option key={item}>{item}</option>)}</datalist></label><label>Estado<select value={state} onChange={event => setState(event.target.value)}>{["SP","MG","PR","RJ","MS","GO","SC","RS"].map(item => <option key={item}>{item}</option>)}</select></label><label className="wide">Endereço completo<input value={address} onChange={event => setAddress(event.target.value)} placeholder="Rua, número e bairro"/></label><div className="wide company-logo-field"><div className="company-logo-preview">{logo ? <img src={logo} alt="Logomarca da empresa"/> : <Building2 size={30}/>}</div><div><b>Logomarca dos relatórios</b><p>Será utilizada nos cabeçalhos de PDF, impressão, orçamentos e ordens de serviço.</p><label className="logo-upload"><ImagePlus size={15}/> Selecionar logomarca<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={event => readLogo(event.target.files?.[0])}/></label>{logo && <button className="logo-remove" type="button" onClick={() => setLogo("")}><Trash2 size={13}/> Remover</button>}</div></div></div>}
-        {tab === "Gerenciador" && <div className="tenant-manager"><div className="tenant-toolbar"><div><b>Gerenciador multiempresa</b><p>Cada CNPJ usa um espaço de dados isolado. Bloqueios interrompem o acesso da empresa.</p></div><button className="primary-btn" onClick={() => { setCompanyName(""); setTradeName(""); setCompanyDoc(""); setCity("Mirassol"); setState("SP"); setEmail(""); setAddress(""); setLogo(""); setTab("Empresa"); }}><Plus size={15}/> Preparar nova empresa</button></div><div className="tenant-grid">{companies.map(company => <article key={company.id} className={company.status === "Bloqueada" ? "blocked" : ""}><div className="tenant-brand">{company.logo ? <img src={company.logo} alt=""/> : <Building2 size={21}/>}<div><strong>{company.tradeName}</strong><small>{company.legalName}</small></div></div><dl><div><dt>CNPJ</dt><dd>{company.cnpj || "Não informado"}</dd></div><div><dt>Cidade</dt><dd>{company.city}/{company.state}</dd></div><div><dt>Base</dt><dd>{company.id}</dd></div></dl><div className="tenant-status"><span className={company.status === "Ativa" ? "active" : "blocked"}>{company.status === "Ativa" ? <UnlockKeyhole size={13}/> : <LockKeyhole size={13}/>} {company.status}</span>{company.id === activeCompany.id && <em>Empresa em uso</em>}</div><footer><button disabled={company.status === "Bloqueada"} onClick={() => onSelectCompany(company)}><Building2 size={13}/> Acessar</button><button className={company.status === "Ativa" ? "danger" : "success"} onClick={() => toggleCompany(company)}>{company.status === "Ativa" ? <><LockKeyhole size={13}/> Bloquear</> : <><UnlockKeyhole size={13}/> Desbloquear</>}</button></footer></article>)}</div></div>}
         {tab === "WhatsApp" && <div className="settings-form whatsapp-settings-form"><div className="wide whatsapp-account-status"><MessageCircle size={20}/><div><small>CONTA LOCALIZADA NA META</small><b>POLARTECH AR CONDICIONADO</b><span>{businessPhone} • Conectado • Qualidade alta</span></div><CheckCircle2 size={19}/></div><label>Phone Number ID<input value={phoneNumberId} onChange={event => setPhoneNumberId(event.target.value)} inputMode="numeric"/><small>ID do número, diferente do telefone.</small></label><label>WABA ID<input value={wabaId} onChange={event => setWabaId(event.target.value)} inputMode="numeric"/><small>ID da conta WhatsApp Business.</small></label><label className="wide">Token permanente<input type="password" value={token} onChange={event => setToken(event.target.value)} autoComplete="new-password" placeholder="Cole o token gerado pelo Utilizador do Sistema"/><small>Por segurança, o token nunca será mostrado depois de salvo.</small></label><div className="wide settings-security-note"><ShieldCheck size={17}/><span><b>Permissões necessárias</b><small>whatsapp_business_management e whatsapp_business_messaging</small></span></div></div>}
         {tab === "Fiscal" && <div className="settings-form"><label>Ambiente<select><option>Homologação</option><option>Produção</option></select></label><label>Regime tributário<select><option>Simples Nacional</option><option>Lucro Presumido</option><option>Lucro Real</option></select></label><label className="wide">Certificado digital A1<input type="file" accept=".pfx,.p12"/></label></div>}
         {tab === "Segurança" && <div className="settings-form"><label className="wide settings-switch"><span><b>Exigir autenticação individual</b><small>Somente funcionários ativos podem entrar.</small></span><input type="checkbox" defaultChecked/></label><label className="wide settings-switch"><span><b>Encerrar sessão por inatividade</b><small>Protege o sistema em computadores compartilhados.</small></span><input type="checkbox" defaultChecked/></label></div>}
-        {saved && <p className="settings-message">{saved}</p>}<footer><small>Empresa ativa: {activeCompany.tradeName} • base {activeCompany.id}</small>{tab !== "Gerenciador" && <div className="settings-footer-actions">{tab === "Empresa" && normalizeCnpj(companyDoc) !== normalizeCnpj(activeCompany.cnpj) && <button className="outline-btn" onClick={createCompany}><Plus size={15}/> Criar como nova empresa</button>}<button className="primary-btn" onClick={save}><CheckCircle2 size={15}/> Salvar configurações</button></div>}</footer>
+        {saved && <p className="settings-message">{saved}</p>}<footer><small>Empresa ativa: {activeCompany.tradeName} • base {activeCompany.id}</small>{<div className="settings-footer-actions">{tab === "Empresa" && normalizeCnpj(companyDoc) !== normalizeCnpj(activeCompany.cnpj) && <button className="outline-btn" onClick={createCompany}><Plus size={15}/> Criar como nova empresa</button>}<button className="primary-btn" onClick={save}><CheckCircle2 size={15}/> Salvar configurações</button></div>}</footer>
       </div></div>
   </section>;
 }
@@ -993,16 +1026,35 @@ function HousesWorkModule({ companyId, responsibleUser = "Utilizador do ProAR" }
   const [newWorkName, setNewWorkName] = useState("");
   const [newBlocks, setNewBlocks] = useState<WorkBlock[]>([{block:"A",houses:1}]);
   const [newCommonAreas, setNewCommonAreas] = useState<string[]>([]);
+  const [projectsRevision, setProjectsRevision] = useState(0);
   useEffect(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem(projectsKey) || "[]") as WorkProject[];
-      const normalized = stored.length ? stored.map(project => project.id === RESERVA_IMPERIAL.id ? {...project,name:"Reserva Imperial",commonAreas:Array.from(new Set([...(project.commonAreas ?? []),...RESERVA_IMPERIAL.commonAreas]))} : project) : [RESERVA_IMPERIAL];
+    const normalizeProjects = (items: WorkProject[]) => {
+      const normalized = items.length ? items.map(project => project.id === RESERVA_IMPERIAL.id ? {...project,name:"Reserva Imperial",commonAreas:Array.from(new Set([...(project.commonAreas ?? []),...RESERVA_IMPERIAL.commonAreas]))} : project) : [RESERVA_IMPERIAL];
       if (!normalized.some(project => project.id === RESERVA_IMPERIAL.id)) normalized.unshift(RESERVA_IMPERIAL);
-      setProjects(normalized); localStorage.setItem(projectsKey,JSON.stringify(normalized));
-      const selected = localStorage.getItem(selectedProjectKey); if (selected && normalized.some(project => project.id === selected)) setActiveProjectId(selected);
-    } catch { setProjects([RESERVA_IMPERIAL]); }
-    setProjectsReady(true);
-  },[projectsKey,selectedProjectKey]);
+      return normalized;
+    };
+    const loadProjects = async () => {
+      let local: WorkProject[] = [RESERVA_IMPERIAL];
+      try { local = normalizeProjects(JSON.parse(localStorage.getItem(projectsKey) || "[]") as WorkProject[]); } catch {}
+      if (!navigator.onLine) { setProjects(local); setProjectsReady(true); return; }
+      try {
+        const response = await fetch(`/api/work-projects?company=${encodeURIComponent(companyId)}&refresh=${Date.now()}`, {cache:"no-store"});
+        const result = await response.json();
+        if (!response.ok) throw new Error();
+        if (result.state?.projects?.length) {
+          const authoritative = normalizeProjects(result.state.projects as WorkProject[]);
+          setProjects(authoritative); setProjectsRevision(Number(result.state.revision||0)); localStorage.setItem(projectsKey,JSON.stringify(authoritative));
+          const selected=localStorage.getItem(selectedProjectKey); if(selected&&authoritative.some(project=>project.id===selected))setActiveProjectId(selected);
+        } else {
+          const seed = normalizeProjects(local);
+          const save = await fetch('/api/work-projects',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({companyId,projects:seed,baseRevision:0})});
+          const saved = await save.json(); if(save.ok)setProjectsRevision(Number(saved.state?.revision||1)); setProjects(seed); localStorage.setItem(projectsKey,JSON.stringify(seed));
+        }
+      } catch { setProjects(local); setReportNotice("Lista de obras online indisponível. Exibindo cache deste aparelho somente para consulta."); }
+      finally { setProjectsReady(true); }
+    };
+    void loadProjects();
+  },[projectsKey,selectedProjectKey,companyId]);
   const mergeWorkRows = (rows: HouseWorkItem[]) => { const byId=new Map(rows.map(item=>[item.id,item])); return createHouses().map(item=>byId.get(item.id)??item); };
   const applyServerMap = (map: { houses?: HouseWorkItem[]; token?: string; revision?: number }) => { const authoritative=mergeWorkRows(map.houses??[]); setHouses(authoritative); localStorage.setItem(storageKey,JSON.stringify(authoritative)); setServerRevision(Number(map.revision||0)); setMapOnline(true); setMapLoading(false); if(map.token){setShareToken(map.token);localStorage.setItem(shareKey,map.token);} return authoritative; };
   const fetchServerMap = async () => { if(!navigator.onLine) throw new Error("offline"); const response=await fetch(`/api/public-work-map?company=${encodeURIComponent(companyId)}&work=${encodeURIComponent(activeProject.id)}&refresh=${Date.now()}`,{cache:"no-store"}); const result=await response.json(); if(!response.ok) throw new Error(result.error||"Falha no banco online"); if(result.map?.houses?.length) applyServerMap(result.map); return result.map as {houses?:HouseWorkItem[];token?:string;revision?:number}|null; };
@@ -1020,7 +1072,7 @@ function HousesWorkModule({ companyId, responsibleUser = "Utilizador do ProAR" }
     const stored=localStorage.getItem(storageKey);const localHouses=(()=>{if(!stored)return createHouses();try{return mergeWorkRows(JSON.parse(stored) as HouseWorkItem[]);}catch{return createHouses();}})();
     if(!navigator.onLine){setHouses(localHouses);setMapOnline(false);setMapLoading(false);setReportNotice("Modo offline: mostrando a cópia deste aparelho.");return;}
     setHouses([]);setMapOnline(true);setMapLoading(true);
-    void fetchServerMap().then(map=>{if(!map) return publishPublicMap(localHouses,true);}).catch(()=>{setMapOnline(false);setMapLoading(false);setReportNotice("Banco online indisponível. A cópia local não foi enviada nem definida como principal.");});
+    void fetchServerMap().then(map=>{if(!map) return publishPublicMap(localHouses);}).catch(()=>{setMapOnline(false);setMapLoading(false);setReportNotice("Banco online indisponível. A cópia local não foi enviada nem definida como principal.");});
   },[storageKey,companyId,projectsReady,activeProject.id]);
   const persist = (next: HouseWorkItem[]) => { setHouses(next);localStorage.setItem(storageKey,JSON.stringify(next));if(!navigator.onLine){localStorage.setItem(`${shareKey}:pending`,"1");setMapOnline(false);setReportNotice("Sem internet: alteração guardada somente neste aparelho.");return;}void publishPublicMap(next).then(()=>setReportNotice("Alteração salva no banco online e atualizada para todos os dispositivos.")).catch(error=>setReportNotice(error.message)); };
   useEffect(() => {
@@ -1043,13 +1095,15 @@ function HousesWorkModule({ companyId, responsibleUser = "Utilizador do ProAR" }
     catch { setReportNotice(navigator.onLine?"Banco online indisponível; nenhum dado local foi enviado.":"Dispositivo sem internet. A cópia offline foi mantida."); }
     window.setTimeout(()=>setReportNotice(""),4500);
   };
-  const sendWorkMap = async () => { setReportNotice("A definir esta versão como base principal online..."); try { await publishPublicMap(houses,true);setReportNotice("Esta versão foi definida como principal no banco online."); } catch(error){setReportNotice((error as Error).message);} window.setTimeout(()=>setReportNotice(""),4500); };
+  const sendWorkMap = async () => { setReportNotice("A sincronizar com o banco principal..."); try { await fetchServerMap();setReportNotice("Sincronização concluída. O banco online permaneceu como fonte principal."); } catch(error){setReportNotice((error as Error).message);} window.setTimeout(()=>setReportNotice(""),4500); };
   const createWorkProject = () => {
     const name = newWorkName.trim(); const blocks = newBlocks.filter(item => item.block.trim() && item.houses > 0).map(item => ({block:item.block.trim().toUpperCase(),houses:Math.max(1,Math.floor(item.houses))}));
     if (!name || !blocks.length) { setReportNotice("Informe o nome da obra e pelo menos uma quadra."); return; }
     const id = `${name.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")}-${Date.now().toString(36)}`;
     const project: WorkProject = {id,name,blocks,commonAreas:newCommonAreas.map(item=>item.trim()).filter(Boolean),createdAt:new Date().toISOString()};
-    const next = [...projects,project]; setProjects(next); localStorage.setItem(projectsKey,JSON.stringify(next)); localStorage.setItem(selectedProjectKey,id); setActiveProjectId(id); setBlockFilter("Todas"); setWorkManagerOpen(false); setNewWorkName(""); setNewBlocks([{block:"A",houses:1}]); setNewCommonAreas([]); setReportNotice(`Obra ${name} cadastrada com sucesso.`);
+    const next = [...projects,project];
+    if (!navigator.onLine) { setReportNotice("Cadastros de novas obras exigem internet para evitar divergência entre aparelhos."); return; }
+    void fetch('/api/work-projects',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({companyId,projects:next,baseRevision:projectsRevision})}).then(async response=>{const result=await response.json();if(response.status===409&&result.state){const authoritative=result.state.projects as WorkProject[];setProjects(authoritative);setProjectsRevision(Number(result.state.revision||0));localStorage.setItem(projectsKey,JSON.stringify(authoritative));throw new Error("Outro aparelho atualizou a lista de obras. A versão online foi mantida; tente cadastrar novamente.");}if(!response.ok)throw new Error(result.error||"Falha ao salvar obra");setProjects(next);setProjectsRevision(Number(result.state?.revision||projectsRevision+1));localStorage.setItem(projectsKey,JSON.stringify(next));localStorage.setItem(selectedProjectKey,id);setActiveProjectId(id);setBlockFilter("Todas");setWorkManagerOpen(false);setNewWorkName("");setNewBlocks([{block:"A",houses:1}]);setNewCommonAreas([]);setReportNotice(`Obra ${name} cadastrada com sucesso e disponível em todos os aparelhos.`);}).catch(error=>setReportNotice(error.message));
   };
   const selectWorkProject = (id:string) => { setActiveProjectId(id); localStorage.setItem(selectedProjectKey,id); setBlockFilter("Todas"); setStatusFilter("Todos"); setQuery(""); };
   const openUpdate = (house: HouseWorkItem) => { setEditing(house); setNextStatus(normalizeHouseStatus(house.status)); setNote(house.note ?? ""); setPhotos({}); setHouseModalTab("Etapa"); setIncidentType("Perda"); setIncidentNote(""); setIncidentPhoto(""); };
@@ -1261,6 +1315,9 @@ type ModalSave = {
   doc: string;
   contact: string;
   phone: string;
+  creditLimit?: number;
+  balancePosted?: number;
+  financialStatus?: Customer["financialStatus"];
   address: string;
   unit: string;
   tech: string;
@@ -1295,7 +1352,7 @@ type ModalSave = {
   employeePassword?: string;
 };
 
-type AuthenticatedUser = { username: string; displayName: string; role?: string; permissions?: string[] };
+type AuthenticatedUser = { username: string; displayName: string; role?: string; permissions?: string[]; companyId?: string; companySlug?: string; trialExpiresAt?: string };
 
 async function passwordHash(value: string) {
   const bytes = new TextEncoder().encode(value);
@@ -1304,6 +1361,9 @@ async function passwordHash(value: string) {
 }
 
 function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }) {
+  const tenant = typeof window !== "undefined" ? (() => { const host=window.location.hostname.toLowerCase(); const root="proar.app"; if(host.endsWith(`.${root}`)){ const sub=host.slice(0,-(`.${root}`.length)); if(sub && !["www","manager","teste","api","admin"].includes(sub)) return sub; } return new URLSearchParams(window.location.search).get("tenant") || ""; })() : "";
+  const [tenantCompany, setTenantCompany] = useState<{trade_name?: string; legal_name?: string; logo_path?: string; brand_config?: {logo?: string; systemName?: string; tagline?: string; primaryColor?: string}; daysRemaining?: number; expired?: boolean} | null>(null);
+  useEffect(() => { if (!tenant) return; fetch(`/api/trial/company?slug=${encodeURIComponent(tenant)}`, {cache:"no-store"}).then(async r => r.ok ? (await r.json()).company : null).then(company => { setTenantCompany(company); if (company?.trade_name) document.title = `${company.trade_name} | ProAR Gestão de Serviços`; }).catch(()=>{}); }, [tenant]);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -1317,11 +1377,12 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
       const response = await fetch("/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, tenant }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Não foi possível entrar.");
-      onLogin({ username: result.username, displayName: result.displayName, role: result.role, permissions: result.permissions });
+      if (result.mustChangePassword && tenant) { window.location.href = `/trocar-senha`; return; }
+      onLogin({ username: result.username, displayName: result.displayName, role: result.role, permissions: result.permissions, companyId: result.companyId, companySlug: result.companySlug, trialExpiresAt: result.trialExpiresAt });
     } catch (loginError) {
       const moduleKeys = Object.keys(localStorage).filter(key => key === "proar-v3-module-records" || key.endsWith(":module-records"));
       const modules = moduleKeys.reduce<Record<string, ModuleRecord[]>>((merged, key) => {
@@ -1342,10 +1403,10 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
   };
   return <main className="login-page">
     <section className="login-brand">
-      <img className="login-official-logo" src="/proar-logo.png" alt="ProAR — Gestão de Serviços"/>
-      <span>SISTEMA INTEGRADO DE GESTÃO</span>
-      <h1>Bem-vindo ao ProAR</h1>
-      <p>Clientes, ordens de serviço, agenda, estoque e financeiro sincronizados num único sistema.</p>
+      <img className="login-official-logo" src={tenantCompany?.logo_path || tenantCompany?.brand_config?.logo || "/proar-logo.png"} alt={tenantCompany?.trade_name || "ProAR — Gestão de Serviços"}/>
+      <span>PROAR GESTÃO DE SERVIÇOS — BY TAV's</span>
+      <h1>{tenantCompany?.trade_name ? `Bem-vindo à ${tenantCompany.trade_name}` : "Bem-vindo ao ProAR"}</h1>
+      <p>Clientes, ordens de serviço, agenda, estoque e financeiro sincronizados num único sistema.</p>{tenantCompany?.daysRemaining !== undefined && <div className="login-security"><Clock3 size={18}/><div><b>Teste gratuito</b><small>{tenantCompany.expired ? "Período encerrado" : `${tenantCompany.daysRemaining} dia(s) restante(s)`}</small></div></div>}
       <div className="login-security"><ShieldCheck size={18}/><div><b>Acesso protegido</b><small>Os dados são compartilhados com segurança entre computador e celular.</small></div></div>
     </section>
     <section className="login-panel">
@@ -1376,6 +1437,9 @@ function Modal({ title, customers, catalogRecords, supplierRecords, employeeReco
   const [doc, setDoc] = useState("");
   const [contact, setContact] = useState("");
   const [phone, setPhone] = useState("");
+  const [creditLimit, setCreditLimit] = useState(0);
+  const [balancePosted, setBalancePosted] = useState(0);
+  const [financialStatus, setFinancialStatus] = useState<Customer["financialStatus"]>("Liberado");
   const [address, setAddress] = useState("");
   const [addressValidated, setAddressValidated] = useState(false);
   const [showAddressMap, setShowAddressMap] = useState(false);
@@ -1502,7 +1566,7 @@ function Modal({ title, customers, catalogRecords, supplierRecords, employeeReco
         <label>Cliente cadastrado<select value={selectedClient} onChange={event => setSelectedClient(event.target.value)}><option value="">Selecione o cliente</option>{customers.map(customer => <option key={customer.doc} value={customer.name}>{customer.name} • {customer.doc}</option>)}</select></label>
         <label>Unidade, filial ou setor<select value={unit} onChange={event => setUnit(event.target.value)} disabled={!selectedClient}><option value="">{selectedClient ? "Selecione o local do atendimento" : "Selecione primeiro o cliente"}</option>{availableUnits.map(item => <option key={item.name} value={item.name}>{item.name} • {item.type}</option>)}</select></label>
         <label>Responsável do cliente<input value={selectedClientData?.contact ?? ""} readOnly placeholder="Carregado pelo cadastro"/></label>
-        <label>Telefone<input value={selectedClientData?.phone ?? ""} readOnly placeholder="Carregado pelo cadastro"/></label>
+        <label>Telefone<input value={selectedClientData?.phone ?? ""} readOnly placeholder="Carregado pelo cadastro"/></label>{selectedClientData && <div className={`wide credit-check ${selectedClientData.financialStatus === "Bloqueado" ? "blocked" : ""}`}><CircleDollarSign size={17}/><div><b>Crédito do cliente</b><small>Limite R$ {(selectedClientData.creditLimit ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})} • Saldo lançado R$ {(selectedClientData.balancePosted ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})} • Disponível R$ {Math.max(0,(selectedClientData.creditLimit ?? 0)-(selectedClientData.balancePosted ?? 0)).toLocaleString("pt-BR",{minimumFractionDigits:2})}</small></div><strong>{selectedClientData.financialStatus ?? "Liberado"}</strong></div>}
         <label className="wide">Endereço do atendimento<input value={unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? ""} readOnly placeholder="Carregado pelo cadastro do cliente"/></label>
         <label>Data do atendimento<input type="date" value={date} onInput={event => setDate(event.currentTarget.value)} onChange={event => setDate(event.target.value)}/></label>
         <label>Horário<input type="time" value={time} onChange={event => setTime(event.target.value)}/></label>
@@ -1520,6 +1584,9 @@ function Modal({ title, customers, catalogRecords, supplierRecords, employeeReco
         <label>CPF ou CNPJ<input value={doc} onChange={event => setDoc(event.target.value)} placeholder="00.000.000/0000-00"/></label>
         <label>Responsável<input value={contact} onChange={event => setContact(event.target.value)} placeholder="Nome do responsável"/></label>
         <label>Telefone / WhatsApp<input value={phone} onChange={event => setPhone(event.target.value)} placeholder="(00) 00000-0000"/></label>
+        <label>Limite de crédito<input type="number" min="0" step="0.01" value={creditLimit || ""} onChange={event => setCreditLimit(Math.max(0,Number(event.target.value)||0))} placeholder="R$ 0,00"/></label>
+        <label>Saldo lançado<input type="number" min="0" step="0.01" value={balancePosted || ""} onChange={event => setBalancePosted(Math.max(0,Number(event.target.value)||0))} placeholder="R$ 0,00"/></label>
+        <label>Situação financeira<select value={financialStatus} onChange={event => setFinancialStatus(event.target.value as Customer["financialStatus"])}><option>Liberado</option><option>Alerta</option><option>Somente à vista</option><option>Bloqueado</option></select></label>
         <label className="wide">Endereço completo<input value={address} onChange={event => { setAddress(event.target.value); setAddressValidated(false); setShowAddressMap(false); }} placeholder="CEP, rua, número, complemento, bairro, cidade e estado"/></label>
         <div className="wide address-validation">
           <div><span className="map-validation-icon"><MapPin size={18}/></span><div><b>Validar endereço no Google Maps</b><small>Confira rua, número, bairro e cidade antes de salvar o cliente.</small></div></div>
@@ -1585,7 +1652,7 @@ function Modal({ title, customers, catalogRecords, supplierRecords, employeeReco
         </>}
       </>}
     </>}
-  </div><div className="modal-actions"><button className="outline-btn" onClick={close}>Cancelar</button><button className="primary-btn" disabled={isNewOrder ? !selectedClient || !tech || !date : isNewCustomer ? !recordName || !address.trim() || !addressValidated : requestedModule === "Compras" ? !recordName || !recordClient || !purchaseItems.some(item => item.description.trim() && item.quantity > 0) || purchaseTotal <= 0 || (paymentType === "A prazo" && !firstDueDate) : requestedModule === "Obras" ? !recordName || !recordClient || !workAddress : requestedModule === "Funcionários" ? !recordName || !employeeUsername.trim() || employeePassword.length < 4 : (!isLinkedStructure && !recordName)} onClick={() => onSave({ title, name: recordName, client: isNewOrder ? selectedClient : recordClient, doc, contact, phone, address: isNewOrder ? (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "") : address, unit, tech, date, time, description, status: recordStatus, value: requestedModule === "Compras" ? purchaseTotal : Number(recordValue) || 0, category: recordCategory, kind: recordKind, catalogItems: catalogRecords.filter(item => selectedCatalogIds.includes(item.id)).map(item => ({ id: item.id, name: item.name, kind: item.kind || "Serviço" })), purchaseItems: purchaseItems.filter(item => item.description.trim() && item.quantity > 0), paymentType, paymentMethod, installments: paymentType === "A prazo" ? Math.max(1, installments) : 1, firstDueDate, paymentInstallments, xmlImported, supplierDoc, supplierId, registerSupplier: xmlImported && !supplierId, engineer, workAddress, blockLot, endDate, progress, commission, cost: Number(recordCost) || 0, employeeRole, employeePermissions, employeeUsername, employeePassword })}><CheckCircle2 size={15}/> Salvar registro</button></div></div>
+  </div><div className="modal-actions"><button className="outline-btn" onClick={close}>Cancelar</button><button className="primary-btn" disabled={isNewOrder ? !selectedClient || !tech || !date || selectedClientData?.financialStatus === "Bloqueado" : isNewCustomer ? !recordName || !address.trim() || !addressValidated : requestedModule === "Compras" ? !recordName || !recordClient || !purchaseItems.some(item => item.description.trim() && item.quantity > 0) || purchaseTotal <= 0 || (paymentType === "A prazo" && !firstDueDate) : requestedModule === "Obras" ? !recordName || !recordClient || !workAddress : requestedModule === "Funcionários" ? !recordName || !employeeUsername.trim() || employeePassword.length < 4 : (!isLinkedStructure && !recordName)} onClick={() => onSave({ title, name: recordName, client: isNewOrder ? selectedClient : recordClient, doc, contact, phone, creditLimit, balancePosted, financialStatus, address: isNewOrder ? (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "") : address, unit, tech, date, time, description, status: recordStatus, value: requestedModule === "Compras" ? purchaseTotal : Number(recordValue) || 0, category: recordCategory, kind: recordKind, catalogItems: catalogRecords.filter(item => selectedCatalogIds.includes(item.id)).map(item => ({ id: item.id, name: item.name, kind: item.kind || "Serviço" })), purchaseItems: purchaseItems.filter(item => item.description.trim() && item.quantity > 0), paymentType, paymentMethod, installments: paymentType === "A prazo" ? Math.max(1, installments) : 1, firstDueDate, paymentInstallments, xmlImported, supplierDoc, supplierId, registerSupplier: xmlImported && !supplierId, engineer, workAddress, blockLot, endDate, progress, commission, cost: Number(recordCost) || 0, employeeRole, employeePermissions, employeeUsername, employeePassword })}><CheckCircle2 size={15}/> Salvar registro</button></div></div>
     {servicePickerOpen && <div className="service-picker-layer" role="dialog" aria-modal="true" aria-label="Selecionar serviços"><button type="button" className="service-picker-backdrop" aria-label="Fechar seleção de serviços" onClick={() => setServicePickerOpen(false)}/><section className="service-picker"><header><div><span>CATÁLOGO DE SERVIÇOS</span><h3>Selecionar vários serviços</h3><p>Pesquise e marque todos os itens necessários para esta ordem.</p></div><button type="button" aria-label="Fechar" onClick={() => setServicePickerOpen(false)}><X size={17}/></button></header><label className="service-picker-search"><Search size={17}/><input autoFocus value={serviceSearch} onChange={event => setServiceSearch(event.target.value)} placeholder="Pesquisar por nome ou categoria..."/><small>{visibleServiceOptions.length} resultado(s)</small></label><div className="service-picker-grid">{visibleServiceOptions.map(item => <label key={item.id} className={servicePickerIds.includes(item.id) ? "selected" : ""}><input type="checkbox" checked={servicePickerIds.includes(item.id)} onChange={() => setServicePickerIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])}/><span><Wrench size={17}/></span><div><b>{item.name}</b><small>{item.category || item.description || "Serviço cadastrado"}</small></div><CheckCircle2 size={16}/></label>)}</div>{!visibleServiceOptions.length && <div className="catalog-empty"><Search size={18}/><span>Nenhum serviço encontrado para esta pesquisa.</span></div>}<footer><span><b>{servicePickerIds.length}</b> serviço(s) marcado(s)</span><div><button type="button" className="outline-btn" onClick={() => setServicePickerOpen(false)}>Cancelar</button><button type="button" className="primary-btn" onClick={() => { setSelectedCatalogIds(servicePickerIds); setServicePickerOpen(false); }}><CheckCircle2 size={15}/> Aplicar seleção</button></div></footer></section></div>}
   </div>;
 }
@@ -1627,6 +1694,16 @@ export default function Home() {
       void fetch("/api/companies", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(company) });
     });
   };
+  useEffect(() => {
+    if (!authenticatedUser?.companySlug || !authenticatedUser.companyId) return;
+    fetch(`/api/trial/company?slug=${encodeURIComponent(authenticatedUser.companySlug)}`, {cache:"no-store"}).then(async response => {
+      if (!response.ok) return null; const result = await response.json(); return result.company;
+    }).then(company => {
+      if (!company) return;
+      const tenantCompany: TenantCompany = { id: company.id, legalName: company.legal_name, tradeName: company.trade_name, cnpj: company.cnpj || company.cpf || "", city: company.city || "", state: company.state || "SP", phone: company.phone || "", email: company.email || "", address: company.address || "", logo: company.logo_path || company.brand_config?.logo || "", status: company.status === "active" ? "Ativa" : "Bloqueada", createdAt: company.trial_started_at || new Date().toISOString() };
+      setCompanies([tenantCompany]); setActiveCompany(tenantCompany); localStorage.setItem("proar-v4-companies", JSON.stringify([tenantCompany])); localStorage.setItem("proar-v4-active-company", tenantCompany.id);
+    }).catch(()=>{});
+  }, [authenticatedUser?.companyId, authenticatedUser?.companySlug]);
   const selectCompany = (company: TenantCompany) => {
     if (company.status === "Bloqueada") { setSavedMessage(`O acesso ao CNPJ ${company.cnpj} está bloqueado pelo gerenciador.`); return; }
     setActiveCompany(company);
@@ -1640,7 +1717,7 @@ export default function Home() {
     const onOffline = () => setOnline(false);
     window.addEventListener("online", onOnline); window.addEventListener("offline", onOffline);
     fetch("/api/auth").then(async response => response.ok ? response.json() : null).then(result => {
-      if (result?.authenticated) handleLogin({ username: result.username, displayName: result.displayName, role: result.role, permissions: result.permissions });
+      if (result?.authenticated) handleLogin({ username: result.username, displayName: result.displayName, role: result.role, permissions: result.permissions, companyId: result.companyId, companySlug: result.companySlug, trialExpiresAt: result.trialExpiresAt });
     }).catch(() => {
       try { const cached = JSON.parse(localStorage.getItem("proar-offline-session") || "null"); if (cached?.user && cached.expiresAt > Date.now()) setAuthenticatedUser(cached.user); } catch {}
     }).finally(() => setCheckingSession(false));
@@ -1660,7 +1737,7 @@ export default function Home() {
         const response = await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { cache: "no-store" });
         if (!response.ok) throw new Error();
         let { state, migratedFrom } = await response.json();
-        if (!state && activeCompany.id !== "main") {
+        if (!state && activeCompany.id !== "main" && !authenticatedUser?.companyId) {
           const legacyResponse = await fetch("/api/state?company=main", { cache: "no-store" });
           if (legacyResponse.ok) {
             const legacyResult = await legacyResponse.json();
@@ -1688,7 +1765,7 @@ export default function Home() {
           customers: readCompanyStorage(activeCompany.id, "customers", []),
           moduleRecords: mergeImportedServices(readCompanyStorage(activeCompany.id, "module-records", {}) as Record<string, ModuleRecord[]>),
         };
-        const initialResponse=await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({...localState,_force:true}) });
+        const initialResponse=await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({...localState,_baseRevision:0}) });
         const initialResult=await initialResponse.json();if(initialResponse.ok)setStateRevision(Number(initialResult.state?._revision||1));
         setServiceOrders(localState.serviceOrders);
         setCustomerRecords(localState.customers);
@@ -1721,7 +1798,7 @@ export default function Home() {
       body: JSON.stringify(payload),
     }).then(async response => {
       const result=await response.json();
-      if (response.status===409 && result.state) { setCustomerRecords(result.state.customers??[]);setServiceOrders(result.state.serviceOrders??[]);setModuleRecords(mergeImportedServices(result.state.moduleRecords??{}));setStateRevision(Number(result.state._revision||0));setSavedMessage("A versão mais recente do banco online foi mantida.");return; }
+      if (response.status===409 && result.state) { const serverCustomers=result.state.customers??[]; const serverOrders=result.state.serviceOrders??[]; const serverModules=mergeImportedServices(result.state.moduleRecords??{}); setCustomerRecords(serverCustomers);setServiceOrders(serverOrders);setModuleRecords(serverModules);setStateRevision(Number(result.state._revision||0));localStorage.setItem(companyStorageKey(activeCompany.id,"customers"),JSON.stringify(serverCustomers));localStorage.setItem(companyStorageKey(activeCompany.id,"service-orders"),JSON.stringify(serverOrders));localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(serverModules));setSavedMessage("Conflito detectado: a versão mais recente do banco online foi preservada. Refaça apenas a alteração pendente.");return; }
       if (!response.ok) throw new Error();setStateRevision(Number(result.state?._revision||stateRevision+1));
     }).catch(() => {
       setSavedMessage("Falha no banco online. A cópia local não substituirá a versão principal.");
@@ -1742,13 +1819,9 @@ export default function Home() {
     finally { setSyncing(false); window.setTimeout(() => setSavedMessage(""),4000); }
   };
   const pushToDatabase = async () => {
-    if (!online) { setSavedMessage("Sem internet. As alterações continuam guardadas neste aparelho."); return; }
-    setSyncing(true); setSavedMessage("A enviar as alterações para o banco principal...");
-    try {
-      const response = await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({companyId:activeCompany.id,customers:customerRecords,serviceOrders,moduleRecords,_force:true}) });
-      const result=await response.json();if (!response.ok) throw new Error(); setStateRevision(Number(result.state?._revision||stateRevision+1));localStorage.removeItem("proar-offline-queue"); setSavedMessage("Esta versão foi definida como banco principal com sucesso.");
-    } catch { setSavedMessage("Falha no envio. As alterações permanecem guardadas no aparelho."); }
-    finally { setSyncing(false); window.setTimeout(() => setSavedMessage(""),4000); }
+    if (!online) { setSavedMessage("Sem internet. Alterações pendentes serão sincronizadas ao reconectar."); return; }
+    // Segurança multiaparelho: nunca força a cópia local como principal.
+    await pullFromDatabase();
   };
   useEffect(() => {
     if (!online || !authenticatedUser) return;
@@ -1756,12 +1829,20 @@ export default function Home() {
       const queue = JSON.parse(localStorage.getItem("proar-offline-queue") || "[]") as { companyId: string; payload: unknown }[];
       if (!queue.length) return;
       const pending: typeof queue = [];
-      for (const item of queue) { try { const response = await fetch(`/api/state?company=${encodeURIComponent(item.companyId)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item.payload) }); if (!response.ok) pending.push(item); } catch { pending.push(item); } }
+      for (const item of queue) { try { const response = await fetch(`/api/state?company=${encodeURIComponent(item.companyId)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item.payload) }); if (response.status === 409) { setSavedMessage("Havia alterações mais novas no servidor. A base online foi preservada; revise a alteração feita offline."); continue; } if (!response.ok) pending.push(item); } catch { pending.push(item); } }
       localStorage.setItem("proar-offline-queue", JSON.stringify(pending));
       if (!pending.length) { setSavedMessage("Dados offline sincronizados com sucesso."); window.setTimeout(() => setSavedMessage(""), 3500); }
     };
     void synchronize();
   }, [online, authenticatedUser]);
+  useEffect(() => {
+    if (!online || !authenticatedUser) return;
+    const refresh = () => { if (document.visibilityState === "visible" && !syncing) void pullFromDatabase(); };
+    const timer = window.setInterval(refresh, 20000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
+  }, [online, authenticatedUser, activeCompany.id, syncing]);
   const updateServiceOrder = (updatedOrder: ServiceOrder) => {
     const updatedOrders = serviceOrders.map(order => order.id === updatedOrder.id ? updatedOrder : order);
     const reminderId = `LEM-${updatedOrder.id.replace(/\D/g, "")}`;
@@ -1799,7 +1880,7 @@ export default function Home() {
       setModuleRecords(updated); persistSharedState(customerRecords, serviceOrders, updated); setCurrent("Vendas");
     } else {
       const customer = customerRecords.find(item => item.name === budget.client);
-      const order: ServiceOrder = { id:`#OS-${String(Math.max(15499,...serviceOrders.map(item => Number(item.id.replace(/\D/g,""))||0))+1).padStart(5,"0")}`, client:budget.client, unit:"Unidade principal", service:budget.purchaseItems?.map(item => item.description).join(", ") || budget.name, tech:"Não definido", date:new Date().toISOString().slice(0,10), time:"A definir", address:customer?.address || "", status:"Aberta", tone:"blue", avatar:budget.client.split(" ").map(item => item[0]).slice(0,2).join(""), catalogItems:budget.purchaseItems?.map(item => ({ id:item.productId || item.id, name:item.description, kind:item.kind || "Serviço" })) };
+      const order: ServiceOrder = { id:`#OS-${String(Math.max(15499,...serviceOrders.map(item => Number(item.id.replace(/\D/g,""))||0))+1).padStart(5,"0")}`, client:budget.client, unit:budget.unit || "Matriz", service:budget.purchaseItems?.map(item => item.description).join(", ") || budget.name, tech:"Não definido", date:new Date().toISOString().slice(0,10), time:"A definir", address:(budget.unit && budget.unit !== "Matriz" ? (moduleRecords["Unidades e setores"] ?? []).find(item=>item.client===budget.client&&item.name===budget.unit)?.address : customer?.address) || customer?.address || "", status:"Aberta", tone:"blue", avatar:budget.client.split(" ").map(item => item[0]).slice(0,2).join(""), catalogItems:budget.purchaseItems?.map(item => ({ id:item.productId || item.id, name:item.description, kind:item.kind || "Serviço" })) };
       const updatedOrders = [order,...serviceOrders]; const updatedModules = { ...moduleRecords, Orçamentos:(moduleRecords.Orçamentos ?? []).map(item => item.id === budget.id ? {...item,status:"Convertido em OS"} : item) };
       setServiceOrders(updatedOrders); setModuleRecords(updatedModules); persistSharedState(customerRecords,updatedOrders,updatedModules); setCurrent("Ordens de serviço");
     }
@@ -1808,7 +1889,7 @@ export default function Home() {
   const saveRecord = async (data: ModalSave) => {
     if (data.title.startsWith("Nova unidade, filial ou setor")) {
       const parentCustomer = data.title.split("•")[1]?.trim() || data.client;
-      const structure: ModuleRecord = { id:`SET-${Date.now().toString().slice(-6)}`, name:data.name, client:parentCustomer, description:data.doc || data.description, address:data.address, category:data.category || "Setor", status:"Ativo", createdAt:new Date().toLocaleString("pt-BR") };
+      const structure: ModuleRecord = { id:`SET-${Date.now().toString().slice(-6)}`, name:data.name, client:parentCustomer, description:data.description || data.doc, doc:data.doc, contact:data.contact, phone:data.phone, address:data.address, category:data.category || "Setor", status:"Ativo", createdAt:new Date().toLocaleString("pt-BR") };
       const updatedModules = { ...moduleRecords, "Unidades e setores":[structure,...(moduleRecords["Unidades e setores"] ?? [])] };
       const updatedCustomers = customerRecords.map(customer => customer.name === parentCustomer ? {...customer,units:customer.units+1} : customer);
       setModuleRecords(updatedModules); setCustomerRecords(updatedCustomers); persistSharedState(updatedCustomers,serviceOrders,updatedModules);
@@ -1823,6 +1904,9 @@ export default function Home() {
         address: data.address,
         units: 0,
         status: "Ativo",
+        creditLimit: data.creditLimit ?? 0,
+        balancePosted: data.balancePosted ?? 0,
+        financialStatus: data.financialStatus ?? "Liberado",
       };
       const updatedCustomers = [newCustomer, ...customerRecords];
       setCustomerRecords(updatedCustomers);
@@ -2005,10 +2089,10 @@ export default function Home() {
       <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNewOrder={() => setModal("Nova ordem de serviço")} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onSwitchUser={logout} online={online} syncing={syncing} onPull={() => void pullFromDatabase()} onPush={() => void pushToDatabase()}/>
       {savedMessage && <div className="save-toast" role="status"><CheckCircle2 size={16}/>{savedMessage}</div>}
       <div className="company-context"><Building2 size={13}/><span>{activeCompany.tradeName}</span><small>{activeCompany.cnpj || "CNPJ pendente"} • {activeCompany.city}/{activeCompany.state}</small></div>
-      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={record => updateModuleRecord("Unidades e setores",record)} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <BiddingModule/> : current === "Orçamentos" ? <BudgetPDV customers={customerRecords} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={record => updateModuleRecord("Orçamentos",record)} onConvert={convertBudget} onDelete={record => deleteModuleRecord("Orçamentos",record)}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders}/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} onOpen={setModal} onUpdate={updateModuleRecord}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} serviceOrders={serviceOrders} customers={customerRecords}/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []}/>}</div>
+      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={record => updateModuleRecord("Unidades e setores",record)} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <BiddingModule/> : current === "Orçamentos" ? <BudgetPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={record => updateModuleRecord("Orçamentos",record)} onConvert={convertBudget} onDelete={record => deleteModuleRecord("Orçamentos",record)}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} onSave={record => updateModuleRecord("Vendas",record)}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders}/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} onOpen={setModal} onUpdate={updateModuleRecord}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} onUpdate={updateServiceOrder} serviceOrders={serviceOrders} customers={customerRecords}/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []}/>}</div>
       <footer><span>© 2026 ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
     {modal && <Modal title={modal} customers={customerRecords} catalogRecords={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} supplierRecords={moduleRecords["Fornecedores"] ?? []} employeeRecords={moduleRecords["Funcionários"] ?? [tiagoEmployee]} close={() => setModal("")} onSave={saveRecord}/>}
-    {selectedOrder && <OrderDetail order={selectedOrder} customerPhone={customerRecords.find(customer => customer.name === selectedOrder.client)?.phone} company={activeCompany} close={() => setSelectedOrder(null)} onUpdate={updateServiceOrder}/>}
+    {selectedOrder && <OrderDetail order={selectedOrder} customerPhone={customerRecords.find(customer => customer.name === selectedOrder.client)?.phone} company={activeCompany} catalog={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} close={() => setSelectedOrder(null)} onUpdate={updateServiceOrder}/>}
   </div>;
 }
