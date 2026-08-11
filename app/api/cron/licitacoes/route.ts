@@ -74,7 +74,8 @@ export async function runTenderMonitor() {
   const items = [...newItems.map(item => ({ ...item, discoveredAt, whatsappStatus })), ...store.items]
     .filter((item, index, list) => list.findIndex(candidate => candidate.numeroControlePNCP === item.numeroControlePNCP) === index)
     .slice(0, 500);
-  const updated: TenderStore = { items, lastScan: discoveredAt, lastError: result.failed ? `${result.failed} consulta(s) parcial(is)` : "" };
+  const failedCount = result.failedSources.length;
+  const updated: TenderStore = { items, lastScan: discoveredAt, lastError: failedCount ? `${failedCount} consulta(s) parcial(is)` : "" };
   await saveStore(updated);
   return { newItems: newItems.length, total: items.length, lastScan: discoveredAt, whatsappStatus };
 }
