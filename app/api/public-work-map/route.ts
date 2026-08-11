@@ -41,9 +41,13 @@ export async function PUT(request: NextRequest) {
   const workId = safeWork(body.workId);
   const id = mapId(companyId, workId);
   const currentResponse = await fetch(`${url}/rest/v1/proar_state?id=eq.${encodeURIComponent(id)}&select=payload`, { headers: headers(key), cache: "no-store" });
-  const currentRows = currentResponse.ok ? await currentResponse.json() as { payload?: { token?: string } }[] : [];
-  const token = currentRows[0]?.payload?.token || randomBytes(24).toString("base64url");
-  const payload = { companyId, workId, token, title: String(body.title || "Acompanhamento da obra"), houses: Array.isArray(body.houses) ? body.houses : [], updatedAt: new Date().toISOString() };
+  const currentRows = currentResponse.ok ? await currentResponse.json() as { payload?: { token?: string; revision?: number; [key:string]: unknown } }[] : [];
+  const currentMap = currentRows[0]?.payload;
+  const currentRevision = Number(currentMap?.revision || 0);
+  const baseRevision = Number(body.baseRevision || 0);
+  if (currentMap && !body.force && baseRevision !== currentRevision) return NextResponse.json({ error: "A base online possui uma versão mais recente.", conflict: true, map: currentMap }, { status: 409 });
+  const token = currentMap?.token || randomBytes(24).toString("base64url");
+  const payload = { companyId, workId, token, revision: currentRevision + 1, title: String(body.title || "Acompanhamento da obra"), houses: Array.isArray(body.houses) ? body.houses : [], updatedAt: new Date().toISOString() };
   const saveResponse = await fetch(`${url}/rest/v1/proar_state?on_conflict=id`, { method: "POST", headers: { ...headers(key), Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ id, payload, updated_at: new Date().toISOString() }) });
-  return saveResponse.ok ? NextResponse.json({ saved: true, token }) : NextResponse.json({ error: "Não foi possível publicar o mapa." }, { status: 502 });
+  return saveResponse.ok ? NextResponse.json({ saved: true, token, map: payload }) : NextResponse.json({ error: "Não foi possível publicar o mapa." }, { status: 502 });
 }
