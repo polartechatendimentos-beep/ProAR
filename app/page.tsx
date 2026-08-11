@@ -970,7 +970,8 @@ function HousesWorkModule({ companyId, responsibleUser = "Utilizador do ProAR" }
   const storageKey = activeProject.id === RESERVA_IMPERIAL.id ? companyStorageKey(companyId, "obra-142-casas") : companyStorageKey(companyId, `obra-${activeProject.id}-itens`);
   const shareKey = activeProject.id === RESERVA_IMPERIAL.id ? companyStorageKey(companyId, "obra-142-public-token") : companyStorageKey(companyId, `obra-${activeProject.id}-public-token`);
   const createHouses = (project = activeProject) => [...project.blocks.flatMap(({ block, houses }) => Array.from({ length: houses }, (_, index): HouseWorkItem => ({ id: `${block}-${String(index + 1).padStart(2, "0")}`, block, lot: index + 1, kind: "house", status: "AG. FRIGORÍGENA", history: [] }))), ...project.commonAreas.map((name,index): HouseWorkItem => ({ id:`common-${String(index + 1).padStart(2,"0")}`, block:"Áreas Comuns", lot:index + 1, kind:"common", name, status:"AG. FRIGORÍGENA", history:[] }))];
-  const [houses, setHouses] = useState<HouseWorkItem[]>(() => createHouses(RESERVA_IMPERIAL));
+  const [houses, setHouses] = useState<HouseWorkItem[]>([]);
+  const [mapLoading, setMapLoading] = useState(true);
   const [blockFilter, setBlockFilter] = useState("Todas");
   const [statusFilter, setStatusFilter] = useState("Todos");
   const [query, setQuery] = useState("");
@@ -1003,23 +1004,23 @@ function HousesWorkModule({ companyId, responsibleUser = "Utilizador do ProAR" }
     setProjectsReady(true);
   },[projectsKey,selectedProjectKey]);
   const mergeWorkRows = (rows: HouseWorkItem[]) => { const byId=new Map(rows.map(item=>[item.id,item])); return createHouses().map(item=>byId.get(item.id)??item); };
-  const applyServerMap = (map: { houses?: HouseWorkItem[]; token?: string; revision?: number }) => { const authoritative=mergeWorkRows(map.houses??[]); setHouses(authoritative); localStorage.setItem(storageKey,JSON.stringify(authoritative)); setServerRevision(Number(map.revision||0)); setMapOnline(true); if(map.token){setShareToken(map.token);localStorage.setItem(shareKey,map.token);} return authoritative; };
+  const applyServerMap = (map: { houses?: HouseWorkItem[]; token?: string; revision?: number }) => { const authoritative=mergeWorkRows(map.houses??[]); setHouses(authoritative); localStorage.setItem(storageKey,JSON.stringify(authoritative)); setServerRevision(Number(map.revision||0)); setMapOnline(true); setMapLoading(false); if(map.token){setShareToken(map.token);localStorage.setItem(shareKey,map.token);} return authoritative; };
   const fetchServerMap = async () => { if(!navigator.onLine) throw new Error("offline"); const response=await fetch(`/api/public-work-map?company=${encodeURIComponent(companyId)}&work=${encodeURIComponent(activeProject.id)}&refresh=${Date.now()}`,{cache:"no-store"}); const result=await response.json(); if(!response.ok) throw new Error(result.error||"Falha no banco online"); if(result.map?.houses?.length) applyServerMap(result.map); return result.map as {houses?:HouseWorkItem[];token?:string;revision?:number}|null; };
   const publishPublicMap = async (next: HouseWorkItem[], force=false) => {
     if(!navigator.onLine){localStorage.setItem(`${shareKey}:pending`,"1");setMapOnline(false);throw new Error("Dispositivo sem internet.");}
-    const response=await fetch("/api/public-work-map",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({companyId,workId:activeProject.id,title:`Acompanhamento da obra — ${activeProject.name}`,houses:next,baseRevision:serverRevision,force})});
+    const response=await fetch("/api/public-work-map",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({companyId,workId:activeProject.id,workName:activeProject.name,title:`Acompanhamento da obra — ${activeProject.name}`,houses:next,baseRevision:serverRevision,force})});
     const result=await response.json();
     if(response.status===409&&result.map){applyServerMap(result.map);localStorage.removeItem(`${shareKey}:pending`);throw new Error("O banco online tinha uma versão mais recente e foi mantido como principal.");}
     if(!response.ok){localStorage.setItem(`${shareKey}:pending`,"1");throw new Error(result.error||"Não foi possível atualizar o banco online.");}
-    setServerRevision(Number(result.map?.revision||serverRevision+1));setMapOnline(true);setShareToken(result.token);localStorage.setItem(shareKey,result.token);localStorage.setItem(storageKey,JSON.stringify(next));localStorage.removeItem(`${shareKey}:pending`);return result.token as string;
+    setServerRevision(Number(result.map?.revision||serverRevision+1));setMapOnline(true);setMapLoading(false);setShareToken(result.token);localStorage.setItem(shareKey,result.token);localStorage.setItem(storageKey,JSON.stringify(next));localStorage.removeItem(`${shareKey}:pending`);return result.token as string;
   };
   useEffect(() => {
     if(!projectsReady)return;
     setShareToken(localStorage.getItem(shareKey)||"");setServerRevision(0);
     const stored=localStorage.getItem(storageKey);const localHouses=(()=>{if(!stored)return createHouses();try{return mergeWorkRows(JSON.parse(stored) as HouseWorkItem[]);}catch{return createHouses();}})();
-    if(!navigator.onLine){setHouses(localHouses);setMapOnline(false);setReportNotice("Modo offline: mostrando a cópia deste aparelho.");return;}
-    setHouses(createHouses());setMapOnline(true);
-    void fetchServerMap().then(map=>{if(!map) return publishPublicMap(localHouses,true);}).catch(()=>{setMapOnline(false);setReportNotice("Banco online indisponível. A cópia local não foi enviada nem definida como principal.");});
+    if(!navigator.onLine){setHouses(localHouses);setMapOnline(false);setMapLoading(false);setReportNotice("Modo offline: mostrando a cópia deste aparelho.");return;}
+    setHouses([]);setMapOnline(true);setMapLoading(true);
+    void fetchServerMap().then(map=>{if(!map) return publishPublicMap(localHouses,true);}).catch(()=>{setMapOnline(false);setMapLoading(false);setReportNotice("Banco online indisponível. A cópia local não foi enviada nem definida como principal.");});
   },[storageKey,companyId,projectsReady,activeProject.id]);
   const persist = (next: HouseWorkItem[]) => { setHouses(next);localStorage.setItem(storageKey,JSON.stringify(next));if(!navigator.onLine){localStorage.setItem(`${shareKey}:pending`,"1");setMapOnline(false);setReportNotice("Sem internet: alteração guardada somente neste aparelho.");return;}void publishPublicMap(next).then(()=>setReportNotice("Alteração salva no banco online e atualizada para todos os dispositivos.")).catch(error=>setReportNotice(error.message)); };
   useEffect(() => {
@@ -1096,6 +1097,7 @@ function HousesWorkModule({ companyId, responsibleUser = "Utilizador do ProAR" }
     if (!observationChanged && !statusChanged && !stagePhotos.length) { setEditing(null); return; }
     persist(next); setEditing(null);
   };
+  if (mapLoading) return <section className="houses-app"><div className="work-online-loading"><RefreshCw size={24}/><div><b>A carregar {activeProject.name}</b><span>A consultar a base principal online. Nenhum valor local provisório será exibido.</span></div></div></section>;
   const visible = houses.filter(house => (blockFilter === "Todas" || house.block === blockFilter) && (statusFilter === "Todos" || normalizeHouseStatus(house.status) === statusFilter) && `${house.block} ${house.lot} ${house.id} ${house.name ?? ""}`.toLowerCase().includes(query.toLowerCase()));
   const completed = houses.filter(house => normalizeHouseStatus(house.status) === "SERVIÇO CONCLUÍDO").length;
   const stageProgress = houses.reduce((sum,house)=>{const index=HOUSE_STATUSES.findIndex(stage=>stage.name===normalizeHouseStatus(house.status));return sum+Math.max(0,index);},0);
