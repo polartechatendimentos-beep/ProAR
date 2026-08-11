@@ -102,11 +102,12 @@ const HOUSE_STATUSES: { name: HouseWorkStatus; color: string }[] = [
 const HOUSE_STAGE_PHOTOS: Record<HouseWorkStatus, string[]> = {
   "AG. FRIGORÍGENA": ["Sala", "Quarto Frente", "Quarto Meio", "Quarto Fundo", "Home"],
   "AG. ACABAMENTO": ["Sala", "Quarto Frente", "Quarto Meio", "Quarto Fundo", "Home", "VTK Fundo"],
-  "AG. TUBULAÇÃO FORÇADA": [],
+  "AG. TUBULAÇÃO FORÇADA": ["Tubulação Forçada"],
   "AG. EXAUSTOR": ["VTK Exaustor", "Acabamento Externo"],
   "AG. TAMPA FRIGORÍGENA": ["Sala", "Quarto Frente", "Quarto Meio", "Quarto Fundo", "Home"],
   "SERVIÇO CONCLUÍDO": [],
 };
+const HOUSE_STAGE_OPTIONAL_PHOTOS: HouseWorkStatus[] = ["AG. TUBULAÇÃO FORÇADA"];
 const LEGACY_HOUSE_STATUS_MAP: Partial<Record<HouseWorkStatus | LegacyHouseWorkStatus, HouseWorkStatus>> = {
   "AG FRIGORÍGENA": "AG. FRIGORÍGENA", "AG VENTO KIT": "AG. TUBULAÇÃO FORÇADA", "VENTOKIT E FRIGORÍGENA OK": "AG. TUBULAÇÃO FORÇADA",
   "AG ACABAMENTO": "AG. ACABAMENTO", "AG EXAUSTOR": "AG. EXAUSTOR", "AG TAMPA FRIGORÍGENA": "AG. TAMPA FRIGORÍGENA", "FIM": "SERVIÇO CONCLUÍDO",
@@ -1028,14 +1029,15 @@ function HousesWorkModule({ companyId, responsibleUser = "Utilizador do ProAR" }
   };
   const saveUpdate = () => {
     if (!editing) return;
-    const requiredLabels = HOUSE_STAGE_PHOTOS[nextStatus];
+    const photoLabels = HOUSE_STAGE_PHOTOS[nextStatus];
+    const requiredLabels = HOUSE_STAGE_OPTIONAL_PHOTOS.includes(nextStatus) ? [] : photoLabels;
     const missing = requiredLabels.filter(label => !photos[label]);
     if (missing.length) { setReportNotice(`Adicione as fotos obrigatórias: ${missing.join(", ")}.`); return; }
     if (nextStatus === "SERVIÇO CONCLUÍDO" && !window.confirm("Confirma a conclusão desta casa? A data, o horário e o responsável serão registrados.")) return;
     const createdAt = new Date().toISOString();
     const observationChanged = note.trim() !== (editing.note ?? "").trim();
     const statusChanged = nextStatus !== normalizeHouseStatus(editing.status);
-    const stagePhotos = requiredLabels.map(label => ({ label, url: photos[label] }));
+    const stagePhotos = photoLabels.filter(label => photos[label]).map(label => ({ label, url: photos[label] }));
     const update: HouseWorkUpdate = { id: `${editing.id}-${Date.now()}`, status: nextStatus, note: note.trim(), responsible: responsibleUser, photos: stagePhotos.length ? stagePhotos : undefined, createdAt, completedAt: nextStatus === "SERVIÇO CONCLUÍDO" ? createdAt : undefined };
     const next = houses.map(item => item.id === editing.id ? { ...item, status: nextStatus, note: note.trim() || item.note, photo: stagePhotos[0]?.url || item.photo, photos: stagePhotos.length ? stagePhotos : item.photos, updatedAt: createdAt, history: [update, ...(item.history ?? [])] } : item);
     if (!observationChanged && !statusChanged && !stagePhotos.length) { setEditing(null); return; }
