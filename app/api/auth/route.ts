@@ -4,12 +4,20 @@ import { authenticate, createSessionForUser, readSession } from "../../../lib/pr
 import { supabaseConfigured, supabaseRest } from "../../../lib/supabase-rest";
 import { hashPassword, verifyPassword } from "../../../lib/password";
 import { tenantSlugFromHost } from "../../../lib/tenant-host";
+import { validateCompanyAccess } from "../../../lib/company-access";
 const COOKIE_NAME = "proar_session";
 const safeEqual = (left: string, right: string) => { const a=Buffer.from(left); const b=Buffer.from(right); return a.length===b.length && timingSafeEqual(a,b); };
 
 export async function GET(request: NextRequest) {
   const user = readSession(request.cookies.get(COOKIE_NAME)?.value);
-  return user ? NextResponse.json({ authenticated: true, ...user }) : NextResponse.json({ authenticated: false }, { status: 401 });
+  if (!user) return NextResponse.json({ authenticated: false }, { status: 401 });
+  const access = await validateCompanyAccess(user.companyId);
+  if (!access.ok) {
+    const response = NextResponse.json({ authenticated: false, error: access.reason }, { status: 403 });
+    response.cookies.set(COOKIE_NAME, "", { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 0 });
+    return response;
+  }
+  return NextResponse.json({ authenticated: true, ...user });
 }
 
 export async function POST(request: NextRequest) {
