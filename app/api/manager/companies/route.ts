@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readSession } from "../../../../lib/proar-auth";
+import { readManagerSession } from "../../../../lib/manager-auth";
 import { supabaseConfigured, supabaseRest } from "../../../../lib/supabase-rest";
 import { resumeTenantProvisioning } from "../../../../lib/tenant-provisioning";
-const COOKIE_NAME = "proar_session";
-const adminUser = (request: NextRequest) => {
-  const user = readSession(request.cookies.get(COOKIE_NAME)?.value);
-  return user && (user.role === "Administrador" || user.permissions.includes("*")) ? user : null;
-};
+const isAdmin = (request: NextRequest) => readManagerSession(request);
 
 export async function GET(request: NextRequest) {
-  if (!adminUser(request)) return NextResponse.json({ error: "Acesso restrito ao ProAR Manager." }, { status: 403 });
+  if (!isAdmin(request)) return NextResponse.json({ error: "Acesso restrito ao ProAR Manager." }, { status: 403 });
   if (!supabaseConfigured()) return NextResponse.json({ error: "Banco mestre não configurado." }, { status: 503 });
   const companies = await supabaseRest("proar_companies?select=*&order=created_at.desc");
   const instances = await supabaseRest("proar_tenant_instances?select=*&order=created_at.desc");
@@ -18,7 +14,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const user = adminUser(request); if (!user) return NextResponse.json({ error: "Acesso restrito ao ProAR Manager." }, { status: 403 });
+  const user = isAdmin(request); if (!user) return NextResponse.json({ error: "Acesso restrito ao ProAR Manager." }, { status: 403 });
   const body = await request.json(); const companyId = String(body.companyId || "").trim(); if (!companyId) return NextResponse.json({ error: "Empresa não informada." }, { status: 400 });
   if (body.retryProvisioning === true) {
     try { const result = await resumeTenantProvisioning(companyId); return NextResponse.json({ saved: true, provisioning: result }); }
