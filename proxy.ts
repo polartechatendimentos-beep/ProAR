@@ -6,6 +6,10 @@ export function proxy(request: NextRequest) {
   const domain = rootDomain();
   const pathname = request.nextUrl.pathname;
 
+  if ((host === domain || host === `www.${domain}`) && pathname === "/") {
+    const url = request.nextUrl.clone(); url.pathname = "/institucional"; return NextResponse.rewrite(url);
+  }
+
   if (host === `teste.${domain}` && pathname === "/") {
     const url = request.nextUrl.clone(); url.pathname = "/teste"; return NextResponse.rewrite(url);
   }
