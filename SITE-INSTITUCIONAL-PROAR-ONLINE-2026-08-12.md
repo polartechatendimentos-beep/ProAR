@@ -8,3 +8,5 @@ O domínio raiz `proar.online` e `www.proar.online` apresenta o site público da
 - `nomefantasia.proar.online`: ambiente individual de cada empresa.
 
 O roteamento é feito no proxy da aplicação sem remover ou substituir as rotas anteriores do ERP.
+
+- `PROAR_ROOT_DOMAIN=proar.online`: domínio raiz configurado na Vercel.
