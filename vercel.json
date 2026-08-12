@@ -6,6 +6,10 @@
     {
       "path": "/api/cron/licitacoes",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/manager-daily-check",
+      "schedule": "15 8 * * *"
     }
   ]
 }
