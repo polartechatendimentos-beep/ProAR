@@ -9,8 +9,8 @@ export function proxy(request: NextRequest) {
   if (host === `teste.${domain}` && pathname === "/") {
     const url = request.nextUrl.clone(); url.pathname = "/teste"; return NextResponse.rewrite(url);
   }
-  if (host === `manager.${domain}` && pathname === "/") {
-    const url = request.nextUrl.clone(); url.pathname = "/manager"; return NextResponse.rewrite(url);
+  if (host === `manager.${domain}` && !pathname.startsWith("/api/") && !pathname.startsWith("/_next/") && pathname !== "/favicon.ico") {
+    if (pathname !== "/manager") { const url = request.nextUrl.clone(); url.pathname = "/manager"; return NextResponse.rewrite(url); }
   }
 
   const tenant = tenantSlugFromHost(host, domain);
