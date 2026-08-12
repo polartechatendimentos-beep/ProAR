@@ -16,7 +16,11 @@ export async function POST(request: NextRequest) {
   const { username = "", password = "", tenant = "" } = await request.json();
   const hostTenant = tenantSlugFromHost(request.headers.get("host"));
   const resolvedTenant = hostTenant || String(tenant || "").trim().toLowerCase();
-  const staticUser = resolvedTenant ? null : authenticate(String(username), String(password));
+  // Preserve legacy/environment users on every official ProAR hostname.
+  // Before multi-tenant subdomains, these users authenticated on the root app;
+  // blocking them whenever a tenant slug is present locks existing customers out.
+  // Tenant users are still checked below when no legacy user matches.
+  const staticUser = authenticate(String(username), String(password));
   if (staticUser) {
     const claims = { username: staticUser.username, displayName: staticUser.displayName, role: staticUser.role, permissions: staticUser.permissions };
     const response = NextResponse.json({ authenticated: true, ...claims }); response.cookies.set(COOKIE_NAME, createSessionForUser(claims), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 }); return response;
