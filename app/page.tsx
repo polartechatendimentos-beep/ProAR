@@ -8,6 +8,7 @@ import "./access-offline.css";
 import "./public-work-share.css";
 import "./budget-pdv.css";
 import "./licitacoes-restored.css";
+import "./modern-dark.css";
 import { IMPORTED_SERVICES } from "../lib/imported-services";
 
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
@@ -150,7 +151,7 @@ const DEFAULT_COMPANY: TenantCompany = {
   id: "polartech-principal",
   legalName: "PolarTech Mirassol Ar Condicionado",
   tradeName: "PolarTech",
-  cnpj: "",
+  cnpj: "45823828000188",
   city: "Mirassol",
   state: "SP",
   phone: "+55 17 2122-2806",
@@ -1704,6 +1705,40 @@ export default function Home() {
       setCompanies([tenantCompany]); setActiveCompany(tenantCompany); localStorage.setItem("proar-v4-companies", JSON.stringify([tenantCompany])); localStorage.setItem("proar-v4-active-company", tenantCompany.id);
     }).catch(()=>{});
   }, [authenticatedUser?.companyId, authenticatedUser?.companySlug]);
+  useEffect(() => {
+    if (!authenticatedUser || !navigator.onLine || normalizeCnpj(activeCompany.cnpj).length !== 14) return;
+    const registerInManager = () => {
+      void fetch("/api/companies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(activeCompany),
+      }).catch(() => {});
+    };
+    registerInManager();
+    const interval = window.setInterval(registerInManager, 6 * 60 * 60 * 1000);
+    return () => window.clearInterval(interval);
+  }, [authenticatedUser?.username, activeCompany.id, activeCompany.cnpj, activeCompany.tradeName]);
+  useEffect(() => {
+    if (!authenticatedUser) return;
+    const verifyManagerAccess = async () => {
+      if (!navigator.onLine) return;
+      try {
+        const response = await fetch("/api/auth", { cache: "no-store" });
+        if (response.status === 401 || response.status === 403) {
+          localStorage.removeItem("proar-offline-session");
+          setAuthenticatedUser(null);
+          setSavedMessage("A empresa foi bloqueada, suspensa ou teve a licença encerrada no ProAR Manager.");
+        }
+      } catch {}
+    };
+    const interval = window.setInterval(verifyManagerAccess, 60 * 60 * 1000);
+    const onFocus = () => void verifyManagerAccess();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [authenticatedUser?.username]);
   const selectCompany = (company: TenantCompany) => {
     if (company.status === "Bloqueada") { setSavedMessage(`O acesso ao CNPJ ${company.cnpj} está bloqueado pelo gerenciador.`); return; }
     setActiveCompany(company);
