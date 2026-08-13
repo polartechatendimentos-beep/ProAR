@@ -17,7 +17,7 @@
 Aplicar `supabase/migrations/20260811_proar_manager_trials.sql`.
 
 ## DNS
-Criar `teste.proar.app` apontando para a implantação Vercel do ProAR. O mesmo código atende `/teste`. Para uma experiência ainda mais limpa, configure um redirect do host `teste.proar.app` para `/teste` no Vercel ou middleware.
+Criar `teste.proar.online` apontando para a implantação Vercel do ProAR. O mesmo código atende `/teste`. Para uma experiência ainda mais limpa, configure um redirect do host `teste.proar.online` para `/teste` no Vercel ou middleware.
 
 ## Segurança
 - Não exponha `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_MANAGEMENT_TOKEN` ou `PROAR_TENANT_MASTER_KEY` no navegador.
@@ -26,13 +26,13 @@ Criar `teste.proar.app` apontando para a implantação Vercel do ProAR. O mesmo 
 - CPF/CNPJ já usados não podem iniciar novo trial automaticamente.
 
 ## Separação do Gerencial
-O Gerenciador Multiempresa foi removido da navegação/configurações do ProAR operacional. Use exclusivamente `/manager` (recomendado em `manager.proar.app`). O domínio `teste.proar.app` abre o cadastro público do trial e o operacional continua separado.
+O Gerenciador Multiempresa foi removido da navegação/configurações do ProAR operacional. Use exclusivamente `/manager` (recomendado em `manager.proar.online`). O domínio `teste.proar.online` abre o cadastro público do trial e o operacional continua separado.
 
 ### Domínios recomendados
-- `app.proar.app` ou domínio atual: ProAR operacional
-- `teste.proar.app`: cadastro de teste por 7 dias
-- `manager.proar.app`: ProAR Manager restrito à TAV's
+- `app.proar.online` ou domínio atual: ProAR operacional
+- `teste.proar.online`: cadastro de teste por 7 dias
+- `manager.proar.online`: ProAR Manager restrito à TAV's
 
 ## Subdomínio automático por empresa
 
-A versão atual usa o padrão `nomefantasia.proar.app`. O tenant é resolvido automaticamente pelo hostname; `?tenant=` permanece apenas como compatibilidade de desenvolvimento/legado. Para produção, configure `*.proar.app` como domínio wildcard no Vercel e `PROAR_ROOT_DOMAIN=proar.app`.
+A versão atual usa o padrão `nomefantasia.proar.online`. O tenant é resolvido automaticamente pelo hostname; `?tenant=` permanece apenas como compatibilidade de desenvolvimento/legado. Para produção, configure `*.proar.online` como domínio wildcard no Vercel e `PROAR_ROOT_DOMAIN=proar.online`.

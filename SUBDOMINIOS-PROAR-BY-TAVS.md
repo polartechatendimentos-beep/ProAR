@@ -4,21 +4,21 @@
 
 Cada empresa possui um endereço exclusivo baseado no nome fantasia:
 
-- `polartech.proar.app`
-- `abcclimatizacao.proar.app`
-- `refrisul.proar.app`
+- `polartech.proar.online`
+- `abcclimatizacao.proar.online`
+- `refrisul.proar.online`
 
 Ambientes reservados:
 
-- `teste.proar.app` — cadastro do trial de 7 dias
-- `manager.proar.app` — gerenciador exclusivo TAV's
-- `proar.app` / `www.proar.app` — institucional/entrada principal
+- `teste.proar.online` — cadastro do trial de 7 dias
+- `manager.proar.online` — gerenciador exclusivo TAV's
+- `proar.online` / `www.proar.online` — institucional/entrada principal
 
 ## O que foi implementado
 
 1. O cadastro do trial gera um slug a partir do nome fantasia.
 2. Slugs reservados são bloqueados automaticamente.
-3. O retorno do trial já fornece `https://<slug>.proar.app`.
+3. O retorno do trial já fornece `https://<slug>.proar.online`.
 4. O login identifica o tenant pelo hostname, sem depender de `?tenant=`.
 5. Usuários globais/estáticos não autenticam dentro de um subdomínio de cliente.
 6. A sessão é criada no host da empresa, mantendo cookies separados entre subdomínios.
@@ -31,15 +31,15 @@ Ambientes reservados:
 
 Adicionar ao projeto no Vercel:
 
-- `proar.app`
-- `*.proar.app` (wildcard)
+- `proar.online`
+- `*.proar.online` (wildcard)
 
 No DNS, configurar o wildcard conforme os valores indicados pelo próprio Vercel para o domínio. Não criar manualmente um domínio para cada cliente: o wildcard resolve os novos subdomínios automaticamente.
 
 Variável recomendada:
 
 ```env
-PROAR_ROOT_DOMAIN=proar.app
+PROAR_ROOT_DOMAIN=proar.online
 ```
 
 ## Segurança

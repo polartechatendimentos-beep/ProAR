@@ -37,8 +37,7 @@ export async function PATCH(request: NextRequest) {
   if (!admin(request)) return NextResponse.json({ error: "Acesso restrito ao administrador." }, { status: 403 });
   if (!supabaseConfigured()) return NextResponse.json({ error: "Supabase não configurado." }, { status: 503 });
   const body = await request.json();
-  const id = String(body.id || "").trim();
-  if (!id) return NextResponse.json({ error: "Empresa inválida." }, { status: 400 });
-  const response = await supabaseRest(`proar_companies?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ status: body.status === "Bloqueada" ? "blocked" : "active", updated_at: new Date().toISOString() }) });
+  const id = cnpjDigits(body.id);
+  const response = await supabaseRest(`proar_companies?id=eq.${id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ status: body.status === "Bloqueada" ? "blocked" : "active", updated_at: new Date().toISOString() }) });
   return response.ok ? NextResponse.json({ saved: true }) : NextResponse.json({ error: "Falha ao alterar bloqueio." }, { status: 502 });
 }

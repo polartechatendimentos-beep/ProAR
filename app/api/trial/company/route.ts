@@ -5,7 +5,7 @@ export async function GET(request: NextRequest) {
   if (!supabaseConfigured()) return NextResponse.json({ error: "Banco mestre não configurado." }, { status: 503 });
   const slug = String(request.nextUrl.searchParams.get("slug") || "").trim().toLowerCase();
   if (!slug) return NextResponse.json({ error: "Empresa não informada." }, { status: 400 });
-  const response = await supabaseRest(`proar_companies?select=id,legal_name,trade_name,cnpj,cpf,city,state,phone,email,address,logo_path,status,slug,plan_code,trial_started_at,trial_expires_at,brand_config,modules&slug=eq.${encodeURIComponent(slug)}&limit=1`);
+  const response = await supabaseRest(`proar_companies?select=id,legal_name,trade_name,cnpj,cpf,city,state,phone,whatsapp,email,address,zip_code,state_registration,municipal_registration,company_type,tax_regime,logo_path,status,slug,plan_code,trial_started_at,trial_expires_at,brand_config,modules&slug=eq.${encodeURIComponent(slug)}&limit=1`);
   const rows = response.ok ? await response.json() : [];
   if (!rows.length) return NextResponse.json({ error: "Empresa não encontrada." }, { status: 404 });
   const company = rows[0];

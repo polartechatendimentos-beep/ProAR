@@ -8,7 +8,7 @@ export function normalizeHost(value: string | null | undefined) {
 }
 
 export function rootDomain() {
-  return (process.env.PROAR_ROOT_DOMAIN || "proar.app").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/$/, "");
+  return (process.env.PROAR_ROOT_DOMAIN || "proar.online").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/$/, "");
 }
 
 export function tenantSlugFromHost(value: string | null | undefined, domain = rootDomain()) {

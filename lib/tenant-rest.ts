@@ -12,6 +12,12 @@ export async function resolveTenantDb(companyId?: string): Promise<TenantDb> {
     const instance = rows[0];
     if (instance?.provisioning_status === "ready" && instance.api_url && instance.encrypted_secret) return { url: instance.api_url, key: decryptTenantSecret(instance.encrypted_secret), dedicated: true, companyId };
   } catch {}
+  // A PolarTech utiliza a base histórica consolidada no banco principal.
+  // Mantemos esta exceção explícita sem permitir fallback para outros tenants.
+  const primaryCompanyId = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
+  if (companyId === primaryCompanyId && masterUrl && masterKey) {
+    return { url: masterUrl, key: masterKey, dedicated: false, companyId };
+  }
   // Uma empresa/tenant NUNCA pode cair silenciosamente no banco mestre.
   // Enquanto o banco dedicado não estiver pronto, o acesso operacional fica indisponível.
   return { url: "", key: "", dedicated: true, companyId };

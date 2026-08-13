@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { municipalityDistances } from "../../../lib/municipality-distances";
 
 const PNCP_URL = "https://pncp.gov.br/api/consulta/v1/contratacoes/proposta";
+const PNCP_API_BASE = "https://pncp.gov.br/api/pncp";
 const COMPRAS_URL = "https://dadosabertos.compras.gov.br/modulo-contratacoes/1_consultarContratacoes_PNCP_14133";
 const UFS = ["SP", "MG", "MS", "PR", "GO"] as const;
 const MODALITIES = [4, 6, 8, 9, 12] as const;
@@ -152,6 +153,17 @@ export async function searchAutomaticTenders(options?: { start?: Date; end?: Dat
 
 export async function GET(request: NextRequest) {
   try {
+    if (request.nextUrl.searchParams.get("documents") === "1") {
+      const cnpj = (request.nextUrl.searchParams.get("cnpj") ?? "").replace(/\D/g, "");
+      const ano = Number(request.nextUrl.searchParams.get("ano") ?? 0);
+      const sequencial = Number(request.nextUrl.searchParams.get("sequencial") ?? 0);
+      if (cnpj.length !== 14 || !ano || !sequencial) return NextResponse.json({ data: [], error: "Identificadores da contratação incompletos." }, { status: 400 });
+      const response = await fetch(`${PNCP_API_BASE}/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos`, { headers: { Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(6500) });
+      if (!response.ok) return NextResponse.json({ data: [], warning: `O PNCP não retornou os documentos desta contratação (${response.status}).` });
+      const payload = await response.json();
+      const docs = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : [];
+      return NextResponse.json({ data: docs });
+    }
     if (request.nextUrl.searchParams.get("monitor") === "1") {
       const store = await readMonitorStore();
       return NextResponse.json({ data: store.items ?? [], lastScan: store.lastScan, warning: store.lastError ?? "", source: "Monitor oficial PNCP" });

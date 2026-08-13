@@ -1,12 +1,19 @@
-# Site institucional do ProAR Online
+# Site institucional — www.proar.online
 
-O domínio raiz `proar.online` e `www.proar.online` apresenta o site público da plataforma. Os ambientes operacionais permanecem separados por subdomínio:
+Criado um site institucional separado do ERP para `proar.online` e `www.proar.online`.
 
-- `teste.proar.online`: cadastro e teste gratuito;
-- `manager.proar.online`: gerenciador administrativo TAV's;
-- `polartech.proar.online`: sistema operacional PolarTech;
-- `nomefantasia.proar.online`: ambiente individual de cada empresa.
+## Conteúdo
+- apresentação do ProAR Gestão de Serviços — BY TAV's;
+- módulos de Clientes, OS, Obras, Vendas, Orçamentos, Estoque, Financeiro, Fiscal, Relatórios e Indicadores;
+- benefícios de uso em computador/tablet/celular;
+- apresentação da arquitetura multiempresa e subdomínio exclusivo;
+- CTA para teste gratuito de 7 dias em `teste.proar.online`;
+- links para Termos de Uso e Privacidade.
 
-O roteamento é feito no proxy da aplicação sem remover ou substituir as rotas anteriores do ERP.
+## Roteamento
+- `proar.online` e `www.proar.online` -> site institucional;
+- `teste.proar.online` -> trial;
+- `manager.proar.online` -> ProAR Manager;
+- `nomefantasia.proar.online` -> ERP da empresa.
 
-- `PROAR_ROOT_DOMAIN=proar.online`: domínio raiz configurado na Vercel.
+A alteração é aditiva e não remove nenhuma rota operacional existente.

@@ -2,8 +2,8 @@
 
 ## Entregue
 - ProAR Manager separado em `/manager`.
-- Cadastro público de trial em `/teste`, preparado para o domínio `teste.proar.app`.
-- `proxy.ts` do Next.js 16 reescreve `teste.proar.app/` para `/teste`.
+- Cadastro público de trial em `/teste`, preparado para o domínio `teste.proar.online`.
+- `proxy.ts` do Next.js 16 reescreve `teste.proar.online/` para `/teste`.
 - Cadastro padrão de empresa com PF/PJ, CPF/CNPJ, razão social, fantasia, responsável, contatos, endereço, inscrições, tipo de empresa, regime tributário e segmento.
 - Validação matemática de CPF/CNPJ e bloqueio de novo trial para documento já cadastrado.
 - Trial controlado no servidor por 7 dias.
@@ -27,7 +27,7 @@ Consulte `.env.example`.
 Aplicar `supabase/migrations/20260811_proar_manager_trials.sql` no banco mestre antes de liberar `/teste`.
 
 ## Vercel / DNS
-Adicionar o domínio `teste.proar.app` ao mesmo projeto ou a uma implantação de homologação e configurar o DNS indicado pelo Vercel.
+Adicionar o domínio `teste.proar.online` ao mesmo projeto ou a uma implantação de homologação e configurar o DNS indicado pelo Vercel.
 
 ## Observação de build
 Os arquivos TS/TSX novos e alterados foram verificados pelo compilador TypeScript em modo de transpile e não apresentaram erros de sintaxe. O `next build` completo não foi executado porque o projeto enviado não contém `node_modules` e a instalação das dependências excedeu o limite de execução deste ambiente.

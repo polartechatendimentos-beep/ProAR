@@ -11,11 +11,13 @@ const safeEqual = (left: string, right: string) => { const a=Buffer.from(left); 
 export async function GET(request: NextRequest) {
   const user = readSession(request.cookies.get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.json({ authenticated: false }, { status: 401 });
-  const access = await validateCompanyAccess(user.companyId);
-  if (!access.ok) {
-    const response = NextResponse.json({ authenticated: false, error: access.reason }, { status: 403 });
-    response.cookies.set(COOKIE_NAME, "", { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 0 });
-    return response;
+  if (user.companyId) {
+    const access = await validateCompanyAccess(user.companyId);
+    if (!access.ok) {
+      const response = NextResponse.json({ authenticated: false, error: access.reason }, { status: 403 });
+      response.cookies.set(COOKIE_NAME, "", { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 0 });
+      return response;
+    }
   }
   return NextResponse.json({ authenticated: true, ...user });
 }
@@ -24,11 +26,7 @@ export async function POST(request: NextRequest) {
   const { username = "", password = "", tenant = "" } = await request.json();
   const hostTenant = tenantSlugFromHost(request.headers.get("host"));
   const resolvedTenant = hostTenant || String(tenant || "").trim().toLowerCase();
-  // Preserve legacy/environment users on every official ProAR hostname.
-  // Before multi-tenant subdomains, these users authenticated on the root app;
-  // blocking them whenever a tenant slug is present locks existing customers out.
-  // Tenant users are still checked below when no legacy user matches.
-  const staticUser = authenticate(String(username), String(password));
+  const staticUser = resolvedTenant ? null : authenticate(String(username), String(password));
   if (staticUser) {
     const claims = { username: staticUser.username, displayName: staticUser.displayName, role: staticUser.role, permissions: staticUser.permissions };
     const response = NextResponse.json({ authenticated: true, ...claims }); response.cookies.set(COOKIE_NAME, createSessionForUser(claims), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 }); return response;
