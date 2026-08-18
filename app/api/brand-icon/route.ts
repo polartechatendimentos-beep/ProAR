@@ -1,0 +1,6 @@
+export const runtime = "edge";
+
+export function GET() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="ProAR"><defs><radialGradient id="b"><stop stop-color="#1478ff"/><stop offset="1" stop-color="#03152f"/></radialGradient><filter id="s"><feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#000" flood-opacity=".45"/></filter></defs><rect width="512" height="512" rx="92" fill="url(#b)"/><g fill="#fff" filter="url(#s)"><path d="M111 119h207c64 0 105 42 105 98 0 56-40 97-105 97H203l-24 81H99l57-189h159c27 0 44-15 44-36 0-22-17-36-44-36H136z"/><path d="M104 245h77l-45 114c-9 22-27 34-53 34H38z"/><path d="M62 400c41 0 53 30 93 30 39 0 59-28 84-51-20 43-48 75-94 75-40 0-57-27-89-27z"/><path d="M72 445c35 0 49 25 82 25 31 0 47-21 67-39-18 34-39 57-73 57-32 0-45-21-80-21z"/></g><g stroke="#0d6de8" stroke-width="10" stroke-linecap="round"><path d="M270 229v83M234 250l72 41M306 250l-72 41M247 216l23 14M293 216l-23 14M247 325l23-14M293 325l-23-14"/></g><circle cx="270" cy="271" r="13" fill="#fff"/></svg>`;
+  return new Response(svg, { headers: { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=31536000, immutable" } });
+}
