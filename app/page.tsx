@@ -14,6 +14,7 @@ import "./proar-3-theme.css";
 import "./lote-1-operacao.css";
 import "./pdv-layout-refinement.css";
 import "./header-visibility.css";
+import "./service-order-tracking.css";
 
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
@@ -87,6 +88,48 @@ type ServiceOrder = {
   nfseVerificationCode?: string;
   nfseIssuedAt?: string;
   nfseValue?: number;
+  trackingToken?: string;
+  whatsappPhone?: string;
+  whatsappUpdatesEnabled?: boolean;
+  whatsappAppointmentReminderEnabled?: boolean;
+  whatsappStatusUpdatesEnabled?: boolean;
+  appointmentReminderHours?: number;
+  timeline?: ServiceOrderTimelineEvent[];
+  assistance?: AssistanceEntry;
+};
+
+type ServiceOrderTimelineEvent = {
+  id: string;
+  createdAt: string;
+  previousStatus?: string;
+  status: string;
+  technician?: string;
+  internalNote?: string;
+  customerNote?: string;
+  photos?: string[];
+  customerVisible?: boolean;
+  whatsappQueued?: boolean;
+};
+
+type AssistanceEntry = {
+  requestedAt?: string;
+  arrivalAt?: string;
+  equipment?: string;
+  brand?: string;
+  model?: string;
+  serialNumber?: string;
+  pickupLocation?: string;
+  pickupReason?: string;
+  authorizedBy?: string;
+  accessories?: string;
+  reportedDefect?: string;
+  receivedBy?: string;
+  condition?: "Excelente" | "Bom" | "Regular" | "Com avarias" | "Danificado";
+  inspection?: Record<string, boolean>;
+  inspectionNotes?: string;
+  missingParts?: string;
+  entryPhotos?: string[];
+  exitPhotos?: string[];
 };
 
 type Customer = {
@@ -288,6 +331,7 @@ type ModuleRecord = {
   installationDate?: string;
   nextMaintenanceDate?: string;
   equipmentUnit?: string;
+  parentUnit?: string;
 };
 
 // Fonte única para os seletores Cliente → Unidade/Filial/Setor. Ela lê os
@@ -304,6 +348,15 @@ function customerStructures(customerName: string, customers: Customer[], structu
       const bMain = /matriz|unidade principal|sede/i.test(`${b.name} ${b.category ?? ""}`) ? 0 : 1;
       return aMain - bMain || a.name.localeCompare(b.name, "pt-BR");
     });
+}
+
+function customerLocations(customerName: string, customers: Customer[], structures: ModuleRecord[], unitName = "") {
+  const all = customerStructures(customerName, customers, structures);
+  const isSector = (item: ModuleRecord) => /setor|departamento|local de atendimento/i.test(item.category ?? "");
+  const units = all.filter(item => !isSector(item));
+  const sectors = unitName ? all.filter(item => isSector(item) && normalizeRelation(item.parentUnit) === normalizeRelation(unitName)) : [];
+  const unlinkedSectors = all.filter(item => isSector(item) && !item.parentUnit);
+  return { units, sectors, unlinkedSectors };
 }
 
 function mergeImportedServices(modules: Record<string, ModuleRecord[]>) {
@@ -651,12 +704,50 @@ function OrderDetail({ order, customerPhone, company, catalog, close, onUpdate }
   const [currentOrder, setCurrentOrder] = useState(order);
   const [itemsTab, setItemsTab] = useState<"Serviços" | "Produtos">("Serviços");
   const [itemSearch, setItemSearch] = useState("");
+  const [statusDraft, setStatusDraft] = useState(order.status);
+  const [internalUpdate, setInternalUpdate] = useState("");
+  const [customerUpdate, setCustomerUpdate] = useState("");
+  const [statusPhotos, setStatusPhotos] = useState<string[]>([]);
+  const [assistanceOpen, setAssistanceOpen] = useState(Boolean(order.assistance?.requestedAt && !order.assistance?.arrivalAt));
+  const [assistance, setAssistance] = useState<AssistanceEntry>(order.assistance ?? {});
+  const [assistancePhotos, setAssistancePhotos] = useState<string[]>(order.assistance?.entryPhotos ?? []);
   const mapsSearch = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.address)}`;
   const mapsEmbed = `https://www.google.com/maps?q=${encodeURIComponent(order.address)}&output=embed`;
   const update = (patch: Partial<ServiceOrder>) => {
     const updated = { ...currentOrder, ...patch };
     setCurrentOrder(updated);
     onUpdate(updated);
+  };
+  const trackingUrl = currentOrder.trackingToken ? `${window.location.origin}/os/${currentOrder.trackingToken}` : "";
+  const whatsappPhone = (currentOrder.whatsappPhone || customerPhone || "").replace(/\D/g, "");
+  const toneForStatus = (status: string) => /cancel|atras/i.test(status) ? "red" : /conclu|confirm|entregue/i.test(status) ? "green" : /aguardando|reagend/i.test(status) ? "amber" : "blue";
+  const trackingToken = () => currentOrder.trackingToken || (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID().replace(/-/g, "") : `${Date.now()}${Math.random().toString(36).slice(2)}`);
+  const attachStatusPhoto = async (file?: File) => { if (!file) return; const encoded = await imageFileToDataUrl(file); setStatusPhotos(current => [...current, encoded]); };
+  const attachAssistancePhoto = async (file?: File) => { if (!file) return; const encoded = await imageFileToDataUrl(file); setAssistancePhotos(current => [...current, encoded]); };
+  const registerStatusUpdate = () => {
+    const statusChanged = statusDraft !== currentOrder.status;
+    if (!statusChanged && !internalUpdate.trim() && !customerUpdate.trim() && !statusPhotos.length) return;
+    const token = trackingToken();
+    const event: ServiceOrderTimelineEvent = { id: `evt-${Date.now()}`, createdAt: new Date().toISOString(), previousStatus: currentOrder.status, status: statusDraft, technician: currentOrder.tech, internalNote: internalUpdate.trim() || undefined, customerNote: customerUpdate.trim() || undefined, photos: statusPhotos.length ? statusPhotos : undefined, customerVisible: Boolean(customerUpdate.trim() || statusPhotos.length), whatsappQueued: Boolean(whatsappPhone && currentOrder.whatsappUpdatesEnabled !== false && (customerUpdate.trim() || statusChanged)) };
+    update({ trackingToken: token, status: statusDraft, tone: toneForStatus(statusDraft), timeline: [...(currentOrder.timeline ?? []), event] });
+    setInternalUpdate(""); setCustomerUpdate(""); setStatusPhotos([]);
+  };
+  const requestAssistance = () => {
+    const token = trackingToken();
+    const requestedAt = new Date().toISOString();
+    const entry: AssistanceEntry = { ...assistance, requestedAt, pickupLocation: assistance.pickupLocation || currentOrder.address };
+    const event: ServiceOrderTimelineEvent = { id:`evt-${Date.now()}`, createdAt:requestedAt, previousStatus:currentOrder.status, status:"Equipamento encaminhado para assistência", technician:currentOrder.tech, internalNote:entry.pickupReason || "Retirada do equipamento solicitada.", customerNote:"Seu equipamento será encaminhado para avaliação em nossa assistência técnica.", customerVisible:true, whatsappQueued:Boolean(whatsappPhone && currentOrder.whatsappUpdatesEnabled !== false) };
+    update({ trackingToken:token, status:"Equipamento encaminhado para assistência", tone:"amber", assistance:entry, timeline:[...(currentOrder.timeline ?? []),event] });
+    setAssistance(entry); setAssistanceOpen(true);
+  };
+  const confirmAssistanceEntry = () => {
+    const damaged = assistance.condition === "Com avarias" || assistance.condition === "Danificado";
+    if (!assistance.equipment?.trim() || !assistance.serialNumber?.trim() || !assistance.reportedDefect?.trim() || !assistance.receivedBy?.trim() || assistancePhotos.length < 1 || (damaged && !assistance.inspectionNotes?.trim())) return;
+    const token = trackingToken(); const arrivalAt = new Date().toISOString();
+    const entry: AssistanceEntry = { ...assistance, arrivalAt, entryPhotos: assistancePhotos };
+    const event: ServiceOrderTimelineEvent = { id:`evt-${Date.now()}`, createdAt:arrivalAt, previousStatus:currentOrder.status, status:"Equipamento recebido na assistência técnica", technician:assistance.receivedBy, internalNote:entry.inspectionNotes || "Recebimento e inspeção visual registrados.", customerNote:"Seu equipamento foi recebido em nossa assistência técnica e seguirá para diagnóstico.", photos:assistancePhotos, customerVisible:true, whatsappQueued:Boolean(whatsappPhone && currentOrder.whatsappUpdatesEnabled !== false) };
+    update({ trackingToken:token, status:"Equipamento recebido na assistência técnica", tone:"blue", assistance:entry, timeline:[...(currentOrder.timeline ?? []),event] });
+    setAssistance(entry); setAssistanceOpen(false);
   };
   const uploadPhoto = async (field: "photoBefore" | "photoAfter", file?: File) => {
     if (!file) return;
@@ -693,6 +784,31 @@ function OrderDetail({ order, customerPhone, company, catalog, close, onUpdate }
           <article><Wrench size={17}/><div><small>SERVIÇO</small><strong>{order.service}</strong></div></article>
           <article><Activity size={17}/><div><small>SITUAÇÃO</small><strong>{currentOrder.status}</strong></div></article>
         </div>
+        <section className="os-tracking-panel">
+          <div className="execution-head"><div><span>ACOMPANHAMENTO PELO WHATSAPP</span><h3>Atualizações seguras para o cliente</h3></div><small>{trackingUrl ? "Link ativo" : "Ative ao salvar uma atualização"}</small></div>
+          <div className="os-tracking-grid">
+            <label>Telefone / WhatsApp<input value={currentOrder.whatsappPhone ?? customerPhone ?? ""} onChange={event => update({ whatsappPhone:event.target.value })} placeholder="(00) 00000-0000"/></label>
+            <label className="tracking-toggle"><input type="checkbox" checked={currentOrder.whatsappUpdatesEnabled !== false} onChange={event => update({ whatsappUpdatesEnabled:event.target.checked, trackingToken:trackingToken() })}/><span><b>Cliente recebe atualizações</b><small>Status e fotos liberadas</small></span></label>
+            <label className="tracking-toggle"><input type="checkbox" checked={currentOrder.whatsappAppointmentReminderEnabled !== false} onChange={event => update({ whatsappAppointmentReminderEnabled:event.target.checked, trackingToken:trackingToken() })}/><span><b>Lembrete de agendamento</b><small>Antes do atendimento</small></span></label>
+            <label>Antecedência do lembrete<select value={currentOrder.appointmentReminderHours ?? 24} onChange={event => update({ appointmentReminderHours:Number(event.target.value), trackingToken:trackingToken() })}><option value="2">2 horas antes</option><option value="24">24 horas antes</option><option value="48">48 horas antes</option></select></label>
+          </div>
+          {trackingUrl && <div className="tracking-link"><MessageCircle size={18}/><div><b>Link exclusivo do cliente</b><small>Mostra somente status, fotos e atualizações liberadas.</small></div><button type="button" onClick={() => navigator.clipboard.writeText(trackingUrl)}>Copiar link</button><button type="button" disabled={!whatsappPhone} onClick={() => window.open(`https://wa.me/${whatsappPhone.startsWith("55") ? whatsappPhone : `55${whatsappPhone}`}?text=${encodeURIComponent(`Acompanhe sua Ordem de Serviço ${currentOrder.id}: ${trackingUrl}`)}`, "_blank", "noopener,noreferrer")}>Enviar WhatsApp</button></div>}
+          <p className="tracking-disclaimer">O envio automático exige uma integração WhatsApp Business configurada no ambiente seguro. Sem essa configuração, a mensagem fica pronta para envio pelo botão WhatsApp.</p>
+        </section>
+        <section className="os-status-panel">
+          <div className="execution-head"><div><span>ATUALIZAÇÃO OPERACIONAL</span><h3>Registrar status, fotos e comunicação</h3></div><small>Observações internas nunca são enviadas ao cliente.</small></div>
+          <div className="status-update-grid"><label>Novo status<select value={statusDraft} onChange={event => setStatusDraft(event.target.value)}>{["Aberta","Agendada","Cliente confirmado","Técnico a caminho","Técnico no local","Em atendimento","Aguardando material","Aguardando aprovação","Aguardando retorno","Serviço concluído","Aguardando assinatura","Concluída","Reagendada","Cancelada"].map(status => <option key={status}>{status}</option>)}</select></label><label>Observação técnica interna<textarea value={internalUpdate} onChange={event => setInternalUpdate(event.target.value)} placeholder="Visível somente para a equipe..."/></label><label>Atualização para o cliente<textarea value={customerUpdate} onChange={event => setCustomerUpdate(event.target.value)} placeholder="Texto que será exibido no acompanhamento e preparado para WhatsApp..."/></label><label className="os-photo-upload"><Camera size={18}/><b>Adicionar fotos</b><small>{statusPhotos.length ? `${statusPhotos.length} foto(s) anexada(s)` : "Fotos opcionais nesta etapa"}</small><input type="file" accept="image/*" multiple onChange={event => void Promise.all(Array.from(event.target.files ?? []).map(attachStatusPhoto))}/></label></div>
+          {statusPhotos.length > 0 && <div className="os-photo-strip">{statusPhotos.map((photo,index)=><figure key={`${photo.slice(-18)}-${index}`}><img src={photo} alt={`Atualização ${index+1}`}/><button type="button" onClick={()=>setStatusPhotos(current=>current.filter((_,photoIndex)=>photoIndex!==index))}><X size={12}/></button></figure>)}</div>}
+          <div className="status-update-actions"><button className="outline-btn" type="button" onClick={requestAssistance}><Package size={15}/> Levar equipamento para assistência</button><button className="primary-btn" type="button" onClick={registerStatusUpdate}><CheckCircle2 size={15}/> Registrar atualização</button></div>
+        </section>
+        {assistanceOpen && <section className="assistance-panel"><div className="execution-head"><div><span>ASSISTÊNCIA TÉCNICA</span><h3>Recebimento obrigatório do equipamento</h3></div><small>Fotos e inspeção preservam o histórico da OS.</small></div>
+          <div className="assistance-form"><label>Equipamento *<input value={assistance.equipment ?? ""} onChange={event=>setAssistance(value=>({...value,equipment:event.target.value}))}/></label><label>Marca<input value={assistance.brand ?? ""} onChange={event=>setAssistance(value=>({...value,brand:event.target.value}))}/></label><label>Modelo<input value={assistance.model ?? ""} onChange={event=>setAssistance(value=>({...value,model:event.target.value}))}/></label><label>Número de série *<input value={assistance.serialNumber ?? ""} onChange={event=>setAssistance(value=>({...value,serialNumber:event.target.value}))}/></label><label>Defeito informado *<textarea value={assistance.reportedDefect ?? ""} onChange={event=>setAssistance(value=>({...value,reportedDefect:event.target.value}))}/></label><label>Acessórios recebidos<input value={assistance.accessories ?? ""} onChange={event=>setAssistance(value=>({...value,accessories:event.target.value}))} placeholder="Controle, cabo, tampa..."/></label><label>Peças/acessórios ausentes<input value={assistance.missingParts ?? ""} onChange={event=>setAssistance(value=>({...value,missingParts:event.target.value}))} placeholder="Descreva ausências identificadas"/></label><label>Responsável pelo recebimento *<input value={assistance.receivedBy ?? ""} onChange={event=>setAssistance(value=>({...value,receivedBy:event.target.value}))}/></label><label>Estado geral<select value={assistance.condition ?? "Bom"} onChange={event=>setAssistance(value=>({...value,condition:event.target.value as AssistanceEntry["condition"]}))}>{["Excelente","Bom","Regular","Com avarias","Danificado"].map(item=><option key={item}>{item}</option>)}</select></label></div>
+          <div className="inspection-checks">{[["riscos","Possui riscos"],["amassados","Possui amassados"],["partesQuebradas","Possui partes quebradas"],["pecasFaltando","Possui peças faltando"],["parafusosAusentes","Parafusos/tampas ausentes"],["oxidacao","Sinais de oxidação"],["manutencaoAnterior","Marcas de manutenção anterior"],["danosAparentes","Danos aparentes"] as const].map(([key,label])=><label key={key}><input type="checkbox" checked={Boolean(assistance.inspection?.[key])} onChange={event=>setAssistance(value=>({...value,inspection:{...(value.inspection ?? {}),[key]:event.target.checked}}))}/>{label}</label>)}</div>
+          <label className="assistance-wide">Observações sobre riscos, avarias e condição{(assistance.condition === "Com avarias" || assistance.condition === "Danificado") ? " *" : ""}<textarea value={assistance.inspectionNotes ?? ""} onChange={event=>setAssistance(value=>({...value,inspectionNotes:event.target.value}))} placeholder="Registre detalhes visuais identificados na entrada..."/></label>
+          <label className="assistance-photo-upload"><Camera size={20}/><b>Fotos obrigatórias de entrada *</b><small>{assistancePhotos.length ? `${assistancePhotos.length} foto(s) anexada(s)` : "Anexe ao menos uma foto antes de confirmar"}</small><input type="file" accept="image/*" multiple onChange={event => void Promise.all(Array.from(event.target.files ?? []).map(attachAssistancePhoto))}/></label>{assistancePhotos.length>0&&<div className="os-photo-strip">{assistancePhotos.map((photo,index)=><figure key={`${photo.slice(-18)}-${index}`}><img src={photo} alt={`Entrada ${index+1}`}/><button type="button" onClick={()=>setAssistancePhotos(current=>current.filter((_,photoIndex)=>photoIndex!==index))}><X size={12}/></button></figure>)}</div>}
+          <div className="status-update-actions"><small>Para confirmar: equipamento, série, defeito, responsável e ao menos uma foto.</small><button className="primary-btn" type="button" onClick={confirmAssistanceEntry} disabled={!assistance.equipment?.trim() || !assistance.serialNumber?.trim() || !assistance.reportedDefect?.trim() || !assistance.receivedBy?.trim() || !assistancePhotos.length || ((assistance.condition === "Com avarias" || assistance.condition === "Danificado") && !assistance.inspectionNotes?.trim())}><CheckCircle2 size={15}/> Confirmar entrada do equipamento</button></div>
+        </section>}
+        {(currentOrder.timeline?.length ?? 0) > 0 && <section className="os-timeline"><div className="execution-head"><div><span>LINHA DO TEMPO</span><h3>Histórico do atendimento</h3></div><small>Eventos não são sobrescritos.</small></div>{[...(currentOrder.timeline ?? [])].reverse().map(event=><article key={event.id}><i/><div><header><b>{event.status}</b><time>{formatMoment(event.createdAt)}</time></header><small>{event.technician || "Equipe ProAR"}</small>{event.internalNote&&<p><strong>Interno:</strong> {event.internalNote}</p>}{event.customerNote&&<p><strong>Cliente:</strong> {event.customerNote}</p>}{event.photos?.length?<div className="os-event-photos">{event.photos.map((photo,index)=><img key={`${photo.slice(-16)}-${index}`} src={photo} alt={`Foto do evento ${index+1}`}/>)}</div>:null}</div></article>)}</section>}
         <section className="preventive-engine">
           <div className="execution-head"><div><span>MANUTENÇÃO PREVENTIVA</span><h3>Garantia, revisão e alerta automático</h3></div><small>{serviceOrderReviewDate(currentOrder) ? `Próxima revisão: ${new Date(`${serviceOrderReviewDate(currentOrder)}T12:00:00`).toLocaleDateString("pt-BR")}` : "Configure a recorrência"}</small></div>
           <div className="preventive-fields"><label>Última manutenção<input type="date" value={currentOrder.lastMaintenanceDate ?? currentOrder.date ?? ""} onChange={event => update({ lastMaintenanceDate: event.target.value })}/></label><label>Garantia / revisão<select value={currentOrder.reviewPeriodMonths ?? 6} onChange={event => update({ reviewPeriodMonths: Number(event.target.value) as 3 | 6 | 12 })}><option value="3">3 meses</option><option value="6">6 meses</option><option value="12">12 meses</option></select></label><label>Notificar antes<input type="number" min="1" max="90" value={currentOrder.notifyDaysBefore ?? 15} onChange={event => update({ notifyDaysBefore: Math.max(1, Number(event.target.value) || 15) })}/><small>dias antes</small></label></div>
@@ -1660,6 +1776,7 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
   const isEquipmentRegistration = title.includes("Equipamentos");
   const [selectedClient, setSelectedClient] = useState("");
   const [unit, setUnit] = useState("");
+  const [sector, setSector] = useState("");
   const [tech, setTech] = useState("");
   const [time, setTime] = useState("");
   const [recordName, setRecordName] = useState("");
@@ -1844,10 +1961,12 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
   const serviceRecords = catalogRecords.filter(item => (item.kind || "Serviço") === "Serviço");
   const selectedServices = serviceRecords.filter(item => selectedCatalogIds.includes(item.id));
   const visibleServiceOptions = serviceRecords.filter(item => `${item.name} ${item.description || ""} ${item.category || ""}`.toLocaleLowerCase("pt-BR").includes(serviceSearch.trim().toLocaleLowerCase("pt-BR")));
-  const availableUnits = selectedClient ? customerStructures(selectedClient, customers, structures).map(item => ({ icon: Building2, name:item.name, type:item.category || "Unidade", doc:item.doc || "", responsible:item.contact || "", phone:item.phone || "", address:item.address || "", orders:0 })) : [];
+  const locations = selectedClient ? customerLocations(selectedClient, customers, structures, unit) : { units: [], sectors: [], unlinkedSectors: [] };
+  const availableUnits = locations.units.map(item => ({ icon: Building2, name:item.name, type:item.category || "Unidade", doc:item.doc || "", responsible:item.contact || "", phone:item.phone || "", address:item.address || "", orders:0 }));
   useEffect(() => {
     if (selectedClient && !availableUnits.some(item => item.name === unit)) setUnit(availableUnits[0]?.name ?? "");
   }, [selectedClient, availableUnits, unit]);
+  useEffect(() => { if (!locations.sectors.some(item => item.name === sector)) setSector(""); }, [unit, selectedClient]);
   return <div className="modal-layer" role="dialog" aria-modal="true" aria-label={title}><button className="modal-backdrop" onClick={close} aria-label="Fechar janela"/><div className="modal"><div className="modal-head"><div><span>{isLinkedStructure ? "ESTRUTURA DO CLIENTE • LIMITE DE 20" : "CADASTRO PROAR"}</span><h2>{isLinkedStructure ? "Nova unidade, filial ou setor" : title}</h2>{isLinkedStructure && <p>Este registro será vinculado a <strong>{parentCustomer}</strong>.</p>}</div><button onClick={close} aria-label="Fechar"><X size={18}/></button></div><div className="form-grid">
     {isLinkedStructure ? <>
       <label>Cliente principal<input value={parentCustomer} readOnly/></label>
@@ -1876,8 +1995,9 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
       <label className="wide">Observações<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="Informações específicas desta unidade, empresa ou setor..."/></label>
     </> : <>
       {isNewOrder ? <>
-        <label>Cliente cadastrado<select value={selectedClient} onChange={event => setSelectedClient(event.target.value)}><option value="">Selecione o cliente</option>{customers.map(customer => <option key={customer.doc} value={customer.name}>{customer.name} • {customer.doc}</option>)}</select></label>
-        <label>Unidade, filial ou setor<select value={unit} onChange={event => setUnit(event.target.value)} disabled={!selectedClient}><option value="">{selectedClient ? "Selecione o local do atendimento" : "Selecione primeiro o cliente"}</option>{availableUnits.map(item => <option key={item.name} value={item.name}>{item.name} • {item.type}</option>)}</select></label>
+        <label>Pesquisar cliente<input list="proar-order-customers" value={selectedClient} onChange={event => { setSelectedClient(event.target.value); setUnit(""); setSector(""); }} placeholder="Pesquisar cliente por nome, CPF/CNPJ ou telefone..."/><datalist id="proar-order-customers">{customers.map(customer => <option key={customer.id} value={customer.name}>{[customer.legalName,customer.tradeName,customer.doc,customer.phone].filter(Boolean).join(" • ")}</option>)}</datalist></label>
+        <label>Unidade / Filial<select value={unit} onChange={event => { setUnit(event.target.value); setSector(""); }} disabled={!selectedClient || !availableUnits.length}><option value="">{selectedClient ? availableUnits.length ? "Selecione a unidade" : "Cliente principal / Endereço principal" : "Selecione primeiro o cliente"}</option>{availableUnits.map(item => <option key={item.name} value={item.name}>{item.name} • {item.type}</option>)}</select>{selectedClient && !availableUnits.length && <small>Nenhuma unidade cadastrada: será usado o endereço principal.</small>}</label>
+        <label>Setor / Local de atendimento<select value={sector} onChange={event => setSector(event.target.value)} disabled={!unit || !locations.sectors.length}><option value="">{unit ? locations.sectors.length ? "Selecione o setor" : "Nenhum setor cadastrado nesta unidade" : "Selecione uma unidade"}</option>{locations.sectors.map(item => <option key={item.id} value={item.name}>{item.name}</option>)}</select>{unit && !locations.sectors.length && <small>Nenhum setor cadastrado nesta unidade.</small>}</label>
         <label>Responsável do cliente<input value={selectedClientData?.contact ?? ""} readOnly placeholder="Carregado pelo cadastro"/></label>
         <label>Telefone<input value={selectedClientData?.phone ?? ""} readOnly placeholder="Carregado pelo cadastro"/></label>{selectedClientData && <div className={`wide credit-check ${selectedClientData.financialStatus === "Bloqueado" ? "blocked" : ""}`}><CircleDollarSign size={17}/><div><b>Crédito do cliente</b><small>Limite R$ {(selectedClientData.creditLimit ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})} • Saldo lançado R$ {(selectedClientData.balancePosted ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})} • Disponível R$ {Math.max(0,(selectedClientData.creditLimit ?? 0)-(selectedClientData.balancePosted ?? 0)).toLocaleString("pt-BR",{minimumFractionDigits:2})}</small></div><strong>{selectedClientData.financialStatus ?? "Liberado"}</strong></div>}
         <label className="wide">Endereço do atendimento<input value={unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? ""} readOnly placeholder="Carregado pelo cadastro do cliente"/></label>
@@ -2250,6 +2370,12 @@ export default function Home() {
     localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(updatedOrders));
     localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(updatedModules));
     persistSharedState(customerRecords, updatedOrders, updatedModules);
+    // O acompanhamento externo recebe somente o recorte liberado ao cliente;
+    // observações internas, financeiro e demais dados operacionais ficam na base autenticada.
+    if (updatedOrder.trackingToken) {
+      const timeline = (updatedOrder.timeline ?? []).filter(event => event.customerVisible).map(event => ({ id:event.id, createdAt:event.createdAt, status:event.status, customerNote:event.customerNote, photos:event.photos, customerVisible:true }));
+      void fetch("/api/public-service-order", { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ companyId:activeCompany.id, orderId:updatedOrder.id, token:updatedOrder.trackingToken, client:updatedOrder.client, service:updatedOrder.service, date:updatedOrder.date, time:updatedOrder.time, status:updatedOrder.status, timeline }) });
+    }
     setSavedMessage(updatedOrder.status === "Concluída" && updatedOrder.reminderEnabled ? `Ordem ${updatedOrder.id} concluída e lembrete agendado.` : `Ordem ${updatedOrder.id} atualizada e sincronizada.`);
     window.setTimeout(() => setSavedMessage(""), 2500);
   };
