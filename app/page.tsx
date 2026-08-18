@@ -11,6 +11,9 @@ import "./licitacoes-restored.css";
 import "./commercial-catalog-enhancements.css";
 import "./entity-detail-tabs.css";
 import "./proar-3-theme.css";
+import "./lote-1-operacao.css";
+import "./pdv-layout-refinement.css";
+import "./header-visibility.css";
 
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
@@ -27,6 +30,8 @@ import {
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type NavItem = { icon: IconType; name: string; badge?: string };
+type GlobalSearchItem = { id: string; title: string; detail: string; module: string; kind: "Cliente" | "OS" | "Cadastro" };
+type PendingItem = { id: string; title: string; detail: string; module: string; tone: "blue" | "amber" | "red" };
 
 const navGroups: { label: string; items: NavItem[] }[] = [
   { label: "VISÃO GERAL", items: [
@@ -285,6 +290,22 @@ type ModuleRecord = {
   equipmentUnit?: string;
 };
 
+// Fonte única para os seletores Cliente → Unidade/Filial/Setor. Ela lê os
+// registros existentes do módulo de estruturas, sem criar cópias paralelas.
+const normalizeRelation = (value?: string) => String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
+function customerStructures(customerName: string, customers: Customer[], structures: ModuleRecord[], includeInactive = false) {
+  const customer = customers.find(item => item.name === customerName);
+  const keys = [customerName, customer?.name, customer?.legalName, customer?.tradeName].map(normalizeRelation).filter(Boolean);
+  return structures
+    .filter(item => keys.includes(normalizeRelation(item.client)))
+    .filter(item => includeInactive || !/^inativ/i.test(item.status ?? ""))
+    .sort((a, b) => {
+      const aMain = /matriz|unidade principal|sede/i.test(`${a.name} ${a.category ?? ""}`) ? 0 : 1;
+      const bMain = /matriz|unidade principal|sede/i.test(`${b.name} ${b.category ?? ""}`) ? 0 : 1;
+      return aMain - bMain || a.name.localeCompare(b.name, "pt-BR");
+    });
+}
+
 function mergeImportedServices(modules: Record<string, ModuleRecord[]>) {
   // O catálogo comercial padrão não fica mais embutido no bundle público.
   // Serviços já persistidos no banco continuam intactos; os padrões são carregados após autenticação.
@@ -309,8 +330,14 @@ const tiagoEmployee: ModuleRecord = { id: "FUN-000001", name: "Tiago Viana", cli
 const linkedUnits: Record<string, { icon: IconType; name: string; type: string; doc: string; responsible: string; phone: string; address: string; orders: number }[]> = {};
 const linkedSectors: Record<string, { icon: IconType; name: string; type: string; doc: string; responsible: string; phone: string; address: string; orders: number }[]> = {};
 
-function Header({ title, subtitle, onMenu, onNewOrder, userName, userRole, onSwitchUser, online, syncing, onPull, onPush }: { title: string; subtitle: string; onMenu: () => void; onNewOrder: () => void; userName: string; userRole: string; onSwitchUser: () => void; online: boolean; syncing: boolean; onPull: () => void; onPush: () => void }) {
+function Header({ title, subtitle, onMenu, onNew, searchItems, pendingItems, onSearchSelect, onPendingSelect, userName, userRole, onSwitchUser, online, syncing, onPull, onPush }: { title: string; subtitle: string; onMenu: () => void; onNew: (option: string) => void; searchItems: GlobalSearchItem[]; pendingItems: PendingItem[]; onSearchSelect: (item: GlobalSearchItem) => void; onPendingSelect: (item: PendingItem) => void; userName: string; userRole: string; onSwitchUser: () => void; online: boolean; syncing: boolean; onPull: () => void; onPush: () => void }) {
   const today = new Date();
+  const [query, setQuery] = useState("");
+  const [showNew, setShowNew] = useState(false);
+  const [showPending, setShowPending] = useState(false);
+  const normalizedQuery = query.trim().toLocaleLowerCase("pt-BR");
+  const results = normalizedQuery ? searchItems.filter(item => `${item.title} ${item.detail}`.toLocaleLowerCase("pt-BR").includes(normalizedQuery)).slice(0, 8) : [];
+  const newOptions = ["Cliente", "Unidade", "Equipamento", "Orçamento", "Venda", "Ordem de Serviço", "Agendamento", "Compra", "Produto", "Serviço", "Conta a pagar", "Conta a receber"];
   return <header className="topbar">
     <div className="headline">
       <button className="menu-toggle" aria-label="Abrir menu" onClick={onMenu}><Menu size={20}/></button>
@@ -318,11 +345,11 @@ function Header({ title, subtitle, onMenu, onNewOrder, userName, userRole, onSwi
       <div className="headline-copy"><div className="eyebrow"><span>PROAR</span><ChevronRight size={10}/><b>Central de operações</b><i>BY TAV's</i></div><h1>{title}</h1><p>{subtitle}</p></div>
     </div>
     <div className="top-actions">
-      <label className="global-search"><Search size={16}/><input aria-label="Pesquisa global" placeholder="Pesquisar no ProAR..." /><kbd>⌘ K</kbd></label>
+      <div className="header-popover-wrap search-wrap"><label className="global-search"><Search size={16}/><input aria-label="Pesquisa global" value={query} onChange={event => setQuery(event.target.value)} onFocus={() => setShowNew(false)} placeholder="Pesquisar cliente, OS, produto..." /><kbd>⌘ K</kbd></label>{results.length > 0 && <div className="header-popover global-results" role="listbox">{results.map(item => <button key={`${item.kind}-${item.id}`} onClick={() => { onSearchSelect(item); setQuery(""); }}><span>{item.kind === "Cliente" ? <UsersRound size={15}/> : item.kind === "OS" ? <ClipboardList size={15}/> : <Search size={15}/>}</span><div><b>{item.title}</b><small>{item.detail}</small></div><em>{item.kind}</em></button>)}</div>}{normalizedQuery && !results.length && <div className="header-popover global-results empty-search"><span>Nenhum registro real encontrado.</span></div>}</div>
       <div className={`header-status ${online ? "" : "offline"}`}><span>{online ? <ShieldCheck size={14}/> : <Database size={14}/>}</span><div><b>{online ? "Sistema operacional" : "Modo offline"}</b><small>{online ? today.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "short" }) : "Dados guardados no aparelho"}</small></div></div>
-      <button className="icon-btn notification-button" aria-label="Notificações"><Bell size={18}/><i/></button>
+      <div className="header-popover-wrap"><button className="icon-btn notification-button" aria-label="Central de pendências" aria-expanded={showPending} onClick={() => { setShowPending(value => !value); setShowNew(false); }}><Bell size={18}/>{pendingItems.length > 0 && <i/>}</button>{showPending && <section className="header-popover pending-popover"><header><div><span>CENTRAL DE PENDÊNCIAS</span><b>O que precisa de atenção</b></div><small>{pendingItems.length}</small></header>{pendingItems.length ? <div>{pendingItems.slice(0, 6).map(item => <button key={item.id} onClick={() => { onPendingSelect(item); setShowPending(false); }}><i className={item.tone}/><span><b>{item.title}</b><small>{item.detail}</small></span><ChevronRight size={14}/></button>)}</div> : <p>Nenhuma pendência operacional encontrada.</p>}</section>}</div>
       <div className="manual-sync"><button disabled={!online || syncing} onClick={onPull} title="Atualizar dados deste aparelho"><ArrowDownRight size={14}/><span>{syncing ? "Sincronizando" : "Atualizar"}</span></button><button disabled={!online || syncing} onClick={onPush} title="Enviar alterações ao banco principal"><RefreshCw size={14}/><span>Sincronizar</span></button></div>
-      <button className="primary-btn" onClick={onNewOrder}><Plus size={17}/> Nova ordem</button>
+      <div className="header-popover-wrap"><button className="primary-btn" aria-expanded={showNew} onClick={() => { setShowNew(value => !value); setShowPending(false); }}><Plus size={17}/> Novo <ChevronDown size={13}/></button>{showNew && <section className="header-popover new-popover"><header><span>CADASTRO RÁPIDO</span><b>Criar novo registro</b></header><div>{newOptions.map(option => <button key={option} onClick={() => { onNew(option); setShowNew(false); }}><Plus size={14}/>{option}</button>)}</div></section>}</div>
       <div className="profile"><div className="profile-avatar">{userName.split(" ").map(word => word[0]).slice(0,2).join("").toUpperCase()}<span /></div><div><strong>{userName}</strong><small>{userRole}</small></div></div>
       <button className="switch-user-btn" aria-label="Trocar utilizador" title="Trocar utilizador" onClick={onSwitchUser}><UserRound size={15}/><span>Trocar</span><LogOut size={14}/></button>
     </div>
@@ -487,6 +514,10 @@ function quickPrintServiceOrder(order: ServiceOrder, company: TenantCompany) {
 }
 
 function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders, customers, company }: { onOpen: (name: string) => void; onSelect: (order: ServiceOrder) => void; onDelete: (order: ServiceOrder) => void; onUpdate: (order: ServiceOrder) => void; serviceOrders: ServiceOrder[]; customers: Customer[]; company: TenantCompany }) {
+  const [query, setQuery] = useState("");
+  const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+  const visibleOrders = serviceOrders.filter(order => { const customer = customers.find(item => item.name === order.client); return !query.trim() || normalizeSearch([order.id, order.client, order.unit, order.address, order.tech, customer?.legalName, customer?.tradeName, customer?.doc, customer?.phone].filter(Boolean).join(" ")).includes(normalizeSearch(query)); });
+  serviceOrders = visibleOrders;
   const today = new Date().toISOString().slice(0, 10);
   const reviewAlerts = serviceOrders.filter(order => {
     const reviewDate = serviceOrderReviewDate(order);
@@ -520,7 +551,7 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders, cu
     } catch (error) { onUpdate({ ...order, nfseStatus:"Erro", nfseValue:value }); window.alert(error instanceof Error ? error.message : "Não foi possível emitir a NFS-e."); }
   };
   return <section className="module-page service-orders">
-    <div className="module-toolbar"><label className="list-search"><Search size={15}/><input placeholder="Pesquisar ordem, cliente ou técnico..."/></label><button className="outline-btn"><Filter size={14}/> Filtros</button><button className="primary-btn" onClick={() => onOpen("Nova ordem de serviço")}><Plus size={16}/> Nova ordem de serviço</button></div>
+    <div className="module-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Pesquisar por cliente, OS, CPF/CNPJ, telefone ou unidade..."/></label><button className="outline-btn"><Filter size={14}/> Filtros</button><button className="primary-btn" onClick={() => onOpen("Nova ordem de serviço")}><Plus size={16}/> Nova ordem de serviço</button></div>
     <div className="module-summary">
       <article><span><ClipboardList size={19}/></span><div><small>ORDENS ABERTAS</small><strong>{serviceOrders.filter(item => item.status !== "Concluída").length}</strong><em>{serviceOrders.filter(item => item.date === today).length} para hoje</em></div></article>
       <article><span><UserCheck size={19}/></span><div><small>TÉCNICOS EMPENHADOS</small><strong>{new Set(serviceOrders.map(item => item.tech).filter(Boolean)).size}</strong><em>Cadastros reais</em></div></article>
@@ -709,12 +740,12 @@ function OrderDetail({ order, customerPhone, company, catalog, close, onUpdate }
   </div>;
 }
 
-function CommercialRecordsManager({ title, records, onConvert, onDelete }: { title: "Orçamentos" | "Vendas"; records: ModuleRecord[]; onConvert?: (record: ModuleRecord, target: "Pedido" | "Ordem de serviço") => void; onDelete?: (record: ModuleRecord) => void }) {
+function CommercialRecordsManager({ title, records, onConvert, onDelete, onEdit }: { title: "Orçamentos" | "Vendas"; records: ModuleRecord[]; onConvert?: (record: ModuleRecord, target: "Pedido" | "Ordem de serviço") => void; onDelete?: (record: ModuleRecord) => void; onEdit?: (record: ModuleRecord) => void }) {
   const [query,setQuery]=useState(""); const [status,setStatus]=useState("Todos");
   const statuses=["Todos",...Array.from(new Set(records.map(item=>item.status||"Sem situação")))];
   const visible=records.filter(item=>(status==="Todos"||(item.status||"Sem situação")===status)&&`${item.id} ${item.client} ${item.name} ${item.unit||""}`.toLowerCase().includes(query.toLowerCase()));
   const total=visible.reduce((sum,item)=>sum+(item.value||0),0); const approved=records.filter(item=>/aprov|confirm|convert|fatur|conclu/i.test(item.status||"")).length;
-  return <section className="commercial-manager panel"><header><div><span className="section-kicker"><FileChartColumn size={12}/> GERENCIADOR DE {title.toUpperCase()}</span><h3>Controle comercial</h3><p>Consulte, filtre e acompanhe todos os registros sem precisar abrir um por um.</p></div><div className="commercial-kpis"><span><small>REGISTROS</small><b>{records.length}</b></span><span><small>VALOR FILTRADO</small><b>R$ {total.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></span><span><small>APROVADOS / CONCLUÍDOS</small><b>{approved}</b></span></div></header><div className="commercial-manager-toolbar"><label><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder={`Pesquisar ${title.toLowerCase()} por cliente, número ou unidade...`}/></label><select value={status} onChange={event=>setStatus(event.target.value)}>{statuses.map(item=><option key={item}>{item}</option>)}</select></div>{visible.length?<div className="table-wrap"><table><thead><tr><th>NÚMERO</th><th>CLIENTE / UNIDADE</th><th>SITUAÇÃO</th><th>ITENS</th><th>VALOR</th><th>DATA</th><th>AÇÕES</th></tr></thead><tbody>{visible.map(record=><tr key={record.id}><td><b className="order-id">{record.id}</b></td><td><strong>{record.client||"—"}</strong><small className="table-description">{record.unit||"Matriz"}</small></td><td><span className={`workflow-status ${/aprov|confirm|convert|fatur|conclu/i.test(record.status||"")?"done":/cancel|reprov|vencid/i.test(record.status||"")?"blocked":""}`}>{record.status||"Registrado"}</span></td><td>{record.purchaseItems?.length??0}</td><td><b>R$ {(record.value??0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></td><td>{record.date?new Date(`${record.date}T12:00:00`).toLocaleDateString("pt-BR"):record.createdAt}</td><td><div className="record-actions">{title==="Orçamentos"&&onConvert&&<><button title="Converter em venda" onClick={()=>onConvert(record,"Pedido")}><ShoppingBag size={14}/></button><button title="Converter em OS" onClick={()=>onConvert(record,"Ordem de serviço")}><ClipboardList size={14}/></button></>}<button title="Imprimir" onClick={()=>window.print()}><ReceiptText size={14}/></button>{onDelete&&<button className="danger" title="Excluir" onClick={()=>onDelete(record)}><Trash2 size={14}/></button>}</div></td></tr>)}</tbody></table></div>:<div className="linked-empty compact"><Search size={20}/><h4>Nenhum registro encontrado</h4><p>Altere os filtros para consultar outros registros.</p></div>}</section>;
+  return <section className="commercial-manager panel"><header><div><span className="section-kicker"><FileChartColumn size={12}/> GERENCIADOR DE {title.toUpperCase()}</span><h3>Controle comercial</h3><p>{onEdit ? "Dê dois cliques no pedido para editar os dados e itens." : "Consulte, filtre e acompanhe todos os registros sem precisar abrir um por um."}</p></div><div className="commercial-kpis"><span><small>REGISTROS</small><b>{records.length}</b></span><span><small>VALOR FILTRADO</small><b>R$ {total.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></span><span><small>APROVADOS / CONCLUÍDOS</small><b>{approved}</b></span></div></header><div className="commercial-manager-toolbar"><label><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder={`Pesquisar ${title.toLowerCase()} por cliente, número ou unidade...`}/></label><select value={status} onChange={event=>setStatus(event.target.value)}>{statuses.map(item=><option key={item}>{item}</option>)}</select></div>{visible.length?<div className="table-wrap"><table><thead><tr><th>NÚMERO</th><th>CLIENTE / UNIDADE</th><th>SITUAÇÃO</th><th>ITENS</th><th>VALOR</th><th>DATA</th><th>AÇÕES</th></tr></thead><tbody>{visible.map(record=><tr key={record.id} className={onEdit ? "editable-row" : ""} onDoubleClick={()=>onEdit?.(record)} title={onEdit ? "Dê dois cliques para alterar este pedido" : undefined}><td><b className="order-id">{record.id}</b></td><td><strong>{record.client||"—"}</strong><small className="table-description">{record.unit||"Matriz"}</small></td><td><span className={`workflow-status ${/aprov|confirm|convert|fatur|conclu/i.test(record.status||"")?"done":/cancel|reprov|vencid/i.test(record.status||"")?"blocked":""}`}>{record.status||"Registrado"}</span></td><td>{record.purchaseItems?.length??0}</td><td><b>R$ {(record.value??0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></td><td>{record.date?new Date(`${record.date}T12:00:00`).toLocaleDateString("pt-BR"):record.createdAt}</td><td><div className="record-actions">{onEdit&&<button title="Alterar pedido" onClick={event=>{event.stopPropagation();onEdit(record)}}><Edit3 size={14}/></button>}{title==="Orçamentos"&&onConvert&&<><button title="Converter em venda" onClick={()=>onConvert(record,"Pedido")}><ShoppingBag size={14}/></button><button title="Converter em OS" onClick={()=>onConvert(record,"Ordem de serviço")}><ClipboardList size={14}/></button></>}<button title="Imprimir" onClick={()=>window.print()}><ReceiptText size={14}/></button>{onDelete&&<button className="danger" title="Excluir" onClick={()=>onDelete(record)}><Trash2 size={14}/></button>}</div></td></tr>)}</tbody></table></div>:<div className="linked-empty compact"><Search size={20}/><h4>Nenhum registro encontrado</h4><p>Altere os filtros para consultar outros registros.</p></div>}</section>;
 }
 
 function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert, onDelete }: { customers: Customer[]; structures: ModuleRecord[]; catalog: ModuleRecord[]; budgets: ModuleRecord[]; onSave: (record: ModuleRecord) => void; onConvert: (record: ModuleRecord, target: "Pedido" | "Ordem de serviço") => void; onDelete: (record: ModuleRecord) => void }) {
@@ -722,7 +753,7 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState<"Todos" | "Produto" | "Serviço">("Todos");
   const [customer, setCustomer] = useState("");
-  const [unit, setUnit] = useState("Matriz");
+  const [unit, setUnit] = useState("");
   const [validity, setValidity] = useState(7);
   const [discount, setDiscount] = useState(0);
   const [payment, setPayment] = useState("PIX");
@@ -737,9 +768,12 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
     if (!customer || !cart.length) { setNotice("Selecione o cliente e adicione pelo menos um produto ou serviço."); return; }
     const validUntil = new Date(); validUntil.setDate(validUntil.getDate() + validity);
     const record: ModuleRecord = { id:`ORC-${Date.now().toString().slice(-6)}`, name:`Orçamento • ${customer}`, client:customer, unit, description:`Condição: ${payment}${observations ? ` • ${observations}` : ""}`, createdAt:new Date().toLocaleString("pt-BR"), date:new Date().toISOString().slice(0,10), endDate:validUntil.toISOString().slice(0,10), status:"Em elaboração", value:total, category:"Produtos e serviços", purchaseItems:cart, paymentMethod:payment };
-    onSave(record); setCart([]); setDiscount(0); setObservations(""); setUnit("Matriz"); setNotice(`${record.id} salvo com sucesso.`);
+    onSave(record); setCart([]); setDiscount(0); setObservations(""); setUnit(""); setNotice(`${record.id} salvo com sucesso.`);
   };
-  const customerUnits = customer ? [{name:"Matriz",category:"Matriz"}, ...structures.filter(item => item.client === customer)] : [];
+  const customerUnits = customer ? customerStructures(customer, customers, structures) : [];
+  useEffect(() => {
+    if (customer && !customerUnits.some(item => item.name === unit)) setUnit(customerUnits[0]?.name ?? "");
+  }, [customer, customerUnits, unit]);
   return <section className="budget-pdv"><CommercialRecordsManager title="Orçamentos" records={budgets} onConvert={onConvert} onDelete={onDelete}/><div className="budget-pdv-hero"><div><span className="section-kicker"><FileText size={12}/> ORÇAMENTO RÁPIDO</span><h2>Orçamento no formato PDV</h2><p>Adicione produtos e serviços, calcule os valores e converta sem redigitação.</p></div><div><label>Cliente<select value={customer} onChange={event => {setCustomer(event.target.value);setUnit("Matriz");}}><option value="">Selecionar cliente</option>{customers.map(item => <option key={item.id}>{item.name}</option>)}</select></label>{customer && <label>Unidade / filial / setor<select value={unit} onChange={event => setUnit(event.target.value)}>{customerUnits.map(item => <option key={item.name} value={item.name}>{item.name} • {item.category || "Unidade"}</option>)}</select></label>}<label>Validade<select value={validity} onChange={event => setValidity(Number(event.target.value))}><option value={7}>7 dias</option><option value={15}>15 dias</option><option value={30}>30 dias</option><option value={60}>60 dias</option></select></label></div></div>{notice && <div className="pdv-notice"><CheckCircle2 size={15}/>{notice}<button onClick={() => setNotice("")}><X size={13}/></button></div>}<div className="budget-pdv-layout"><div className="budget-catalog panel"><div className="budget-search"><label><Search size={17}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Pesquisar produto ou serviço..."/></label><div>{(["Todos","Produto","Serviço"] as const).map(kind => <button className={kindFilter === kind ? "active" : ""} key={kind} onClick={() => setKindFilter(kind)}>{kind}</button>)}</div></div><div className="budget-catalog-grid">{items.map(item => <button key={item.id} onClick={() => add(item)}><span className={item.kind === "Produto" ? "product" : "service"}>{item.kind === "Produto" ? <Package size={17}/> : <Wrench size={17}/>}</span><div><small>{item.id} • {item.kind}</small><b>{item.name}</b><em>{item.category || "Sem categoria"}</em></div><strong>R$ {(item.value ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong><Plus size={15}/></button>)}</div>{!items.length && <div className="linked-empty"><Search size={20}/><h4>Nenhum item encontrado</h4></div>}</div><aside className="budget-cart panel"><header><div><ShoppingCart size={17}/><span><b>Itens do orçamento</b><small>{cart.length} cadastro(s)</small></span></div>{cart.length > 0 && <button onClick={() => setCart([])}><Trash2 size={13}/> Limpar</button>}</header><div className="budget-cart-list">{cart.map(item => <article key={item.id}><div><small>{item.kind}</small><b>{item.description}</b><input type="number" min="0" step="0.01" value={item.unitValue} onChange={event => update(item.id,{unitValue:Number(event.target.value)})}/></div><label>Qtd.<input type="number" min="0.001" step="0.001" value={item.quantity} onChange={event => update(item.id,{quantity:Number(event.target.value)})}/></label><strong>R$ {(item.quantity*item.unitValue).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong><button onClick={() => setCart(current => current.filter(record => record.id !== item.id))}><Trash2 size={13}/></button></article>)}{!cart.length && <div className="pdv-empty"><ShoppingCart size={26}/><strong>Orçamento vazio</strong><p>Selecione produtos ou serviços no catálogo.</p></div>}</div><div className="budget-totals"><label>Forma de pagamento<select value={payment} onChange={event => setPayment(event.target.value)}>{["PIX","Dinheiro","Cartão de crédito","Cartão de débito","Boleto","Transferência","A combinar"].map(item => <option key={item}>{item}</option>)}</select></label><label>Desconto<input type="number" min="0" max={subtotal} value={discount || ""} onChange={event => setDiscount(Number(event.target.value))} placeholder="R$ 0,00"/></label><label className="wide">Observações<textarea value={observations} onChange={event => setObservations(event.target.value)} placeholder="Prazo, garantia e condições..."/></label><p><span>Subtotal</span><b>R$ {subtotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></p><div><span>TOTAL</span><strong>R$ {total.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div><button className="primary-btn" disabled={!customer || !cart.length} onClick={save}><CheckCircle2 size={16}/> Salvar orçamento</button></div></aside></div><div className="budget-saved panel"><header><div><span className="section-kicker"><History size={12}/> ORÇAMENTOS SALVOS</span><h3>Conversão rápida</h3></div><small>{budgets.length} orçamento(s)</small></header>{budgets.length ? <div>{budgets.map(record => <article key={record.id}><span><b>{record.id}</b><strong>{record.client}</strong><small>{record.purchaseItems?.length ?? 0} item(ns) • {record.endDate ? `Válido até ${new Date(`${record.endDate}T12:00:00`).toLocaleDateString("pt-BR")}` : record.createdAt}</small></span><em>{record.status}</em><b>R$ {(record.value ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</b><button onClick={() => onConvert(record,"Pedido")}><ShoppingBag size={14}/> Converter em venda</button><button onClick={() => onConvert(record,"Ordem de serviço")}><ClipboardList size={14}/> Converter em OS</button><button className="danger" onClick={() => onDelete(record)}><Trash2 size={14}/></button></article>)}</div> : <div className="linked-empty"><FileText size={22}/><h4>Nenhum orçamento salvo</h4></div>}</div></section>;
 }
 
@@ -766,11 +800,12 @@ function SalesPDV({ customers, structures, records, sales, onSave }: { customers
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [discount, setDiscount] = useState(0);
   const [customer, setCustomer] = useState("");
-  const [unit, setUnit] = useState("Matriz");
+  const [unit, setUnit] = useState("");
   const [payment, setPayment] = useState("PIX");
   const [notice, setNotice] = useState("");
   const [fullScreen, setFullScreen] = useState(false);
   const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
+  const [editingSale, setEditingSale] = useState<ModuleRecord | null>(null);
   const pdvRef = useRef<HTMLElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const quickSaleCatalog: SaleItem[] = records.filter(item => (item.kind === "Produto" || item.kind === "Serviço") && item.status !== "Inativo").map(item => ({ id:item.id, name:item.name, code:item.id, price:item.value ?? 0, kind:item.kind!, unit:item.unitOfMeasure || (item.kind === "Serviço" ? "serviço" : "un") }));
@@ -778,7 +813,10 @@ function SalesPDV({ customers, structures, records, sales, onSave }: { customers
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const total = Math.max(0, subtotal - discount);
   const selectedCustomer = customers.find(item => item.name === customer);
-  const customerUnits = customer ? [{name:"Matriz",category:"Matriz"}, ...structures.filter(item => item.client === customer)] : [];
+  const customerUnits = customer ? customerStructures(customer, customers, structures) : [];
+  useEffect(() => {
+    if (customer && !customerUnits.some(item => item.name === unit)) setUnit(customerUnits[0]?.name ?? "");
+  }, [customer, customerUnits, unit]);
 
   const addItem = (item: SaleItem) => setCart(current => {
     const existing = current.find(record => record.id === item.id);
@@ -806,11 +844,17 @@ function SalesPDV({ customers, structures, records, sales, onSave }: { customers
     if (selectedCustomer?.financialStatus === "Bloqueado") { setNotice("Cliente bloqueado pelo financeiro. A venda não pode ser concluída."); return; }
     if (selectedCustomer?.creditLimit && (selectedCustomer.balancePosted ?? 0) + total > selectedCustomer.creditLimit && payment === "Boleto") { setNotice("Limite de crédito excedido para venda a prazo. Solicite liberação do financeiro."); return; }
     const sale: ModuleRecord = {
-      id: `VEN-${Date.now().toString().slice(-6)}`, name:`Venda • ${customer || "Consumidor final"}`, client:customer || "Consumidor final", unit, paymentMethod:payment, value:total, status:"Pedido confirmado", category:"Venda PDV", description:`Subtotal R$ ${subtotal.toLocaleString("pt-BR",{minimumFractionDigits:2})} • desconto R$ ${discount.toLocaleString("pt-BR",{minimumFractionDigits:2})}`, purchaseItems:cart.map(item=>({id:item.id,productId:item.id,description:item.name,quantity:item.quantity,unitValue:item.price,kind:item.kind})), createdAt:new Date().toLocaleString("pt-BR"), date:new Date().toISOString().slice(0,10)
+      ...(editingSale ?? {}), id: editingSale?.id ?? `VEN-${Date.now().toString().slice(-6)}`, name:`Venda • ${customer || "Consumidor final"}`, client:customer || "Consumidor final", unit, paymentMethod:payment, value:total, status:editingSale?.status || "Pedido confirmado", category:"Venda PDV", description:`Subtotal R$ ${subtotal.toLocaleString("pt-BR",{minimumFractionDigits:2})} • desconto R$ ${discount.toLocaleString("pt-BR",{minimumFractionDigits:2})}`, purchaseItems:cart.map(item=>({id:item.id,productId:item.id,description:item.name,quantity:item.quantity,unitValue:item.price,kind:item.kind})), createdAt:editingSale?.createdAt ?? new Date().toLocaleString("pt-BR"), date:editingSale?.date ?? new Date().toISOString().slice(0,10)
     };
     onSave(sale);
-    setCart([]); setDiscount(0); setCustomer(""); setUnit("Matriz"); setActiveTab("itens");
-    setNotice(`Venda ${sale.id} finalizada e sincronizada — R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.`);
+    setCart([]); setDiscount(0); setCustomer(""); setUnit("Matriz"); setActiveTab("itens"); setEditingSale(null);
+    setNotice(editingSale ? `Pedido ${sale.id} atualizado e sincronizado.` : `Venda ${sale.id} finalizada e sincronizada — R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.`);
+  };
+  const editSavedSale = (sale: ModuleRecord) => {
+    setEditingSale(sale); setCustomer(sale.client === "Consumidor final" ? "" : sale.client); setUnit(sale.unit || "Matriz"); setPayment(sale.paymentMethod || "PIX");
+    const match = sale.description?.match(/desconto R\$ ([\d.,]+)/i); setDiscount(match ? Number(match[1].replace(".","").replace(",",".")) || 0 : 0);
+    setCart((sale.purchaseItems ?? []).map(item => ({ id:item.productId || item.id, name:item.description, code:item.productId || item.id, price:item.unitValue, quantity:item.quantity, kind:item.kind || "Produto", unit:records.find(record => record.id === (item.productId || item.id))?.unitOfMeasure || "un" })));
+    setActiveTab("itens"); setNotice(`Editando ${sale.id}. Ajuste os itens e clique em “Atualizar pedido”.`);
   };
 
   useEffect(() => {
@@ -832,7 +876,7 @@ function SalesPDV({ customers, structures, records, sales, onSave }: { customers
     else { await document.exitFullscreen(); setFullScreen(false); }
   };
   return <section className={`pdv-page ${fullScreen ? "pdv-fullscreen" : ""}`} ref={pdvRef}>
-    <CommercialRecordsManager title="Vendas" records={sales}/>
+    <CommercialRecordsManager title="Vendas" records={sales} onEdit={editSavedSale}/>
     <div className="pdv-command">
       <div><span className="section-kicker"><ShoppingBag size={12}/> VENDA RÁPIDA</span><h2>PDV ProAR</h2><p>Produtos e serviços em um fluxo direto, sem campos desnecessários.</p></div>
       <div className="pdv-shortcuts"><button onClick={toggleFullScreen}><Grid2X2 size={14}/>{fullScreen ? "Sair da tela cheia" : "Maximizar PDV"}</button><button onClick={() => setShortcutsOpen(true)}><Keyboard size={14}/><kbd>F1</kbd> Atalhos</button><span>Caixa aberto</span></div>
@@ -862,7 +906,7 @@ function SalesPDV({ customers, structures, records, sales, onSave }: { customers
       <aside className="pdv-cart panel">
         <div className="pdv-cart-head"><div><ReceiptText size={17}/><span><strong>Venda atual</strong><small>{formatQuantity(cart.reduce((sum, item) => sum + item.quantity, 0))} item(ns)</small></span></div>{cart.length > 0 && <button onClick={() => setCart([])}><Trash2 size={13}/> Limpar</button>}</div>
         <div className="pdv-cart-items">{cart.length ? cart.map(item => <article key={item.id}><div><small>{item.code}</small><strong>{item.name}</strong><span>R$ {item.price.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} / {item.unit}</span></div><div className="quantity"><button onClick={() => changeQuantity(item.id, -1)} aria-label="Diminuir quantidade"><Minus size={12}/></button><label><input inputMode="decimal" value={quantityDrafts[item.id] ?? formatQuantity(item.quantity)} onChange={event => typeQuantity(item.id, event.target.value)} onBlur={() => confirmQuantity(item)} aria-label={`Quantidade de ${item.name}`}/><small>{item.unit}</small></label><button onClick={() => changeQuantity(item.id, 1)} aria-label="Aumentar quantidade"><Plus size={12}/></button></div><b>R$ {(item.price * item.quantity).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></article>) : <div className="pdv-empty"><ShoppingCart size={29}/><strong>Carrinho vazio</strong><p>Selecione um produto ou serviço para iniciar.</p></div>}</div>
-        <div className="pdv-summary"><p><span>Subtotal</span><b>R$ {subtotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></p>{discount > 0 && <p className="discount"><span>Desconto</span><b>− R$ {discount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></p>}<div><span>TOTAL</span><strong>R$ {total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></div><small>{customer || "Consumidor final"} • {payment}</small><button className="finish-sale" disabled={!cart.length} onClick={finishSale}><CheckCircle2 size={17}/> Finalizar venda <kbd>F10</kbd></button></div>
+        <div className="pdv-summary"><p><span>Subtotal</span><b>R$ {subtotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></p>{discount > 0 && <p className="discount"><span>Desconto</span><b>− R$ {discount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></p>}<div><span>TOTAL</span><strong>R$ {total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></div><small>{customer || "Consumidor final"} • {payment}</small><button className="finish-sale" disabled={!cart.length} onClick={finishSale}><CheckCircle2 size={17}/>{editingSale ? "Atualizar pedido" : "Finalizar venda"}<kbd>F10</kbd></button></div>
       </aside>
     </div>
     {shortcutsOpen && <div className="shortcut-layer" role="dialog" aria-modal="true" aria-label="Atalhos do PDV"><button className="modal-backdrop" onClick={() => setShortcutsOpen(false)} aria-label="Fechar atalhos"/><div className="shortcut-card"><div><span><Keyboard size={19}/></span><div><small>PDV PROAR</small><h3>Atalhos de teclado</h3></div><button onClick={() => setShortcutsOpen(false)} aria-label="Fechar"><X size={16}/></button></div>{[["F1","Abrir esta ajuda"],["F2","Pesquisar produto ou serviço"],["F3","Selecionar cliente"],["F4","Forma de pagamento"],["F8","Desconto e outras opções"],["F10","Finalizar a venda"],["ESC","Fechar janela"]].map(([key,label]) => <p key={key}><kbd>{key}</kbd><span>{label}</span></p>)}</div></div>}
@@ -1607,7 +1651,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
   </main>;
 }
 
-function Modal({ title, customers, catalogRecords, supplierRecords, employeeRecords, close, onSave }: { title: string; customers: Customer[]; catalogRecords: ModuleRecord[]; supplierRecords: ModuleRecord[]; employeeRecords: ModuleRecord[]; close: () => void; onSave: (data: ModalSave) => void | Promise<void> }) {
+function Modal({ title, customers, structures, catalogRecords, supplierRecords, employeeRecords, close, onSave }: { title: string; customers: Customer[]; structures: ModuleRecord[]; catalogRecords: ModuleRecord[]; supplierRecords: ModuleRecord[]; employeeRecords: ModuleRecord[]; close: () => void; onSave: (data: ModalSave) => void | Promise<void> }) {
   const isLinkedStructure = title.startsWith("Nova unidade, filial ou setor");
   const isNewOrder = title === "Nova ordem de serviço";
   const isNewCustomer = title === "Novo cliente";
@@ -1799,11 +1843,10 @@ function Modal({ title, customers, catalogRecords, supplierRecords, employeeReco
   const serviceRecords = catalogRecords.filter(item => (item.kind || "Serviço") === "Serviço");
   const selectedServices = serviceRecords.filter(item => selectedCatalogIds.includes(item.id));
   const visibleServiceOptions = serviceRecords.filter(item => `${item.name} ${item.description || ""} ${item.category || ""}`.toLocaleLowerCase("pt-BR").includes(serviceSearch.trim().toLocaleLowerCase("pt-BR")));
-  const availableUnits = selectedClient ? [
-    ...(selectedClientData ? [{ icon: Building2, name: "Endereço principal", type: "Cliente principal", doc: selectedClientData.doc, responsible: selectedClientData.contact, phone: selectedClientData.phone, address: selectedClientData.address, orders: 0 }] : []),
-    ...(linkedUnits[selectedClient] ?? []),
-    ...(linkedSectors[selectedClient] ?? []),
-  ].filter((unit, index, list) => list.findIndex(item => item.name === unit.name) === index) : [];
+  const availableUnits = selectedClient ? customerStructures(selectedClient, customers, structures).map(item => ({ icon: Building2, name:item.name, type:item.category || "Unidade", doc:item.doc || "", responsible:item.contact || "", phone:item.phone || "", address:item.address || "", orders:0 })) : [];
+  useEffect(() => {
+    if (selectedClient && !availableUnits.some(item => item.name === unit)) setUnit(availableUnits[0]?.name ?? "");
+  }, [selectedClient, availableUnits, unit]);
   return <div className="modal-layer" role="dialog" aria-modal="true" aria-label={title}><button className="modal-backdrop" onClick={close} aria-label="Fechar janela"/><div className="modal"><div className="modal-head"><div><span>{isLinkedStructure ? "ESTRUTURA DO CLIENTE • LIMITE DE 20" : "CADASTRO PROAR"}</span><h2>{isLinkedStructure ? "Nova unidade, filial ou setor" : title}</h2>{isLinkedStructure && <p>Este registro será vinculado a <strong>{parentCustomer}</strong>.</p>}</div><button onClick={close} aria-label="Fechar"><X size={18}/></button></div><div className="form-grid">
     {isLinkedStructure ? <>
       <label>Cliente principal<input value={parentCustomer} readOnly/></label>
@@ -2188,6 +2231,16 @@ export default function Home() {
     } else if (!updatedOrder.reminderEnabled) {
       updatedModules = { ...updatedModules, Lembretes: currentReminders.filter(item => item.id !== reminderId) };
     }
+    // Conclusão nunca apaga lançamentos anteriores: cria somente integrações ainda inexistentes.
+    if (/conclu[ií]da/i.test(updatedOrder.status)) {
+      const receivableId = `REC-${updatedOrder.id.replace(/\D/g, "")}`;
+      const stockPrefix = `OS-${updatedOrder.id.replace(/\D/g, "")}-`;
+      const hasReceivable = (updatedModules.Financeiro ?? []).some(item => item.id === receivableId || item.serviceOrderId === updatedOrder.id);
+      const productsUsed = (updatedOrder.catalogItems ?? []).filter(item => item.kind === "Produto");
+      if (!hasReceivable) updatedModules = { ...updatedModules, Financeiro: [{ id: receivableId, name: `Conta a receber • ${updatedOrder.id}`, client: updatedOrder.client, description: `Gerada pela conclusão da OS ${updatedOrder.id}`, createdAt: new Date().toLocaleString("pt-BR"), status: "Em aberto", date: new Date().toISOString().slice(0,10), value: 0, transactionType: "Receber", serviceOrderId: updatedOrder.id }, ...(updatedModules.Financeiro ?? [])] };
+      const stockEntries = productsUsed.filter(item => !(updatedModules.Estoque ?? []).some(stock => stock.id === `${stockPrefix}${item.id}`)).map(item => ({ id: `${stockPrefix}${item.id}`, name: `Saída por OS • ${item.name}`, client: updatedOrder.client, description: `Movimentação vinculada à ${updatedOrder.id}`, createdAt: new Date().toLocaleString("pt-BR"), status: "Concluído", category: "Saída por OS", serviceOrderId: updatedOrder.id, kind: "Produto" as const }));
+      if (stockEntries.length) updatedModules = { ...updatedModules, Estoque: [...stockEntries, ...(updatedModules.Estoque ?? [])] };
+    }
     setServiceOrders(updatedOrders);
     setModuleRecords(updatedModules);
     setSelectedOrder(updatedOrder);
@@ -2206,6 +2259,7 @@ export default function Home() {
     setSavedMessage(`Cliente ${updatedCustomer.name} atualizado com sucesso.`);
     window.setTimeout(() => setSavedMessage(""), 2500);
   };
+  const appendAudit = (modules: Record<string, ModuleRecord[]>, action: string, reference: string, detail: string) => ({ ...modules, Auditoria: [{ id: `AUD-${Date.now()}`, name: action, client: authenticatedUser?.displayName || "Sistema", description: `${reference} • ${detail}`, createdAt: new Date().toLocaleString("pt-BR"), status: "Registrado", category: "Rastreabilidade" }, ...(modules.Auditoria ?? [])].slice(0, 1000) });
   const convertBudget = (budget: ModuleRecord, target: "Pedido" | "Ordem de serviço") => {
     if (target === "Pedido") {
       const sale: ModuleRecord = { ...budget, id:`VEN-${Date.now().toString().slice(-6)}`, name:`Pedido • ${budget.name}`, status:"Pedido confirmado", createdAt:new Date().toLocaleString("pt-BR") };
@@ -2416,29 +2470,30 @@ export default function Home() {
     setAuthenticatedUser(null);
   };
   const deleteCustomer = (customer: Customer) => {
-    if (!window.confirm(`Excluir o cliente “${customer.name}”? Esta ação também remove o cadastro da base compartilhada.`)) return;
-    const updatedCustomers = customerRecords.filter(item => item.id !== customer.id);
+    if (!window.confirm(`Inativar o cliente “${customer.name}”? O cadastro, seus vínculos e histórico serão preservados.`)) return;
+    const updatedCustomers = customerRecords.map(item => item.id === customer.id ? { ...item, status: "Inativo" } : item);
     setCustomerRecords(updatedCustomers);
     localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(updatedCustomers));
     persistSharedState(updatedCustomers, serviceOrders, moduleRecords);
-    setSavedMessage("Cliente excluído com sucesso.");
+    setSavedMessage("Cliente inativado com sucesso. O histórico foi preservado.");
   };
   const deleteOrder = (order: ServiceOrder) => {
-    if (!window.confirm(`Excluir definitivamente a ordem ${order.id}?`)) return;
-    const updatedOrders = serviceOrders.filter(item => item.id !== order.id);
+    if (!window.confirm(`Cancelar a ordem ${order.id}? A ordem continuará disponível no histórico.`)) return;
+    const updatedOrders = serviceOrders.map(item => item.id === order.id ? { ...item, status: "Cancelada", tone: "red" } : item);
     setServiceOrders(updatedOrders);
     localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(updatedOrders));
     persistSharedState(customerRecords, updatedOrders, moduleRecords);
     setSelectedOrder(null);
-    setSavedMessage(`Ordem ${order.id} excluída.`);
+    setSavedMessage(`Ordem ${order.id} cancelada. O histórico foi preservado.`);
   };
   const deleteModuleRecord = (moduleName: string, record: ModuleRecord) => {
-    if (!window.confirm(`Excluir o registro “${record.name}”?`)) return;
-    const updatedModules = { ...moduleRecords, [moduleName]: (moduleRecords[moduleName] ?? []).filter(item => item.id !== record.id) };
+    const cancellation = /Vendas|Orçamentos|Compras|Financeiro/.test(moduleName);
+    if (!window.confirm(`${cancellation ? "Cancelar" : "Inativar"} o registro “${record.name}”? O histórico será mantido.`)) return;
+    const updatedModules = { ...moduleRecords, [moduleName]: (moduleRecords[moduleName] ?? []).map(item => item.id === record.id ? { ...item, status: cancellation ? "Cancelado" : "Inativo" } : item) };
     setModuleRecords(updatedModules);
     localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(updatedModules));
     persistSharedState(customerRecords, serviceOrders, updatedModules);
-    setSavedMessage("Registro excluído com sucesso.");
+    setSavedMessage(`${cancellation ? "Registro cancelado" : "Registro inativado"} com histórico preservado.`);
   };
   const updateModuleRecord = (moduleName: string, record: ModuleRecord) => {
     const currentRecords = moduleRecords[moduleName] ?? [];
@@ -2452,24 +2507,54 @@ export default function Home() {
       if (!hasPayable) updatedModules = { ...updatedModules, "Financeiro": [{ ...record, id: payableId, name: `Conta a pagar • ${record.name}`, status: "Em aberto", category: record.category || "Compra de produtos", purchaseId: record.id, createdAt: new Date().toLocaleString("pt-BR") }, ...(updatedModules["Financeiro"] ?? [])] };
       if (!hasStockEntry) updatedModules = { ...updatedModules, "Estoque": [{ ...record, id: stockId, name: `Entrada • ${record.name}`, status: "Concluído", category: "Entrada por compra", createdAt: new Date().toLocaleString("pt-BR") }, ...(updatedModules["Estoque"] ?? [])] };
     }
+    updatedModules = appendAudit(updatedModules, exists ? "Registro atualizado" : "Registro criado", `${moduleName} • ${record.name}`, exists ? "Alteração registrada pelo utilizador" : "Novo cadastro registrado pelo utilizador");
     setModuleRecords(updatedModules);
     localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(updatedModules));
     persistSharedState(customerRecords, serviceOrders, updatedModules);
     setSavedMessage(moduleName === "Compras" && record.status === "Recebida" ? "Compra recebida: estoque e conta a pagar atualizados." : "Registro atualizado e sincronizado.");
     window.setTimeout(() => setSavedMessage(""), 3000);
   };
+  const globalSearchItems = useMemo<GlobalSearchItem[]>(() => {
+    const customerItems = customerRecords.map(customer => ({ id: customer.id, title: customer.name, detail: [customer.doc, customer.phone, customer.city || customer.address].filter(Boolean).join(" • "), module: "Clientes", kind: "Cliente" as const }));
+    const orderItems = serviceOrders.map(order => ({ id: order.id, title: order.id, detail: [order.client, order.service, order.tech].filter(Boolean).join(" • "), module: "Ordens de serviço", kind: "OS" as const }));
+    const moduleItems = Object.entries(moduleRecords).flatMap(([module, records]) => records.map(record => ({ id: record.id, title: record.name, detail: [record.id, record.client, record.sku, record.barcode, record.serialNumber, record.doc].filter(Boolean).join(" • "), module, kind: "Cadastro" as const })));
+    return [...customerItems, ...orderItems, ...moduleItems];
+  }, [customerRecords, serviceOrders, moduleRecords]);
+  const pendingItems = useMemo<PendingItem[]>(() => {
+    const now = new Date();
+    const ordersPending = serviceOrders.filter(order => /atras|aguardando|aberta|agendada/i.test(order.status)).map(order => ({ id: `os-${order.id}`, title: `${order.id} • ${order.status}`, detail: `${order.client} • ${order.date || "sem data"}`, module: "Ordens de serviço", tone: /atras/i.test(order.status) ? "red" as const : /aguardando/i.test(order.status) ? "amber" as const : "blue" as const }));
+    const recordsPending = Object.entries(moduleRecords).flatMap(([module, records]) => records.filter(record => /atras|venc|aguardando|pendente|baixo estoque|sem estoque/i.test(record.status || "") || (module === "Estoque" && (record.stockCurrent ?? 0) <= (record.stockMin ?? -1))).map(record => ({ id: `${module}-${record.id}`, title: record.name, detail: `${module} • ${record.status || "Atenção necessária"}`, module, tone: /atras|venc|sem estoque/i.test(record.status || "") ? "red" as const : "amber" as const })));
+    return [...ordersPending, ...recordsPending].slice(0, 20);
+  }, [serviceOrders, moduleRecords]);
+  const openNew = (option: string) => {
+    const routes: Record<string, { module?: string; modal?: string }> = {
+      "Cliente": { modal: "Novo cliente" }, "Unidade": { module: "Clientes" }, "Equipamento": { modal: "Novo • Equipamentos" }, "Orçamento": { module: "Orçamentos" }, "Venda": { module: "Vendas" }, "Ordem de Serviço": { modal: "Nova ordem de serviço" }, "Agendamento": { modal: "Nova ordem de serviço" }, "Compra": { modal: "Novo registro • Compras" }, "Produto": { modal: "Novo registro • Produtos" }, "Serviço": { modal: "Novo registro • Serviços" }, "Conta a pagar": { modal: "Novo registro • Financeiro" }, "Conta a receber": { modal: "Novo registro • Financeiro" },
+    };
+    const route = routes[option];
+    if (route.module) setCurrent(route.module);
+    if (route.modal) setModal(route.modal);
+    if (option === "Unidade") setSavedMessage("Abra um cliente para cadastrar uma unidade, filial ou setor vinculado.");
+  };
+  const openGlobalSearch = (item: GlobalSearchItem) => {
+    setCurrent(item.module);
+    setSavedMessage(`${item.kind} localizado: ${item.title}.`);
+  };
+  const openPending = (item: PendingItem) => {
+    setCurrent(item.module);
+    setSavedMessage(`Pendência selecionada: ${item.title}.`);
+  };
   if (checkingSession) return <div className="session-loading"><div className="brand-mark brand-logo"><img src="/icon.png" alt="ProAR"/></div><p>A carregar o ProAR...</p></div>;
   if (!authenticatedUser) return <LoginScreen onLogin={handleLogin}/>;
   return <div className="app-shell">
     <Sidebar current={current} setCurrent={setCurrent} open={menuOpen} close={() => setMenuOpen(false)} permissions={authenticatedUser.permissions}/>
     <main className="main">
-      <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNewOrder={() => setModal("Nova ordem de serviço")} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onSwitchUser={logout} online={online} syncing={syncing} onPull={() => void pullFromDatabase()} onPush={() => void pushToDatabase()}/>
+      <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNew={openNew} searchItems={globalSearchItems} pendingItems={pendingItems} onSearchSelect={openGlobalSearch} onPendingSelect={openPending} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onSwitchUser={logout} online={online} syncing={syncing} onPull={() => void pullFromDatabase()} onPush={() => void pushToDatabase()}/>
       {savedMessage && <div className="save-toast" role="status"><CheckCircle2 size={16}/>{savedMessage}</div>}
       <div className="company-context"><Building2 size={13}/><span>{activeCompany.tradeName}</span><small>{activeCompany.cnpj || "CNPJ pendente"} • {activeCompany.city}/{activeCompany.state}</small></div>
       <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={record => updateModuleRecord("Unidades e setores",record)} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} company={activeCompany} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <BiddingModule/> : current === "Orçamentos" ? <BudgetPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={record => updateModuleRecord("Orçamentos",record)} onConvert={convertBudget} onDelete={record => deleteModuleRecord("Orçamentos",record)}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} sales={moduleRecords.Vendas ?? []} onSave={record => updateModuleRecord("Vendas",record)}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders} company={activeCompany}/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} onOpen={setModal} onUpdate={updateModuleRecord}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} onUpdate={updateServiceOrder} serviceOrders={serviceOrders} customers={customerRecords} company={activeCompany}/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []} allModules={moduleRecords} serviceOrders={serviceOrders}/>}</div>
       <footer><span>© 2026 ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
-    {modal && <Modal title={modal} customers={customerRecords} catalogRecords={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} supplierRecords={moduleRecords["Fornecedores"] ?? []} employeeRecords={moduleRecords["Funcionários"] ?? [tiagoEmployee]} close={() => setModal("")} onSave={saveRecord}/>}
+    {modal && <Modal title={modal} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalogRecords={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} supplierRecords={moduleRecords["Fornecedores"] ?? []} employeeRecords={moduleRecords["Funcionários"] ?? [tiagoEmployee]} close={() => setModal("")} onSave={saveRecord}/>}
     {selectedOrder && <OrderDetail order={selectedOrder} customerPhone={customerRecords.find(customer => customer.name === selectedOrder.client)?.phone} company={activeCompany} catalog={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} close={() => setSelectedOrder(null)} onUpdate={updateServiceOrder}/>}
   </div>;
 }
