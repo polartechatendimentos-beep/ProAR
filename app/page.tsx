@@ -1632,7 +1632,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
   };
   return <main className="login-page">
     <section className="login-brand">
-      <img className="login-official-logo" src={tenantCompany?.logo_path || tenantCompany?.brand_config?.logo || "/proar-logo.png"} alt={tenantCompany?.trade_name || "ProAR — Gestão de Serviços"}/>
+      <img className="login-official-logo" src={tenantCompany?.logo_path || tenantCompany?.brand_config?.logo || "/api/brand-icon"} alt={tenantCompany?.trade_name || "ProAR — Gestão de Serviços"}/>
       <span>PROAR GESTÃO DE SERVIÇOS — BY TAV's</span>
       <h1>{tenantCompany?.trade_name ? `Bem-vindo à ${tenantCompany.trade_name}` : "Bem-vindo ao ProAR"}</h1>
       <p>Clientes, ordens de serviço, agenda, estoque e financeiro sincronizados num único sistema.</p>{tenantCompany?.daysRemaining !== undefined && <div className="login-security"><Clock3 size={18}/><div><b>Teste gratuito</b><small>{tenantCompany.expired ? "Período encerrado" : `${tenantCompany.daysRemaining} dia(s) restante(s)`}</small></div></div>}
