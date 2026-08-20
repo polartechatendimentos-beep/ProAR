@@ -16,9 +16,9 @@ export const metadata: Metadata = {
   title: "ProAR Gestão de Serviços — BY TAV's",
   description: "ProAR Gestão de Serviços — BY TAV's | Sistema de Gestão Operacional, Comercial e Financeira.",
   icons: {
-    icon: "/api/brand-icon",
-    shortcut: "/api/brand-icon",
-    apple: "/api/brand-icon",
+    icon: "/icon-512.png",
+    shortcut: "/icon-192.png",
+    apple: "/icon-192.png",
   },
 };
 

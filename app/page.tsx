@@ -189,10 +189,10 @@ type Customer = {
   financialStatus?: "Liberado" | "Alerta" | "Somente à vista" | "Bloqueado";
 };
 
-type HouseWorkStatus = "AG. FRIGORÍGENA" | "AG. ACABAMENTO" | "AG. TUBULAÇÃO FORÇADA" | "AG. EXAUSTOR" | "AG. TAMPA FRIGORÍGENA" | "SERVIÇO CONCLUÍDO";
+type HouseWorkStatus = "INÍCIO DE OBRA" | "AG. FRIGORÍGENA" | "AG. ACABAMENTO" | "AG. TUBULAÇÃO FORÇADA" | "AG. EXAUSTOR" | "AG. TAMPA FRIGORÍGENA" | "SERVIÇO CONCLUÍDO";
 type LegacyHouseWorkStatus = "AG FRIGORÍGENA" | "AG VENTO KIT" | "VENTOKIT E FRIGORÍGENA OK" | "AG ACABAMENTO" | "AG EXAUSTOR" | "AG TAMPA FRIGORÍGENA" | "FIM";
 type HouseStagePhoto = { label: string; url: string };
-type HouseWorkUpdate = { id: string; status: HouseWorkStatus | LegacyHouseWorkStatus; note: string; responsible?: string; photo?: string; photos?: string[] | HouseStagePhoto[]; createdAt: string; completedAt?: string };
+type HouseWorkUpdate = { id: string; status: HouseWorkStatus | LegacyHouseWorkStatus; previousStatus?: HouseWorkStatus; note: string; responsible?: string; photo?: string; photos?: string[] | HouseStagePhoto[]; createdAt: string; completedAt?: string; origin?: string };
 type HouseIncident = { id: string; type: "Perda" | "Roubo"; note: string; photo: string; responsible: string; createdAt: string };
 type HouseWorkItem = { id: string; block: string; lot: number; kind?: "house" | "common"; name?: string; status: HouseWorkStatus | LegacyHouseWorkStatus; photo?: string; photos?: string[] | HouseStagePhoto[]; note?: string; updatedAt?: string; history: HouseWorkUpdate[]; incidents?: HouseIncident[] };
 type WorkBlock = { block: string; houses: number };
@@ -206,11 +206,12 @@ const HOUSE_BLOCKS = [
 ] as const;
 const RESERVA_IMPERIAL: WorkProject = { id: "reserva-imperial", name: "Reserva Imperial", blocks: HOUSE_BLOCKS.map(item => ({...item})), commonAreas: ["Academia", "Salão de Festas", "Área Gourmet", "Administrativo"], createdAt: "2026-08-11T00:00:00.000Z" };
 const HOUSE_STATUSES: { name: HouseWorkStatus; color: string }[] = [
-  { name: "AG. FRIGORÍGENA", color: "#ef4444" }, { name: "AG. ACABAMENTO", color: "#f59e0b" },
+  { name: "INÍCIO DE OBRA", color: "#64748b" }, { name: "AG. FRIGORÍGENA", color: "#ef4444" }, { name: "AG. ACABAMENTO", color: "#f59e0b" },
   { name: "AG. TUBULAÇÃO FORÇADA", color: "#8b5cf6" }, { name: "AG. EXAUSTOR", color: "#06b6d4" },
   { name: "AG. TAMPA FRIGORÍGENA", color: "#3b82f6" }, { name: "SERVIÇO CONCLUÍDO", color: "#16a34a" },
 ];
 const HOUSE_STAGE_PHOTOS: Record<HouseWorkStatus, string[]> = {
+  "INÍCIO DE OBRA": [],
   "AG. FRIGORÍGENA": ["Sala", "Quarto Frente", "Quarto Meio", "Quarto Fundo", "Home"],
   "AG. ACABAMENTO": ["Sala", "Quarto Frente", "Quarto Meio", "Quarto Fundo", "Home", "VTK Fundo"],
   "AG. TUBULAÇÃO FORÇADA": ["Tubulação Forçada"],
@@ -219,11 +220,11 @@ const HOUSE_STAGE_PHOTOS: Record<HouseWorkStatus, string[]> = {
   "SERVIÇO CONCLUÍDO": [],
 };
 const HOUSE_STAGE_OPTIONAL_PHOTOS: HouseWorkStatus[] = ["AG. TUBULAÇÃO FORÇADA"];
-const LEGACY_HOUSE_STATUS_MAP: Partial<Record<HouseWorkStatus | LegacyHouseWorkStatus, HouseWorkStatus>> = {
+const LEGACY_HOUSE_STATUS_MAP: Record<string, HouseWorkStatus> = {
   "AG FRIGORÍGENA": "AG. FRIGORÍGENA", "AG VENTO KIT": "AG. TUBULAÇÃO FORÇADA", "VENTOKIT E FRIGORÍGENA OK": "AG. TUBULAÇÃO FORÇADA",
-  "AG ACABAMENTO": "AG. ACABAMENTO", "AG EXAUSTOR": "AG. EXAUSTOR", "AG TAMPA FRIGORÍGENA": "AG. TAMPA FRIGORÍGENA", "FIM": "SERVIÇO CONCLUÍDO",
+  "AG ACABAMENTO": "AG. ACABAMENTO", "AG EXAUSTOR": "AG. EXAUSTOR", "AG. EXAUTOR": "AG. EXAUSTOR", "AG EXAUTOR": "AG. EXAUSTOR", "ag_exautor": "AG. EXAUSTOR", "ag-exaustor": "AG. EXAUSTOR", "AG TAMPA FRIGORÍGENA": "AG. TAMPA FRIGORÍGENA", "FIM": "SERVIÇO CONCLUÍDO",
 };
-const normalizeHouseStatus = (status: HouseWorkStatus | LegacyHouseWorkStatus): HouseWorkStatus => LEGACY_HOUSE_STATUS_MAP[status] || status as HouseWorkStatus;
+const normalizeHouseStatus = (status: HouseWorkStatus | LegacyHouseWorkStatus | string): HouseWorkStatus => LEGACY_HOUSE_STATUS_MAP[status as HouseWorkStatus] || status as HouseWorkStatus;
 const normalizeStagePhotos = (photos: HouseWorkUpdate["photos"], photo: string | undefined, status: HouseWorkStatus | LegacyHouseWorkStatus): HouseStagePhoto[] => {
   const values = photos?.length ? photos : photo ? [photo] : [];
   const labels = HOUSE_STAGE_PHOTOS[normalizeHouseStatus(status)];
@@ -536,7 +537,7 @@ function CustomerDetail({ customerName, customers, structures, serviceOrders, mo
     <div className="detail-header">
       <button className="back-button" onClick={onBack}><ArrowLeft size={16}/> Voltar aos clientes</button>
       <div className="detail-identity"><span>{customer.name.split(" ").map(x => x[0]).slice(0,2).join("")}</span><div><small>CLIENTE CADASTRADO</small><h2>{customer.name}</h2><p>{customer.doc || "Documento não informado"} • {customer.address || "Endereço não informado"}</p></div></div>
-      <button className="outline-btn"><Edit3 size={14}/> Editar cliente</button>
+      <div className="detail-header-actions"><ContextReports title={`Cliente ${customer.name}`} rows={[["Cliente",customer.name],["CPF/CNPJ",customer.doc],["Telefone",customer.phone]]} options={["Cliente 360°","Equipamentos","Ordens de Serviço","Vendas","Financeiro","Histórico","Documentos"]}/><button className="outline-btn"><Edit3 size={14}/> Editar cliente</button></div>
     </div>
     <nav className="detail-tabs" aria-label="Abas do cliente">{tabs.map(item => <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}{item === "Cadastro de unidade e setor" && <em>{linkedRecords.length}</em>}</button>)}</nav>
     {isStructureTab ? <div className="units-content">
@@ -638,7 +639,7 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders, cu
     } catch (error) { onUpdate({ ...order, nfseStatus:"Erro", nfseValue:value }); window.alert(error instanceof Error ? error.message : "Não foi possível emitir a NFS-e."); }
   };
   return <section className="module-page service-orders">
-    <div className="module-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Pesquisar por cliente, OS, CPF/CNPJ, telefone ou unidade..."/></label><button className="outline-btn"><Filter size={14}/> Filtros</button><button className="primary-btn" onClick={() => onOpen("Nova ordem de serviço")}><Plus size={16}/> Nova ordem de serviço</button></div>
+    <div className="module-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Pesquisar por cliente, OS, CPF/CNPJ, telefone ou unidade..."/></label><button className="outline-btn"><Filter size={14}/> Filtros</button><ContextReports title="Ordens de Serviço" rows={serviceOrders.map(order=>[order.id,order.client,order.status])} options={["Imprimir Ordem de Serviço","Relatório técnico","Certificado de higienização","Relatório fotográfico","Relatório da assistência técnica","Comprovante de entrega","Histórico completo da OS"]}/><button className="primary-btn" onClick={() => onOpen("Nova ordem de serviço")}><Plus size={16}/> Nova ordem de serviço</button></div>
     <div className="module-summary">
       <article><span><ClipboardList size={19}/></span><div><small>ORDENS ABERTAS</small><strong>{serviceOrders.filter(item => item.status !== "Concluída").length}</strong><em>{serviceOrders.filter(item => item.date === today).length} para hoje</em></div></article>
       <article><span><UserCheck size={19}/></span><div><small>TÉCNICOS EMPENHADOS</small><strong>{new Set(serviceOrders.map(item => item.tech).filter(Boolean)).size}</strong><em>Cadastros reais</em></div></article>
@@ -1188,6 +1189,16 @@ function downloadCsv(filename: string, rows: string[][]) {
   URL.revokeObjectURL(link.href);
 }
 
+function ContextReports({ title, options, rows = [] }: { title: string; options: string[]; rows?: string[][] }) {
+  const [open, setOpen] = useState(false);
+  const generate = (option: string, excel = false) => {
+    const filename = `${title}-${option}`.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9]+/g,"-").toLowerCase();
+    if (excel) downloadCsv(`${filename}.xls`, [["Relatório", option], ["Contexto", title], ["Gerado em", new Date().toLocaleString("pt-BR")], [], ...rows]); else window.print();
+    setOpen(false);
+  };
+  return <div className="context-reports"><button className="outline-btn" onClick={()=>setOpen(value=>!value)}><FileChartColumn size={14}/> Relatórios <ChevronDown size={13}/></button>{open && <div className="context-report-menu"><b>RELATÓRIOS DESTE REGISTRO</b>{options.map(option=><button key={option} onClick={()=>generate(option)}>{option}<FileText size={13}/></button>)}<footer><button onClick={()=>generate(options[0] || "Relatório",true)}><ArrowDownRight size={13}/> Exportar Excel</button><button onClick={()=>generate(options[0] || "Relatório")}><FileText size={13}/> Gerar PDF</button></footer></div>}</div>;
+}
+
 function Reports({ modules, customers, serviceOrders, company }: { modules: Record<string, ModuleRecord[]>; customers: Customer[]; serviceOrders: ServiceOrder[]; company: TenantCompany }) {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -1355,14 +1366,14 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
   const activeProject = projects.find(project => project.id === activeProjectId) ?? projects[0] ?? RESERVA_IMPERIAL;
   const storageKey = activeProject.id === RESERVA_IMPERIAL.id ? companyStorageKey(companyId, "obra-142-casas") : companyStorageKey(companyId, `obra-${activeProject.id}-itens`);
   const shareKey = activeProject.id === RESERVA_IMPERIAL.id ? companyStorageKey(companyId, "obra-142-public-token") : companyStorageKey(companyId, `obra-${activeProject.id}-public-token`);
-  const createHouses = (project = activeProject) => [...project.blocks.flatMap(({ block, houses }) => Array.from({ length: houses }, (_, index): HouseWorkItem => ({ id: `${block}-${String(index + 1).padStart(2, "0")}`, block, lot: index + 1, kind: "house", status: "AG. FRIGORÍGENA", history: [] }))), ...project.commonAreas.map((name,index): HouseWorkItem => ({ id:`common-${String(index + 1).padStart(2,"0")}`, block:"Áreas Comuns", lot:index + 1, kind:"common", name, status:"AG. FRIGORÍGENA", history:[] }))];
+  const createHouses = (project = activeProject) => [...project.blocks.flatMap(({ block, houses }) => Array.from({ length: houses }, (_, index): HouseWorkItem => ({ id: `${block}-${String(index + 1).padStart(2, "0")}`, block, lot: index + 1, kind: "house", status: "INÍCIO DE OBRA", history: [] }))), ...project.commonAreas.map((name,index): HouseWorkItem => ({ id:`common-${String(index + 1).padStart(2,"0")}`, block:"Áreas Comuns", lot:index + 1, kind:"common", name, status:"INÍCIO DE OBRA", history:[] }))];
   const [houses, setHouses] = useState<HouseWorkItem[]>([]);
   const [mapLoading, setMapLoading] = useState(true);
   const [blockFilter, setBlockFilter] = useState("Todas");
   const [statusFilter, setStatusFilter] = useState("Todos");
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<HouseWorkItem | null>(null);
-  const [nextStatus, setNextStatus] = useState<HouseWorkStatus>("AG. FRIGORÍGENA");
+  const [nextStatus, setNextStatus] = useState<HouseWorkStatus>("INÍCIO DE OBRA");
   const [note, setNote] = useState("");
   const [photos, setPhotos] = useState<Record<string, string>>({});
   const [houseModalTab, setHouseModalTab] = useState<"Etapa" | "Perdas e Roubos">("Etapa");
@@ -1375,6 +1386,7 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
   const [shareToken, setShareToken] = useState("");
   const [serverRevision, setServerRevision] = useState(0);
   const [mapOnline, setMapOnline] = useState(true);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [workManagerOpen, setWorkManagerOpen] = useState(false);
   const [newWorkName, setNewWorkName] = useState("");
   const [newBlocks, setNewBlocks] = useState<WorkBlock[]>([{block:"A",houses:1}]);
@@ -1427,7 +1439,16 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     setHouses([]);setMapOnline(true);setMapLoading(true);
     void fetchServerMap().then(map=>{if(!map) return publishPublicMap(localHouses);}).catch(()=>{setMapOnline(false);setMapLoading(false);setReportNotice("Banco online indisponível. A cópia local não foi enviada nem definida como principal.");});
   },[storageKey,companyId,projectsReady,activeProject.id]);
-  const persist = (next: HouseWorkItem[]) => { setHouses(next);localStorage.setItem(storageKey,JSON.stringify(next));if(!navigator.onLine){localStorage.setItem(`${shareKey}:pending`,"1");setMapOnline(false);setReportNotice("Sem internet: alteração guardada somente neste aparelho.");return;}void publishPublicMap(next).then(()=>setReportNotice("Alteração salva no banco online e atualizada para todos os dispositivos.")).catch(error=>setReportNotice(error.message)); };
+  const persist = async (next: HouseWorkItem[]) => {
+    if (!navigator.onLine) { setSaveState("error"); setMapOnline(false); setReportNotice("Não foi possível salvar a alteração. Tente novamente."); return false; }
+    setSaveState("saving");
+    try {
+      await publishPublicMap(next);
+      setHouses(next); localStorage.setItem(storageKey,JSON.stringify(next));
+      setSaveState("saved"); setReportNotice("Alteração salva no banco online e atualizada para todos os dispositivos.");
+      window.setTimeout(()=>setSaveState("idle"),1800); return true;
+    } catch (error) { setSaveState("error"); setReportNotice("Não foi possível salvar a alteração. Tente novamente."); window.setTimeout(()=>setSaveState("idle"),3000); return false; }
+  };
   useEffect(() => {
     const synchronize=()=>{if(!navigator.onLine){setMapOnline(false);return;}if(localStorage.getItem(`${shareKey}:pending`))void publishPublicMap(houses).catch(error=>setReportNotice(error.message));else void fetchServerMap().catch(()=>setMapOnline(false));};
     const timer=window.setInterval(()=>{if(navigator.onLine&&!localStorage.getItem(`${shareKey}:pending`))void fetchServerMap().catch(()=>setMapOnline(false));},20000);
@@ -1488,7 +1509,7 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     const next=houses.map(item=>item.id===editing.id?{...item,updatedAt:createdAt,incidents:[incident,...(item.incidents??[])]}:item);
     persist(next); setEditing(next.find(item=>item.id===editing.id)??null); setIncidentNote(""); setIncidentPhoto(""); setReportNotice(`${incidentType} registrada com foto e responsável.`);
   };
-  const saveUpdate = () => {
+  const saveUpdate = async () => {
     if (!editing) return;
     const photoLabels = HOUSE_STAGE_PHOTOS[nextStatus];
     const requiredLabels = HOUSE_STAGE_OPTIONAL_PHOTOS.includes(nextStatus) ? [] : photoLabels;
@@ -1499,10 +1520,11 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     const observationChanged = note.trim() !== (editing.note ?? "").trim();
     const statusChanged = nextStatus !== normalizeHouseStatus(editing.status);
     const stagePhotos = photoLabels.filter(label => photos[label]).map(label => ({ label, url: photos[label] }));
-    const update: HouseWorkUpdate = { id: `${editing.id}-${Date.now()}`, status: nextStatus, note: note.trim(), responsible: responsibleUser, photos: stagePhotos.length ? stagePhotos : undefined, createdAt, completedAt: nextStatus === "SERVIÇO CONCLUÍDO" ? createdAt : undefined };
+    const previousStatus = normalizeHouseStatus(editing.status);
+    const update: HouseWorkUpdate = { id: `${editing.id}-${Date.now()}`, status: nextStatus, previousStatus, note: note.trim(), responsible: responsibleUser, photos: stagePhotos.length ? stagePhotos : undefined, createdAt, completedAt: nextStatus === "SERVIÇO CONCLUÍDO" ? createdAt : undefined, origin: typeof navigator === "undefined" ? "web" : navigator.userAgent };
     const next = houses.map(item => item.id === editing.id ? { ...item, status: nextStatus, note: note.trim() || item.note, photo: stagePhotos[0]?.url || item.photo, photos: stagePhotos.length ? stagePhotos : item.photos, updatedAt: createdAt, history: [update, ...(item.history ?? [])] } : item);
     if (!observationChanged && !statusChanged && !stagePhotos.length) { setEditing(null); return; }
-    persist(next); setEditing(null);
+    if (await persist(next)) setEditing(null);
   };
   if (mapLoading) return <section className="houses-app"><div className="work-online-loading"><RefreshCw size={24}/><div><b>A carregar {activeProject.name}</b><span>A consultar a base principal online. Nenhum valor local provisório será exibido.</span></div></div></section>;
   const visible = houses.filter(house => (blockFilter === "Todas" || house.block === blockFilter) && (statusFilter === "Todos" || normalizeHouseStatus(house.status) === statusFilter) && `${house.block} ${house.lot} ${house.id} ${house.name ?? ""}`.toLowerCase().includes(query.toLowerCase()));
@@ -1579,6 +1601,7 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     window.setTimeout(() => setReportNotice(""), 5000);
   };
   return <section className="houses-app">
+    {saveState !== "idle" && <div className={`work-save-bar ${saveState}`} role="status"><i/><span>{saveState === "saving" ? "A gravar alteração..." : saveState === "saved" ? "Alteração confirmada" : "Não foi possível salvar"}</span></div>}
     <div className="work-manager-bar"><div><span><Building2 size={17}/></span><label>Obra ativa<select value={activeProject.id} onChange={event=>selectWorkProject(event.target.value)}>{projects.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}</select></label><small>{activeProject.blocks.length} quadra(s) • {activeProject.blocks.reduce((total,item)=>total+item.houses,0)} casas • {activeProject.commonAreas.length} áreas comuns</small></div><button className="primary-btn" onClick={()=>setWorkManagerOpen(true)}><Plus size={15}/> Cadastrar obra</button></div>
     <div className="houses-hero"><div><span className="section-kicker"><House size={12}/> CONTROLE DE EXECUÇÃO</span><h2>{activeProject.name}</h2><p>Acompanhamento individual das casas e áreas comuns, com evidências e histórico de execução.</p></div><div className="houses-public-share"><span><MapPin size={18}/></span><div><small>ACESSO DO CLIENTE</small><b>{shareToken ? "Mapa público ativo" : "Criar link de acompanhamento"}</b><em>{shareToken ? "Atualização automática em tempo real" : "O cliente verá somente o andamento da obra"}</em></div><button onClick={refreshWorkMap}><ArrowDownRight size={14}/> Atualizar</button><button onClick={sendWorkMap}><ArrowUpRight size={14}/> Enviar</button><button onClick={sharePublicMap}><MessageCircle size={14}/>{shareToken ? "Link" : "Criar link"}</button>{shareToken && <a href={`/obra/${shareToken}`} target="_blank" rel="noreferrer"><Eye size={14}/> Visualizar</a>}</div><div className="houses-progress"><div><small>PROGRESSO GERAL</small><strong>{completion}%</strong></div><i><b style={{ width: `${completion}%` }}/></i><span>{completed} finalizadas de {houses.length} unidades cadastradas</span></div></div>
     <div className="houses-kpis"><article><span><House size={18}/></span><div><small>TOTAL CADASTRADO</small><strong>{houses.length}</strong><em>{activeProject.blocks.length} quadras • {activeProject.commonAreas.length} áreas comuns</em></div></article>{HOUSE_STATUSES.map(status => { const total = houses.filter(house => normalizeHouseStatus(house.status) === status.name).length; return <article key={status.name}><i style={{background:status.color}}/><div><small>{status.name}</small><strong>{total}</strong><em>{Math.round(total / houses.length * 100)}% da obra</em></div></article>; })}</div>
@@ -1669,7 +1692,7 @@ function GenericModule({ name, onOpen, onDelete, onUpdate, onConvert, companyCnp
     return values.some(value => String(candidate.client || candidate.supplier || "").trim().toLowerCase() === value);
   };
   return <section className="module-page management-module">
-    <div className="management-hero"><div><span className="section-kicker"><Grid2X2 size={12}/> MÓDULO PROAR</span><h2>{name}</h2><p>{descriptions[name] || `Consulte, cadastre e acompanhe todas as informações de ${name.toLowerCase()} em um só lugar.`}</p>{name === "Compras" && nfeStatus && <small className="nfe-search-status">{nfeStatus}</small>}</div><div className="management-actions">{name === "Compras" && <button className="outline-btn" onClick={searchDestinedNfe}><Search size={14}/> Buscar NF-e destinadas</button>}<button className="outline-btn" onClick={() => window.print()}><FileText size={14}/> Imprimir</button><button className="outline-btn" onClick={exportRecords}><ArrowDownRight size={14}/> Exportar</button><button className="primary-btn" onClick={() => onOpen(`Novo registro • ${name}`)}><Plus size={16}/> {name === "Compras" ? "Nova compra" : name === "Fornecedores" ? "Novo fornecedor" : name === "Financeiro" ? "Novo lançamento" : name === "Obras" ? "Nova obra" : "Novo registro"}</button></div></div>
+    <div className="management-hero"><div><span className="section-kicker"><Grid2X2 size={12}/> MÓDULO PROAR</span><h2>{name}</h2><p>{descriptions[name] || `Consulte, cadastre e acompanhe todas as informações de ${name.toLowerCase()} em um só lugar.`}</p>{name === "Compras" && nfeStatus && <small className="nfe-search-status">{nfeStatus}</small>}</div><div className="management-actions">{name === "Compras" && <button className="outline-btn" onClick={searchDestinedNfe}><Search size={14}/> Buscar NF-e destinadas</button>}<ContextReports title={name} rows={filtered.map(record=>[record.id,record.name,record.status || "",String(record.value ?? "")])} options={name === "Equipamentos" ? ["Ficha técnica","Histórico de manutenção","Histórico de OS","Higienizações","Pendências","QR Code"] : name === "Estoque" ? ["Posição atual","Movimentações","Perdas","Reservas","Inventário"] : name === "Compras" ? ["Solicitação","Aprovação","Pedido","Recebimento","Divergências"] : name === "Financeiro" ? ["Conta específica","Contas a pagar","Contas a receber","Fluxo de caixa","Extrato","Resultado"] : name === "Orçamentos" ? ["Proposta comercial","Versão atual","Versões anteriores","Relatório sem valores internos"] : name === "Vendas" ? ["Comprovante da venda","Pedido","Relação de itens","Relatório financeiro da venda","Impressão sem valores"] : ["Relatório do módulo","Histórico","Documentos"]}/><button className="outline-btn" onClick={() => window.print()}><FileText size={14}/> Imprimir</button><button className="outline-btn" onClick={exportRecords}><ArrowDownRight size={14}/> Exportar</button><button className="primary-btn" onClick={() => onOpen(`Novo registro • ${name}`)}><Plus size={16}/> {name === "Compras" ? "Nova compra" : name === "Fornecedores" ? "Novo fornecedor" : name === "Financeiro" ? "Novo lançamento" : name === "Obras" ? "Nova obra" : "Novo registro"}</button></div></div>
     <div className="management-stats"><article><span><ClipboardList size={18}/></span><div><small>TOTAL DE REGISTROS</small><strong>{records.length}</strong></div></article><article><span><Clock3 size={18}/></span><div><small>PENDENTES / EM ABERTO</small><strong>{records.filter(record => /Rascunho|Aguardando|aberto|Vencida|Pendente/i.test(record.status || "")).length}</strong></div></article><article><span><CircleDollarSign size={18}/></span><div><small>VALOR REGISTRADO</small><strong>R$ {totalValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></div></article></div>
     {managementFlows[name] && <div className="management-flow">{managementFlows[name].map((step, index) => <article key={step.title}><span>{String(index + 1).padStart(2, "0")}</span><div><b>{step.title}</b><small>{step.text}</small></div>{index < managementFlows[name].length - 1 && <ChevronRight size={14}/>}</article>)}</div>}
     <nav className="management-tabs" aria-label={`Áreas de ${name}`}>{tabs.map(tab => <button key={tab} className={activeView === tab ? "active" : ""} onClick={() => setActiveView(tab)}>{tab}</button>)}</nav>
