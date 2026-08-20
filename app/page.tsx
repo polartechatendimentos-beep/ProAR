@@ -12,6 +12,10 @@ import "./commercial-catalog-enhancements.css";
 import "./entity-detail-tabs.css";
 import "./proar-3-theme.css";
 import "./lote-1-operacao.css";
+
+/* Salvamento explícito da Ordem de Serviço */
+.order-detail-head{position:sticky;top:0;z-index:8;background:#0a2036}.order-detail-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}.order-detail-actions>.context-reports{display:inline-block}.order-detail-actions>button{flex:0 0 auto}.order-save-button{min-height:36px}.order-dirty-indicator{padding:6px 9px;border:1px solid #d7972b;border-radius:8px;background:#3b2a0d;color:#ffe2a8;font-size:10px;font-weight:800}.order-save-notice{position:sticky;top:62px;z-index:7;display:flex;justify-content:center;padding:8px 14px;border-bottom:1px solid #2c5b84;background:#0b2946;color:#cce8ff;font-size:11px;font-weight:800}.order-save-notice.saved{background:#123d2e;color:#bcf5d5;border-color:#267b55}.order-save-notice.error{background:#3b1720;color:#ffd0d8;border-color:#984654}.order-save-footer{position:sticky;bottom:0;z-index:8;margin:0!important;padding:13px 18px!important;border-top:1px solid #214766!important;background:#081b2f;box-shadow:0 -10px 24px rgba(0,0,0,.2)}.order-save-footer .primary-btn{min-width:168px}.order-save-footer .outline-btn:first-child{margin-right:auto}.spin{animation:osSpin 1s linear infinite}@keyframes osSpin{to{transform:rotate(360deg)}}
+@media(max-width:700px){.order-detail-head{align-items:flex-start!important;flex-direction:column}.order-detail-actions{width:100%;justify-content:flex-start}.order-detail-actions .context-reports{order:3}.order-save-button{flex:1}.order-save-footer{display:grid!important;grid-template-columns:1fr 1fr;gap:8px}.order-save-footer .outline-btn:first-child{margin:0}.order-save-footer .outline-btn:last-child{grid-column:1/-1}.order-save-footer button{min-height:46px;justify-content:center}}
 import "./pdv-layout-refinement.css";
 import "./header-visibility.css";
 import "./service-order-tracking.css";
