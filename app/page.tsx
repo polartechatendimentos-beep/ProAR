@@ -1,4 +1,4 @@
-etSyncing(false); }
+tSyncing(false); }
   };
   const pushToDatabase = async () => {
     if (!online) { setSavedMessage("Sem internet. Alterações pendentes serão sincronizadas ao reconectar."); return; }
