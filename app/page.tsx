@@ -672,12 +672,12 @@ async function imageFileToDataUrl(file: File) {
     element.onerror = reject;
     element.src = source;
   });
-  const scale = Math.min(1, 1280 / image.width);
+  const scale = Math.min(1, 960 / image.width);
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(image.width * scale));
   canvas.height = Math.max(1, Math.round(image.height * scale));
   canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL("image/jpeg", 0.78);
+  return canvas.toDataURL("image/jpeg", 0.68);
 }
 
 function SignaturePad({ label, value, onChange }: { label: string; value?: string; onChange: (value: string) => void }) {
@@ -1387,6 +1387,7 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
   const [serverRevision, setServerRevision] = useState(0);
   const [mapOnline, setMapOnline] = useState(true);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveError, setSaveError] = useState("");
   const [workManagerOpen, setWorkManagerOpen] = useState(false);
   const [newWorkName, setNewWorkName] = useState("");
   const [newBlocks, setNewBlocks] = useState<WorkBlock[]>([{block:"A",houses:1}]);
@@ -1423,9 +1424,9 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
   const mergeWorkRows = (rows: HouseWorkItem[]) => { const byId=new Map(rows.map(item=>[item.id,item])); return createHouses().map(item=>byId.get(item.id)??item); };
   const applyServerMap = (map: { houses?: HouseWorkItem[]; token?: string; revision?: number }) => { const authoritative=mergeWorkRows(map.houses??[]); setHouses(authoritative); localStorage.setItem(storageKey,JSON.stringify(authoritative)); setServerRevision(Number(map.revision||0)); setMapOnline(true); setMapLoading(false); if(map.token){setShareToken(map.token);localStorage.setItem(shareKey,map.token);} return authoritative; };
   const fetchServerMap = async () => { if(!navigator.onLine) throw new Error("offline"); const response=await fetch(`/api/public-work-map?company=${encodeURIComponent(companyId)}&work=${encodeURIComponent(activeProject.id)}&refresh=${Date.now()}`,{cache:"no-store"}); const result=await response.json(); if(!response.ok) throw new Error(result.error||"Falha no banco online"); if(result.map?.houses?.length) applyServerMap(result.map); return result.map as {houses?:HouseWorkItem[];token?:string;revision?:number}|null; };
-  const publishPublicMap = async (next: HouseWorkItem[]) => {
+  const publishPublicMap = async (next: HouseWorkItem[], revision = serverRevision) => {
     if(!navigator.onLine){localStorage.setItem(`${shareKey}:pending`,"1");setMapOnline(false);throw new Error("Dispositivo sem internet.");}
-    const response=await fetch("/api/public-work-map",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({companyId,workId:activeProject.id,workName:activeProject.name,title:`Acompanhamento da obra — ${activeProject.name}`,houses:next,baseRevision:serverRevision})});
+    const response=await fetch("/api/public-work-map",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({companyId,workId:activeProject.id,workName:activeProject.name,title:`Acompanhamento da obra — ${activeProject.name}`,houses:next,baseRevision:revision})});
     const result=await response.json();
     if(response.status===409&&result.map){applyServerMap(result.map);localStorage.removeItem(`${shareKey}:pending`);throw new Error("O banco online tinha uma versão mais recente e foi mantido como principal.");}
     if(!response.ok){localStorage.setItem(`${shareKey}:pending`,"1");throw new Error(result.error||"Não foi possível atualizar o banco online.");}
@@ -1440,14 +1441,29 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     void fetchServerMap().then(map=>{if(!map) return publishPublicMap(localHouses);}).catch(()=>{setMapOnline(false);setMapLoading(false);setReportNotice("Banco online indisponível. A cópia local não foi enviada nem definida como principal.");});
   },[storageKey,companyId,projectsReady,activeProject.id]);
   const persist = async (next: HouseWorkItem[]) => {
-    if (!navigator.onLine) { setSaveState("error"); setMapOnline(false); setReportNotice("Não foi possível salvar a alteração. Tente novamente."); return false; }
-    setSaveState("saving");
+    if (!navigator.onLine) { const message="Não foi possível salvar a alteração. Tente novamente."; setSaveState("error"); setSaveError(message); setMapOnline(false); setReportNotice(message); return false; }
+    setSaveError(""); setSaveState("saving");
     try {
       await publishPublicMap(next);
       setHouses(next); localStorage.setItem(storageKey,JSON.stringify(next));
       setSaveState("saved"); setReportNotice("Alteração salva no banco online e atualizada para todos os dispositivos.");
       window.setTimeout(()=>setSaveState("idle"),1800); return true;
-    } catch (error) { setSaveState("error"); setReportNotice("Não foi possível salvar a alteração. Tente novamente."); window.setTimeout(()=>setSaveState("idle"),3000); return false; }
+    } catch (error) {
+      try {
+        const latest=await fetchServerMap();
+        if (!latest?.houses?.length) throw error;
+        const changed=next.find(item=>item.id===editing?.id);
+        if (!changed) throw error;
+        const rebased=latest.houses.map(item=>item.id===changed.id?changed:item);
+        await publishPublicMap(rebased,Number(latest.revision||0));
+        setHouses(rebased); localStorage.setItem(storageKey,JSON.stringify(rebased));
+        setSaveState("saved"); setReportNotice("Alteração salva após sincronizar a versão mais recente.");
+        window.setTimeout(()=>setSaveState("idle"),1800); return true;
+      } catch {
+        const message="Não foi possível salvar a alteração. Tente novamente.";
+        setSaveState("error"); setSaveError(message); setReportNotice(message); window.setTimeout(()=>setSaveState("idle"),3000); return false;
+      }
+    }
   };
   useEffect(() => {
     const synchronize=()=>{if(!navigator.onLine){setMapOnline(false);return;}if(localStorage.getItem(`${shareKey}:pending`))void publishPublicMap(houses).catch(error=>setReportNotice(error.message));else void fetchServerMap().catch(()=>setMapOnline(false));};
@@ -1480,7 +1496,7 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     void fetch('/api/work-projects',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({companyId,projects:next,baseRevision:projectsRevision})}).then(async response=>{const result=await response.json();if(response.status===409&&result.state){const authoritative=result.state.projects as WorkProject[];setProjects(authoritative);setProjectsRevision(Number(result.state.revision||0));localStorage.setItem(projectsKey,JSON.stringify(authoritative));throw new Error("Outro aparelho atualizou a lista de obras. A versão online foi mantida; tente cadastrar novamente.");}if(!response.ok)throw new Error(result.error||"Falha ao salvar obra");setProjects(next);setProjectsRevision(Number(result.state?.revision||projectsRevision+1));localStorage.setItem(projectsKey,JSON.stringify(next));localStorage.setItem(selectedProjectKey,id);setActiveProjectId(id);setBlockFilter("Todas");setWorkManagerOpen(false);setNewWorkName("");setNewBlocks([{block:"A",houses:1}]);setNewCommonAreas([]);setReportNotice(`Obra ${name} cadastrada com sucesso e disponível em todos os aparelhos.`);}).catch(error=>setReportNotice(error.message));
   };
   const selectWorkProject = (id:string) => { setActiveProjectId(id); localStorage.setItem(selectedProjectKey,id); setBlockFilter("Todas"); setStatusFilter("Todos"); setQuery(""); };
-  const openUpdate = (house: HouseWorkItem) => { setEditing(house); setNextStatus(normalizeHouseStatus(house.status)); setNote(house.note ?? ""); setPhotos({}); setHouseModalTab("Etapa"); setIncidentType("Perda"); setIncidentNote(""); setIncidentPhoto(""); };
+  const openUpdate = (house: HouseWorkItem) => { setEditing(house); setNextStatus(normalizeHouseStatus(house.status)); setNote(house.note ?? ""); setPhotos({}); setSaveError(""); setHouseModalTab("Etapa"); setIncidentType("Perda"); setIncidentNote(""); setIncidentPhoto(""); };
   const readStagePhoto = async (label: string, file?: File) => {
     if (!file) return;
     const encoded = await imageFileToDataUrl(file);
@@ -1514,7 +1530,7 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     const photoLabels = HOUSE_STAGE_PHOTOS[nextStatus];
     const requiredLabels = HOUSE_STAGE_OPTIONAL_PHOTOS.includes(nextStatus) ? [] : photoLabels;
     const missing = requiredLabels.filter(label => !photos[label]);
-    if (missing.length) { setReportNotice(`Adicione as fotos obrigatórias: ${missing.join(", ")}.`); return; }
+    if (missing.length) { const message=`Adicione as fotos obrigatórias: ${missing.join(", ")}.`; setSaveError(message); setReportNotice(message); return; }
     if (nextStatus === "SERVIÇO CONCLUÍDO" && !window.confirm("Confirma a conclusão desta casa? A data, o horário e o responsável serão registrados.")) return;
     const createdAt = new Date().toISOString();
     const observationChanged = note.trim() !== (editing.note ?? "").trim();
