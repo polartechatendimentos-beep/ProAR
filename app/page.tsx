@@ -1,37 +1,378 @@
-Y��x-���jם��i��+��j[h��ܢ���ou�赩h��n�X�z�H�\�H�Y[���[\ܝ����][��˘��Ȏ[\ܝ���][Y[\�\�K���Ȏ[\ܝ���؜�KLM����Ȏ[\ܝ����ܚٛ��Y�^\˘��Ȏ[\ܝ���X��\��[ٙ�[�K���Ȏ[\ܝ���X�X�]�ܚ�\�\�K���Ȏ[\ܝ��؝Y�]\����Ȏ[\ܝ���X�]X��\�\�\�ܙY���Ȏ[\ܝ�����[Y\��X[X�][��Y[�[��[Y[�˘��Ȏ[\ܝ���[�]KY]Z[]X�˘��Ȏ[\ܝ�����\�L�][YK���Ȏ[\ܝ����KLK[�\�X�[˘��Ȏ[\ܝ����[^[�]\�Y�[�[Y[����Ȏ[\ܝ���XY\�]�\�X�[]K���Ȏ[\ܝ����\��X�K[ܙ\�]�X��[�˘��Ȏ�[\ܝ�\�QY��X�\�SY[[�\�T�Y�\�T�]K\H��\ۙ[�\K\H�ܛQ]�[�\H�[�\�]�[�\��XX��[�\�]�[�H���H��XX��[\ܝX�]�]K[\��X[��K\�����۔�Y�\���ԚY�\����\�Y���[��\���YY��\�P�\�[�\���Z[[�̋�[[�\�^\��\���^\���X�[�Y��X���\��L��]��ۑ�ۋ�]��۔�Y��\��Q�\��Yۋ�\��\�\��������[P�\���[[��[U^�[\�ܚY��[���[��XYۙ\��\����Y��[Y\�K�۝X�Y]�^YK^YSٙ���][[�X\��^[�]\���\���[����]X\[��ܙY]�\��^X��\�Y[�KZ[�\�[ܙRܚ^�۝[X��Y�KۙK\��X�Z\^��[��\���K�����X\���][�����Y[�X����[�ИY���[���\��ܙK�[�[��\\�\��X��\�\���[��Y\��Y�P�\��K[���Y��\��]X�\�K����^Z�K[�����^Z�K[XY�T\��\�\�ԛ�[��[]�\���\�Z�\�Kܙ[���\�\�K\�ܞK[XY�RX�ۋ�Y��\��H���H�X�YK\�XX���\HX�ە\HH��\ۙ[�\O��^�OΈ�[X�\������U�YΈ�[X�\���\�Ә[YOΈ��[��O�\H�]�][HH�X�ێ�X�ە\N��[YN���[����Y�OΈ��[��N\H�ؘ[�X\��][HH�Y���[���]N���[���]Z[���[���[�[N���[����[����Y[�H���Ȉ��Y\��ȈN\H[�[��][HH�Y���[���]N���[���]Z[���[���[�[N���[���ۙN���YH��[X�\����Y�N��ۜ��]�ܛ�\Έ�X�[���[���][\Έ�]�][V�HV�HH�X�[���T�����T�S�][\Έ�X�ێ�^[�]\���\��[YN��Z[�[[�X�X[�K��X�ێ��[[�\�^\��[YN��Y�[�H�K��X�ێ��[�[YN����Y�X�p���Y\ȈK�_K��X�[����QT��PS�][\Έ�X�ێ�\�\�ԛ�[��[YN���Y[�\ȈK��X�ێ���\��[YN��\]Z\[Y[��ȈK��X�ێ��[U^�[YN��ܰ��[Y[��ȈK��X�ێ���[�ИY��[YN���[�\ȈK��X�ێ�[�X\���[YN��X�]p���Y\ȈK�_K��X�[���T�p����ȋ][\Έ�X�ێ��\��\�\��[YN��ܙ[��H�\��p��ȈK��X�ێ��Z[[�̋�[YN��؜�\ȈK��X�ێ�ܙ[���[YN���\��p���ȈK��X�ێ�X��Y�K�[YN����]�ȈK��X�ێ��\�Z�\�K�[YN��\��]YH�K��X�ێ���[���\��[YN����\�\ȈK��X�ێ��ܙK�[YN���ܛ�X�Yܙ\ȈK�_K��X�[���T�0��ȋ][\Έ�X�ێ��[]�\���[YN���[�[��Z\�ȈK��X�ێ���YY��\�P�\�[�\���[YN���[��[۰�\�[�ȈK��X�ێ��[P�\���[[��[YN���[]0�ܚ[�ȈK��X�ێ��][����[YN���ۙ�Y�\�p���Y\ȈK�_K�N�\H�\��X�Sܙ\�HY���[����Y[����[���[�]���[����\��X�N���[���X����[��]N���[���[YN���[���Y�\�Έ��[����]\Έ��[���ۙN���[���]�]\����[���X��[�]Έ��[���X���]]Έ��[���ЙY�ܙOΈ��[����Y�\�Έ��[���Y[��Yۘ]\�OΈ��[��X��X�X[��Yۘ]\�OΈ��[���][��][\�Έ�Y���[����[YN���[����[����\��p��Ȉ���]ȈV�N�[Z[�\�[�X�YΈ���X[��[Z[�\�[[�[�Έ�[X�\��[Z[�\�[�]Έ�X\Ȉ�Y\�\Ȏ�[Z[�\�]OΈ��[���[Z[�\�Y\��Y�OΈ��[���[Z[�\��]\�Έ�[�[�H��Y�[�YȈ�[��XYȎ\�XZ[�[�[��Q]OΈ��[���]�Y]�\�[�[۝�Έ�
-�L���Y�Q^\ЙY�ܙOΈ�[X�\����T�]\�Έ�����[Z]YH�����\��[�Ȉ�[Z]YH��\��Ȉ��[��[YH����S�[X�\�Έ��[�����U�\�Y�X�][ې��OΈ��[�����R\��YY]Έ��[�����U�[YOΈ�[X�\��X��[����[�Έ��[���]�\ۙOΈ��[���]�\\]\�[�X�YΈ���X[��]�\\�[�Y[��[Z[�\�[�X�YΈ���X[��]�\�]\�\]\�[�X�YΈ���X[�\�[�Y[��[Z[�\��\��Έ�[X�\�[Y[[�OΈ�\��X�Sܙ\�[Y[[�Q]�[��N\��\�[��OΈ\��\�[��Q[��N[��Έ[�ԙX�ܙ[��^X�][ۜ�Έ[��^X�][ۖ�NN�\H�\��X�Sܙ\�[Y[[�Q]�[�HY���[��ܙX]Y]���[���]�[�\��]\�Έ��[���]\Έ��[��X��X�X[�Έ��[��[�\��[��OΈ��[���\��Y\���OΈ��[�����Έ��[���N�\��Y\��\�X�OΈ���X[��]�\]Y]YYΈ���X[�N�\H\��\�[��Q[��HH�\]Y\�Y]Έ��[��\��]�[]Έ��[��\]Z\Y[�Έ��[����[�Έ��[��[�[Έ��[���\�X[�[X�\�Έ��[��X��\��][ۏΈ��[��X��\�X\�ۏΈ��[��]]ܚ^�Y�OΈ��[��X��\��ܚY\�Έ��[���\ܝYY�X�Έ��[���X�Z]�Y�OΈ��[���ۙ][ۏΈ�^�[[�H����H���Y�[\�����H]�\�X\Ȉ�[�Y�X�YȎ[��X�[ۏΈ�X�ܙ��[�����X[��[��X�[ۓ��\�Έ��[��Z\��[��\��Έ��[��[��T���Έ��[���N^]���Έ��[���NN�\H[�ԙX�ܙH\X�X�[]OΈ�؜�Y�]0�ܚ[Ȉ�����؜�Y�]0�ܚ[Ȉ��\�Y�X�\�\X�X�[YYH�\�[��Έ���X[�Y[�Y�Y\�Έ��[��[\[Y[�][ۑ]OΈ��[���]�Y]�]OΈ��[��X��X�[�\�ۜ�X�OΈ��[���ٙ\��[ۘ[��[��[Έ��[���ٙ\��[ۘ[�Y�\��][ۏΈ��[���\�ۜ�X�[]Q��[Y[�Έ��[��[�Έ�X�]�]N���[���\�[�X�]N���[��V�NN�\H[��^X�][ۈHY���[��ܙX]Y]���[��\]Z\Y[����[����][ۏΈ��[���\X�]P�OΈ�[X�\��Y�ܙP�ۙ][ۏΈ��[���\��X�\Έ��[���N��X��Έ���X����[���X[�Y�X�\�\�Έ��[���\���OΈ��[����Έ��[���]X[�]OΈ��[����[�]\�T�X�ܙΈ��[��V�N[�[��Έ�\N���[���\�ܚ\[ێ���[���\��[��N���[��V�NX��X�[��OΈ��[���Y�ܙT���Έ��[���NY�\����Έ��[���NX��X�X[�Έ��[���\�ۜ�X�UX��X�[Έ��[���Yۘ]\�OΈ��[���^XZ[�[�[��Q]OΈ��[��N�\H�\��Y\�HY���[����[YN���[����Έ��[����۝X����[���ۙN���[��Y�\�Έ��[���[�]Έ�[X�\���]\Έ��[��\��ە\OΈ������Y�[�[YOΈ��[���YS�[YOΈ��[��[XZ[Έ��[���\��OΈ��[����Y]Έ��[��Y�\�ӝ[X�\�Έ��[����\[Y[�Έ��[���ZY��ܚ��Έ��[���]OΈ��[���]OΈ��[���]T�Y�\��][ۏΈ��[��][�X�\[�Y�\��][ۏΈ��[��ۘYSXZ[�Έ��[��^�]\�Έ��[��ܙY][Z]Έ�[X�\��[[��T��YΈ�[X�\��[�[��X[�]\�Έ�X�\�YȈ�[\�H����Y[�H0��\�H����]YXYȎN�\H�\�U�ܚ��]\�H�S��P�S�HД�H��Qˈ��Q�԰�Q�S�H��QˈP�P�SQS�Ȉ�QˈP�Sp������԰��QH��QˈVUT�Ԉ��QˈSTH��Q�԰�Q�S�H���T��p����Ӑ�p�QȎ\HY�X�R�\�U�ܚ��]\�H�Q���Q�԰�Q�S�H��Q��S���U���S���UH��Q�԰�Q�S�H�Ȉ�Q�P�P�SQS�Ȉ�Q�VUT�Ԉ��Q�STH��Q�԰�Q�S�H���SH�\H�\�T�Y�T��H�X�[���[���\����[��N\H�\�U�ܚ�\]HH�Y���[����]\Έ�\�U�ܚ��]\�Y�X�R�\�U�ܚ��]\���]�[�\��]\�Έ�\�U�ܚ��]\����N���[����\�ۜ�X�OΈ��[�����Έ��[������Έ��[���H�\�T�Y�T���N�ܙX]Y]���[�����\]Y]Έ��[���ܚY�[�Έ��[��N\H�\�R[��Y[�H�Y���[���\N��\�H����X�Ȏ���N���[����Έ��[����\�ۜ�X�N���[���ܙX]Y]���[��N\H�\�U�ܚ�][HH�Y���[������Έ��[������[X�\���[�Έ��\�H����[[ۈ���[YOΈ��[����]\Έ�\�U�ܚ��]\�Y�X�R�\�U�ܚ��]\����Έ��[������Έ��[���H�\�T�Y�T���N���OΈ��[���\]Y]Έ��[���\�ܞN��\�U�ܚ�\]V�N�[��Y[��Έ�\�R[��Y[��HN\H�ܚЛ���H����Έ��[����\�\Έ�[X�\�N\H�ܚ��ڙX�H�Y���[����[YN���[�������Έ�ܚЛ����N���[[ې\�X\Έ��[���N�ܙX]Y]���[��N��ۜ��T�WГ����H����Έ�H��\�\Έ
-HK����Έ����\�\Έ�K����Έ��H��\�\ΈM�K�����Έ�̈��\�\ΈM�K����Έ���\�\Έ
-�K����Έ�H��\�\Έ
-HK�����Έ����\�\Έ��K����Έ�ȋ�\�\ΈL�K����Έ�H��\�\ΈLK�����Έ����\�\ΈLK����Έ�H��\�\ΈL�K�H\��ۜ��ۜ��T�T��W�STT�PS��ܚ��ڙX�H�Y���\�\��KZ[\\�X[��[YN���\�\��H[\\�X[�����Έ�T�WГ���˛X\
-][HO�
-ˋ��][_JJK��[[ې\�X\ΈȐX�Y[ZXH���[0���H�\�\ȋ��\�XH��\�Y]��YZ[�\��]]�ȗKܙX]Y]�����LLLU�����N�ۜ��T�W��UT�TΈ��[YN��\�U�ܚ��]\����܎���[��V�HH��[YN��S��P�S�HД�H���܎��͍
-���K��[YN��Qˈ��Q�԰�Q�S�H���܎���Y�
+"use client";
 
+import "./settings.css";
+import "./multiempresa.css";
+import "./obra-142.css";
+import "./workflow-fixes.css";
+import "./access-offline.css";
+import "./public-work-share.css";
+import "./budget-pdv.css";
+import "./licitacoes-restored.css";
+import "./commercial-catalog-enhancements.css";
+import "./entity-detail-tabs.css";
+import "./proar-3-theme.css";
+import "./lote-1-operacao.css";
+import "./pdv-layout-refinement.css";
+import "./header-visibility.css";
+import "./service-order-tracking.css";
 
-�K��[YN��QˈP�P�SQS�ȋ��܎��ٍNYL��K���[YN��QˈP�Sp������԰��QH���܎����Xٍ��K��[YN��QˈVUT�Ԉ���܎���
-���
-�K���[YN��QˈSTH��Q�԰�Q�S�H���܎���؎����K��[YN���T��p����Ӑ�p�Qȋ��܎���M�L�H�K�N�ۜ��T�W��Q�W���Έ�X�ܙ�\�U�ܚ��]\���[���O�H�S��P�S�HД�H���K��Qˈ��Q�԰�Q�S�H��Ȕ�[H��]X\����[�H��]X\��YZ[ȋ�]X\���[�ȋ��YH�K��QˈP�P�SQS�Ȏ�Ȕ�[H��]X\����[�H��]X\��YZ[ȋ�]X\���[�ȋ��YH�����[�ȗK��QˈP�Sp������԰��QH��ȕX�[p������ܰ��YH�K��QˈVUT�Ԉ��ȕ��^]\�܈��X�X�[Y[��^\��ȗK��QˈSTH��Q�԰�Q�S�H��Ȕ�[H��]X\����[�H��]X\��YZ[ȋ�]X\���[�ȋ��YH�K���T��p����Ӑ�p�QȎ��K�N�ۜ��T�W��Q�W��SӐS���Έ�\�U�ܚ��]\��HHȐQˈP�Sp������԰��QH�N�ۜ�Q�P�W��T�W��UT��PT��X�ܙ��[���\�U�ܚ��]\ψH�Q���Q�԰�Q�S�H���Qˈ��Q�԰�Q�S�H��Q��S���U���QˈP�Sp������԰��QH���S���UH��Q�԰�Q�S�H�Ȏ��QˈP�Sp������԰��QH���Q�P�P�SQS�Ȏ��QˈP�P�SQS�ȋ�Q�VUT�Ԉ���QˈVUT�Ԉ��QˈVUUԈ���QˈVUT�Ԉ��Q�VUUԈ���QˈVUT�Ԉ��Y��^]]܈���QˈVUT�Ԉ��Y�Y^]\�܈���QˈVUT�Ԉ��Q�STH��Q�԰�Q�S�H���QˈSTH��Q�԰�Q�S�H���SH����T��p����Ӑ�p�Qȋ�N�ۜ��ܛX[^�R�\�T�]\�H
-�]\Έ�\�U�ܚ��]\�Y�X�R�\�U�ܚ��]\���[��N��\�U�ܚ��]\�O�Q�P�W��T�W��UT��PT��]\�\��\�U�ܚ��]\�H�]\�\��\�U�ܚ��]\��ۜ��ܛX[^�T�Y�T���H
-��Έ�\�U�ܚ�\]VȜ��ȗK�Έ��[��[�Y�[�Y�]\Έ�\�U�ܚ��]\�Y�X�R�\�U�ܚ��]\�N��\�T�Y�T���HO��ۜ��[Y\�H���˛[�������������H��N�ۜ�X�[�H�T�W��Q�W����ۛܛX[^�R�\�T�]\��]\�WN�]\���[Y\˛X\
+import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  Activity, AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight,
+  Bell, Boxes, BriefcaseBusiness, Building2, CalendarDays, ChartNoAxesCombined,
+  CheckCircle2, ChevronDown, ChevronRight, CircleDollarSign, ClipboardList,
+  Clock3, FileChartColumn, FileText, Filter, Grid2X2, HandCoins, Headphones,
+  ArrowLeft, Camera, Contact, Edit3, Eye, EyeOff, Hospital, Landmark, LayoutDashboard, LogIn, LogOut, MapPin,
+  CreditCard, Keyboard, Menu, Minus, MoreHorizontal, Package, Phone, Plus, ReceiptText, ScanBarcode, School, Search, Settings,
+  ShieldCheck, ShoppingBag, ShoppingCart, Store, TrendingUp, UserCheck, UserRound,
+  MessageCircle, PenTool, Tag, Trash2, Database, LockKeyhole, UnlockKeyhole, ImagePlus,
+  UsersRound, WalletCards, Warehouse, Wrench, X, Zap, House, History, ImageIcon, RefreshCw
+} from "lucide-react";
 
-][K[�^
-HO�\[و][HOOH���[�Ȉ��X�[�X�[��[�^H���	�[�^
-�_X\��][HH�][JNN�\H[�[���\[�HHY���[��Y�[�[YN���[���YS�[YN���[��ۜ����[���]N���[���]N���[��ۙN���[���]�\Έ��[��[XZ[���[��Y�\�Έ��[���\��OΈ��[���]T�Y�\��][ۏΈ��[��][�X�\[�Y�\��][ۏΈ��[����\[�U\OΈ��[��^�Y�[YOΈ��[�����Έ��[���]\Έ�]]�H����]YXYH�ܙX]Y]���[��N��ۜ�Q�US���TS�N�[�[���\[�HHY���\�X�\�[��\[��Y�[�[YN���\�X�Z\�\���\��ۙX�[ۘYȋ��YS�[YN���\�X���ۜ���
-K��ˎ��KN���]N��Z\�\������]N�����ۙN���MHM��L��L�
-���[XZ[����Y�\�Έ����]\Έ�]]�H��ܙX]Y]��]�]J
-K��T����[��
-K�N��ۜ���\[�T�ܘY�R�^HH
-��\[�RY���[���\��\��N���[��HO���\�]�����\[�RYN�ܙ\��\��_X�ۜ�Y�X�T�ܘY�R�^\Έ�X�ܙ��[����[�ψH��\��X�K[ܙ\�Ȏ����\�]��\�\��X�K[ܙ\�ȋ��\��Y\�Έ���\�]��X�\��Y\�ȋ��[�[K\�X�ܙȎ����\�]��[[�[K\�X�ܙȋ�N��[��[ۈ�XY��\[�T�ܘY�J��\[�RY���[���\��\��N���[���[�X�Έ[�ۛ�ۊH�ۜ��\��[�H��[�ܘY�K��]][J��\[�T�ܘY�R�^J��\[�RY�\��\��JJN��Y��Y�Y���ؘZ\�����[H�\�\�Y���H[\�\�H�[��\[�[H[�[���[��Hܝ^�\��X�\˂��ۜ�[��Y�X�HH��\[�RYOOHQ�US���TS�K�Y��\[�RYOOH�XZ[���ۜ�Y�X�HH[��Y�X�H	��Y�X�T�ܘY�R�^\�ܙ\��\��WH���[�ܘY�K��]][JY�X�T�ܘY�R�^\�ܙ\��\��WJH��[�H��]\����Ӌ�\��J�\��[���Y�X�H����Ӌ���[��Y�J�[�X��JN�B��]���]\���[�X���B�B��ۜ��ܛX[^�Pۜ�H
-�[YN���[��HO��[YK��\X�J�����K��X�JM
-N�ۜ��ܛX]ۜ�H
-�[YN���[��HO��ܛX[^�Pۜ��[YJK��\X�J׊̟JJ��JJ��JJ�JJ��JK����K�����
-I
-H�N�ۜ���\[�RY���Pۜ�H
-ۜ����[��HO��ܛX[^�Pۜ�ۜ�H[\�\�KI�]K����
-_X�\H[�[T�X�ܙHY���[���[YN���[���Y[����[��\�ܚ\[ێ���[��ܙX]Y]���[���[�Έ��\��p��Ȉ���]Ȏ�]\�Έ��[��]OΈ��[���[YOΈ�[X�\��]Y�ܞOΈ��[��\��\�R][\�Έ\��\�R][V�N^[Y[�\OΈ���\�H��H�^�Ȏ^[Y[�Y]�Έ��[��[��[Y[��Έ�[X�\��\��YQ]OΈ��[��^[Y[�[��[Y[��Έ\��\�R[��[Y[��N\��\�RYΈ��[��[��[Y[��[X�\�Έ�[X�\��[Z[�\�Y\��Y�OΈ��[���\��X�Sܙ\�YΈ��[��[�]Έ��[��ۙOΈ��[���۝X�Έ��[����Έ��[��[��[�Y\�Έ��[��Y�\��Έ��[�������Έ��[��[�]OΈ��[����ܙ\��Έ�[X�\���[Z\��[ۏΈ�[X�\����Έ�[X�\�[�]ٓYX\�\�OΈ��[���[��X�[ە\OΈ�Y�\����X�X�\���]Y�[YOΈ�[X�\��][Y[�]OΈ��[���][Y[�Y]�Έ��[���][Y[�X���[�Έ��[��[�\�\��[YOΈ�[X�\�\���[��[YOΈ�[X�\�[\�YYT��OΈ��[��[\�YYT\�Z\��[ۜ�Έ�X�ܙ��[��
-��\�X[^�\���ܚX\���Y]\���^�Z\��V�O�[\�YYU\�\��[YOΈ��[��[\�YYT\���ܙ\�Έ��[����OΈ��[���\���OΈ��[����[�Έ��[��[�[Έ��[���\Y\�Έ��[�������\��[�Έ�[X�\�����Z[�Έ�[X�\�����X^Έ�[X�\�������][ۏΈ��[���\��[�S[۝�Έ�[X�\�\�[X]YZ[�]\�Έ�[X�\�\�\��\�Q]OΈ��[��\�\��\�U�[YOΈ�[X�\�\�\��\�T�\Y\�Έ��[��Y�[�[YOΈ��[���YS�[YOΈ��[��[XZ[Έ��[���\��OΈ��[����Y]Έ��[��Y�\�ӝ[X�\�Έ��[����\[Y[�Έ��[���ZY��ܚ��Έ��[���]OΈ��[���]OΈ��[���]T�Y�\��][ۏΈ��[��][�X�\[�Y�\��][ۏΈ��[��ۘYSXZ[�Έ��[��^�]\�Έ��[��\]Z\Y[�\OΈ��[���\X�]P�\�Έ�[X�\��\�X[�[X�\�Έ��[����Y�OΈ��[���Y��Y�\�[�Έ��[��[��[][ۓ��][ۏΈ��[��[��[][ۑ]OΈ��[���^XZ[�[�[��Q]OΈ��[��\]Z\Y[�[�]Έ��[��\�[�[�]Έ��[��N����۝H0X�H\�H���[]ܙ\��Y[�H8���[�YYKњ[X[��]܋�[H0�����Y�\����^\�[�\��p��[�H\��]\�\��[HܚX\����X\�\�[[\˂��ۜ��ܛX[^�T�[][ۈH
-�[YOΈ��[��HO���[���[YH����K��ܛX[^�J����K��\X�J��L�WL͙�K����K��[J
-K����[S��\��\�J�P���N�[��[ۈ�\��Y\���X�\�\��\tomerName: string, customers: Customer[], structures: ModuleRecord[], includeInactive = false) {
+type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
+type NavItem = { icon: IconType; name: string; badge?: string };
+type GlobalSearchItem = { id: string; title: string; detail: string; module: string; kind: "Cliente" | "OS" | "Cadastro" };
+type PendingItem = { id: string; title: string; detail: string; module: string; tone: "blue" | "amber" | "red" };
+
+const navGroups: { label: string; items: NavItem[] }[] = [
+  { label: "VISÃO GERAL", items: [
+    { icon: LayoutDashboard, name: "Painel inicial" },
+    { icon: CalendarDays, name: "Agenda" },
+    { icon: Bell, name: "Notificações" },
+  ]},
+  { label: "COMERCIAL", items: [
+    { icon: UsersRound, name: "Clientes" },
+    { icon: Boxes, name: "Equipamentos" },
+    { icon: FileText, name: "Orçamentos" },
+    { icon: ShoppingBag, name: "Vendas" },
+    { icon: Landmark, name: "Licitações" },
+  ]},
+  { label: "OPERAÇÃO", items: [
+    { icon: ClipboardList, name: "Ordens de serviço" },
+    { icon: Building2, name: "Obras" },
+    { icon: Wrench, name: "Serviços" },
+    { icon: Package, name: "Produtos" },
+    { icon: Warehouse, name: "Estoque" },
+    { icon: ShoppingCart, name: "Compras" },
+    { icon: Store, name: "Fornecedores" },
+  ]},
+  { label: "GESTÃO", items: [
+    { icon: WalletCards, name: "Financeiro" },
+    { icon: BriefcaseBusiness, name: "Funcionários" },
+    { icon: FileChartColumn, name: "Relatórios" },
+    { icon: Settings, name: "Configurações" },
+  ]},
+];
+
+type ServiceOrder = {
+  id: string; client: string; unit: string; service: string; tech: string;
+  date: string; time: string; address: string; status: string; tone: string; avatar: string;
+  checkInAt?: string;
+  checkOutAt?: string;
+  photoBefore?: string;
+  photoAfter?: string;
+  clientSignature?: string;
+  technicianSignature?: string;
+  catalogItems?: { id: string; name: string; kind: "Serviço" | "Produto" }[];
+  reminderEnabled?: boolean;
+  reminderAmount?: number;
+  reminderUnit?: "Dias" | "Meses";
+  reminderDate?: string;
+  reminderMessage?: string;
+  reminderStatus?: "Pendente" | "Agendado" | "Enviado";
+  lastMaintenanceDate?: string;
+  reviewPeriodMonths?: 3 | 6 | 12;
+  notifyDaysBefore?: number;
+  nfseStatus?: "Não emitida" | "Processando" | "Emitida" | "Erro" | "Cancelada";
+  nfseNumber?: string;
+  nfseVerificationCode?: string;
+  nfseIssuedAt?: string;
+  nfseValue?: number;
+  trackingToken?: string;
+  whatsappPhone?: string;
+  whatsappUpdatesEnabled?: boolean;
+  whatsappAppointmentReminderEnabled?: boolean;
+  whatsappStatusUpdatesEnabled?: boolean;
+  appointmentReminderHours?: number;
+  timeline?: ServiceOrderTimelineEvent[];
+  assistance?: AssistanceEntry;
+  pmoc?: PmocRecord;
+  pmocExecutions?: PmocExecution[];
+};
+
+type ServiceOrderTimelineEvent = {
+  id: string;
+  createdAt: string;
+  previousStatus?: string;
+  status: string;
+  technician?: string;
+  internalNote?: string;
+  customerNote?: string;
+  photos?: string[];
+  customerVisible?: boolean;
+  whatsappQueued?: boolean;
+};
+
+type AssistanceEntry = {
+  requestedAt?: string;
+  arrivalAt?: string;
+  equipment?: string;
+  brand?: string;
+  model?: string;
+  serialNumber?: string;
+  pickupLocation?: string;
+  pickupReason?: string;
+  authorizedBy?: string;
+  accessories?: string;
+  reportedDefect?: string;
+  receivedBy?: string;
+  condition?: "Excelente" | "Bom" | "Regular" | "Com avarias" | "Danificado";
+  inspection?: Record<string, boolean>;
+  inspectionNotes?: string;
+  missingParts?: string;
+  entryPhotos?: string[];
+  exitPhotos?: string[];
+};
+
+type PmocRecord = {
+  applicability?: "Obrigatório" | "Não obrigatório" | "Verificar aplicabilidade";
+  hasPmoc?: boolean;
+  identifier?: string;
+  implementationDate?: string;
+  reviewDate?: string;
+  technicalResponsible?: string;
+  professionalCouncil?: string;
+  professionalRegistration?: string;
+  responsibilityDocument?: string;
+  plan?: { activity: string; periodicity: string }[];
+};
+
+type PmocExecution = {
+  id: string;
+  createdAt: string;
+  equipment: string;
+  location?: string;
+  capacityBtu?: number;
+  beforeCondition?: string;
+  services: string[];
+  products?: { product: string; manufacturer?: string; purpose?: string; lot?: string; quantity?: string; sanitaryRecord?: string }[];
+  pending?: { type: string; description: string; urgency: string }[];
+  technicalNote?: string;
+  beforePhotos?: string[];
+  afterPhotos?: string[];
+  technician?: string;
+  responsibleTechnical?: string;
+  signature?: string;
+  nextMaintenanceDate?: string;
+};
+
+type Customer = {
+  id: string; name: string; doc: string; contact: string; phone: string;
+  address: string; units: number; status: string;
+  personType?: "PF" | "PJ";
+  legalName?: string;
+  tradeName?: string;
+  email?: string;
+  zipCode?: string;
+  street?: string;
+  addressNumber?: string;
+  complement?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  stateRegistration?: string;
+  municipalRegistration?: string;
+  cnaeMain?: string;
+  taxStatus?: string;
+  creditLimit?: number;
+  balancePosted?: number;
+  financialStatus?: "Liberado" | "Alerta" | "Somente à vista" | "Bloqueado";
+};
+
+type HouseWorkStatus = "INÍCIO DE OBRA" | "AG. FRIGORÍGENA" | "AG. ACABAMENTO" | "AG. TUBULAÇÃO FORÇADA" | "AG. EXAUSTOR" | "AG. TAMPA FRIGORÍGENA" | "SERVIÇO CONCLUÍDO";
+type LegacyHouseWorkStatus = "AG FRIGORÍGENA" | "AG VENTO KIT" | "VENTOKIT E FRIGORÍGENA OK" | "AG ACABAMENTO" | "AG EXAUSTOR" | "AG TAMPA FRIGORÍGENA" | "FIM";
+type HouseStagePhoto = { label: string; url: string };
+type HouseWorkUpdate = { id: string; status: HouseWorkStatus | LegacyHouseWorkStatus; previousStatus?: HouseWorkStatus; note: string; responsible?: string; photo?: string; photos?: string[] | HouseStagePhoto[]; createdAt: string; completedAt?: string; origin?: string };
+type HouseIncident = { id: string; type: "Perda" | "Roubo"; note: string; photo: string; responsible: string; createdAt: string };
+type HouseWorkItem = { id: string; block: string; lot: number; kind?: "house" | "common"; name?: string; status: HouseWorkStatus | LegacyHouseWorkStatus; photo?: string; photos?: string[] | HouseStagePhoto[]; note?: string; updatedAt?: string; history: HouseWorkUpdate[]; incidents?: HouseIncident[] };
+type WorkBlock = { block: string; houses: number };
+type WorkProject = { id: string; name: string; blocks: WorkBlock[]; commonAreas: string[]; createdAt: string };
+
+const HOUSE_BLOCKS = [
+  { block: "A", houses: 5 }, { block: "B", houses: 24 }, { block: "C1", houses: 16 },
+  { block: "C2", houses: 16 }, { block: "D", houses: 6 }, { block: "E", houses: 5 },
+  { block: "F", houses: 27 }, { block: "G", houses: 12 }, { block: "H1", houses: 10 },
+  { block: "H2", houses: 10 }, { block: "I", houses: 12 },
+] as const;
+const RESERVA_IMPERIAL: WorkProject = { id: "reserva-imperial", name: "Reserva Imperial", blocks: HOUSE_BLOCKS.map(item => ({...item})), commonAreas: ["Academia", "Salão de Festas", "Área Gourmet", "Administrativo"], createdAt: "2026-08-11T00:00:00.000Z" };
+const HOUSE_STATUSES: { name: HouseWorkStatus; color: string }[] = [
+  { name: "INÍCIO DE OBRA", color: "#64748b" }, { name: "AG. FRIGORÍGENA", color: "#ef4444" }, { name: "AG. ACABAMENTO", color: "#f59e0b" },
+  { name: "AG. TUBULAÇÃO FORÇADA", color: "#8b5cf6" }, { name: "AG. EXAUSTOR", color: "#06b6d4" },
+  { name: "AG. TAMPA FRIGORÍGENA", color: "#3b82f6" }, { name: "SERVIÇO CONCLUÍDO", color: "#16a34a" },
+];
+const HOUSE_STAGE_PHOTOS: Record<HouseWorkStatus, string[]> = {
+  "INÍCIO DE OBRA": [],
+  "AG. FRIGORÍGENA": ["Sala", "Quarto Frente", "Quarto Meio", "Quarto Fundo", "Home"],
+  "AG. ACABAMENTO": ["Sala", "Quarto Frente", "Quarto Meio", "Quarto Fundo", "Home", "VTK Fundo"],
+  "AG. TUBULAÇÃO FORÇADA": ["Tubulação Forçada"],
+  "AG. EXAUSTOR": ["VTK Exaustor", "Acabamento Externo"],
+  "AG. TAMPA FRIGORÍGENA": ["Sala", "Quarto Frente", "Quarto Meio", "Quarto Fundo", "Home"],
+  "SERVIÇO CONCLUÍDO": [],
+};
+const HOUSE_STAGE_OPTIONAL_PHOTOS: HouseWorkStatus[] = ["AG. TUBULAÇÃO FORÇADA"];
+const LEGACY_HOUSE_STATUS_MAP: Record<string, HouseWorkStatus> = {
+  "AG FRIGORÍGENA": "AG. FRIGORÍGENA", "AG VENTO KIT": "AG. TUBULAÇÃO FORÇADA", "VENTOKIT E FRIGORÍGENA OK": "AG. TUBULAÇÃO FORÇADA",
+  "AG ACABAMENTO": "AG. ACABAMENTO", "AG EXAUSTOR": "AG. EXAUSTOR", "AG. EXAUTOR": "AG. EXAUSTOR", "AG EXAUTOR": "AG. EXAUSTOR", "ag_exautor": "AG. EXAUSTOR", "ag-exaustor": "AG. EXAUSTOR", "AG TAMPA FRIGORÍGENA": "AG. TAMPA FRIGORÍGENA", "FIM": "SERVIÇO CONCLUÍDO",
+};
+const normalizeHouseStatus = (status: HouseWorkStatus | LegacyHouseWorkStatus | string): HouseWorkStatus => LEGACY_HOUSE_STATUS_MAP[status as HouseWorkStatus] || status as HouseWorkStatus;
+const normalizeStagePhotos = (photos: HouseWorkUpdate["photos"], photo: string | undefined, status: HouseWorkStatus | LegacyHouseWorkStatus): HouseStagePhoto[] => {
+  const values = photos?.length ? photos : photo ? [photo] : [];
+  const labels = HOUSE_STAGE_PHOTOS[normalizeHouseStatus(status)];
+  return values.map((item, index) => typeof item === "string" ? { label: labels[index] || `Foto ${index + 1}`, url: item } : item);
+};
+
+type TenantCompany = {
+  id: string;
+  legalName: string;
+  tradeName: string;
+  cnpj: string;
+  city: string;
+  state: string;
+  phone: string;
+  whatsapp?: string;
+  email: string;
+  address: string;
+  zipCode?: string;
+  stateRegistration?: string;
+  municipalRegistration?: string;
+  companyType?: string;
+  taxRegime?: string;
+  logo?: string;
+  status: "Ativa" | "Bloqueada";
+  createdAt: string;
+};
+
+const DEFAULT_COMPANY: TenantCompany = {
+  id: "polartech-principal",
+  legalName: "PolarTech Mirassol Ar Condicionado",
+  tradeName: "PolarTech",
+  cnpj: "45.823.828/0001-88",
+  city: "Mirassol",
+  state: "SP",
+  phone: "+55 17 2122-2806",
+  email: "",
+  address: "",
+  status: "Ativa",
+  createdAt: new Date().toISOString(),
+};
+
+const companyStorageKey = (companyId: string, resource: string) => `proar-v4:${companyId}:${resource}`;
+const legacyStorageKeys: Record<string, string> = {
+  "service-orders": "proar-v3-service-orders",
+  customers: "proar-v3-customers",
+  "module-records": "proar-v3-module-records",
+};
+
+function readCompanyStorage(companyId: string, resource: string, fallback: unknown) {
+  const current = localStorage.getItem(companyStorageKey(companyId, resource));
+  // Dados legados globais só podem ser usados na empresa principal. Em tenants, nunca cruzar caches.
+  const allowLegacy = companyId === DEFAULT_COMPANY.id || companyId === "main";
+  const legacy = allowLegacy && legacyStorageKeys[resource] ? localStorage.getItem(legacyStorageKeys[resource]) : null;
+  try { return JSON.parse(current ?? legacy ?? JSON.stringify(fallback)); }
+  catch { return fallback; }
+}
+const normalizeCnpj = (value: string) => value.replace(/\D/g, "").slice(0, 14);
+const formatCnpj = (value: string) => normalizeCnpj(value).replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2}).*/, "$1.$2.$3/$4-$5");
+const companyIdFromCnpj = (cnpj: string) => normalizeCnpj(cnpj) || `empresa-${Date.now()}`;
+
+type ModuleRecord = {
+  id: string;
+  name: string;
+  client: string;
+  description: string;
+  createdAt: string;
+  kind?: "Serviço" | "Produto";
+  status?: string;
+  date?: string;
+  value?: number;
+  category?: string;
+  purchaseItems?: PurchaseItem[];
+  paymentType?: "À vista" | "A prazo";
+  paymentMethod?: string;
+  installments?: number;
+  firstDueDate?: string;
+  paymentInstallments?: PurchaseInstallment[];
+  purchaseId?: string;
+  installmentNumber?: number;
+  reminderMessage?: string;
+  serviceOrderId?: string;
+  unit?: string;
+  phone?: string;
+  contact?: string;
+  doc?: string;
+  engineer?: string;
+  address?: string;
+  blockLot?: string;
+  endDate?: string;
+  progress?: number;
+  commission?: number;
+  cost?: number;
+  unitOfMeasure?: string;
+  transactionType?: "Pagar" | "Receber";
+  settledValue?: number;
+  settlementDate?: string;
+  settlementMethod?: string;
+  settlementAccount?: string;
+  interestValue?: number;
+  discountValue?: number;
+  employeeRole?: string;
+  employeePermissions?: Record<string, ("Visualizar" | "Criar" | "Editar" | "Excluir")[]>;
+  employeeUsername?: string;
+  employeePasswordHash?: string;
+  sku?: string;
+  barcode?: string;
+  brand?: string;
+  model?: string;
+  supplier?: string;
+  stockCurrent?: number;
+  stockMin?: number;
+  stockMax?: number;
+  stockLocation?: string;
+  warrantyMonths?: number;
+  estimatedMinutes?: number;
+  lastPurchaseDate?: string;
+  lastPurchaseValue?: number;
+  lastPurchaseSupplier?: string;
+  legalName?: string;
+  tradeName?: string;
+  email?: string;
+  zipCode?: string;
+  street?: string;
+  addressNumber?: string;
+  complement?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  stateRegistration?: string;
+  municipalRegistration?: string;
+  cnaeMain?: string;
+  taxStatus?: string;
+  equipmentType?: string;
+  capacityBtus?: number;
+  serialNumber?: string;
+  voltage?: string;
+  refrigerant?: string;
+  installationLocation?: string;
+  installationDate?: string;
+  nextMaintenanceDate?: string;
+  equipmentUnit?: string;
+  parentUnit?: string;
+};
+
+// Fonte única para os seletores Cliente → Unidade/Filial/Setor. Ela lê os
+// registros existentes do módulo de estruturas, sem criar cópias paralelas.
+const normalizeRelation = (value?: string) => String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
+function customerStructures(customerName: string, customers: Customer[], structures: ModuleRecord[], includeInactive = false) {
   const customer = customers.find(item => item.name === customerName);
   const keys = [customerName, customer?.name, customer?.legalName, customer?.tradeName].map(normalizeRelation).filter(Boolean);
   return structures
@@ -797,7 +1138,591 @@ function SalesPDV({ customers, structures, records, sales, onSave }: { customers
           </button>)}</div>
           {!filteredCatalog.length && <div className="linked-empty"><Package size={23}/><h4>Nenhum produto ou serviço cadastrado</h4><p>Cadastre os itens reais nos módulos Produtos e Serviços.</p></div>}
         </>}
-        {activeTab === "cliente" && <div className="pdv-hidden-panel"><div className="pdv-panel-title"><UserRound size={20}/><div><h3>Cliente da venda</h3><p>Opcional para vendas rápidas.</p></div></div><label>Selecionar cliente<select value={customer} onChange={event => {setCustomer(event.target.value);setUnit("");}}><option value="">Consumidor final</option>{customers.map(item => <option key={item.doc} value={item.name}>{item.name} • {item.doc}</option>)}</select></label>{customer && <>{customerUnits.length ? <label>Unidade / filial / setor<select value={unit} onChange={event=>setUnit(event.target.value)}>{customerUnits.map(item=><option key={item.name} value={item.name}>{item.name} • {item.category || "Unidade"}</option>)}</select></label> : <p className="field-hint">Nenhuma unidade/filial/setor cadastrado para este cliente.</p>}<div className={`credit-check ${selectedCustomer?.financialStatus === "��x��$z{-���jם    : moduleName === "Compras"
+        {activeTab === "cliente" && <div className="pdv-hidden-panel"><div className="pdv-panel-title"><UserRound size={20}/><div><h3>Cliente da venda</h3><p>Opcional para vendas rápidas.</p></div></div><label>Selecionar cliente<select value={customer} onChange={event => {setCustomer(event.target.value);setUnit("");}}><option value="">Consumidor final</option>{customers.map(item => <option key={item.doc} value={item.name}>{item.name} • {item.doc}</option>)}</select></label>{customer && <>{customerUnits.length ? <label>Unidade / filial / setor<select value={unit} onChange={event=>setUnit(event.target.value)}>{customerUnits.map(item=><option key={item.name} value={item.name}>{item.name} • {item.category || "Unidade"}</option>)}</select></label> : <p className="field-hint">Nenhuma unidade/filial/setor cadastrado para este cliente.</p>}<div className={`credit-check ${selectedCustomer?.financialStatus === "Bloqueado" ? "blocked" : ""}`}><CircleDollarSign size={17}/><div><b>Crédito</b><small>Disponível R$ {Math.max(0,(selectedCustomer?.creditLimit ?? 0)-(selectedCustomer?.balancePosted ?? 0)).toLocaleString("pt-BR",{minimumFractionDigits:2})}</small></div><strong>{selectedCustomer?.financialStatus ?? "Liberado"}</strong></div></>}<button className="outline-btn"><Plus size={14}/> Cadastro rápido</button></div>}
+        {activeTab === "pagamento" && <div className="pdv-hidden-panel"><div className="pdv-panel-title"><CreditCard size={20}/><div><h3>Forma de pagamento</h3><p>Escolha uma opção para concluir.</p></div></div><div className="payment-grid">{["PIX", "Dinheiro", "Cartão de débito", "Cartão de crédito", "Boleto", "Transferência"].map(option => <button className={payment === option ? "active" : ""} key={option} onClick={() => setPayment(option)}>{option}</button>)}</div></div>}
+        {activeTab === "opcoes" && <div className="pdv-hidden-panel"><div className="pdv-panel-title"><Tag size={20}/><div><h3>Opções da venda</h3><p>Recursos menos utilizados ficam ocultos aqui.</p></div></div><label>Desconto em reais<input type="number" min="0" max={subtotal} value={discount || ""} onChange={event => setDiscount(Number(event.target.value))} placeholder="R$ 0,00"/></label><label>Observações<textarea placeholder="Informações adicionais para o comprovante..."/></label></div>}
+      </div>
+      <aside className="pdv-cart panel">
+        <div className="pdv-cart-head"><div><ReceiptText size={17}/><span><strong>Venda atual</strong><small>{formatQuantity(cart.reduce((sum, item) => sum + item.quantity, 0))} item(ns)</small></span></div>{cart.length > 0 && <button onClick={() => setCart([])}><Trash2 size={13}/> Limpar</button>}</div>
+        <div className="pdv-cart-items">{cart.length ? cart.map(item => <article key={item.id}><div><small>{item.code}</small><strong>{item.name}</strong><span>R$ {item.price.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} / {item.unit}</span></div><div className="quantity"><button onClick={() => changeQuantity(item.id, -1)} aria-label="Diminuir quantidade"><Minus size={12}/></button><label><input inputMode="decimal" value={quantityDrafts[item.id] ?? formatQuantity(item.quantity)} onChange={event => typeQuantity(item.id, event.target.value)} onBlur={() => confirmQuantity(item)} aria-label={`Quantidade de ${item.name}`}/><small>{item.unit}</small></label><button onClick={() => changeQuantity(item.id, 1)} aria-label="Aumentar quantidade"><Plus size={12}/></button></div><b>R$ {(item.price * item.quantity).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></article>) : <div className="pdv-empty"><ShoppingCart size={29}/><strong>Carrinho vazio</strong><p>Selecione um produto ou serviço para iniciar.</p></div>}</div>
+        <div className="pdv-summary"><p><span>Subtotal</span><b>R$ {subtotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></p>{discount > 0 && <p className="discount"><span>Desconto</span><b>− R$ {discount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></p>}<div><span>TOTAL</span><strong>R$ {total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></div><small>{customer || "Consumidor final"} • {payment}</small><button className="finish-sale" disabled={!cart.length} onClick={finishSale}><CheckCircle2 size={17}/>{editingSale ? "Atualizar pedido" : "Finalizar venda"}<kbd>F10</kbd></button></div>
+      </aside>
+    </div>
+    {shortcutsOpen && <div className="shortcut-layer" role="dialog" aria-modal="true" aria-label="Atalhos do PDV"><button className="modal-backdrop" onClick={() => setShortcutsOpen(false)} aria-label="Fechar atalhos"/><div className="shortcut-card"><div><span><Keyboard size={19}/></span><div><small>PDV PROAR</small><h3>Atalhos de teclado</h3></div><button onClick={() => setShortcutsOpen(false)} aria-label="Fechar"><X size={16}/></button></div>{[["F1","Abrir esta ajuda"],["F2","Pesquisar produto ou serviço"],["F3","Selecionar cliente"],["F4","Forma de pagamento"],["F8","Desconto e outras opções"],["F10","Finalizar a venda"],["ESC","Fechar janela"]].map(([key,label]) => <p key={key}><kbd>{key}</kbd><span>{label}</span></p>)}</div></div>}
+  </section>;
+}
+
+const moduleStatuses: Record<string, string[]> = {
+  "Compras": ["Rascunho", "Aguardando aprovação", "Aprovada", "Enviada ao fornecedor", "Aguardando entrega", "Recebida parcialmente", "Recebida", "Cancelada", "Devolvida"],
+  "Fornecedores": ["Ativo", "Inativo", "Bloqueado"],
+  "Financeiro": ["Em aberto", "Aguardando aprovação", "Vencida", "Paga parcialmente", "Paga", "Recebida", "Cancelada"],
+  "Funcionários": ["Ativo", "Em férias", "Afastado", "Inativo"],
+  "Obras": ["Planejamento", "Em andamento", "Pausada", "Aguardando material", "Concluída", "Cancelada"],
+};
+
+const managementTabs: Record<string, string[]> = {
+  "Compras": ["Visão geral", "Pedidos", "Aprovação", "Recebimento", "Histórico"],
+  "Fornecedores": ["Visão geral", "Cadastro", "Produtos fornecidos", "Compras", "Avaliação"],
+  "Financeiro": ["Visão geral", "Contas a pagar", "Contas a receber", "Fluxo de caixa", "Conciliação"],
+  "Funcionários": ["Visão geral", "Equipe", "Funções e permissões", "Comissões", "Histórico"],
+  "Obras": ["Visão geral", "Planejamento", "Execução", "Perdas", "Financeiro", "Histórico"],
+};
+
+const managementFlows: Record<string, { title: string; text: string }[]> = {
+  "Compras": [
+    { title: "Solicitação", text: "Materiais e quantidades" },
+    { title: "Aprovação", text: "Validação da gerência" },
+    { title: "Pedido", text: "Envio ao fornecedor" },
+    { title: "Recebimento", text: "Conferência e nota fiscal" },
+    { title: "Integração", text: "Estoque e conta a pagar" },
+  ],
+  "Fornecedores": [
+    { title: "Cadastro", text: "Dados fiscais e contato" },
+    { title: "Catálogo", text: "Produtos e condições" },
+    { title: "Cotação", text: "Preço e prazo" },
+    { title: "Compras", text: "Pedidos vinculados" },
+    { title: "Avaliação", text: "Qualidade e entrega" },
+  ],
+  "Financeiro": [
+    { title: "Previsão", text: "Títulos e vencimentos" },
+    { title: "Aprovação", text: "Conferência financeira" },
+    { title: "Liquidação", text: "Pagamento ou recebimento" },
+    { title: "Caixa", text: "Movimentação por conta" },
+    { title: "Conciliação", text: "Comprovantes e diferenças" },
+  ],
+  "Funcionários": [
+    { title: "Cadastro", text: "Dados e função" },
+    { title: "Acesso", text: "Utilizador e senha" },
+    { title: "Permissões", text: "Módulos autorizados" },
+    { title: "Operação", text: "OS, vendas e tarefas" },
+    { title: "Histórico", text: "Atividades e comissões" },
+  ],
+  "Obras": [
+    { title: "Cadastro", text: "Cliente, endereço e responsáveis" },
+    { title: "Planejamento", text: "Prazo, orçamento e equipe" },
+    { title: "Execução", text: "Serviços, fotos e progresso" },
+    { title: "Controle", text: "Materiais, perdas e ocorrências" },
+    { title: "Conclusão", text: "Financeiro, relatório e entrega" },
+  ],
+};
+
+function downloadCsv(filename: string, rows: string[][]) {
+  const csv = rows.map(row => row.map(cell => `"${String(cell ?? "").replaceAll('"', '""')}"`).join(";")).join("\n");
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" }));
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function ContextReports({ title, options, rows = [] }: { title: string; options: string[]; rows?: string[][] }) {
+  const [open, setOpen] = useState(false);
+  const generate = (option: string, excel = false) => {
+    const filename = `${title}-${option}`.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9]+/g,"-").toLowerCase();
+    if (excel) downloadCsv(`${filename}.xls`, [["Relatório", option], ["Contexto", title], ["Gerado em", new Date().toLocaleString("pt-BR")], [], ...rows]); else window.print();
+    setOpen(false);
+  };
+  return <div className="context-reports"><button className="outline-btn" onClick={()=>setOpen(value=>!value)}><FileChartColumn size={14}/> Relatórios <ChevronDown size={13}/></button>{open && <div className="context-report-menu"><b>RELATÓRIOS DESTE REGISTRO</b>{options.map(option=><button key={option} onClick={()=>generate(option)}>{option}<FileText size={13}/></button>)}<footer><button onClick={()=>generate(options[0] || "Relatório",true)}><ArrowDownRight size={13}/> Exportar Excel</button><button onClick={()=>generate(options[0] || "Relatório")}><FileText size={13}/> Gerar PDF</button></footer></div>}</div>;
+}
+
+function Reports({ modules, customers, serviceOrders, company }: { modules: Record<string, ModuleRecord[]>; customers: Customer[]; serviceOrders: ServiceOrder[]; company: TenantCompany }) {
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [status, setStatus] = useState("Todas");
+  const [client, setClient] = useState("Todos");
+  const [technician, setTechnician] = useState("Todos");
+  const [paymentMethod, setPaymentMethod] = useState("Todas");
+  const [selectedReport, setSelectedReport] = useState("Visão consolidada");
+  const inPeriod = (record: ModuleRecord) => {
+    if (!record.date) return !startDate && !endDate;
+    return (!startDate || record.date >= startDate) && (!endDate || record.date <= endDate);
+  };
+  const matchesStatus = (record: ModuleRecord) => status === "Todas" || (record.status || "").toLowerCase().includes(status.toLowerCase());
+  const filteredModules = Object.fromEntries(Object.entries(modules).map(([key, records]) => [key, records.filter(record => inPeriod(record) && matchesStatus(record) && (client === "Todos" || record.client === client) && (paymentMethod === "Todas" || record.paymentMethod === paymentMethod))]));
+  const filteredOrders = serviceOrders.filter(order => (client === "Todos" || order.client === client) && (technician === "Todos" || order.tech === technician) && (status === "Todas" || order.status.toLowerCase().includes(status.toLowerCase())) && (!startDate || order.date >= startDate) && (!endDate || order.date <= endDate));
+  const financial = filteredModules.Financeiro ?? [];
+  const billed = financial.filter(record => /Recebida|Paga|aberto|Vencida/i.test(record.status || "")).reduce((sum, record) => sum + (record.value ?? 0), 0);
+  const pending = financial.filter(record => /aberto|Vencida|Pendente|parcial/i.test(record.status || "")).reduce((sum, record) => sum + Math.max(0, (record.value ?? 0) - (record.settledValue ?? 0)), 0);
+  const reportGroups = [
+    { title: "Compras", icon: ShoppingCart, count: filteredModules["Compras"]?.length ?? 0, items: ["Compras por período", "Compras por fornecedor", "Pedidos pendentes", "Comparação de preços"] },
+    { title: "Fornecedores", icon: Store, count: filteredModules["Fornecedores"]?.length ?? 0, items: ["Fornecedores ativos", "Histórico de preços", "Avaliação dos fornecedores", "Total comprado"] },
+    { title: "Financeiro", icon: WalletCards, count: filteredModules["Financeiro"]?.length ?? 0, items: ["Contas a pagar", "Contas a receber", "Fluxo de caixa", "Resultado por centro de custo"] },
+    { title: "Funcionários", icon: BriefcaseBusiness, count: filteredModules["Funcionários"]?.length ?? 0, items: ["Equipe ativa", "Funções e permissões", "Comissões", "Histórico de atividades"] },
+    { title: "Obras", icon: Building2, count: filteredModules["Obras"]?.length ?? 0, items: ["Obras em andamento", "Progresso por obra", "Perdas e ocorrências", "Resultado financeiro"] },
+    { title: "Serviços", icon: Wrench, count: filteredOrders.length, items: ["Ordens abertas", "Ordens concluídas", "Serviços por cliente", "Produtividade técnica"] },
+    { title: "Clientes", icon: UsersRound, count: customers.length, items: ["Clientes ativos", "Histórico de atendimento", "Faturamento por cliente", "Inadimplência"] },
+    { title: "Estoque", icon: Warehouse, count: modules["Produtos"]?.length ?? 0, items: ["Estoque atual", "Produtos sem estoque", "Entradas e saídas", "Valor do estoque"] },
+  ];
+  const exportSummary = () => downloadCsv("relatorio-geral-proar.csv", [["Relatório", selectedReport], ["Período", startDate || "Início", endDate || "Hoje"], ["Situação", status], [], ["Módulo", "Quantidade", "Gerado em"], ...reportGroups.map(group => [group.title, String(group.count), new Date().toLocaleString("pt-BR")])]);
+  return <section className="module-page reports-page">
+    <div className="report-print-company-header"><div>{company.logo ? <img src={company.logo} alt={company.tradeName}/> : null}</div><div><h1>{company.tradeName || company.legalName}</h1><p>{company.legalName}</p><small>{company.cnpj ? `CNPJ/CPF: ${company.cnpj}` : "CNPJ/CPF não informado"}</small><small>{[company.phone, company.email].filter(Boolean).join(" • ")}</small><small>{[company.address, company.city && company.state ? `${company.city}/${company.state}` : company.city || company.state].filter(Boolean).join(" • ")}</small></div></div>
+    <div className="management-hero"><div><span className="section-kicker"><FileChartColumn size={12}/> INTELIGÊNCIA GERENCIAL</span><h2>Central de relatórios</h2><p>Indicadores comerciais, operacionais, financeiros e administrativos com dados reais do ProAR.</p></div><div className="management-actions"><button className="outline-btn" onClick={() => window.print()}><FileText size={14}/> Imprimir</button><button className="primary-btn" onClick={exportSummary}><ArrowDownRight size={14}/> Exportar resumo</button></div></div>
+    <div className="report-kpis"><article><small>TOTAL FATURADO</small><strong>R$ {billed.toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong></article><article><small>TOTAL PENDENTE</small><strong>R$ {pending.toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong></article><article><small>OS CONCLUÍDAS</small><strong>{filteredOrders.filter(order => order.status === "Concluída").length}</strong></article><article><small>REGISTROS FILTRADOS</small><strong>{Object.values(filteredModules).reduce((sum, records) => sum + records.length, 0)}</strong></article></div>
+    <div className="report-filter-bar"><label>Data inicial<input type="date" value={startDate} onChange={event => setStartDate(event.target.value)}/></label><label>Data final<input type="date" value={endDate} onChange={event => setEndDate(event.target.value)}/></label><label>Situação<select value={status} onChange={event => setStatus(event.target.value)}><option>Todas</option><option>Ativo</option><option>Pendente</option><option>Concluído</option><option>Vencida</option><option>Paga</option></select></label><label>Cliente<select value={client} onChange={event => setClient(event.target.value)}><option>Todos</option>{customers.map(customer => <option key={customer.id}>{customer.name}</option>)}</select></label><label>Técnico<select value={technician} onChange={event => setTechnician(event.target.value)}><option>Todos</option>{[...new Set(serviceOrders.map(order => order.tech).filter(Boolean))].map(name => <option key={name}>{name}</option>)}</select></label><label>Pagamento<select value={paymentMethod} onChange={event => setPaymentMethod(event.target.value)}><option>Todas</option><option>Pix</option><option>Boleto</option><option>Cartão de crédito</option><option>Cartão de débito</option><option>Dinheiro</option></select></label><div className="report-active-filter"><Filter size={14}/><span>{selectedReport}</span><button onClick={() => { setStartDate(""); setEndDate(""); setStatus("Todas"); setClient("Todos"); setTechnician("Todos"); setPaymentMethod("Todas"); }}>Limpar</button></div></div>
+    <div className="report-grid">{reportGroups.map(({ title, icon: Icon, count, items }) => <article className="report-card" key={title}><div className="report-card-head"><span><Icon size={20}/></span><div><small>MÓDULO</small><h3>{title}</h3></div><b>{count}</b></div><div className="report-links">{items.map(item => <button className={selectedReport === item ? "active" : ""} onClick={() => setSelectedReport(item)} key={item}>{item}<ChevronRight size={13}/></button>)}</div><footer><button onClick={() => window.print()}><FileText size={13}/> PDF</button><button onClick={() => downloadCsv(`relatorio-${title.toLowerCase()}.xls`, [["Relatório", selectedReport], ["Período", startDate || "Início", endDate || "Hoje"], ["Situação", status], ["Cliente", client], ["Técnico", technician], ["Pagamento", paymentMethod], ["Total", String(count)]])}><ArrowDownRight size={13}/> Excel</button><button onClick={() => downloadCsv(`relatorio-${title.toLowerCase()}.csv`, [["Relatório", selectedReport], ["Total", String(count)]])}><ArrowDownRight size={13}/> CSV</button></footer></article>)}</div>
+  </section>;
+}
+
+function FinancialModule({ records, onOpen, onUpdate }: { records: ModuleRecord[]; onOpen: (name: string) => void; onUpdate: (moduleName: string, record: ModuleRecord) => void }) {
+  const [view, setView] = useState<"Títulos" | "Fluxo de caixa">("Títulos");
+  const [settling, setSettling] = useState<ModuleRecord | null>(null);
+  const [amount, setAmount] = useState(0);
+  const [interest, setInterest] = useState(0);
+  const [discount, setDiscount] = useState(0);
+  const [method, setMethod] = useState("Pix");
+  const [account, setAccount] = useState("Conta bancária");
+  const isFullySettled = (record: ModuleRecord) => /^(Paga|Recebida|Cancelada)$/i.test(record.status || "");
+  const open = records.filter(record => !isFullySettled(record));
+  const realized = records.filter(record => (record.settledValue ?? 0) > 0 || /^(Paga|Recebida)$/i.test(record.status || ""));
+  const payable = (record: ModuleRecord) => record.transactionType === "Pagar" || /pagar|compra|fornecedor/i.test(`${record.name} ${record.category}`);
+  const total = (items: ModuleRecord[]) => items.reduce((sum, record) => sum + (record.settledValue ?? record.value ?? 0), 0);
+  const incoming = realized.filter(record => !payable(record));
+  const outgoing = realized.filter(payable);
+  const maxChart = Math.max(1, total(incoming), total(outgoing), total(open.filter(record => !payable(record))), total(open.filter(payable)));
+  const startSettlement = (record: ModuleRecord) => { setSettling(record); setAmount(Math.max(0, (record.value ?? 0) - (record.settledValue ?? 0))); setInterest(0); setDiscount(0); };
+  const settle = () => {
+    if (!settling) return;
+    const finalValue = Math.max(0, amount + interest - discount);
+    const accumulated = (settling.settledValue ?? 0) + finalValue;
+    const isPaid = accumulated >= (settling.value ?? 0);
+    onUpdate("Financeiro", { ...settling, transactionType: payable(settling) ? "Pagar" : "Receber", settledValue: accumulated, settlementDate: new Date().toISOString().slice(0, 10), settlementMethod: method, settlementAccount: account, interestValue: (settling.interestValue ?? 0) + interest, discountValue: (settling.discountValue ?? 0) + discount, status: isPaid ? (payable(settling) ? "Paga" : "Recebida") : "Baixa parcial" });
+    setSettling(null);
+  };
+  return <section className="module-page financial-module">
+    <div className="management-hero"><div><span className="section-kicker"><WalletCards size={12}/> CONTROLE FINANCEIRO</span><h2>Financeiro e fluxo de caixa</h2><p>Separe compromissos previstos da movimentação efetivamente liquidada.</p></div><div className="management-actions"><button className="outline-btn" onClick={() => window.print()}><FileText size={14}/> Relatório</button><button className="primary-btn" onClick={() => onOpen("Novo registro • Financeiro")}><Plus size={15}/> Novo lançamento</button></div></div>
+    <div className="finance-kpis"><article><small>A RECEBER</small><strong>R$ {total(open.filter(record => !payable(record))).toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong><span>Previsto</span></article><article><small>A PAGAR</small><strong>R$ {total(open.filter(payable)).toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong><span>Previsto</span></article><article><small>ENTRADAS REALIZADAS</small><strong>R$ {total(incoming).toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong><span>Liquidado</span></article><article><small>SALDO REALIZADO</small><strong>R$ {(total(incoming)-total(outgoing)).toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong><span>Caixa e bancos</span></article></div>
+    <nav className="management-tabs"><button className={view === "Títulos" ? "active" : ""} onClick={() => setView("Títulos")}>Contas a pagar e receber</button><button className={view === "Fluxo de caixa" ? "active" : ""} onClick={() => setView("Fluxo de caixa")}>Fluxo de caixa</button></nav>
+    {view === "Fluxo de caixa" ? <div className="cashflow-panel panel"><div className="panel-head"><div><span className="section-kicker"><ChartNoAxesCombined size={12}/> PREVISTO × REALIZADO</span><h2>Movimentação consolidada</h2><p>Comparativo dos títulos cadastrados e efetivamente baixados.</p></div></div><div className="cashflow-chart">{[{label:"Receitas previstas",value:total(open.filter(record => !payable(record))),tone:"blue"},{label:"Receitas realizadas",value:total(incoming),tone:"green"},{label:"Despesas previstas",value:total(open.filter(payable)),tone:"orange"},{label:"Despesas realizadas",value:total(outgoing),tone:"red"}].map(item => <div key={item.label}><span><b>{item.label}</b><strong>R$ {item.value.toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong></span><i><b className={item.tone} style={{width:`${Math.max(2,item.value/maxChart*100)}%`}}/></i></div>)}</div><div className="cashflow-balance"><span>Saldo acumulado realizado</span><strong>R$ {(total(incoming)-total(outgoing)).toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong></div></div> : <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><ReceiptText size={12}/> TÍTULOS</span><h2>Liquidação de contas</h2><p>{open.length} título(s) aguardando baixa</p></div></div><div className="table-wrap"><table><thead><tr><th>DESCRIÇÃO</th><th>TIPO</th><th>VENCIMENTO</th><th>VALOR</th><th>LIQUIDADO</th><th>SITUAÇÃO</th><th>AÇÃO</th></tr></thead><tbody>{records.map(record => <tr key={record.id}><td><strong>{record.name}</strong><small className="table-description">{record.client || record.category}</small></td><td>{payable(record) ? "A pagar" : "A receber"}</td><td>{record.date ? new Date(`${record.date}T12:00:00`).toLocaleDateString("pt-BR") : "—"}</td><td><b>R$ {(record.value ?? 0).toLocaleString("pt-BR", {minimumFractionDigits:2})}</b></td><td>R$ {(record.settledValue ?? 0).toLocaleString("pt-BR", {minimumFractionDigits:2})}</td><td><span className={`workflow-status ${/Paga|Recebida/i.test(record.status || "") ? "done" : ""}`}>{record.status || "Em aberto"}</span></td><td>{!/Paga|Recebida|Cancelada/i.test(record.status || "") ? <button className="settle-button" onClick={() => startSettlement(record)}><HandCoins size={14}/> Dar baixa</button> : <span className="settled-label"><CheckCircle2 size={13}/> Liquidado</span>}</td></tr>)}</tbody></table></div>{!records.length && <div className="linked-empty"><WalletCards size={22}/><h4>Nenhum lançamento financeiro</h4><p>Cadastre uma conta a pagar ou receber.</p></div>}</div>}
+    {settling && <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Baixar título"><button className="modal-backdrop" onClick={() => setSettling(null)} aria-label="Fechar"/><div className="modal settlement-modal"><div className="modal-head"><div><span>BAIXA FINANCEIRA</span><h2>{settling.name}</h2><p>Liquidação parcial ou total com rastreabilidade.</p></div><button onClick={() => setSettling(null)}><X size={18}/></button></div><div className="settlement-form"><label>Valor da baixa<input type="number" min="0" step="0.01" value={amount} onChange={event => setAmount(Number(event.target.value)||0)}/></label><label>Juros / multa<input type="number" min="0" step="0.01" value={interest} onChange={event => setInterest(Number(event.target.value)||0)}/></label><label>Desconto<input type="number" min="0" step="0.01" value={discount} onChange={event => setDiscount(Number(event.target.value)||0)}/></label><label>Forma de pagamento<select value={method} onChange={event => setMethod(event.target.value)}><option>Pix</option><option>Boleto</option><option>Cartão de crédito</option><option>Cartão de débito</option><option>Dinheiro</option><option>Transferência</option></select></label><label>Conta / caixa de destino<select value={account} onChange={event => setAccount(event.target.value)}><option>Conta bancária</option><option>Caixa</option><option>Conta digital</option><option>Cartão</option></select></label><div className="settlement-total"><span>VALOR EFETIVO</span><strong>R$ {Math.max(0,amount+interest-discount).toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong></div></div><div className="modal-actions"><button className="outline-btn" onClick={() => setSettling(null)}>Cancelar</button><button className="primary-btn" onClick={settle}><CheckCircle2 size={15}/> Confirmar baixa</button></div></div></div>}
+  </section>;
+}
+
+function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectCompany }: { companies: TenantCompany[]; activeCompany: TenantCompany; onCompaniesChange: (companies: TenantCompany[]) => void; onSelectCompany: (company: TenantCompany) => void }) {
+  const [tab, setTab] = useState<"Empresa" | "WhatsApp" | "Fiscal" | "Segurança">("Empresa");
+  const [companyName, setCompanyName] = useState(activeCompany.legalName);
+  const [tradeName, setTradeName] = useState(activeCompany.tradeName);
+  const [companyDoc, setCompanyDoc] = useState(activeCompany.cnpj);
+  const [city, setCity] = useState(activeCompany.city);
+  const [state, setState] = useState(activeCompany.state || "SP");
+  const [email, setEmail] = useState(activeCompany.email);
+  const [address, setAddress] = useState(activeCompany.address);
+  const [logo, setLogo] = useState(activeCompany.logo || "");
+  const [phoneNumberId, setPhoneNumberId] = useState("473138105880735");
+  const [wabaId, setWabaId] = useState("449236708270435");
+  const [businessPhone, setBusinessPhone] = useState("+55 17 2122-2806");
+  const [token, setToken] = useState("");
+  const [saved, setSaved] = useState("");
+  useEffect(() => {
+    const stored = JSON.parse(localStorage.getItem(companyStorageKey(activeCompany.id, "settings")) || "{}");
+    setCompanyName(activeCompany.legalName);
+    setTradeName(activeCompany.tradeName);
+    setCompanyDoc(activeCompany.cnpj);
+    setCity(activeCompany.city);
+    setState(activeCompany.state || "SP");
+    setEmail(activeCompany.email);
+    setAddress(activeCompany.address);
+    setLogo(activeCompany.logo || "");
+    setPhoneNumberId(stored.phoneNumberId || "473138105880735");
+    setWabaId(stored.wabaId || "449236708270435");
+    setBusinessPhone(stored.businessPhone || "+55 17 2122-2806");
+  }, [activeCompany]);
+  const updateCompany = () => {
+    const normalizedDocument = normalizeCnpj(companyDoc);
+    const updatedId = !normalizeCnpj(activeCompany.cnpj) && normalizedDocument.length === 14 ? normalizedDocument : activeCompany.id;
+    const updated: TenantCompany = { ...activeCompany, id: updatedId, legalName: companyName.trim(), tradeName: tradeName.trim() || companyName.trim(), cnpj: formatCnpj(companyDoc), city: city.trim(), state, email: email.trim(), address: address.trim(), phone: businessPhone, logo };
+    if (updatedId !== activeCompany.id) ["settings", "customers", "service-orders", "module-records"].forEach(resource => {
+      const previous = localStorage.getItem(companyStorageKey(activeCompany.id, resource));
+      if (previous) localStorage.setItem(companyStorageKey(updatedId, resource), previous);
+    });
+    const next = companies.map(company => company.id === activeCompany.id ? updated : company);
+    onCompaniesChange(next);
+    onSelectCompany(updated);
+    return updated;
+  };
+  const save = () => {
+    const updated = updateCompany();
+    localStorage.setItem(companyStorageKey(updated.id, "settings"), JSON.stringify({ companyName, companyDoc, city, state, logo, phoneNumberId, wabaId, businessPhone, tokenConfigured: Boolean(token) }));
+    setToken("");
+    setSaved(tab === "WhatsApp" ? "Identificadores salvos. O token foi mascarado e não será exibido novamente." : "Configurações salvas com sucesso.");
+    window.setTimeout(() => setSaved(""), 3500);
+  };
+  const readLogo = (file?: File) => {
+    if (!file) return;
+    if (file.size > 2_000_000) { setSaved("A logomarca deve ter no máximo 2 MB."); return; }
+    const reader = new FileReader();
+    reader.onload = () => setLogo(String(reader.result || ""));
+    reader.readAsDataURL(file);
+  };
+  const createCompany = () => {
+    const cnpj = normalizeCnpj(companyDoc);
+    if (cnpj.length !== 14) { setSaved("Informe um CNPJ válido com 14 números."); return; }
+    if (companies.some(company => normalizeCnpj(company.cnpj) === cnpj && company.id !== activeCompany.id)) { setSaved("Este CNPJ já possui uma empresa cadastrada."); return; }
+    const company: TenantCompany = { id: companyIdFromCnpj(cnpj), legalName: companyName.trim() || "Nova empresa", tradeName: tradeName.trim() || companyName.trim() || "Nova empresa", cnpj: formatCnpj(cnpj), city: city.trim(), state, phone: businessPhone, email: email.trim(), address: address.trim(), logo, status: "Ativa", createdAt: new Date().toISOString() };
+    onCompaniesChange([...companies, company]);
+    onSelectCompany(company);
+    setTab("Empresa");
+    setSaved("Empresa criada com uma base de dados independente.");
+  };
+  const toggleCompany = (company: TenantCompany) => {
+    const nextStatus = company.status === "Ativa" ? "Bloqueada" : "Ativa";
+    const next = companies.map(item => item.id === company.id ? { ...item, status: nextStatus } as TenantCompany : item);
+    onCompaniesChange(next);
+    if (company.id === activeCompany.id && nextStatus === "Bloqueada") setSaved("Empresa bloqueada. Os utilizadores deste CNPJ não poderão acessar os dados.");
+  };
+  const cities = ["Mirassol", "São José do Rio Preto", "Olímpia", "Monte Aprazível", "Bálsamo", "Jaci", "Bady Bassitt", "Neves Paulista", "Barretos"];
+  return <section className="settings-page">
+    <div className="management-hero settings-hero"><div><span className="section-kicker"><Settings size={12}/> CENTRAL DE CONFIGURAÇÕES</span><h2>Configurações do ProAR</h2><p>Dados empresariais, integrações, emissão fiscal e segurança em uma área centralizada.</p></div><div className="settings-health"><ShieldCheck size={19}/><span><b>Ambiente protegido</b><small>Credenciais sensíveis permanecem mascaradas</small></span></div></div>
+    <div className="settings-layout"><nav className="settings-nav">{[{name:"Empresa",icon:Building2,text:"Dados e logomarca"},{name:"WhatsApp",icon:MessageCircle,text:"API oficial da Meta"},{name:"Fiscal",icon:FileText,text:"NF-e, NFC-e e NFS-e"},{name:"Segurança",icon:ShieldCheck,text:"Acessos e proteção"}].map(item => <button key={item.name} className={tab === item.name ? "active" : ""} onClick={() => setTab(item.name as typeof tab)}><item.icon size={17}/><span><b>{item.name}</b><small>{item.text}</small></span></button>)}</nav>
+      <div className="settings-card"><header><div><small>CONFIGURAÇÃO • {tab.toUpperCase()}</small><h3>{tab === "WhatsApp" ? "WhatsApp Business Platform" : tab === "Empresa" ? "Cadastro da empresa" : tab === "Fiscal" ? "Configuração fiscal" : "Segurança do sistema"}</h3></div><span className="settings-status"><i/> Configuração disponível</span></header>
+        {tab === "Empresa" && <div className="settings-form company-settings-form"><label>Razão social / Nome empresarial<input value={companyName} onChange={event => setCompanyName(event.target.value)}/></label><label>Nome fantasia<input value={tradeName} onChange={event => setTradeName(event.target.value)}/></label><label>CNPJ<input value={companyDoc} onChange={event => setCompanyDoc(formatCnpj(event.target.value))} placeholder="00.000.000/0000-00"/></label><label>Telefone<input value={businessPhone} onChange={event => setBusinessPhone(event.target.value)}/></label><label>E-mail<input type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="contato@empresa.com.br"/></label><label>Cidade<input list="proar-cities" value={city} onChange={event => setCity(event.target.value)} placeholder="Selecione ou digite a cidade"/><datalist id="proar-cities">{cities.map(item => <option key={item}>{item}</option>)}</datalist></label><label>Estado<select value={state} onChange={event => setState(event.target.value)}>{["SP","MG","PR","RJ","MS","GO","SC","RS"].map(item => <option key={item}>{item}</option>)}</select></label><label className="wide">Endereço completo<input value={address} onChange={event => setAddress(event.target.value)} placeholder="Rua, número e bairro"/></label><div className="wide company-logo-field"><div className="company-logo-preview">{logo ? <img src={logo} alt="Logomarca da empresa"/> : <Building2 size={30}/>}</div><div><b>Logomarca dos relatórios</b><p>Será utilizada nos cabeçalhos de PDF, impressão, orçamentos e ordens de serviço.</p><label className="logo-upload"><ImagePlus size={15}/> Selecionar logomarca<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={event => readLogo(event.target.files?.[0])}/></label>{logo && <button className="logo-remove" type="button" onClick={() => setLogo("")}><Trash2 size={13}/> Remover</button>}</div></div></div>}
+        {tab === "WhatsApp" && <div className="settings-form whatsapp-settings-form"><div className="wide whatsapp-account-status"><MessageCircle size={20}/><div><small>CONTA LOCALIZADA NA META</small><b>POLARTECH AR CONDICIONADO</b><span>{businessPhone} • Conectado • Qualidade alta</span></div><CheckCircle2 size={19}/></div><label>Phone Number ID<input value={phoneNumberId} onChange={event => setPhoneNumberId(event.target.value)} inputMode="numeric"/><small>ID do número, diferente do telefone.</small></label><label>WABA ID<input value={wabaId} onChange={event => setWabaId(event.target.value)} inputMode="numeric"/><small>ID da conta WhatsApp Business.</small></label><label className="wide">Token permanente<input type="password" value={token} onChange={event => setToken(event.target.value)} autoComplete="new-password" placeholder="Cole o token gerado pelo Utilizador do Sistema"/><small>Por segurança, o token nunca será mostrado depois de salvo.</small></label><div className="wide settings-security-note"><ShieldCheck size={17}/><span><b>Permissões necessárias</b><small>whatsapp_business_management e whatsapp_business_messaging</small></span></div></div>}
+        {tab === "Fiscal" && <div className="settings-form"><label>Ambiente<select><option>Homologação</option><option>Produção</option></select></label><label>Regime tributário<select><option>Simples Nacional</option><option>Lucro Presumido</option><option>Lucro Real</option></select></label><label className="wide">Certificado digital A1<input type="file" accept=".pfx,.p12"/></label></div>}
+        {tab === "Segurança" && <div className="settings-form"><label className="wide settings-switch"><span><b>Exigir autenticação individual</b><small>Somente funcionários ativos podem entrar.</small></span><input type="checkbox" defaultChecked/></label><label className="wide settings-switch"><span><b>Encerrar sessão por inatividade</b><small>Protege o sistema em computadores compartilhados.</small></span><input type="checkbox" defaultChecked/></label></div>}
+        {saved && <p className="settings-message">{saved}</p>}<footer><small>Empresa ativa: {activeCompany.tradeName} • base {activeCompany.id}</small>{<div className="settings-footer-actions">{tab === "Empresa" && normalizeCnpj(companyDoc) !== normalizeCnpj(activeCompany.cnpj) && <button className="outline-btn" onClick={createCompany}><Plus size={15}/> Criar como nova empresa</button>}<button className="primary-btn" onClick={save}><CheckCircle2 size={15}/> Salvar configurações</button></div>}</footer>
+      </div></div>
+  </section>;
+}
+
+function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do ProAR" }: { companyId: string; company: TenantCompany; responsibleUser?: string }) {
+  const projectsKey = companyStorageKey(companyId, "obras-cadastradas");
+  const selectedProjectKey = companyStorageKey(companyId, "obra-selecionada");
+  const [projects, setProjects] = useState<WorkProject[]>([RESERVA_IMPERIAL]);
+  const [activeProjectId, setActiveProjectId] = useState(RESERVA_IMPERIAL.id);
+  const [projectsReady, setProjectsReady] = useState(false);
+  const activeProject = projects.find(project => project.id === activeProjectId) ?? projects[0] ?? RESERVA_IMPERIAL;
+  const storageKey = activeProject.id === RESERVA_IMPERIAL.id ? companyStorageKey(companyId, "obra-142-casas") : companyStorageKey(companyId, `obra-${activeProject.id}-itens`);
+  const shareKey = activeProject.id === RESERVA_IMPERIAL.id ? companyStorageKey(companyId, "obra-142-public-token") : companyStorageKey(companyId, `obra-${activeProject.id}-public-token`);
+  const createHouses = (project = activeProject) => [...project.blocks.flatMap(({ block, houses }) => Array.from({ length: houses }, (_, index): HouseWorkItem => ({ id: `${block}-${String(index + 1).padStart(2, "0")}`, block, lot: index + 1, kind: "house", status: "INÍCIO DE OBRA", history: [] }))), ...project.commonAreas.map((name,index): HouseWorkItem => ({ id:`common-${String(index + 1).padStart(2,"0")}`, block:"Áreas Comuns", lot:index + 1, kind:"common", name, status:"INÍCIO DE OBRA", history:[] }))];
+  const [houses, setHouses] = useState<HouseWorkItem[]>([]);
+  const [mapLoading, setMapLoading] = useState(true);
+  const [blockFilter, setBlockFilter] = useState("Todas");
+  const [statusFilter, setStatusFilter] = useState("Todos");
+  const [query, setQuery] = useState("");
+  const [editing, setEditing] = useState<HouseWorkItem | null>(null);
+  const [nextStatus, setNextStatus] = useState<HouseWorkStatus>("INÍCIO DE OBRA");
+  const [note, setNote] = useState("");
+  const [photos, setPhotos] = useState<Record<string, string>>({});
+  const [houseModalTab, setHouseModalTab] = useState<"Etapa" | "Perdas e Roubos">("Etapa");
+  const [incidentType, setIncidentType] = useState<"Perda" | "Roubo">("Perda");
+  const [incidentNote, setIncidentNote] = useState("");
+  const [incidentPhoto, setIncidentPhoto] = useState("");
+  const [historyHouse, setHistoryHouse] = useState<HouseWorkItem | null>(null);
+  const [historyUpdate, setHistoryUpdate] = useState<HouseWorkUpdate | null>(null);
+  const [reportNotice, setReportNotice] = useState("");
+  const [shareToken, setShareToken] = useState("");
+  const [serverRevision, setServerRevision] = useState(0);
+  const [mapOnline, setMapOnline] = useState(true);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveError, setSaveError] = useState("");
+  const [workManagerOpen, setWorkManagerOpen] = useState(false);
+  const [newWorkName, setNewWorkName] = useState("");
+  const [newBlocks, setNewBlocks] = useState<WorkBlock[]>([{block:"A",houses:1}]);
+  const [newCommonAreas, setNewCommonAreas] = useState<string[]>([]);
+  const [projectsRevision, setProjectsRevision] = useState(0);
+  useEffect(() => {
+    const normalizeProjects = (items: WorkProject[]) => {
+      const normalized = items.length ? items.map(project => project.id === RESERVA_IMPERIAL.id ? {...project,name:"Reserva Imperial",commonAreas:Array.from(new Set([...(project.commonAreas ?? []),...RESERVA_IMPERIAL.commonAreas]))} : project) : [RESERVA_IMPERIAL];
+      if (!normalized.some(project => project.id === RESERVA_IMPERIAL.id)) normalized.unshift(RESERVA_IMPERIAL);
+      return normalized;
+    };
+    const loadProjects = async () => {
+      let local: WorkProject[] = [RESERVA_IMPERIAL];
+      try { local = normalizeProjects(JSON.parse(localStorage.getItem(projectsKey) || "[]") as WorkProject[]); } catch {}
+      if (!navigator.onLine) { setProjects(local); setProjectsReady(true); return; }
+      try {
+        const response = await fetch(`/api/work-projects?company=${encodeURIComponent(companyId)}&refresh=${Date.now()}`, {cache:"no-store"});
+        const result = await response.json();
+        if (!response.ok) throw new Error();
+        if (result.state?.projects?.length) {
+          const authoritative = normalizeProjects(result.state.projects as WorkProject[]);
+          setProjects(authoritative); setProjectsRevision(Number(result.state.revision||0)); localStorage.setItem(projectsKey,JSON.stringify(authoritative));
+          const selected=localStorage.getItem(selectedProjectKey); if(selected&&authoritative.some(project=>project.id===selected))setActiveProjectId(selected);
+        } else {
+          const seed = normalizeProjects(local);
+          const save = await fetch('/api/work-projects',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({companyId,projects:seed,baseRevision:0})});
+          const saved = await save.json(); if(save.ok)setProjectsRevision(Number(saved.state?.revision||1)); setProjects(seed); localStorage.setItem(projectsKey,JSON.stringify(seed));
+        }
+      } catch { setProjects(local); setReportNotice("Lista de obras online indisponível. Exibindo cache deste aparelho somente para consulta."); }
+      finally { setProjectsReady(true); }
+    };
+    void loadProjects();
+  },[projectsKey,selectedProjectKey,companyId]);
+  const mergeWorkRows = (rows: HouseWorkItem[]) => { const byId=new Map(rows.map(item=>[item.id,item])); return createHouses().map(item=>byId.get(item.id)??item); };
+  const applyServerMap = (map: { houses?: HouseWorkItem[]; token?: string; revision?: number }) => { const authoritative=mergeWorkRows(map.houses??[]); setHouses(authoritative); localStorage.setItem(storageKey,JSON.stringify(authoritative)); setServerRevision(Number(map.revision||0)); setMapOnline(true); setMapLoading(false); if(map.token){setShareToken(map.token);localStorage.setItem(shareKey,map.token);} return authoritative; };
+  const fetchServerMap = async () => { if(!navigator.onLine) throw new Error("offline"); const response=await fetch(`/api/public-work-map?company=${encodeURIComponent(companyId)}&work=${encodeURIComponent(activeProject.id)}&refresh=${Date.now()}`,{cache:"no-store"}); const result=await response.json(); if(!response.ok) throw new Error(result.error||"Falha no banco online"); if(result.map?.houses?.length) applyServerMap(result.map); return result.map as {houses?:HouseWorkItem[];token?:string;revision?:number}|null; };
+  const publishPublicMap = async (next: HouseWorkItem[], revision = serverRevision) => {
+    if(!navigator.onLine){localStorage.setItem(`${shareKey}:pending`,"1");setMapOnline(false);throw new Error("Dispositivo sem internet.");}
+    const response=await fetch("/api/public-work-map",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({companyId,workId:activeProject.id,workName:activeProject.name,title:`Acompanhamento da obra — ${activeProject.name}`,houses:next,baseRevision:revision})});
+    const result=await response.json();
+    if(response.status===409&&result.map){applyServerMap(result.map);localStorage.removeItem(`${shareKey}:pending`);throw new Error("O banco online tinha uma versão mais recente e foi mantido como principal.");}
+    if(!response.ok){localStorage.setItem(`${shareKey}:pending`,"1");throw new Error(result.error||"Não foi possível atualizar o banco online.");}
+    setServerRevision(Number(result.map?.revision||serverRevision+1));setMapOnline(true);setMapLoading(false);setShareToken(result.token);localStorage.setItem(shareKey,result.token);localStorage.setItem(storageKey,JSON.stringify(next));localStorage.removeItem(`${shareKey}:pending`);return result.token as string;
+  };
+  useEffect(() => {
+    if(!projectsReady)return;
+    setShareToken(localStorage.getItem(shareKey)||"");setServerRevision(0);
+    const stored=localStorage.getItem(storageKey);const localHouses=(()=>{if(!stored)return createHouses();try{return mergeWorkRows(JSON.parse(stored) as HouseWorkItem[]);}catch{return createHouses();}})();
+    if(!navigator.onLine){setHouses(localHouses);setMapOnline(false);setMapLoading(false);setReportNotice("Modo offline: mostrando a cópia deste aparelho.");return;}
+    setHouses([]);setMapOnline(true);setMapLoading(true);
+    void fetchServerMap().then(map=>{if(!map) return publishPublicMap(localHouses);}).catch(()=>{setMapOnline(false);setMapLoading(false);setReportNotice("Banco online indisponível. A cópia local não foi enviada nem definida como principal.");});
+  },[storageKey,companyId,projectsReady,activeProject.id]);
+  const persist = async (next: HouseWorkItem[]) => {
+    if (!navigator.onLine) { const message="Não foi possível salvar a alteração. Tente novamente."; setSaveState("error"); setSaveError(message); setMapOnline(false); setReportNotice(message); return false; }
+    setSaveError(""); setSaveState("saving");
+    try {
+      await publishPublicMap(next);
+      setHouses(next); localStorage.setItem(storageKey,JSON.stringify(next));
+      setSaveState("saved"); setReportNotice("Alteração salva no banco online e atualizada para todos os dispositivos.");
+      window.setTimeout(()=>setSaveState("idle"),1800); return true;
+    } catch (error) {
+      try {
+        const latest=await fetchServerMap();
+        if (!latest?.houses?.length) throw error;
+        const changed=next.find(item=>item.id===editing?.id);
+        if (!changed) throw error;
+        const rebased=latest.houses.map(item=>item.id===changed.id?changed:item);
+        await publishPublicMap(rebased,Number(latest.revision||0));
+        setHouses(rebased); localStorage.setItem(storageKey,JSON.stringify(rebased));
+        setSaveState("saved"); setReportNotice("Alteração salva após sincronizar a versão mais recente.");
+        window.setTimeout(()=>setSaveState("idle"),1800); return true;
+      } catch {
+        const message="Não foi possível salvar a alteração. Tente novamente.";
+        setSaveState("error"); setSaveError(message); setReportNotice(message); window.setTimeout(()=>setSaveState("idle"),3000); return false;
+      }
+    }
+  };
+  useEffect(() => {
+    const synchronize=()=>{if(!navigator.onLine){setMapOnline(false);return;}if(localStorage.getItem(`${shareKey}:pending`))void publishPublicMap(houses).catch(error=>setReportNotice(error.message));else void fetchServerMap().catch(()=>setMapOnline(false));};
+    const timer=window.setInterval(()=>{if(navigator.onLine&&!localStorage.getItem(`${shareKey}:pending`))void fetchServerMap().catch(()=>setMapOnline(false));},20000);
+    window.addEventListener("online",synchronize);window.addEventListener("offline",synchronize);return()=>{window.clearInterval(timer);window.removeEventListener("online",synchronize);window.removeEventListener("offline",synchronize);};
+  },[shareKey,houses,serverRevision,activeProject.id]);
+  const sharePublicMap = async () => {
+    setReportNotice("A publicar o mapa da obra...");
+    try {
+      const token = shareToken || await publishPublicMap(houses); const url = `${window.location.origin}/obra/${token}`;
+      if (navigator.share) await navigator.share({ title: "Acompanhamento da obra — PolarTech", text: "Acompanhe em tempo real o andamento de cada casa da obra.", url });
+      else { await navigator.clipboard.writeText(url); setReportNotice("Link copiado. Pode enviá-lo ao cliente pelo WhatsApp."); window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`Acompanhe em tempo real o andamento da obra: ${url}`)}`, "_blank", "noopener,noreferrer"); }
+    } catch (error) { if ((error as Error)?.name !== "AbortError") setReportNotice((error as Error)?.message || "Não foi possível compartilhar o mapa."); }
+    window.setTimeout(() => setReportNotice(""), 5000);
+  };
+  const refreshWorkMap = async () => {
+    setReportNotice("A atualizar o mapa pelo banco principal...");
+    try { await fetchServerMap();localStorage.removeItem(`${shareKey}:pending`);setReportNotice("Banco online carregado. Esta é a versão principal."); }
+    catch { setReportNotice(navigator.onLine?"Banco online indisponível; nenhum dado local foi enviado.":"Dispositivo sem internet. A cópia offline foi mantida."); }
+    window.setTimeout(()=>setReportNotice(""),4500);
+  };
+  const sendWorkMap = async () => { setReportNotice("A sincronizar com o banco principal..."); try { await fetchServerMap();setReportNotice("Sincronização concluída. O banco online permaneceu como fonte principal."); } catch(error){setReportNotice((error as Error).message);} window.setTimeout(()=>setReportNotice(""),4500); };
+  const createWorkProject = () => {
+    const name = newWorkName.trim(); const blocks = newBlocks.filter(item => item.block.trim() && item.houses > 0).map(item => ({block:item.block.trim().toUpperCase(),houses:Math.max(1,Math.floor(item.houses))}));
+    if (!name || !blocks.length) { setReportNotice("Informe o nome da obra e pelo menos uma quadra."); return; }
+    const id = `${name.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")}-${Date.now().toString(36)}`;
+    const project: WorkProject = {id,name,blocks,commonAreas:newCommonAreas.map(item=>item.trim()).filter(Boolean),createdAt:new Date().toISOString()};
+    const next = [...projects,project];
+    if (!navigator.onLine) { setReportNotice("Cadastros de novas obras exigem internet para evitar divergência entre aparelhos."); return; }
+    void fetch('/api/work-projects',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({companyId,projects:next,baseRevision:projectsRevision})}).then(async response=>{const result=await response.json();if(response.status===409&&result.state){const authoritative=result.state.projects as WorkProject[];setProjects(authoritative);setProjectsRevision(Number(result.state.revision||0));localStorage.setItem(projectsKey,JSON.stringify(authoritative));throw new Error("Outro aparelho atualizou a lista de obras. A versão online foi mantida; tente cadastrar novamente.");}if(!response.ok)throw new Error(result.error||"Falha ao salvar obra");setProjects(next);setProjectsRevision(Number(result.state?.revision||projectsRevision+1));localStorage.setItem(projectsKey,JSON.stringify(next));localStorage.setItem(selectedProjectKey,id);setActiveProjectId(id);setBlockFilter("Todas");setWorkManagerOpen(false);setNewWorkName("");setNewBlocks([{block:"A",houses:1}]);setNewCommonAreas([]);setReportNotice(`Obra ${name} cadastrada com sucesso e disponível em todos os aparelhos.`);}).catch(error=>setReportNotice(error.message));
+  };
+  const selectWorkProject = (id:string) => { setActiveProjectId(id); localStorage.setItem(selectedProjectKey,id); setBlockFilter("Todas"); setStatusFilter("Todos"); setQuery(""); };
+  const openUpdate = (house: HouseWorkItem) => { setEditing(house); setNextStatus(normalizeHouseStatus(house.status)); setNote(house.note ?? ""); setPhotos({}); setSaveError(""); setHouseModalTab("Etapa"); setIncidentType("Perda"); setIncidentNote(""); setIncidentPhoto(""); };
+  const readStagePhoto = async (label: string, file?: File) => {
+    if (!file) return;
+    const encoded = await imageFileToDataUrl(file);
+    setPhotos(current => ({ ...current, [label]: encoded }));
+  };
+  const readIncidentPhoto = async (file?: File) => { if (file) setIncidentPhoto(await imageFileToDataUrl(file)); };
+  const replaceHistoryPhoto = async (label: string, file?: File) => {
+    if (!file || !historyHouse || !historyUpdate) return;
+    const url = await imageFileToDataUrl(file);
+    const nextUpdate: HouseWorkUpdate = {...historyUpdate,photos:normalizeStagePhotos(historyUpdate.photos,historyUpdate.photo,historyUpdate.status).map(photo=>photo.label===label?{...photo,url}:photo)};
+    const nextHouse: HouseWorkItem = {...historyHouse,updatedAt:new Date().toISOString(),history:(historyHouse.history??[]).map(update=>update.id===historyUpdate.id?nextUpdate:update)};
+    const next=houses.map(item=>item.id===nextHouse.id?nextHouse:item);
+    persist(next);setHistoryHouse(nextHouse);setHistoryUpdate(nextUpdate);
+  };
+  const replaceIncidentPhoto = async (incidentId: string, file?: File) => {
+    if (!file || !editing) return;
+    const photo=await imageFileToDataUrl(file);const updatedAt=new Date().toISOString();
+    const nextHouse: HouseWorkItem={...editing,updatedAt,incidents:(editing.incidents??[]).map(incident=>incident.id===incidentId?{...incident,photo}:incident)};
+    const next=houses.map(item=>item.id===editing.id?nextHouse:item);persist(next);setEditing(nextHouse);setReportNotice("Foto da ocorrência substituída e salva no banco online.");
+  };
+  const saveIncident = () => {
+    if (!editing) return;
+    if (!incidentPhoto) { setReportNotice("Anexe uma foto da perda ou do roubo."); return; }
+    const createdAt = new Date().toISOString();
+    const incident: HouseIncident = {id:`incident-${editing.id}-${Date.now()}`,type:incidentType,note:incidentNote.trim(),photo:incidentPhoto,responsible:responsibleUser,createdAt};
+    const next=houses.map(item=>item.id===editing.id?{...item,updatedAt:createdAt,incidents:[incident,...(item.incidents??[])]}:item);
+    persist(next); setEditing(next.find(item=>item.id===editing.id)??null); setIncidentNote(""); setIncidentPhoto(""); setReportNotice(`${incidentType} registrada com foto e responsável.`);
+  };
+  const saveUpdate = async () => {
+    if (!editing) return;
+    const photoLabels = HOUSE_STAGE_PHOTOS[nextStatus];
+    const requiredLabels = HOUSE_STAGE_OPTIONAL_PHOTOS.includes(nextStatus) ? [] : photoLabels;
+    const missing = requiredLabels.filter(label => !photos[label]);
+    if (missing.length) { const message=`Adicione as fotos obrigatórias: ${missing.join(", ")}.`; setSaveError(message); setReportNotice(message); return; }
+    if (nextStatus === "SERVIÇO CONCLUÍDO" && !window.confirm("Confirma a conclusão desta casa? A data, o horário e o responsável serão registrados.")) return;
+    const createdAt = new Date().toISOString();
+    const observationChanged = note.trim() !== (editing.note ?? "").trim();
+    const statusChanged = nextStatus !== normalizeHouseStatus(editing.status);
+    const stagePhotos = photoLabels.filter(label => photos[label]).map(label => ({ label, url: photos[label] }));
+    const previousStatus = normalizeHouseStatus(editing.status);
+    const update: HouseWorkUpdate = { id: `${editing.id}-${Date.now()}`, status: nextStatus, previousStatus, note: note.trim(), responsible: responsibleUser, photos: stagePhotos.length ? stagePhotos : undefined, createdAt, completedAt: nextStatus === "SERVIÇO CONCLUÍDO" ? createdAt : undefined, origin: typeof navigator === "undefined" ? "web" : navigator.userAgent };
+    const next = houses.map(item => item.id === editing.id ? { ...item, status: nextStatus, note: note.trim() || item.note, photo: stagePhotos[0]?.url || item.photo, photos: stagePhotos.length ? stagePhotos : item.photos, updatedAt: createdAt, history: [update, ...(item.history ?? [])] } : item);
+    if (!observationChanged && !statusChanged && !stagePhotos.length) { setEditing(null); return; }
+    if (await persist(next)) setEditing(null);
+  };
+  if (mapLoading) return <section className="houses-app"><div className="work-online-loading"><RefreshCw size={24}/><div><b>A carregar {activeProject.name}</b><span>A consultar a base principal online. Nenhum valor local provisório será exibido.</span></div></div></section>;
+  const visible = houses.filter(house => (blockFilter === "Todas" || house.block === blockFilter) && (statusFilter === "Todos" || normalizeHouseStatus(house.status) === statusFilter) && `${house.block} ${house.lot} ${house.id} ${house.name ?? ""}`.toLowerCase().includes(query.toLowerCase()));
+  const completed = houses.filter(house => normalizeHouseStatus(house.status) === "SERVIÇO CONCLUÍDO").length;
+  const stageProgress = houses.reduce((sum,house)=>{const index=HOUSE_STATUSES.findIndex(stage=>stage.name===normalizeHouseStatus(house.status));return sum+Math.max(0,index);},0);
+  const completion = houses.length ? Math.round(stageProgress / (houses.length * (HOUSE_STATUSES.length - 1)) * 100) : 0;
+  const grouped = [...activeProject.blocks.map(({ block }) => ({ block, houses: visible.filter(house => house.block === block) })),{block:"Áreas Comuns",houses:visible.filter(house=>house.kind === "common")}].filter(group => group.houses.length);
+  const statusColor = (status: HouseWorkStatus | LegacyHouseWorkStatus) => HOUSE_STATUSES.find(item => item.name === normalizeHouseStatus(status))?.color ?? "#64748b";
+  const houseProgress = (status: HouseWorkStatus | LegacyHouseWorkStatus) => {
+    const index=HOUSE_STATUSES.findIndex(stage=>stage.name===normalizeHouseStatus(status));
+    return Math.round(Math.max(0,index)/(HOUSE_STATUSES.length-1)*100);
+  };
+  const createWorkReport = async (selectedHouses: HouseWorkItem[], reportTitle: string) => {
+    const { jsPDF } = await import("jspdf");
+    const pdf = new jsPDF({ unit: "mm", format: "a4" });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    let y = 0;
+    const header = () => {
+      pdf.setFillColor(14, 62, 128); pdf.rect(0, 0, pageWidth, 27, "F");
+      pdf.setTextColor(255, 255, 255); pdf.setFont("helvetica", "bold"); pdf.setFontSize(14); pdf.text(`${company.tradeName || company.legalName} — RELATÓRIO DE OBRA`, 14, 9);
+      pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5); pdf.text(company.cnpj ? `CNPJ/CPF: ${company.cnpj}` : company.legalName, 14, 14);
+      pdf.text([company.phone, company.email].filter(Boolean).join(" • ") || `${company.city}/${company.state}`, 14, 19);
+      pdf.text(reportTitle, pageWidth - 14, 11, { align: "right" });
+      pdf.text(`Gerado em ${new Date().toLocaleString("pt-BR")}`, pageWidth - 14, 19, { align: "right" });
+      pdf.setTextColor(35, 55, 78); y = 35;
+    };
+    const ensureSpace = (height: number) => { if (y + height > pageHeight - 18) { pdf.addPage(); header(); } };
+    header();
+    for (const house of selectedHouses) {
+      ensureSpace(24);
+      pdf.setFillColor(238, 246, 255); pdf.roundedRect(12, y, pageWidth - 24, 16, 2, 2, "F");
+      pdf.setFont("helvetica", "bold"); pdf.setFontSize(11); pdf.setTextColor(16, 91, 178); pdf.text(`QUADRA ${house.block} • CASA / LOTE ${String(house.lot).padStart(2, "0")}`, 16, y + 7);
+      pdf.setFontSize(8); pdf.setTextColor(50, 70, 92); pdf.text(`Situação atual: ${normalizeHouseStatus(house.status)}`, 16, y + 12); y += 21;
+      const history = [...(house.history ?? [])].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      if (!history.length) { pdf.setFont("helvetica", "italic"); pdf.setFontSize(8); pdf.setTextColor(115, 130, 145); pdf.text("Nenhuma alteração registrada para esta casa.", 16, y); y += 9; }
+      for (const [index, update] of history.entries()) {
+        const photos = normalizeStagePhotos(update.photos, update.photo, update.status);
+        ensureSpace(photos.length ? 67 : 27);
+        pdf.setDrawColor(216, 228, 239); pdf.line(16, y, pageWidth - 16, y); y += 6;
+        pdf.setFont("helvetica", "bold"); pdf.setFontSize(9); pdf.setTextColor(37, 61, 86); pdf.text(`${String(index + 1).padStart(2, "0")} • ${normalizeHouseStatus(update.status)}`, 16, y);
+        pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5); pdf.setTextColor(105, 122, 140); pdf.text(new Date(update.createdAt).toLocaleString("pt-BR"), pageWidth - 16, y, { align: "right" }); y += 6;
+        if (update.responsible) { pdf.setTextColor(55, 73, 93); pdf.text(`Responsável: ${update.responsible}`, 16, y); y += 5; }
+        if (update.note) { pdf.setTextColor(55, 73, 93); const lines = pdf.splitTextToSize(`Observações: ${update.note}`, pageWidth - 32) as string[]; pdf.text(lines, 16, y); y += lines.length * 4 + 3; }
+        else { pdf.setTextColor(125, 139, 153); pdf.text("Sem observações.", 16, y); y += 6; }
+        for (let photoIndex = 0; photoIndex < photos.length; photoIndex += 2) {
+          ensureSpace(45);
+          photos.slice(photoIndex, photoIndex + 2).forEach((photo, column) => { try { pdf.setFontSize(7); pdf.setTextColor(65, 83, 103); pdf.text(photo.label, 16 + column * 89, y); pdf.addImage(photo.url, photo.url.startsWith("data:image/png") ? "PNG" : "JPEG", 16 + column * 89, y + 3, 84, 40, undefined, "FAST"); } catch {} });
+          y += 44;
+        }
+        y += 3;
+      }
+      if (house.incidents?.length) {
+        ensureSpace(18); pdf.setFillColor(255,244,244); pdf.roundedRect(14,y,pageWidth-28,10,2,2,"F"); pdf.setFont("helvetica","bold"); pdf.setFontSize(9); pdf.setTextColor(180,55,55); pdf.text("PERDAS E ROUBOS",18,y+6.5); y+=15;
+        for (const incident of [...house.incidents].reverse()) { ensureSpace(55); pdf.setFont("helvetica","bold"); pdf.setFontSize(8.5); pdf.setTextColor(130,45,45); pdf.text(`${incident.type} • ${new Date(incident.createdAt).toLocaleString("pt-BR")}`,16,y); y+=5; pdf.setFont("helvetica","normal"); pdf.setFontSize(7.5); pdf.setTextColor(65,78,92); pdf.text(`Responsável: ${incident.responsible}`,16,y); y+=5; if(incident.note){const lines=pdf.splitTextToSize(incident.note,pageWidth-32) as string[];pdf.text(lines,16,y);y+=lines.length*4+2;} try{pdf.addImage(incident.photo,incident.photo.startsWith("data:image/png")?"PNG":"JPEG",16,y,84,40,undefined,"FAST");y+=44;}catch{} }
+      }
+      y += 3;
+    }
+    const pages = pdf.getNumberOfPages();
+    for (let page = 1; page <= pages; page += 1) { pdf.setPage(page); pdf.setDrawColor(220, 229, 238); pdf.line(12, pageHeight - 12, pageWidth - 12, pageHeight - 12); pdf.setFontSize(7); pdf.setTextColor(110, 126, 143); pdf.text(`ProAR Gestão de Serviços — BY TAV's • ${company.tradeName || company.legalName}`, 14, pageHeight - 7); pdf.text(`Página ${page} de ${pages}`, pageWidth - 14, pageHeight - 7, { align: "right" }); }
+    const safeTitle = reportTitle.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
+    return { pdf, filename: `relatorio-${safeTitle}.pdf` };
+  };
+  const issueWorkReport = async (selectedHouses: HouseWorkItem[], reportTitle: string, share = false) => {
+    setReportNotice("A gerar relatório com fotos e histórico...");
+    try {
+      const { pdf, filename } = await createWorkReport(selectedHouses, reportTitle);
+      if (share) {
+        const file = new File([pdf.output("blob")], filename, { type: "application/pdf" });
+        if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) { await navigator.share({ title: reportTitle, text: `Segue o ${reportTitle} da ${company.tradeName}.`, files: [file] }); setReportNotice("Relatório compartilhado com sucesso."); }
+        else { pdf.save(filename); window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`Segue o ${reportTitle} da ${company.tradeName}. O PDF foi baixado e deve ser anexado a esta conversa.`)}`, "_blank", "noopener,noreferrer"); setReportNotice("PDF baixado. Anexe o arquivo na conversa aberta do WhatsApp."); }
+      } else { pdf.save(filename); setReportNotice("Relatório PDF gerado com sucesso."); }
+    } catch (error) { if ((error as Error)?.name !== "AbortError") setReportNotice("Não foi possível gerar o relatório. Tente novamente."); }
+    window.setTimeout(() => setReportNotice(""), 5000);
+  };
+  return <section className="houses-app">
+    {saveState !== "idle" && <div className={`work-save-bar ${saveState}`} role="status"><i/><span>{saveState === "saving" ? "A gravar alteração..." : saveState === "saved" ? "Alteração confirmada" : "Não foi possível salvar"}</span></div>}
+    <div className="work-manager-bar"><div><span><Building2 size={17}/></span><label>Obra ativa<select value={activeProject.id} onChange={event=>selectWorkProject(event.target.value)}>{projects.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}</select></label><small>{activeProject.blocks.length} quadra(s) • {activeProject.blocks.reduce((total,item)=>total+item.houses,0)} casas • {activeProject.commonAreas.length} áreas comuns</small></div><button className="primary-btn" onClick={()=>setWorkManagerOpen(true)}><Plus size={15}/> Cadastrar obra</button></div>
+    <div className="houses-hero"><div><span className="section-kicker"><House size={12}/> CONTROLE DE EXECUÇÃO</span><h2>{activeProject.name}</h2><p>Acompanhamento individual das casas e áreas comuns, com evidências e histórico de execução.</p></div><div className="houses-public-share"><span><MapPin size={18}/></span><div><small>ACESSO DO CLIENTE</small><b>{shareToken ? "Mapa público ativo" : "Criar link de acompanhamento"}</b><em>{shareToken ? "Atualização automática em tempo real" : "O cliente verá somente o andamento da obra"}</em></div><button onClick={refreshWorkMap}><ArrowDownRight size={14}/> Atualizar</button><button onClick={sendWorkMap}><ArrowUpRight size={14}/> Enviar</button><button onClick={sharePublicMap}><MessageCircle size={14}/>{shareToken ? "Link" : "Criar link"}</button>{shareToken && <a href={`/obra/${shareToken}`} target="_blank" rel="noreferrer"><Eye size={14}/> Visualizar</a>}</div><div className="houses-progress"><div><small>PROGRESSO GERAL</small><strong>{completion}%</strong></div><i><b style={{ width: `${completion}%` }}/></i><span>{completed} finalizadas de {houses.length} unidades cadastradas</span></div></div>
+    <div className="houses-kpis"><article><span><House size={18}/></span><div><small>TOTAL CADASTRADO</small><strong>{houses.length}</strong><em>{activeProject.blocks.length} quadras • {activeProject.commonAreas.length} áreas comuns</em></div></article>{HOUSE_STATUSES.map(status => { const total = houses.filter(house => normalizeHouseStatus(house.status) === status.name).length; return <article key={status.name}><i style={{background:status.color}}/><div><small>{status.name}</small><strong>{total}</strong><em>{Math.round(total / houses.length * 100)}% da obra</em></div></article>; })}</div>
+    <div className="houses-toolbar"><label><Search size={15}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar quadra, casa ou área comum..."/></label><select value={blockFilter} onChange={event => setBlockFilter(event.target.value)}><option>Todas</option>{activeProject.blocks.map(item => <option key={item.block}>{item.block}</option>)}{activeProject.commonAreas.length > 0 && <option>Áreas Comuns</option>}</select><select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option>Todos</option>{HOUSE_STATUSES.map(item => <option key={item.name}>{item.name}</option>)}</select><span>{visible.length} unidade(s) exibida(s)</span></div>
+    <div className="houses-legend">{HOUSE_STATUSES.map(status => <span key={status.name}><i style={{background:status.color}}/>{status.name}</span>)}</div>
+    {reportNotice && <div className="work-report-notice"><FileText size={15}/>{reportNotice}</div>}
+    <div className="block-list">{grouped.map(group => { const completeBlock = houses.filter(house => house.block === group.block); return <section className="block-section" key={group.block}><header><div><span>{group.block === "Áreas Comuns" ? "ÁREA" : "QUADRA"}</span><strong>{group.block}</strong></div><p>{group.houses.length} unidade(s) exibida(s)</p><b>{completeBlock.filter(house => normalizeHouseStatus(house.status) === "SERVIÇO CONCLUÍDO").length}/{completeBlock.length} concluídas</b><div className="block-report-actions"><button onClick={() => issueWorkReport(completeBlock, `Relatório completo da Quadra ${group.block}`)}><FileText size={13}/> PDF da quadra</button><button onClick={() => issueWorkReport(completeBlock, `Relatório completo da Quadra ${group.block}`, true)}><MessageCircle size={13}/> WhatsApp</button></div></header><div className="house-grid">{group.houses.map(house => <article key={house.id} style={{"--house-color":statusColor(house.status)} as React.CSSProperties} onDoubleClick={() => openUpdate(house)}><div className="house-card-top"><span><House size={15}/></span><div><small>{house.kind === "common" ? "ÁREA COMUM" : `QUADRA ${house.block}`}</small><h3>{house.kind === "common" ? house.name : `Lote ${String(house.lot).padStart(2,"0")}`}</h3></div>{house.photo && <img src={house.photo} alt={`Casa ${house.id}`}/>}</div>
+<div className="house-status"><i/><span>{normalizeHouseStatus(house.status)}</span></div><div className="house-mini-progress"><i><b style={{width:`${houseProgress(house.status)}%`}}/></i><small>{houseProgress(house.status)}%</small></div>
+{house.note && <p>{house.note}</p>}<small className="house-date">{house.updatedAt ? `Atualizado em ${new Date(house.updatedAt).toLocaleString("pt-BR")}` : "Sem alterações registradas"}</small><footer><button onClick={() => openUpdate(house)} title="Alterar status"><Edit3 size={13}/></button><button disabled={!house.history?.length} onClick={() => setHistoryHouse(house)} title="Histórico"><History size={13}/></button><button onClick={() => issueWorkReport([house], `Relatório da Quadra ${house.block} — Casa ${String(house.lot).padStart(2, "0")}`)} title="Gerar PDF"><FileText size={13}/></button><button onClick={() => issueWorkReport([house], `Relatório da Quadra ${house.block} — Casa ${String(house.lot).padStart(2, "0")}`, true)} title="Enviar pelo WhatsApp"><MessageCircle size={13}/></button></footer></article>)}</div></section>; })}</div>
+    {!visible.length && <div className="linked-empty"><Search size={22}/><h4>Nenhuma casa encontrada</h4><p>Altere os filtros para visualizar outros lotes.</p></div>}
+    {workManagerOpen && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={()=>setWorkManagerOpen(false)} aria-label="Fechar"/><div className="modal work-register-modal"><div className="modal-head"><div><span>GERENCIADOR DE OBRAS</span><h2>Cadastrar nova obra</h2><p>Defina as quadras, a quantidade de casas e as áreas comuns.</p></div><button onClick={()=>setWorkManagerOpen(false)}><X size={18}/></button></div><div className="work-register-body"><label className="wide">Nome da obra<input value={newWorkName} onChange={event=>setNewWorkName(event.target.value)} placeholder="Ex.: Residencial Primavera"/></label><section className="work-config-section"><header><div><b>Quadras e casas</b><small>Informe a identificação e a quantidade de casas de cada quadra.</small></div><button type="button" onClick={()=>setNewBlocks(current=>[...current,{block:String.fromCharCode(65+current.length),houses:1}])}><Plus size={13}/> Quadra</button></header>{newBlocks.map((item,index)=><div className="work-config-row" key={index}><label>Quadra<input value={item.block} onChange={event=>setNewBlocks(current=>current.map((block,i)=>i===index?{...block,block:event.target.value}:block))}/></label><label>Quantidade de casas<input type="number" min="1" value={item.houses} onChange={event=>setNewBlocks(current=>current.map((block,i)=>i===index?{...block,houses:Math.max(1,Number(event.target.value)||1)}:block))}/></label><button type="button" disabled={newBlocks.length===1} onClick={()=>setNewBlocks(current=>current.filter((_,i)=>i!==index))}><Trash2 size={14}/></button></div>)}</section><section className="work-config-section"><header><div><b>Áreas comuns</b><small>Adicione a quantidade necessária e dê um nome para cada área.</small></div><button type="button" onClick={()=>setNewCommonAreas(current=>[...current,""])}><Plus size={13}/> Área comum</button></header>{newCommonAreas.length===0?<p className="work-config-empty">Nenhuma área comum adicionada.</p>:newCommonAreas.map((name,index)=><div className="work-config-row common" key={index}><label>Nome da área comum<input value={name} onChange={event=>setNewCommonAreas(current=>current.map((area,i)=>i===index?event.target.value:area))} placeholder="Ex.: Academia, salão de festas..."/></label><button type="button" onClick={()=>setNewCommonAreas(current=>current.filter((_,i)=>i!==index))}><Trash2 size={14}/></button></div>)}</section></div><div className="modal-actions"><button className="outline-btn" onClick={()=>setWorkManagerOpen(false)}>Cancelar</button><button className="primary-btn" onClick={createWorkProject}><CheckCircle2 size={15}/> Cadastrar obra</button></div></div></div>}
+    {editing && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={() => setEditing(null)} aria-label="Fechar"/><div className="modal house-update-modal"><div className="modal-head"><div><span>ATUALIZAÇÃO DA OBRA</span><h2>Quadra {editing.block} • Casa {String(editing.lot).padStart(2,"0")}</h2><p>Status atual: {normalizeHouseStatus(editing.status)} • Responsável: {responsibleUser}</p></div><button onClick={() => setEditing(null)}><X size={18}/></button></div><div className="house-modal-tabs"><button className={houseModalTab === "Etapa" ? "active" : ""} onClick={()=>setHouseModalTab("Etapa")}><CheckCircle2 size={14}/> Etapa da obra</button><button className={houseModalTab === "Perdas e Roubos" ? "active warning" : ""} onClick={()=>setHouseModalTab("Perdas e Roubos")}><AlertTriangle size={14}/> Perdas e Roubos {editing.incidents?.length ? <span>{editing.incidents.length}</span> : null}</button></div>{houseModalTab === "Etapa" ? <><div className="house-stage-progress">{HOUSE_STATUSES.map((stage,index) => { const activeIndex = HOUSE_STATUSES.findIndex(item => item.name === nextStatus); return <div key={stage.name} className={index <= activeIndex ? "active" : ""}><i>{index < activeIndex ? <CheckCircle2 size={12}/> : index + 1}</i><span>{stage.name}</span></div>; })}</div><div className="house-update-body"><label>Novo status<select value={nextStatus} onChange={event => { setNextStatus(event.target.value as HouseWorkStatus); setPhotos({}); }}>{HOUSE_STATUSES.map(status => <option key={status.name}>{status.name}</option>)}</select></label><div className="status-preview" style={{"--preview-color":statusColor(nextStatus)} as React.CSSProperties}><i/><span>{nextStatus}</span></div>{HOUSE_STAGE_PHOTOS[nextStatus].length > 0 && <div className="stage-photo-slots wide">{HOUSE_STAGE_PHOTOS[nextStatus].map(label => <label className={photos[label] ? "filled" : ""} key={label}>{photos[label] ? <img src={photos[label]} alt={label}/> : <ImageIcon size={22}/>}<b>{label}</b><small>{photos[label] ? "Foto pronta • toque para substituir" : HOUSE_STAGE_OPTIONAL_PHOTOS.includes(nextStatus) ? "Foto opcional" : "Foto obrigatória"}</small><input type="file" accept="image/*" capture="environment" onChange={event => void readStagePhoto(label,event.target.files?.[0])}/>{photos[label] && <button type="button" onClick={event => { event.preventDefault(); setPhotos(current => { const next = {...current}; delete next[label]; return next; }); }}><X size={12}/> Remover</button>}</label>)}</div>}<label className="wide">Observação da etapa<textarea value={note} onChange={event => setNote(event.target.value)} placeholder={nextStatus === "AG. TUBULAÇÃO FORÇADA" ? "Informe os detalhes da tubulação forçada..." : "Descreva o serviço executado, pendências ou materiais utilizados..."}/><small>A observação poderá ser consultada no histórico permanente da casa.</small></label>{nextStatus === "SERVIÇO CONCLUÍDO" && <div className="completion-warning wide"><CheckCircle2 size={19}/><span><b>Finalização da casa</b><small>Ao confirmar, o sistema registrará automaticamente data, horário e {responsibleUser} como responsável.</small></span></div>}</div><div className="modal-actions"><button className="outline-btn" onClick={() => setEditing(null)}>Cancelar</button><button className="primary-btn" onClick={saveUpdate}><CheckCircle2 size={15}/> {nextStatus === "SERVIÇO CONCLUÍDO" ? "Concluir casa" : "Salvar etapa"}</button></div></> : <><div className="incident-register-body"><div className="incident-form"><label>Tipo da ocorrência<select value={incidentType} onChange={event=>setIncidentType(event.target.value as "Perda" | "Roubo")}><option>Perda</option><option>Roubo</option></select></label><label className="incident-photo-upload">{incidentPhoto ? <img src={incidentPhoto} alt="Foto da ocorrência"/> : <><Camera size={25}/><b>Anexar foto da ocorrência</b><small>Câmera ou galeria • foto obrigatória</small></>}<input type="file" accept="image/*" capture="environment" onChange={event=>void readIncidentPhoto(event.target.files?.[0])}/></label><label className="wide">Observação<textarea value={incidentNote} onChange={event=>setIncidentNote(event.target.value)} placeholder="Descreva o item perdido ou roubado e os detalhes da ocorrência..."/></label></div><section className="incident-history"><header><b>Registros desta unidade</b><small>{editing.incidents?.length ?? 0} ocorrência(s)</small></header>{editing.incidents?.length ? editing.incidents.map(incident=>
+<article key={incident.id}><label className="replaceable-photo"><img src={incident.photo} alt={incident.type}/><span>Alterar foto</span><input type="file" accept="image/*" capture="environment" onChange={event=>void replaceIncidentPhoto(incident.id,event.target.files?.[0])}/></label>
+<div><strong>{incident.type}</strong><time>{new Date(incident.createdAt).toLocaleString("pt-BR")}</time><p>{incident.note || "Sem observação."}</p><small>Responsável: {incident.responsible}</small></div></article>) : <div className="incident-empty"><AlertTriangle size={20}/><span>Nenhuma perda ou roubo registrado nesta unidade.</span></div>}</section></div><div className="modal-actions"><button className="outline-btn" onClick={() => setEditing(null)}>Fechar</button><button className="danger-primary-btn" onClick={saveIncident}><Camera size={15}/> Registrar {incidentType.toLowerCase()}</button></div></>}</div></div>}
+    {historyHouse && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={() => setHistoryHouse(null)} aria-label="Fechar"/><div className="modal house-history-modal"><div className="modal-head"><div><span>HISTÓRICO DA CASA</span><h2>Quadra {historyHouse.block} • Casa {String(historyHouse.lot).padStart(2,"0")}</h2><p>{historyHouse.history.length} alteração(ões) permanente(s) • clique numa etapa para ver os detalhes</p></div><button onClick={() => setHistoryHouse(null)}><X size={18}/></button></div><div className="house-timeline">{historyHouse.history.map(item => { const itemPhotos = normalizeStagePhotos(item.photos,item.photo,item.status); return <article key={item.id} onClick={() => setHistoryUpdate(item)} tabIndex={0}><i style={{background:statusColor(item.status)}}/><div><header><strong>{normalizeHouseStatus(item.status)} — Concluído</strong><time>{new Date(item.createdAt).toLocaleString("pt-BR")}</time></header><p>Responsável: {item.responsible || "Não informado no registro antigo"}</p><small>{itemPhotos.length} foto(s) anexada(s){item.note ? " • com observação" : ""}</small></div></article>; })}</div><div className="modal-actions"><button className="outline-btn" onClick={() => issueWorkReport([historyHouse], `Relatório da Quadra ${historyHouse.block} — Casa ${String(historyHouse.lot).padStart(2,"0")}`)}><FileText size={14}/> Relatório completo</button><button className="primary-btn" onClick={() => setHistoryHouse(null)}>Fechar histórico</button></div></div></div>}
+    {historyUpdate && <div className="modal-layer house-history-detail-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={() => setHistoryUpdate(null)} aria-label="Fechar"/><div className="modal house-history-detail"><div className="modal-head"><div><span>DETALHES DA ETAPA</span><h2>{normalizeHouseStatus(historyUpdate.status)}</h2><p>{new Date(historyUpdate.createdAt).toLocaleString("pt-BR")} • {historyUpdate.responsible || "Responsável não informado"}</p></div><button onClick={() => setHistoryUpdate(null)}><X size={18}/></button></div><div className="history-detail-body">{normalizeStagePhotos(historyUpdate.photos,historyUpdate.photo,historyUpdate.status).map(photo => 
+<figure key={photo.label}><img src={photo.url} alt={photo.label}/><figcaption>{photo.label}</figcaption><label className="replace-history-photo"><Edit3 size={12}/> Alterar foto<input type="file" accept="image/*" capture="environment" onChange={event=>void replaceHistoryPhoto(photo.label,event.target.files?.[0])}/></label></figure>
+)}{!normalizeStagePhotos(historyUpdate.photos,historyUpdate.photo,historyUpdate.status).length && <div className="no-stage-photos"><ImageIcon size={22}/><span>Nenhuma foto exigida ou anexada nesta etapa.</span></div>}<div className="history-detail-note"><b>Observações da etapa</b><p>{historyUpdate.note || "Nenhuma observação registrada."}</p></div></div><div className="modal-actions"><button className="primary-btn" onClick={() => setHistoryUpdate(null)}>Fechar detalhes</button></div></div></div>}
+  </section>;
+}
+
+function GenericModule({ name, onOpen, onDelete, onUpdate, onConvert, companyCnpj, canEdit, records, allModules, serviceOrders }: { name: string; onOpen: (name: string) => void; onDelete: (moduleName: string, record: ModuleRecord) => void; onUpdate: (moduleName: string, record: ModuleRecord) => void; onConvert?: (record: ModuleRecord, target: "Pedido" | "Ordem de serviço") => void; companyCnpj?: string; canEdit: boolean; records: ModuleRecord[]; allModules?: Record<string, ModuleRecord[]>; serviceOrders?: ServiceOrder[] }) {
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("Todas");
+  const [activeView, setActiveView] = useState("Visão geral");
+  const [editingCatalogRecord, setEditingCatalogRecord] = useState<ModuleRecord | null>(null);
+  const [historyCatalogRecord, setHistoryCatalogRecord] = useState<ModuleRecord | null>(null);
+  const [detailRecord, setDetailRecord] = useState<ModuleRecord | null>(null);
+  const [detailTab, setDetailTab] = useState("Dados gerais");
+  const [employeePasswordReset, setEmployeePasswordReset] = useState("");
+  const [nfeStatus, setNfeStatus] = useState("");
+  const catalogEditable = canEdit;
+  const descriptions: Record<string,string> = {
+    "Equipamentos": "Acompanhe o parque de equipamentos, histórico técnico, garantias e próximas manutenções.",
+    "Ordens de serviço": "Planeje atendimentos, distribua equipes e acompanhe cada serviço até a assinatura.",
+    "Estoque": "Controle entradas, saídas, reservas, inventários, perdas e alertas de reposição.",
+    "Compras": "Solicitações, aprovações, recebimentos, estoque e contas a pagar integrados.",
+    "Fornecedores": "Cadastro, produtos fornecidos, compras, financeiro, documentos e avaliação.",
+    "Financeiro": "Contas a pagar e receber, caixa, bancos, conciliação e centros de custo.",
+    "Obras": "Planeje e acompanhe obras, responsáveis, prazos, execução, perdas, materiais e resultado financeiro.",
+  };
+  const statuses = moduleStatuses[name] ?? ["Ativo", "Pendente", "Concluído", "Inativo"];
+  const tabs = managementTabs[name] ?? ["Visão geral", "Cadastros", "Histórico"];
+  const viewMatches = (record: ModuleRecord) => {
+    if (activeView === "Visão geral" || activeView === "Histórico" || activeView === "Cadastro" || activeView === "Equipe") return true;
+    if (activeView === "Planejamento") return /Planejamento/i.test(record.status || "");
+    if (activeView === "Execução") return /Em andamento|Pausada|Aguardando material/i.test(record.status || "");
+    if (activeView === "Perdas") return /perda|avaria|ocorrência/i.test(`${record.category} ${record.description}`);
+    if (activeView === "Pedidos") return !/Recebida|Cancelada|Devolvida/i.test(record.status || "");
+    if (activeView === "Aprovação") return /Aguardando aprovação|Aprovada/i.test(record.status || "");
+    if (activeView === "Recebimento") return /Aguardando entrega|Recebida/i.test(record.status || "");
+    if (activeView === "Contas a pagar") return /pagar|compra|fornecedor/i.test(`${record.name} ${record.category} ${record.description}`);
+    if (activeView === "Contas a receber") return /receber|venda|cliente|serviço/i.test(`${record.name} ${record.category} ${record.description}`);
+    if (activeView === "Fluxo de caixa") return /Paga|Recebida/i.test(record.status || "");
+    if (activeView === "Produtos fornecidos") return Boolean(record.description || record.category);
+    if (activeView === "Funções e permissões") return Boolean(record.category || record.description);
+    if (activeView === "Comissões") return /comissão/i.test(`${record.category} ${record.description}`);
+    return true;
+  };
+  const filtered = records.filter(record => `${record.id} ${record.name} ${record.client} ${record.description}`.toLowerCase().includes(query.toLowerCase()) && (statusFilter === "Todas" || (record.status || statuses[0]) === statusFilter) && viewMatches(record));
+  const totalValue = records.reduce((total, record) => total + (record.value ?? 0), 0);
+  const openValue = records.filter(record => /Rascunho|Aguardando|aberto|Vencida|Pendente/i.test(record.status || "")).reduce((total, record) => total + (record.value ?? 0), 0);
+  const exportRecords = () => downloadCsv(`${name.toLowerCase()}-proar.csv`, [["Código", "Nome", "Responsável", "Situação", "Valor", "Data"], ...filtered.map(record => [record.id, record.name, record.client, record.status || statuses[0], String(record.value ?? 0), record.date || record.createdAt])]);
+  const advance = (record: ModuleRecord) => {
+    const currentIndex = statuses.indexOf(record.status || statuses[0]);
+    onUpdate(name, { ...record, status: statuses[Math.min(currentIndex + 1, statuses.length - 1)] });
+  };
+  const duplicate = (record: ModuleRecord) => onUpdate(name, { ...record, id: `${name.slice(0,3).toUpperCase()}-${Date.now().toString().slice(-6)}`, name: `${record.name} (cópia)`, status: statuses[0], createdAt: new Date().toLocaleString("pt-BR") });
+  const searchDestinedNfe = async () => {
+    setNfeStatus("Consultando o Ambiente Nacional da NF-e...");
+    try { const response = await fetch("/api/nfe/distribution",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({cnpj:companyCnpj})}); const result = await response.json(); setNfeStatus(response.ok ? `${result.count ?? 0} nota(s) nova(s) localizada(s).` : result.error || "Não foi possível consultar as notas."); }
+    catch { setNfeStatus("Consulta indisponível. Verifique o certificado A1 nas Configurações Fiscais."); }
+  };
+  const openDetail = (record: ModuleRecord) => { setDetailRecord(record); setDetailTab("Dados gerais"); };
+  const detailTabsFor = (moduleName: string) => moduleName === "Fornecedores"
+    ? ["Dados gerais", "Compras", "Produtos fornecidos", "Financeiro", "Documentos", "Histórico"]
+    : moduleName === "Equipamentos"
+      ? ["Dados gerais", "Dados técnicos", "Ordens de serviço", "Manutenções", "Garantias", "Histórico"]
+      : moduleName === "Compras"
         ? ["Dados gerais", "Itens", "Pagamento", "Financeiro", "Documentos", "Histórico"]
         : moduleName === "Produtos"
           ? ["Dados gerais", "Estoque", "Compras", "Clientes", "Histórico"]
