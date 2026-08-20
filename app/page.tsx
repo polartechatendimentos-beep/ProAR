@@ -96,6 +96,8 @@ type ServiceOrder = {
   appointmentReminderHours?: number;
   timeline?: ServiceOrderTimelineEvent[];
   assistance?: AssistanceEntry;
+  pmoc?: PmocRecord;
+  pmocExecutions?: PmocExecution[];
 };
 
 type ServiceOrderTimelineEvent = {
@@ -130,6 +132,38 @@ type AssistanceEntry = {
   missingParts?: string;
   entryPhotos?: string[];
   exitPhotos?: string[];
+};
+
+type PmocRecord = {
+  applicability?: "Obrigatório" | "Não obrigatório" | "Verificar aplicabilidade";
+  hasPmoc?: boolean;
+  identifier?: string;
+  implementationDate?: string;
+  reviewDate?: string;
+  technicalResponsible?: string;
+  professionalCouncil?: string;
+  professionalRegistration?: string;
+  responsibilityDocument?: string;
+  plan?: { activity: string; periodicity: string }[];
+};
+
+type PmocExecution = {
+  id: string;
+  createdAt: string;
+  equipment: string;
+  location?: string;
+  capacityBtu?: number;
+  beforeCondition?: string;
+  services: string[];
+  products?: { product: string; manufacturer?: string; purpose?: string; lot?: string; quantity?: string; sanitaryRecord?: string }[];
+  pending?: { type: string; description: string; urgency: string }[];
+  technicalNote?: string;
+  beforePhotos?: string[];
+  afterPhotos?: string[];
+  technician?: string;
+  responsibleTechnical?: string;
+  signature?: string;
+  nextMaintenanceDate?: string;
 };
 
 type Customer = {
@@ -711,6 +745,10 @@ function OrderDetail({ order, customerPhone, company, catalog, close, onUpdate }
   const [assistanceOpen, setAssistanceOpen] = useState(Boolean(order.assistance?.requestedAt && !order.assistance?.arrivalAt));
   const [assistance, setAssistance] = useState<AssistanceEntry>(order.assistance ?? {});
   const [assistancePhotos, setAssistancePhotos] = useState<string[]>(order.assistance?.entryPhotos ?? []);
+  const [pmoc, setPmoc] = useState<PmocRecord>(order.pmoc ?? { applicability: "Verificar aplicabilidade", hasPmoc: false, plan: [] });
+  const [pmocExecution, setPmocExecution] = useState<Partial<PmocExecution>>({ equipment: "", location: order.unit, services: [], products: [], pending: [] });
+  const [pmocBeforePhotos, setPmocBeforePhotos] = useState<string[]>([]);
+  const [pmocAfterPhotos, setPmocAfterPhotos] = useState<string[]>([]);
   const mapsSearch = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.address)}`;
   const mapsEmbed = `https://www.google.com/maps?q=${encodeURIComponent(order.address)}&output=embed`;
   const update = (patch: Partial<ServiceOrder>) => {
@@ -724,6 +762,11 @@ function OrderDetail({ order, customerPhone, company, catalog, close, onUpdate }
   const trackingToken = () => currentOrder.trackingToken || (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID().replace(/-/g, "") : `${Date.now()}${Math.random().toString(36).slice(2)}`);
   const attachStatusPhoto = async (file?: File) => { if (!file) return; const encoded = await imageFileToDataUrl(file); setStatusPhotos(current => [...current, encoded]); };
   const attachAssistancePhoto = async (file?: File) => { if (!file) return; const encoded = await imageFileToDataUrl(file); setAssistancePhotos(current => [...current, encoded]); };
+  const attachPmocPhoto = async (kind: "before" | "after", file?: File) => {
+    if (!file) return;
+    const encoded = await imageFileToDataUrl(file);
+    (kind === "before" ? setPmocBeforePhotos : setPmocAfterPhotos)(current => [...current, encoded]);
+  };
   const registerStatusUpdate = () => {
     const statusChanged = statusDraft !== currentOrder.status;
     if (!statusChanged && !internalUpdate.trim() && !customerUpdate.trim() && !statusPhotos.length) return;
@@ -764,6 +807,35 @@ function OrderDetail({ order, customerPhone, company, catalog, close, onUpdate }
     const unit = (patch.reminderUnit ?? currentOrder.reminderUnit ?? "Meses") as "Dias" | "Meses";
     const enabled = Boolean(patch.reminderEnabled ?? currentOrder.reminderEnabled);
     update({ reminderAmount: amount, reminderUnit: unit, reminderEnabled: enabled, reminderDate: enabled ? reminderDate(amount, unit, currentOrder.checkOutAt) : "", reminderMessage: patch.reminderMessage ?? currentOrder.reminderMessage ?? "Olá! Está na hora de realizar a higienização preventiva do seu ar-condicionado. Vamos agendar?", reminderStatus: enabled ? (currentOrder.checkOutAt ? "Agendado" : "Pendente") : "Pendente", ...patch });
+  };
+  const savePmoc = () => {
+    update({ pmoc });
+  };
+  const registerPmocExecution = () => {
+    if (!pmocExecution.equipment?.trim() || !(pmocExecution.services ?? []).length) return;
+    const createdAt = new Date().toISOString();
+    const entry: PmocExecution = {
+      id: `pmoc-${Date.now()}`,
+      createdAt,
+      equipment: pmocExecution.equipment.trim(),
+      location: pmocExecution.location?.trim() || currentOrder.unit,
+      capacityBtu: Number(pmocExecution.capacityBtu) || undefined,
+      beforeCondition: pmocExecution.beforeCondition?.trim(),
+      services: pmocExecution.services ?? [],
+      products: pmocExecution.products ?? [],
+      pending: pmocExecution.pending ?? [],
+      technicalNote: pmocExecution.technicalNote?.trim(),
+      beforePhotos: pmocBeforePhotos,
+      afterPhotos: pmocAfterPhotos,
+      technician: currentOrder.tech,
+      responsibleTechnical: pmoc.technicalResponsible,
+      signature: pmocExecution.signature,
+      nextMaintenanceDate: pmocExecution.nextMaintenanceDate,
+    };
+    const timelineEvent: ServiceOrderTimelineEvent = { id: `evt-pmoc-${Date.now()}`, createdAt, status: "Execução PMOC registrada", technician: currentOrder.tech, internalNote: entry.technicalNote || "Higienização/manutenção registrada no histórico PMOC.", customerNote: "A execução de higienização/manutenção foi registrada.", photos: [...pmocBeforePhotos, ...pmocAfterPhotos], customerVisible: true, whatsappQueued: Boolean(whatsappPhone && currentOrder.whatsappUpdatesEnabled !== false) };
+    update({ pmoc, pmocExecutions: [...(currentOrder.pmocExecutions ?? []), entry], timeline: [...(currentOrder.timeline ?? []), timelineEvent] });
+    setPmocExecution({ equipment: "", location: currentOrder.unit, services: [], products: [], pending: [] });
+    setPmocBeforePhotos([]); setPmocAfterPhotos([]);
   };
   const addCatalogItem = (item: ModuleRecord) => {
     const kind = item.kind || "Serviço";
@@ -809,6 +881,29 @@ function OrderDetail({ order, customerPhone, company, catalog, close, onUpdate }
           <div className="status-update-actions"><small>Para confirmar: equipamento, série, defeito, responsável e ao menos uma foto.</small><button className="primary-btn" type="button" onClick={confirmAssistanceEntry} disabled={!assistance.equipment?.trim() || !assistance.serialNumber?.trim() || !assistance.reportedDefect?.trim() || !assistance.receivedBy?.trim() || !assistancePhotos.length || ((assistance.condition === "Com avarias" || assistance.condition === "Danificado") && !assistance.inspectionNotes?.trim())}><CheckCircle2 size={15}/> Confirmar entrada do equipamento</button></div>
         </section>}
         {(currentOrder.timeline?.length ?? 0) > 0 && <section className="os-timeline"><div className="execution-head"><div><span>LINHA DO TEMPO</span><h3>Histórico do atendimento</h3></div><small>Eventos não são sobrescritos.</small></div>{[...(currentOrder.timeline ?? [])].reverse().map(event=><article key={event.id}><i/><div><header><b>{event.status}</b><time>{formatMoment(event.createdAt)}</time></header><small>{event.technician || "Equipe ProAR"}</small>{event.internalNote&&<p><strong>Interno:</strong> {event.internalNote}</p>}{event.customerNote&&<p><strong>Cliente:</strong> {event.customerNote}</p>}{event.photos?.length?<div className="os-event-photos">{event.photos.map((photo,index)=><img key={`${photo.slice(-16)}-${index}`} src={photo} alt={`Foto do evento ${index+1}`}/>)}</div>:null}</div></article>)}</section>}
+        <section className="pmoc-panel">
+          <div className="execution-head"><div><span>PMOC E HIGIENIZAÇÃO POR AMBIENTE</span><h3>Plano, evidências e execução técnica</h3></div><small>O certificado registra a execução e não substitui o PMOC.</small></div>
+          <div className="pmoc-status-note"><ShieldCheck size={17}/><span><b>Execução do serviço:</b> {currentOrder.pmocExecutions?.length ? "com registros" : "sem registro"} <i/> <b>PMOC:</b> {!pmoc.hasPmoc ? "não cadastrado" : pmoc.reviewDate && pmoc.reviewDate < new Date().toISOString().slice(0,10) ? "vencido" : "vigente / em revisão"} <i/> <b>Documentação:</b> {pmoc.technicalResponsible && pmoc.responsibilityDocument ? "com dados cadastrados" : "com pendências"}</span></div>
+          <div className="pmoc-grid">
+            <label>Aplicabilidade do PMOC<select value={pmoc.applicability ?? "Verificar aplicabilidade"} onChange={event=>setPmoc(value=>({...value,applicability:event.target.value as PmocRecord["applicability"]}))}><option>Obrigatório</option><option>Não obrigatório</option><option>Verificar aplicabilidade</option></select></label>
+            <label className="tracking-toggle"><input type="checkbox" checked={Boolean(pmoc.hasPmoc)} onChange={event=>setPmoc(value=>({...value,hasPmoc:event.target.checked}))}/><span><b>Possui PMOC</b><small>Vincula as execuções desta OS ao plano</small></span></label>
+            <label>Número / identificação<input value={pmoc.identifier ?? ""} onChange={event=>setPmoc(value=>({...value,identifier:event.target.value}))} placeholder="PMOC-0000"/></label>
+            <label>Data de implantação<input type="date" value={pmoc.implementationDate ?? ""} onChange={event=>setPmoc(value=>({...value,implementationDate:event.target.value}))}/></label>
+            <label>Validade / revisão<input type="date" value={pmoc.reviewDate ?? ""} onChange={event=>setPmoc(value=>({...value,reviewDate:event.target.value}))}/></label>
+            <label>Responsável técnico<input value={pmoc.technicalResponsible ?? ""} onChange={event=>setPmoc(value=>({...value,technicalResponsible:event.target.value}))} placeholder="Selecionar profissional habilitado"/></label>
+            <label>Conselho profissional<input value={pmoc.professionalCouncil ?? ""} onChange={event=>setPmoc(value=>({...value,professionalCouncil:event.target.value}))} placeholder="Conselho / UF"/></label>
+            <label>Registro profissional<input value={pmoc.professionalRegistration ?? ""} onChange={event=>setPmoc(value=>({...value,professionalRegistration:event.target.value}))}/></label>
+            <label>ART / TRT / documento aplicável<input value={pmoc.responsibilityDocument ?? ""} onChange={event=>setPmoc(value=>({...value,responsibilityDocument:event.target.value}))}/></label>
+          </div>
+          <div className="pmoc-plan"><div><b>Plano de manutenção configurável</b><small>Defina a periodicidade conforme o PMOC vigente; o sistema não fixa frequências legais.</small></div>{(pmoc.plan ?? []).map((item,index)=><div className="pmoc-plan-row" key={`${item.activity}-${index}`}><input value={item.activity} onChange={event=>setPmoc(value=>({...value,plan:(value.plan??[]).map((record,itemIndex)=>itemIndex===index?{...record,activity:event.target.value}:record)}))} placeholder="Atividade (ex.: Filtros)"/><input value={item.periodicity} onChange={event=>setPmoc(value=>({...value,plan:(value.plan??[]).map((record,itemIndex)=>itemIndex===index?{...record,periodicity:event.target.value}:record)}))} placeholder="Periodicidade"/><button type="button" className="delete-action" title="Remover atividade" onClick={()=>setPmoc(value=>({...value,plan:(value.plan??[]).filter((_,itemIndex)=>itemIndex!==index)}))}><Trash2 size={14}/></button></div>)}<div className="pmoc-actions"><button type="button" className="outline-btn" onClick={()=>setPmoc(value=>({...value,plan:[...(value.plan??[]),{activity:"",periodicity:""}]}))}><Plus size={14}/> Adicionar atividade</button><button type="button" className="outline-btn" onClick={savePmoc}><CheckCircle2 size={14}/> Salvar dados do PMOC</button></div></div>
+          <div className="pmoc-execution"><div><span>EXECUÇÃO DE HIGIENIZAÇÃO</span><h4>Registro por setor, sala e equipamento</h4><p>O histórico é acumulativo: uma nova execução não substitui a anterior.</p></div><div className="pmoc-grid"><label>Equipamento *<input value={pmocExecution.equipment ?? ""} onChange={event=>setPmocExecution(value=>({...value,equipment:event.target.value}))} placeholder="Código ou identificação"/></label><label>Setor / sala / ambiente<input value={pmocExecution.location ?? ""} onChange={event=>setPmocExecution(value=>({...value,location:event.target.value}))} placeholder="Unidade • setor • sala"/></label><label>Capacidade instalada (BTU/h)<input type="number" min="0" value={pmocExecution.capacityBtu ?? ""} onChange={event=>setPmocExecution(value=>({...value,capacityBtu:Number(event.target.value)||undefined}))}/></label><label>Estado antes da execução<textarea value={pmocExecution.beforeCondition ?? ""} onChange={event=>setPmocExecution(value=>({...value,beforeCondition:event.target.value}))} placeholder="Filtro, serpentina, turbina, bandeja, dreno e funcionamento..."/></label></div>
+            <div className="pmoc-checklist"><b>Serviços executados *</b>{["Desmontagem","Limpeza dos filtros","Higienização da serpentina","Higienização da turbina/ventilador","Limpeza da bandeja","Limpeza/desobstrução do dreno","Limpeza da carenagem","Aplicação de sanitizante","Lubrificação","Montagem","Teste de funcionamento","Não aplicável"].map(service=><label key={service}><input type="checkbox" checked={Boolean(pmocExecution.services?.includes(service))} onChange={event=>setPmocExecution(value=>({...value,services:event.target.checked?[...(value.services??[]),service]:(value.services??[]).filter(item=>item!==service)}))}/>{service}</label>)}</div>
+            <div className="pmoc-photo-pair"><label className="assistance-photo-upload"><Camera size={18}/><b>Fotos antes</b><small>{pmocBeforePhotos.length ? `${pmocBeforePhotos.length} anexo(s)` : "Conforme configuração do plano"}</small><input type="file" accept="image/*" multiple onChange={event=>void Promise.all(Array.from(event.target.files??[]).map(file=>attachPmocPhoto("before",file)))}/></label><label className="assistance-photo-upload"><Camera size={18}/><b>Fotos depois</b><small>{pmocAfterPhotos.length ? `${pmocAfterPhotos.length} anexo(s)` : "Foto geral, filtro, serpentina ou resultado"}</small><input type="file" accept="image/*" multiple onChange={event=>void Promise.all(Array.from(event.target.files??[]).map(file=>attachPmocPhoto("after",file)))}/></label></div>
+            <div className="pmoc-grid"><label>Produto utilizado<input value={pmocExecution.products?.[0]?.product ?? ""} onChange={event=>setPmocExecution(value=>({...value,products:[{...(value.products?.[0]??{}),product:event.target.value}]}))} placeholder="Produto químico / material"/></label><label>Fabricante / finalidade<input value={`${pmocExecution.products?.[0]?.manufacturer ?? ""}${pmocExecution.products?.[0]?.purpose ? ` • ${pmocExecution.products?.[0]?.purpose}` : ""}`} onChange={event=>setPmocExecution(value=>({...value,products:[{...(value.products?.[0]??{}),product:value.products?.[0]?.product ?? "",manufacturer:event.target.value}]}))} placeholder="Informação documentada"/></label><label>Pendência técnica<select value={pmocExecution.pending?.[0]?.type ?? ""} onChange={event=>setPmocExecution(value=>({...value,pending:event.target.value?[{...(value.pending?.[0]??{}),type:event.target.value,description:value.pending?.[0]?.description ?? "",urgency:value.pending?.[0]?.urgency??"Normal"}]:[]}))}><option value="">Nenhuma</option>{["Filtro danificado","Vazamento","Dreno","Ruído","Oxidação","Serpentina","Motor","Turbina","Sistema elétrico","Controle","Placa","Baixo rendimento","Outro"].map(item=><option key={item}>{item}</option>)}</select></label><label>Observação / recomendação<textarea value={pmocExecution.technicalNote ?? ""} onChange={event=>setPmocExecution(value=>({...value,technicalNote:event.target.value}))} placeholder="Pendências, recomendação e detalhes técnicos..."/></label><label>Próxima manutenção<input type="date" value={pmocExecution.nextMaintenanceDate ?? ""} onChange={event=>setPmocExecution(value=>({...value,nextMaintenanceDate:event.target.value}))}/></label></div>
+            <div className="pmoc-actions"><button className="primary-btn" type="button" disabled={!pmocExecution.equipment?.trim() || !(pmocExecution.services??[]).length} onClick={registerPmocExecution}><CheckCircle2 size={15}/> Registrar execução no PMOC</button><button className="outline-btn" type="button" onClick={()=>window.print()}><FileText size={15}/> Gerar certificado / relatório</button></div>
+          </div>
+          {(currentOrder.pmocExecutions?.length ?? 0) > 0 && <div className="pmoc-history"><b>Execuções anteriores preservadas</b>{[...(currentOrder.pmocExecutions??[])].reverse().map(item=><article key={item.id}><span><strong>{item.equipment}</strong><small>{item.location || currentOrder.unit} • {formatMoment(item.createdAt)}</small></span><em>{item.services.length} serviço(s)</em><span>{item.nextMaintenanceDate ? `Próxima: ${new Date(`${item.nextMaintenanceDate}T12:00:00`).toLocaleDateString("pt-BR")}` : "Próxima manutenção não definida"}</span></article>)}</div>}
+        </section>
         <section className="preventive-engine">
           <div className="execution-head"><div><span>MANUTENÇÃO PREVENTIVA</span><h3>Garantia, revisão e alerta automático</h3></div><small>{serviceOrderReviewDate(currentOrder) ? `Próxima revisão: ${new Date(`${serviceOrderReviewDate(currentOrder)}T12:00:00`).toLocaleDateString("pt-BR")}` : "Configure a recorrência"}</small></div>
           <div className="preventive-fields"><label>Última manutenção<input type="date" value={currentOrder.lastMaintenanceDate ?? currentOrder.date ?? ""} onChange={event => update({ lastMaintenanceDate: event.target.value })}/></label><label>Garantia / revisão<select value={currentOrder.reviewPeriodMonths ?? 6} onChange={event => update({ reviewPeriodMonths: Number(event.target.value) as 3 | 6 | 12 })}><option value="3">3 meses</option><option value="6">6 meses</option><option value="12">12 meses</option></select></label><label>Notificar antes<input type="number" min="1" max="90" value={currentOrder.notifyDaysBefore ?? 15} onChange={event => update({ notifyDaysBefore: Math.max(1, Number(event.target.value) || 15) })}/><small>dias antes</small></label></div>
