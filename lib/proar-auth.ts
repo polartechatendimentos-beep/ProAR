@@ -1,4 +1,6 @@
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { verifyPassword } from "./password";
+import { requiredSecret } from "./security-env";
 
 type ProARUser = {
   username: string;
@@ -14,24 +16,20 @@ type ProARUser = {
 const SESSION_SECONDS = 60 * 60 * 12;
 
 function users(): ProARUser[] {
-  const systemUsers: ProARUser[] = [{
-    username: "jhonnatam.reis", displayName: "Jhonnatam Reis", passwordHash: "5994471abb01112afcc18159f6cc74b4f511b99806da59b3caf5a9c173cacfc5",
-    role: "Técnico", permissions: ["Painel inicial", "Agenda", "Clientes", "Equipamentos", "Ordens de serviço", "Serviços"], active: true,
-  }];
   try {
     const environmentUsers = (JSON.parse(process.env.PROAR_USERS_JSON ?? "[]") as Partial<ProARUser>[]).map(user => ({
       username: user.username ?? "", displayName: user.displayName ?? user.username ?? "", passwordHash: user.passwordHash ?? "", role: user.role ?? "Administrador", permissions: user.permissions ?? ["*"], active: user.active ?? true,
     }));
-    return [...environmentUsers, ...systemUsers.filter(systemUser => !environmentUsers.some(user => user.username.toLocaleLowerCase("pt-BR") === systemUser.username))];
-  } catch { return systemUsers; }
+    return environmentUsers;
+  } catch { return []; }
 }
 function safeEqual(left: string, right: string) { const a = Buffer.from(left); const b = Buffer.from(right); return a.length === b.length && timingSafeEqual(a, b); }
 export function authenticate(username: string, password: string) {
   const normalized = username.trim().toLocaleLowerCase("pt-BR"); const user = users().find(item => item.active && item.username.toLocaleLowerCase("pt-BR") === normalized); if (!user) return null;
-  const passwordHash = createHash("sha256").update(password).digest("hex"); return safeEqual(passwordHash, user.passwordHash) ? user : null;
+  return verifyPassword(password, user.passwordHash) ? user : null;
 }
 
-function sign(payload: string) { return createHmac("sha256", process.env.PROAR_SESSION_SECRET ?? "").update(payload).digest("hex"); }
+function sign(payload: string) { return createHmac("sha256", requiredSecret("PROAR_SESSION_SECRET")).update(payload).digest("hex"); }
 export function createSession(username: string) {
   const user = users().find(item => item.username === username); if (!user) return ""; return createSessionForUser(user);
 }
