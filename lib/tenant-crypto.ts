@@ -1,8 +1,8 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { requiredSecret } from "./security-env";
 
 function key() {
-  const raw = process.env.PROAR_TENANT_MASTER_KEY || process.env.PROAR_SESSION_SECRET || "";
-  if (!raw) throw new Error("PROAR_TENANT_MASTER_KEY não configurada.");
+  const raw = requiredSecret("PROAR_TENANT_MASTER_KEY");
   return createHash("sha256").update(raw).digest();
 }
 
