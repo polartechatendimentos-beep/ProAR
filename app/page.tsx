@@ -1568,7 +1568,7 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     const statusChanged = nextStatus !== normalizeHouseStatus(editing.status);
     const stagePhotos = photoLabels.filter(label => photos[label]).map(label => ({ label, url: photos[label] }));
     const previousStatus = normalizeHouseStatus(editing.status);
-    const storedStatus: LegacyHouseWorkStatus = nextStatus === "AG. EXAUSTOR" ? "ag_exaustor" : nextStatus;
+    const storedStatus: HouseWorkItem["status"] = nextStatus === "AG. EXAUSTOR" ? "ag_exaustor" : nextStatus;
     const update: HouseWorkUpdate = { id: `${editing.id}-${Date.now()}`, status: storedStatus, previousStatus, note: note.trim(), responsible: responsibleUser, photos: stagePhotos.length ? stagePhotos : undefined, createdAt, completedAt: nextStatus === "SERVIÇO CONCLUÍDO" ? createdAt : undefined, origin: typeof navigator === "undefined" ? "web" : navigator.userAgent };
     const next = houses.map(item => item.id === editing.id ? { ...item, status: storedStatus, note: note.trim() || item.note, photo: stagePhotos[0]?.url || item.photo, photos: stagePhotos.length ? stagePhotos : item.photos, updatedAt: createdAt, history: [update, ...(item.history ?? [])] } : item);
     if (!observationChanged && !statusChanged && !stagePhotos.length) { setSaveError("Nenhuma alteração realizada."); return; }
