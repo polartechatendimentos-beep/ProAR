@@ -5,11 +5,12 @@ import { provisionTenant } from "../../../../lib/tenant-provisioning";
 import { resolveTenantDb, tenantHeaders } from "../../../../lib/tenant-rest";
 import { hashPassword } from "../../../../lib/password";
 import { companyUrl, isReservedSlug } from "../../../../lib/tenant-host";
+import { requiredSecret } from "../../../../lib/security-env";
 
 const digits = (value: unknown) => String(value ?? "").replace(/\D/g, "");
 const clean = (value: unknown, max = 180) => String(value ?? "").trim().slice(0, max);
 const slugify = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 42);
-const privacyHash = (value: string) => createHmac("sha256", process.env.PROAR_TRIAL_RATE_SECRET || process.env.PROAR_SESSION_SECRET || "proar").update(value).digest("hex");
+const privacyHash = (value: string) => createHmac("sha256", requiredSecret("PROAR_TRIAL_RATE_SECRET")).update(value).digest("hex");
 
 async function verifyCaptcha(token: string, ip: string) {
   const secret = process.env.TURNSTILE_SECRET_KEY?.trim();
