@@ -9,7 +9,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "npm run build",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm run lint && npm run build",
+    "test": "node --test",
     "lint": "eslint . --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },
