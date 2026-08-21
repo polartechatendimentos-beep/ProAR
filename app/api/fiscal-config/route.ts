@@ -162,8 +162,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Certificado inválido ou senha incorreta." }, { status: 400 });
     }
 
-    const subject = cert.subject.attributes.map(attribute => `${attribute.shortName ?? attribute.name}=${attribute.value}`).join(", ");
-    const issuer = cert.issuer.attributes.map(attribute => `${attribute.shortName ?? attribute.name}=${attribute.value}`).join(", ");
+    const subject = cert.subject.attributes.map((attribute: { shortName?: string; name?: string; value?: string }) => `${attribute.shortName ?? attribute.name}=${attribute.value ?? ""}`).join(", ");
+    const issuer = cert.issuer.attributes.map((attribute: { shortName?: string; name?: string; value?: string }) => `${attribute.shortName ?? attribute.name}=${attribute.value ?? ""}`).join(", ");
     const document = subject.match(/(?:CNPJ|CPF)[:= ]*(\d{11,14})/i)?.[1] ?? subject.match(/\b\d{14}\b/)?.[0] ?? "";
     const record = await loadRecord();
     record.certificate = {
