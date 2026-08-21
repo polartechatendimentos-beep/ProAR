@@ -190,7 +190,7 @@ type Customer = {
 };
 
 type HouseWorkStatus = "INÍCIO DE OBRA" | "AG. FRIGORÍGENA" | "AG. ACABAMENTO" | "AG. TUBULAÇÃO FORÇADA" | "AG. EXAUSTOR" | "AG. TAMPA FRIGORÍGENA" | "SERVIÇO CONCLUÍDO";
-type LegacyHouseWorkStatus = "AG FRIGORÍGENA" | "AG VENTO KIT" | "VENTOKIT E FRIGORÍGENA OK" | "AG ACABAMENTO" | "AG EXAUSTOR" | "AG TAMPA FRIGORÍGENA" | "FIM";
+type LegacyHouseWorkStatus = "AG FRIGORÍGENA" | "AG VENTO KIT" | "VENTOKIT E FRIGORÍGENA OK" | "AG ACABAMENTO" | "AG EXAUSTOR" | "AG TAMPA FRIGORÍGENA" | "FIM" | "ag_exaustor" | "ag_exautor";
 type HouseStagePhoto = { label: string; url: string };
 type HouseWorkUpdate = { id: string; status: HouseWorkStatus | LegacyHouseWorkStatus; previousStatus?: HouseWorkStatus; note: string; responsible?: string; photo?: string; photos?: string[] | HouseStagePhoto[]; createdAt: string; completedAt?: string; origin?: string };
 type HouseIncident = { id: string; type: "Perda" | "Roubo"; note: string; photo: string; responsible: string; createdAt: string };
@@ -222,7 +222,7 @@ const HOUSE_STAGE_PHOTOS: Record<HouseWorkStatus, string[]> = {
 const HOUSE_STAGE_OPTIONAL_PHOTOS: HouseWorkStatus[] = ["AG. TUBULAÇÃO FORÇADA"];
 const LEGACY_HOUSE_STATUS_MAP: Record<string, HouseWorkStatus> = {
   "AG FRIGORÍGENA": "AG. FRIGORÍGENA", "AG VENTO KIT": "AG. TUBULAÇÃO FORÇADA", "VENTOKIT E FRIGORÍGENA OK": "AG. TUBULAÇÃO FORÇADA",
-  "AG ACABAMENTO": "AG. ACABAMENTO", "AG EXAUSTOR": "AG. EXAUSTOR", "AG. EXAUTOR": "AG. EXAUSTOR", "AG EXAUTOR": "AG. EXAUSTOR", "ag_exautor": "AG. EXAUSTOR", "ag-exaustor": "AG. EXAUSTOR", "AG TAMPA FRIGORÍGENA": "AG. TAMPA FRIGORÍGENA", "FIM": "SERVIÇO CONCLUÍDO",
+  "AG ACABAMENTO": "AG. ACABAMENTO", "AG EXAUSTOR": "AG. EXAUSTOR", "AG. EXAUTOR": "AG. EXAUSTOR", "AG EXAUTOR": "AG. EXAUSTOR", "ag_exautor": "AG. EXAUSTOR", "ag-exautor": "AG. EXAUSTOR", "ag_exaustor": "AG. EXAUSTOR", "ag-exaustor": "AG. EXAUSTOR", "AG TAMPA FRIGORÍGENA": "AG. TAMPA FRIGORÍGENA", "FIM": "SERVIÇO CONCLUÍDO",
 };
 const normalizeHouseStatus = (status: HouseWorkStatus | LegacyHouseWorkStatus | string): HouseWorkStatus => LEGACY_HOUSE_STATUS_MAP[status as HouseWorkStatus] || status as HouseWorkStatus;
 const normalizeStagePhotos = (photos: HouseWorkUpdate["photos"], photo: string | undefined, status: HouseWorkStatus | LegacyHouseWorkStatus): HouseStagePhoto[] => {
@@ -1456,7 +1456,9 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     const result=await response.json();
     if(response.status===409&&result.map){applyServerMap(result.map);localStorage.removeItem(`${shareKey}:pending`);throw new Error("O banco online tinha uma versão mais recente e foi mantido como principal.");}
     if(!response.ok){localStorage.setItem(`${shareKey}:pending`,"1");throw new Error(result.error||"Não foi possível atualizar o banco online.");}
-    setServerRevision(Number(result.map?.revision||serverRevision+1));setMapOnline(true);setMapLoading(false);setShareToken(result.token);localStorage.setItem(shareKey,result.token);localStorage.setItem(storageKey,JSON.stringify(next));localStorage.removeItem(`${shareKey}:pending`);return result.token as string;
+    const confirmed=result.map as {houses?:HouseWorkItem[];revision?:number;token?:string};
+    if(!confirmed?.houses?.length) throw new Error("O banco não confirmou a atualização da etapa.");
+    setServerRevision(Number(confirmed.revision||serverRevision+1));setMapOnline(true);setMapLoading(false);setShareToken(result.token);localStorage.setItem(shareKey,result.token);localStorage.removeItem(`${shareKey}:pending`);return confirmed;
   };
   useEffect(() => {
     if(!projectsReady)return;
@@ -1470,25 +1472,20 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     if (!navigator.onLine) { const message="Não foi possível salvar a alteração. Tente novamente."; setSaveState("error"); setSaveError(message); setMapOnline(false); setReportNotice(message); return false; }
     setSaveError(""); setSaveState("saving");
     try {
-      await publishPublicMap(next);
-      setHouses(next); localStorage.setItem(storageKey,JSON.stringify(next));
-      setSaveState("saved"); setReportNotice("Alteração salva no banco online e atualizada para todos os dispositivos.");
+      const confirmed=await publishPublicMap(next);
+      const authoritative=mergeWorkRows(confirmed.houses??[]);
+      const requested=next.find(item=>item.id===editing?.id); const returned=authoritative.find(item=>item.id===editing?.id);
+      if(requested && normalizeHouseStatus(requested.status)==="AG. EXAUSTOR" && normalizeHouseStatus(returned?.status||"")!=="AG. EXAUSTOR") throw new Error("O banco não confirmou AG. EXAUSTOR.");
+      setHouses(authoritative); localStorage.setItem(storageKey,JSON.stringify(authoritative));
+      setSaveState("saved"); setReportNotice("✓ Etapa da obra atualizada");
       window.setTimeout(()=>setSaveState("idle"),1800); return true;
     } catch (error) {
-      try {
-        const latest=await fetchServerMap();
-        if (!latest?.houses?.length) throw error;
-        const changed=next.find(item=>item.id===editing?.id);
-        if (!changed) throw error;
-        const rebased=latest.houses.map(item=>item.id===changed.id?changed:item);
-        await publishPublicMap(rebased,Number(latest.revision||0));
-        setHouses(rebased); localStorage.setItem(storageKey,JSON.stringify(rebased));
-        setSaveState("saved"); setReportNotice("Alteração salva após sincronizar a versão mais recente.");
-        window.setTimeout(()=>setSaveState("idle"),1800); return true;
-      } catch {
-        const message="Não foi possível salvar a alteração. Tente novamente.";
-        setSaveState("error"); setSaveError(message); setReportNotice(message); window.setTimeout(()=>setSaveState("idle"),3000); return false;
-      }
+      const message = error instanceof Error && /versão mais recente|conflito/i.test(error.message)
+        ? "Este registro foi alterado por outro usuário. Atualize os dados antes de continuar."
+        : "Não foi possível salvar a alteração. Verifique os dados e tente novamente.";
+      setSaveState("error"); setSaveError(message); setReportNotice(message);
+      window.setTimeout(()=>setSaveState("idle"),3000);
+      return false;
     }
   };
   useEffect(() => {
@@ -1499,7 +1496,7 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
   const sharePublicMap = async () => {
     setReportNotice("A publicar o mapa da obra...");
     try {
-      const token = shareToken || await publishPublicMap(houses); const url = `${window.location.origin}/obra/${token}`;
+      const savedMap = shareToken ? null : await publishPublicMap(houses); const token = shareToken || savedMap?.token || ""; if (!token) throw new Error("O banco não confirmou o link da obra."); const url = `${window.location.origin}/obra/${token}`;
       if (navigator.share) await navigator.share({ title: "Acompanhamento da obra — PolarTech", text: "Acompanhe em tempo real o andamento de cada casa da obra.", url });
       else { await navigator.clipboard.writeText(url); setReportNotice("Link copiado. Pode enviá-lo ao cliente pelo WhatsApp."); window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`Acompanhe em tempo real o andamento da obra: ${url}`)}`, "_blank", "noopener,noreferrer"); }
     } catch (error) { if ((error as Error)?.name !== "AbortError") setReportNotice((error as Error)?.message || "Não foi possível compartilhar o mapa."); }
@@ -1535,23 +1532,26 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     const nextUpdate: HouseWorkUpdate = {...historyUpdate,photos:normalizeStagePhotos(historyUpdate.photos,historyUpdate.photo,historyUpdate.status).map(photo=>photo.label===label?{...photo,url}:photo)};
     const nextHouse: HouseWorkItem = {...historyHouse,updatedAt:new Date().toISOString(),history:(historyHouse.history??[]).map(update=>update.id===historyUpdate.id?nextUpdate:update)};
     const next=houses.map(item=>item.id===nextHouse.id?nextHouse:item);
-    persist(next);setHistoryHouse(nextHouse);setHistoryUpdate(nextUpdate);
+    if (await persist(next)) { setHistoryHouse(nextHouse); setHistoryUpdate(nextUpdate); }
   };
   const replaceIncidentPhoto = async (incidentId: string, file?: File) => {
     if (!file || !editing) return;
     const photo=await imageFileToDataUrl(file);const updatedAt=new Date().toISOString();
     const nextHouse: HouseWorkItem={...editing,updatedAt,incidents:(editing.incidents??[]).map(incident=>incident.id===incidentId?{...incident,photo}:incident)};
-    const next=houses.map(item=>item.id===editing.id?nextHouse:item);persist(next);setEditing(nextHouse);setReportNotice("Foto da ocorrência substituída e salva no banco online.");
+    const next=houses.map(item=>item.id===editing.id?nextHouse:item);
+    if (await persist(next)) setEditing(nextHouse);
   };
-  const saveIncident = () => {
+  const saveIncident = async () => {
+    if (saveState === "saving") return;
     if (!editing) return;
     if (!incidentPhoto) { setReportNotice("Anexe uma foto da perda ou do roubo."); return; }
     const createdAt = new Date().toISOString();
     const incident: HouseIncident = {id:`incident-${editing.id}-${Date.now()}`,type:incidentType,note:incidentNote.trim(),photo:incidentPhoto,responsible:responsibleUser,createdAt};
     const next=houses.map(item=>item.id===editing.id?{...item,updatedAt:createdAt,incidents:[incident,...(item.incidents??[])]}:item);
-    persist(next); setEditing(next.find(item=>item.id===editing.id)??null); setIncidentNote(""); setIncidentPhoto(""); setReportNotice(`${incidentType} registrada com foto e responsável.`);
+    if (await persist(next)) { setEditing(next.find(item=>item.id===editing.id)??null); setIncidentNote(""); setIncidentPhoto(""); }
   };
   const saveUpdate = async () => {
+    if (saveState === "saving") return;
     if (!editing) return;
     const photoLabels = HOUSE_STAGE_PHOTOS[nextStatus];
     const requiredLabels = HOUSE_STAGE_OPTIONAL_PHOTOS.includes(nextStatus) ? [] : photoLabels;
@@ -1563,9 +1563,10 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     const statusChanged = nextStatus !== normalizeHouseStatus(editing.status);
     const stagePhotos = photoLabels.filter(label => photos[label]).map(label => ({ label, url: photos[label] }));
     const previousStatus = normalizeHouseStatus(editing.status);
-    const update: HouseWorkUpdate = { id: `${editing.id}-${Date.now()}`, status: nextStatus, previousStatus, note: note.trim(), responsible: responsibleUser, photos: stagePhotos.length ? stagePhotos : undefined, createdAt, completedAt: nextStatus === "SERVIÇO CONCLUÍDO" ? createdAt : undefined, origin: typeof navigator === "undefined" ? "web" : navigator.userAgent };
-    const next = houses.map(item => item.id === editing.id ? { ...item, status: nextStatus, note: note.trim() || item.note, photo: stagePhotos[0]?.url || item.photo, photos: stagePhotos.length ? stagePhotos : item.photos, updatedAt: createdAt, history: [update, ...(item.history ?? [])] } : item);
-    if (!observationChanged && !statusChanged && !stagePhotos.length) { setEditing(null); return; }
+    const storedStatus = nextStatus === "AG. EXAUSTOR" ? "ag_exaustor" : nextStatus;
+    const update: HouseWorkUpdate = { id: `${editing.id}-${Date.now()}`, status: storedStatus, previousStatus, note: note.trim(), responsible: responsibleUser, photos: stagePhotos.length ? stagePhotos : undefined, createdAt, completedAt: nextStatus === "SERVIÇO CONCLUÍDO" ? createdAt : undefined, origin: typeof navigator === "undefined" ? "web" : navigator.userAgent };
+    const next = houses.map(item => item.id === editing.id ? { ...item, status: storedStatus, note: note.trim() || item.note, photo: stagePhotos[0]?.url || item.photo, photos: stagePhotos.length ? stagePhotos : item.photos, updatedAt: createdAt, history: [update, ...(item.history ?? [])] } : item);
+    if (!observationChanged && !statusChanged && !stagePhotos.length) { setSaveError("Nenhuma alteração realizada."); return; }
     if (await persist(next)) setEditing(null);
   };
   if (mapLoading) return <section className="houses-app"><div className="work-online-loading"><RefreshCw size={24}/><div><b>A carregar {activeProject.name}</b><span>A consultar a base principal online. Nenhum valor local provisório será exibido.</span></div></div></section>;
