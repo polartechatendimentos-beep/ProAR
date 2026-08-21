@@ -1,12 +1,15 @@
 import crypto from "node:crypto";
 import { NextRequest } from "next/server";
+import { requiredSecret } from "./security-env";
 
 export const MANAGER_COOKIE = "proar_manager_session";
 const ttlSeconds = 8 * 60 * 60;
 
-const secret = () => process.env.PROAR_MANAGER_SESSION_SECRET || process.env.PROAR_TRIAL_RATE_SECRET || "proar-manager-session-change-me";
-const managerUser = () => process.env.PROAR_MANAGER_USER || "admin";
-const managerPassword = () => process.env.PROAR_MANAGER_PASSWORD || "232325";
+const secret = () => requiredSecret("PROAR_MANAGER_SESSION_SECRET");
+const managerUser = () => requiredSecret("PROAR_MANAGER_USER", 3);
+// A senha continua sendo administrada pela Vercel; a exigência de comprimento
+// não é aplicada aqui para não invalidar credenciais legadas antes da troca.
+const managerPassword = () => requiredSecret("PROAR_MANAGER_PASSWORD", 1);
 
 function b64url(input: string | Buffer) {
   return Buffer.from(input).toString("base64url");
