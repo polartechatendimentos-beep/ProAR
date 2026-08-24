@@ -1072,8 +1072,6 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
   const [validity, setValidity] = useState(7);
   const [discount, setDiscount] = useState(0);
   const [payment, setPayment] = useState("PIX");
-  const [priceTable, setPriceTable] = useState("Padrão");
-  const [selectedItemId, setSelectedItemId] = useState("");
   const [observations, setObservations] = useState("");
   const [notice, setNotice] = useState("");
   const items = catalog.filter(item => (item.kind === "Produto" || item.kind === "Serviço") && item.status !== "Inativo" && (kindFilter === "Todos" || item.kind === kindFilter) && `${item.name} ${item.id} ${item.category}`.toLowerCase().includes(search.toLowerCase()));
@@ -1120,6 +1118,8 @@ function SalesPDV({ customers, structures, records, sales, onSave }: { customers
   const [customer, setCustomer] = useState("");
   const [unit, setUnit] = useState("");
   const [payment, setPayment] = useState("PIX");
+  const [priceTable, setPriceTable] = useState("Padrão");
+  const [selectedItemId, setSelectedItemId] = useState("");
   const [notice, setNotice] = useState("");
   const [fullScreen, setFullScreen] = useState(false);
   const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
