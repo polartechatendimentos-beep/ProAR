@@ -17,6 +17,7 @@ import "./header-visibility.css";
 import "./service-order-tracking.css";
 import "./public-contracts.css";
 import "./login-minimal.css";
+import "./operational-refresh.css";
 
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
@@ -238,7 +239,9 @@ const HOUSE_STAGE_PHOTOS: Record<HouseWorkStatus, string[]> = {
   "AG. TAMPA FRIGORÍGENA": ["Sala", "Quarto Frente", "Quarto Meio", "Quarto Fundo", "Home"],
   "SERVIÇO CONCLUÍDO": [],
 };
-const HOUSE_STAGE_OPTIONAL_PHOTOS: HouseWorkStatus[] = ["AG. TUBULAÇÃO FORÇADA", "AG. EXAUSTOR"];
+// Evidências fotográficas são sempre opcionais. A ausência de foto jamais bloqueia
+// uma atualização de etapa; quando presente, ela continua vinculada ao histórico.
+const HOUSE_STAGE_OPTIONAL_PHOTOS: HouseWorkStatus[] = ["INÍCIO DE OBRA", "AG. FRIGORÍGENA", "AG. ACABAMENTO", "AG. TUBULAÇÃO FORÇADA", "AG. EXAUSTOR", "AG. TAMPA FRIGORÍGENA", "SERVIÇO CONCLUÍDO"];
 const LEGACY_HOUSE_STATUS_MAP: Record<string, HouseWorkStatus> = {
   "AG FRIGORÍGENA": "AG. FRIGORÍGENA", "AG VENTO KIT": "AG. TUBULAÇÃO FORÇADA", "VENTOKIT E FRIGORÍGENA OK": "AG. TUBULAÇÃO FORÇADA",
   "AG ACABAMENTO": "AG. ACABAMENTO", "AG EXAUSTOR": "AG. EXAUSTOR", "AG. EXAUTOR": "AG. EXAUSTOR", "AG EXAUTOR": "AG. EXAUSTOR", "ag_exautor": "AG. EXAUSTOR", "ag-exautor": "AG. EXAUSTOR", "ag_exaustor": "AG. EXAUSTOR", "ag-exaustor": "AG. EXAUSTOR", "AG TAMPA FRIGORÍGENA": "AG. TAMPA FRIGORÍGENA", "FIM": "SERVIÇO CONCLUÍDO",
@@ -1019,9 +1022,8 @@ function OrderDetail({ order, customerPhone, company, catalog, contracts, close,
             {currentOrder.reminderEnabled && <div className="reminder-fields"><label>Enviar após<input type="number" min="1" max="60" value={currentOrder.reminderAmount ?? 6} onChange={event => configureReminder({ reminderAmount: Math.max(1, Number(event.target.value) || 1) })}/></label><label>Período<select value={currentOrder.reminderUnit ?? "Meses"} onChange={event => configureReminder({ reminderUnit: event.target.value as "Dias" | "Meses" })}><option>Dias</option><option>Meses</option></select></label><label>Data prevista<input type="date" value={currentOrder.reminderDate ?? reminderDate(6, "Meses", currentOrder.checkOutAt)} onChange={event => update({ reminderDate: event.target.value })}/></label><label className="wide">Mensagem<textarea value={currentOrder.reminderMessage ?? "Olá! Está na hora de realizar a higienização preventiva do seu ar-condicionado. Vamos agendar?"} onChange={event => configureReminder({ reminderMessage: event.target.value })}/></label><div className="reminder-summary"><MessageCircle size={15}/><span><b>{customerPhone || "Cliente sem WhatsApp cadastrado"}</b><small>{currentOrder.checkOutAt ? `Agendado para ${new Date(`${currentOrder.reminderDate}T12:00:00`).toLocaleDateString("pt-BR")}` : "Será agendado automaticamente quando o técnico fizer o check-out."}</small></span></div></div>}
           </div>}
         </section>
-        <section className="order-map">
-          <div className="order-map-head"><div><span><MapPin size={16}/></span><div><small>ENDEREÇO DO ATENDIMENTO</small><strong>{order.address || "Endereço não informado"}</strong></div></div>{order.address && <a href={mapsSearch} target="_blank" rel="noreferrer">Abrir no Google Maps <ArrowRight size={13}/></a>}</div>
-          {order.address ? <iframe title={`Mapa de ${order.address}`} src={mapsEmbed} loading="lazy" referrerPolicy="no-referrer-when-downgrade"/> : <div className="map-empty"><MapPin size={24}/><p>Cadastre o endereço do cliente para visualizar o mapa.</p></div>}
+        <section className="order-map compact-address">
+          <div className="order-map-head"><div><span><MapPin size={16}/></span><div><small>ENDEREÇO DO ATENDIMENTO</small><strong>{order.address || "Endereço incompleto"}</strong><em>{order.address ? "Endereço da unidade/cliente" : "⚠ Endereço incompleto"}</em></div></div><div className="address-actions">{order.address && <a href={mapsSearch} target="_blank" rel="noreferrer"><MapPin size={13}/> Abrir no Google Maps</a>}<button type="button" disabled={!order.address} onClick={() => order.address && void navigator.clipboard?.writeText(order.address)}>Copiar endereço</button></div></div>
         </section>
         <section className="field-execution">
           <div className="execution-head"><div><span>EXECUÇÃO EM CAMPO</span><h3>Registo do atendimento</h3></div><small>Os dados são sincronizados automaticamente</small></div>
@@ -1107,6 +1109,7 @@ type SaleItem = { id: string; name: string; code: string; price: number; kind: "
 type CartItem = SaleItem & { quantity: number };
 
 function SalesPDV({ customers, structures, records, sales, onSave }: { customers: Customer[]; structures: ModuleRecord[]; records: ModuleRecord[]; sales: ModuleRecord[]; onSave: (record: ModuleRecord) => void }) {
+  const [salesView, setSalesView] = useState<"nova" | "historico" | "caixa">("nova");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"itens" | "cliente" | "pagamento" | "opcoes">("itens");
@@ -1189,11 +1192,14 @@ function SalesPDV({ customers, structures, records, sales, onSave }: { customers
     else { await document.exitFullscreen(); setFullScreen(false); }
   };
   return <section className={`pdv-page ${fullScreen ? "pdv-fullscreen" : ""}`} ref={pdvRef}>
-    <CommercialRecordsManager title="Vendas" records={sales} onEdit={editSavedSale}/>
+    <div className="sales-top"><h2>Vendas</h2><button className="primary-btn" onClick={()=>{setSalesView("nova");searchRef.current?.focus();}}><Plus size={15}/> Nova venda</button></div>
+    <nav className="sales-mode-tabs"><button className={salesView === "nova" ? "active" : ""} onClick={()=>setSalesView("nova")}>Nova venda</button><button className={salesView === "historico" ? "active" : ""} onClick={()=>setSalesView("historico")}>Histórico</button><button className={salesView === "caixa" ? "active" : ""} onClick={()=>setSalesView("caixa")}>Caixa</button></nav>
+    {salesView === "historico" ? <CommercialRecordsManager title="Vendas" records={sales} onEdit={editSavedSale}/> : salesView === "caixa" ? <div className="panel pdv-cash-panel"><h3>Caixa</h3><p>Acompanhe as vendas confirmadas e os recebimentos do turno.</p><strong>R$ {sales.filter(item=>item.status !== "Cancelada").reduce((sum,item)=>sum+(item.value??0),0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div> : <>
     <div className="pdv-command">
       <div><span className="section-kicker"><ShoppingBag size={12}/> VENDA RÁPIDA</span><h2>PDV ProAR</h2><p>Produtos e serviços em um fluxo direto, sem campos desnecessários.</p></div>
       <div className="pdv-shortcuts"><button onClick={toggleFullScreen}><Grid2X2 size={14}/>{fullScreen ? "Sair da tela cheia" : "Maximizar PDV"}</button><button onClick={() => setShortcutsOpen(true)}><Keyboard size={14}/><kbd>F1</kbd> Atalhos</button><span>Caixa aberto</span></div>
     </div>
+    <div className="pdv-context"><label>Cliente<select value={customer} onChange={event=>{setCustomer(event.target.value);setUnit("");}}><option value="">Consumidor final</option>{customers.map(item=><option key={item.doc} value={item.name}>{item.name}</option>)}</select></label><label>Tabela de preço<select defaultValue="Padrão"><option>Padrão</option><option>Varejo</option><option>Atacado</option><option>Construtora</option><option>Cliente especial</option></select></label><button className="outline-btn" onClick={()=>setShortcutsOpen(true)}><Keyboard size={14}/> Atalhos</button><button className="outline-btn" onClick={()=>setActiveTab("opcoes")}><MoreHorizontal size={14}/> Mais opções</button></div>
     {notice && <div className="pdv-notice"><CheckCircle2 size={15}/>{notice}<button onClick={() => setNotice("")}><X size={13}/></button></div>}
     <nav className="pdv-tabs" aria-label="Etapas da venda">
       <button className={activeTab === "itens" ? "active" : ""} onClick={() => setActiveTab("itens")}><ScanBarcode size={15}/><span>Itens</span><kbd>F2</kbd></button>
@@ -1223,6 +1229,7 @@ function SalesPDV({ customers, structures, records, sales, onSave }: { customers
       </aside>
     </div>
     {shortcutsOpen && <div className="shortcut-layer" role="dialog" aria-modal="true" aria-label="Atalhos do PDV"><button className="modal-backdrop" onClick={() => setShortcutsOpen(false)} aria-label="Fechar atalhos"/><div className="shortcut-card"><div><span><Keyboard size={19}/></span><div><small>PDV PROAR</small><h3>Atalhos de teclado</h3></div><button onClick={() => setShortcutsOpen(false)} aria-label="Fechar"><X size={16}/></button></div>{[["F1","Abrir esta ajuda"],["F2","Pesquisar produto ou serviço"],["F3","Selecionar cliente"],["F4","Forma de pagamento"],["F8","Desconto e outras opções"],["F10","Finalizar a venda"],["ESC","Fechar janela"]].map(([key,label]) => <p key={key}><kbd>{key}</kbd><span>{label}</span></p>)}</div></div>}
+    </>}
   </section>;
 }
 
@@ -1648,14 +1655,6 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     if (saveState === "saving") return;
     if (!editing) return;
     const photoLabels = HOUSE_STAGE_PHOTOS[nextStatus];
-    const requiredLabels = HOUSE_STAGE_OPTIONAL_PHOTOS.includes(nextStatus) ? [] : photoLabels;
-    const missing = requiredLabels.filter(label => !photos[label]);
-    if (missing.length) {
-      const message = missing.length === 1
-        ? `Adicione a foto ${missing[0]} antes de salvar esta etapa.`
-        : `Adicione as fotos obrigatórias: ${missing.join(", ")}.`;
-      setSaveError(message); setReportNotice(message); return;
-    }
     if (nextStatus === "SERVIÇO CONCLUÍDO" && !window.confirm("Confirma a conclusão desta casa? A data, o horário e o responsável serão registrados.")) return;
     const createdAt = new Date().toISOString();
     const observationChanged = note.trim() !== (editing.note ?? "").trim();
@@ -1678,6 +1677,12 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
   const completed = houses.filter(house => normalizeHouseStatus(house.status) === "SERVIÇO CONCLUÍDO").length;
   const stageProgress = houses.reduce((sum,house)=>{const index=HOUSE_STATUSES.findIndex(stage=>stage.name===normalizeHouseStatus(house.status));return sum+Math.max(0,index);},0);
   const completion = houses.length ? Math.round(stageProgress / (houses.length * (HOUSE_STATUSES.length - 1)) * 100) : 0;
+  const blockProgress = (block: string) => {
+    const entries = houses.filter(house => house.block === block);
+    const totalStages = Math.max(1, entries.length * (HOUSE_STATUSES.length - 1));
+    const progress = Math.round(entries.reduce((sum, house) => sum + Math.max(0, HOUSE_STATUSES.findIndex(stage => stage.name === normalizeHouseStatus(house.status))), 0) / totalStages * 100);
+    return { entries, progress, done: entries.filter(house => normalizeHouseStatus(house.status) === "SERVIÇO CONCLUÍDO").length, working: entries.filter(house => !["INÍCIO DE OBRA", "SERVIÇO CONCLUÍDO"].includes(normalizeHouseStatus(house.status))).length };
+  };
   const grouped = [...activeProject.blocks.map(({ block }) => ({ block, houses: visible.filter(house => house.block === block) })),{block:"Áreas Comuns",houses:visible.filter(house=>house.kind === "common")}].filter(group => group.houses.length);
   const statusColor = (status: HouseWorkStatus | LegacyHouseWorkStatus) => HOUSE_STATUSES.find(item => item.name === normalizeHouseStatus(status))?.color ?? "#64748b";
   const houseProgress = (status: HouseWorkStatus | LegacyHouseWorkStatus) => {
@@ -1751,6 +1756,7 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     {saveState !== "idle" && <div className={`work-save-bar ${saveState}`} role="status"><i/><span>{saveState === "saving" ? "Salvando..." : saveState === "saved" ? "✓ ALTERAÇÃO EFETUADA" : "Não foi possível salvar a alteração"}</span></div>}
     <div className="work-manager-bar"><div><span><Building2 size={17}/></span><label>Obra ativa<select value={activeProject.id} onChange={event=>selectWorkProject(event.target.value)}>{projects.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}</select></label><small>{activeProject.blocks.length} quadra(s) • {activeProject.blocks.reduce((total,item)=>total+item.houses,0)} casas • {activeProject.commonAreas.length} áreas comuns</small></div><button className="primary-btn" onClick={()=>setWorkManagerOpen(true)}><Plus size={15}/> Cadastrar obra</button></div>
     <div className="houses-hero"><div><span className="section-kicker"><House size={12}/> CONTROLE DE EXECUÇÃO</span><h2>{activeProject.name}</h2><p>Acompanhamento individual das casas e áreas comuns, com evidências e histórico de execução.</p></div><div className="houses-public-share"><span><MapPin size={18}/></span><div><small>ACESSO DO CLIENTE</small><b>{shareToken ? "Mapa público ativo" : "Criar link de acompanhamento"}</b><em>{shareToken ? "Atualização automática em tempo real" : "O cliente verá somente o andamento da obra"}</em></div><button onClick={refreshWorkMap}><ArrowDownRight size={14}/> Atualizar</button><button onClick={sendWorkMap}><ArrowUpRight size={14}/> Enviar</button><button onClick={sharePublicMap}><MessageCircle size={14}/>{shareToken ? "Link" : "Criar link"}</button>{shareToken && <a href={`/obra/${shareToken}`} target="_blank" rel="noreferrer"><Eye size={14}/> Visualizar</a>}</div><div className="houses-progress"><div><small>PROGRESSO GERAL</small><strong>{completion}%</strong></div><i><b style={{ width: `${completion}%` }}/></i><span>{completed} finalizadas de {houses.length} unidades cadastradas</span></div></div>
+    <div className="work-block-summary">{activeProject.blocks.map(({block})=>{const stat=blockProgress(block);return <button key={block} className={blockFilter===block?"active":""} onClick={()=>setBlockFilter(block)}><b>Quadra {block}</b><span>{stat.progress}%</span></button>})}</div>
     <div className="houses-kpis"><article><span><House size={18}/></span><div><small>TOTAL CADASTRADO</small><strong>{houses.length}</strong><em>{activeProject.blocks.length} quadras • {activeProject.commonAreas.length} áreas comuns</em></div></article>{HOUSE_STATUSES.map(status => { const total = houses.filter(house => normalizeHouseStatus(house.status) === status.name).length; return <article key={status.name}><i style={{background:status.color}}/><div><small>{status.name}</small><strong>{total}</strong><em>{Math.round(total / houses.length * 100)}% da obra</em></div></article>; })}</div>
     <div className="houses-toolbar"><label><Search size={15}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar quadra, casa ou área comum..."/></label><select value={blockFilter} onChange={event => setBlockFilter(event.target.value)}><option>Todas</option>{activeProject.blocks.map(item => <option key={item.block}>{item.block}</option>)}{activeProject.commonAreas.length > 0 && <option>Áreas Comuns</option>}</select><select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option>Todos</option>{HOUSE_STATUSES.map(item => <option key={item.name}>{item.name}</option>)}</select><span>{visible.length} unidade(s) exibida(s)</span></div>
     <div className="houses-legend">{HOUSE_STATUSES.map(status => <span key={status.name}><i style={{background:status.color}}/>{status.name}</span>)}</div>
