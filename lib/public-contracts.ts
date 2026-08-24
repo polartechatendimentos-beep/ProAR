@@ -212,6 +212,8 @@ export type EmpenhoAllocation = {
   empenhoId: string;
   serviceOrderId: string;
   certameItemId?: string;
+  quantity?: number;
+  unitValue?: number;
   amount: number;
 };
 
@@ -225,6 +227,12 @@ export function validateEmpenhoAllocations(
 ) {
   if (allocations.some(allocation => !Number.isFinite(allocation.amount) || allocation.amount <= 0)) {
     throw new CertameBalanceError("Todos os vínculos do Empenho devem possuir valor maior que zero.");
+  }
+  if (allocations.some(allocation => allocation.quantity !== undefined && (!Number.isFinite(allocation.quantity) || allocation.quantity <= 0))) {
+    throw new CertameBalanceError("A quantidade vinculada ao item do Certame deve ser maior que zero.");
+  }
+  if (new Set(allocations.map(allocation => allocation.id)).size !== allocations.length) {
+    throw new CertameBalanceError("Existem vínculos duplicados neste Empenho.");
   }
   const allocated = calculateEmpenhoAllocatedAmount(allocations);
   if (allocated > precision(empenhoValue)) {
