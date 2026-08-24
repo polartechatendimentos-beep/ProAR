@@ -1072,6 +1072,8 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
   const [validity, setValidity] = useState(7);
   const [discount, setDiscount] = useState(0);
   const [payment, setPayment] = useState("PIX");
+  const [priceTable, setPriceTable] = useState("Padrão");
+  const [selectedItemId, setSelectedItemId] = useState("");
   const [observations, setObservations] = useState("");
   const [notice, setNotice] = useState("");
   const items = catalog.filter(item => (item.kind === "Produto" || item.kind === "Serviço") && item.status !== "Inativo" && (kindFilter === "Todos" || item.kind === kindFilter) && `${item.name} ${item.id} ${item.category}`.toLowerCase().includes(search.toLowerCase()));
@@ -1138,6 +1140,21 @@ function SalesPDV({ customers, structures, records, sales, onSave }: { customers
     const existing = current.find(record => record.id === item.id);
     return existing ? current.map(record => record.id === item.id ? { ...record, quantity: record.quantity + 1 } : record) : [...current, { ...item, quantity: 1 }];
   });
+  const launchCommand = () => {
+    const command = search.trim();
+    if (!command) return;
+    const match = command.match(/^(\d+(?:[.,]\d+)?)\s*(?:x|\*)\s*(.+)$/i);
+    const quantity = match ? Number(match[1].replace(",", ".")) : 1;
+    const term = (match?.[2] ?? command).trim().toLocaleLowerCase("pt-BR");
+    const item = quickSaleCatalog.find(record => `${record.code} ${record.name}`.toLocaleLowerCase("pt-BR") === term)
+      ?? quickSaleCatalog.find(record => `${record.code} ${record.name}`.toLocaleLowerCase("pt-BR").includes(term));
+    if (!item) { setNotice("Produto ou serviço não encontrado."); return; }
+    setCart(current => {
+      const existing = current.find(record => record.id === item.id);
+      return existing ? current.map(record => record.id === item.id ? { ...record, quantity: record.quantity + quantity } : record) : [...current, { ...item, quantity }];
+    });
+    setSelectedItemId(item.id); setSearch(""); requestAnimationFrame(() => searchRef.current?.focus());
+  };
   const formatQuantity = (value: number) => value.toLocaleString("pt-BR", { maximumFractionDigits: 3 });
   const changeQuantity = (id: string, amount: number) => setCart(current => current
     .map(item => item.id === id ? { ...item, quantity: Math.round((item.quantity + amount) * 1000) / 1000 } : item)
@@ -1175,12 +1192,18 @@ function SalesPDV({ customers, structures, records, sales, onSave }: { customers
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "F1") { event.preventDefault(); setShortcutsOpen(value => !value); }
-      if (event.key === "F2") { event.preventDefault(); setActiveTab("itens"); searchRef.current?.focus(); }
-      if (event.key === "F3") { event.preventDefault(); setActiveTab("cliente"); }
+      if (event.key === "F1") { event.preventDefault(); setActiveTab("cliente"); }
+      if (event.key === "F2") { event.preventDefault(); setShortcutsOpen(value => !value); }
+      if (event.key === "F3") { event.preventDefault(); setActiveTab("opcoes"); }
       if (event.key === "F4") { event.preventDefault(); setActiveTab("pagamento"); }
-      if (event.key === "F8") { event.preventDefault(); setActiveTab("opcoes"); }
-      if (event.key === "F10") { event.preventDefault(); finishSale(); }
+      if (event.key === "F5") { event.preventDefault(); setSalesView("historico"); }
+      if (event.key === "F6") { event.preventDefault(); setActiveTab("itens"); searchRef.current?.focus(); }
+      if (event.key === "F7") { event.preventDefault(); setActiveTab("pagamento"); }
+      if (event.key === "F8") { event.preventDefault(); if (selectedItemId) setCart(current => current.filter(item => item.id !== selectedItemId)); }
+      if (event.key === "F9") { event.preventDefault(); if (cart.length && window.confirm("Cancelar a venda atual?")) { setCart([]); setSelectedItemId(""); setNotice("Venda atual cancelada. Nenhum histórico foi alterado."); } }
+      if (event.key === "F10") { event.preventDefault(); setActiveTab("opcoes"); }
+      if (event.key === "F11") { event.preventDefault(); setNotice("Vendedor: utilizador atual."); }
+      if (event.key === "F12") { event.preventDefault(); setSalesView("nova"); setShortcutsOpen(false); }
       if (event.key === "Escape") setShortcutsOpen(false);
     };
     window.addEventListener("keydown", onKeyDown);
@@ -1199,7 +1222,7 @@ function SalesPDV({ customers, structures, records, sales, onSave }: { customers
       <div><span className="section-kicker"><ShoppingBag size={12}/> VENDA RÁPIDA</span><h2>PDV ProAR</h2><p>Produtos e serviços em um fluxo direto, sem campos desnecessários.</p></div>
       <div className="pdv-shortcuts"><button onClick={toggleFullScreen}><Grid2X2 size={14}/>{fullScreen ? "Sair da tela cheia" : "Maximizar PDV"}</button><button onClick={() => setShortcutsOpen(true)}><Keyboard size={14}/><kbd>F1</kbd> Atalhos</button><span>Caixa aberto</span></div>
     </div>
-    <div className="pdv-context"><label>Cliente<select value={customer} onChange={event=>{setCustomer(event.target.value);setUnit("");}}><option value="">Consumidor final</option>{customers.map(item=><option key={item.doc} value={item.name}>{item.name}</option>)}</select></label><label>Tabela de preço<select defaultValue="Padrão"><option>Padrão</option><option>Varejo</option><option>Atacado</option><option>Construtora</option><option>Cliente especial</option></select></label><button className="outline-btn" onClick={()=>setShortcutsOpen(true)}><Keyboard size={14}/> Atalhos</button><button className="outline-btn" onClick={()=>setActiveTab("opcoes")}><MoreHorizontal size={14}/> Mais opções</button></div>
+    <div className="pdv-context"><label>Cliente<select value={customer} onChange={event=>{setCustomer(event.target.value);setUnit("");}}><option value="">Consumidor final</option>{customers.map(item=><option key={item.doc} value={item.name}>{item.name}</option>)}</select></label><label>Tabela de preço<select value={priceTable} onChange={event=>setPriceTable(event.target.value)}><option>Padrão</option><option>Varejo</option><option>Atacado</option><option>Construtora</option><option>Cliente especial</option></select></label><button className="outline-btn" onClick={()=>setShortcutsOpen(true)}><Keyboard size={14}/> Atalhos</button><button className="outline-btn" onClick={()=>setActiveTab("opcoes")}><MoreHorizontal size={14}/> Mais opções</button></div>
     {notice && <div className="pdv-notice"><CheckCircle2 size={15}/>{notice}<button onClick={() => setNotice("")}><X size={13}/></button></div>}
     <nav className="pdv-tabs" aria-label="Etapas da venda">
       <button className={activeTab === "itens" ? "active" : ""} onClick={() => setActiveTab("itens")}><ScanBarcode size={15}/><span>Itens</span><kbd>F2</kbd></button>
@@ -1207,10 +1230,10 @@ function SalesPDV({ customers, structures, records, sales, onSave }: { customers
       <button className={activeTab === "pagamento" ? "active" : ""} onClick={() => setActiveTab("pagamento")}><CreditCard size={15}/><span>Pagamento</span><kbd>F4</kbd></button>
       <button className={activeTab === "opcoes" ? "active" : ""} onClick={() => setActiveTab("opcoes")}><MoreHorizontal size={15}/><span>Mais opções</span><kbd>F8</kbd></button>
     </nav>
-    <div className="pdv-layout">
+    <div className="pdv-operational-grid"><aside className="pdv-function-keys" aria-label="Atalhos do PDV">{[["F1","Cliente"],["F2","Menu"],["F3","Operações"],["F4","Pagamento"],["F5","Recuperar venda"],["F6","Pesquisar"],["F7","Finalizar"],["F8","Cancelar item"],["F9","Cancelar venda"],["F10","Desconto"],["F11","Vendedor"],["F12","Sair"]].map(([key,label])=><button key={key} onClick={()=>key==="F4"||key==="F7"?setActiveTab("pagamento"):key==="F1"?setActiveTab("cliente"):key==="F5"?setSalesView("historico"):key==="F6"?searchRef.current?.focus():key==="F10"?setActiveTab("opcoes"):key==="F8"&&selectedItemId?setCart(current=>current.filter(item=>item.id!==selectedItemId)):undefined}><kbd>{key}</kbd><span>{label}</span></button>)}</aside><div className="pdv-layout">
       <div className="pdv-workspace panel">
         {activeTab === "itens" && <>
-          <label className="pdv-search"><Search size={19}/><input ref={searchRef} autoFocus value={search} onChange={event => setSearch(event.target.value)} placeholder="Digite produto, serviço ou código..."/><kbd>F2</kbd></label>
+          <label className="pdv-search"><Search size={19}/><input ref={searchRef} autoFocus value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event=>{if(event.key==="Enter"){event.preventDefault();launchCommand();}}} placeholder="Código, produto ou 10xCÓDIGO"/><kbd>F6</kbd></label>
           <div className="pdv-catalog">{filteredCatalog.map(item => <button key={item.id} onClick={() => addItem(item)}>
             <span className={item.kind === "Serviço" ? "service" : "product"}>{item.kind === "Serviço" ? <Wrench size={17}/> : <Package size={17}/>}</span>
             <div><small>{item.code} • {item.kind}</small><strong>{item.name}</strong></div>
@@ -1224,10 +1247,10 @@ function SalesPDV({ customers, structures, records, sales, onSave }: { customers
       </div>
       <aside className="pdv-cart panel">
         <div className="pdv-cart-head"><div><ReceiptText size={17}/><span><strong>Venda atual</strong><small>{formatQuantity(cart.reduce((sum, item) => sum + item.quantity, 0))} item(ns)</small></span></div>{cart.length > 0 && <button onClick={() => setCart([])}><Trash2 size={13}/> Limpar</button>}</div>
-        <div className="pdv-cart-items">{cart.length ? cart.map(item => <article key={item.id}><div><small>{item.code}</small><strong>{item.name}</strong><span>R$ {item.price.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} / {item.unit}</span></div><div className="quantity"><button onClick={() => changeQuantity(item.id, -1)} aria-label="Diminuir quantidade"><Minus size={12}/></button><label><input inputMode="decimal" value={quantityDrafts[item.id] ?? formatQuantity(item.quantity)} onChange={event => typeQuantity(item.id, event.target.value)} onBlur={() => confirmQuantity(item)} aria-label={`Quantidade de ${item.name}`}/><small>{item.unit}</small></label><button onClick={() => changeQuantity(item.id, 1)} aria-label="Aumentar quantidade"><Plus size={12}/></button></div><b>R$ {(item.price * item.quantity).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></article>) : <div className="pdv-empty"><ShoppingCart size={29}/><strong>Carrinho vazio</strong><p>Selecione um produto ou serviço para iniciar.</p></div>}</div>
+        <div className="pdv-cart-items">{cart.length ? cart.map(item => <article className={selectedItemId===item.id?"selected":""} key={item.id} onClick={()=>setSelectedItemId(item.id)}><div><small>{item.code}</small><strong>{item.name}</strong><span>R$ {item.price.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} / {item.unit}</span></div><div className="quantity"><button onClick={() => changeQuantity(item.id, -1)} aria-label="Diminuir quantidade"><Minus size={12}/></button><label><input inputMode="decimal" value={quantityDrafts[item.id] ?? formatQuantity(item.quantity)} onChange={event => typeQuantity(item.id, event.target.value)} onBlur={() => confirmQuantity(item)} aria-label={`Quantidade de ${item.name}`}/><small>{item.unit}</small></label><button onClick={() => changeQuantity(item.id, 1)} aria-label="Aumentar quantidade"><Plus size={12}/></button></div><b>R$ {(item.price * item.quantity).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></article>) : <div className="pdv-empty"><ShoppingCart size={29}/><strong>Carrinho vazio</strong><p>Leia um código ou pesquise um produto para iniciar.</p></div>}</div>
         <div className="pdv-summary"><p><span>Subtotal</span><b>R$ {subtotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></p>{discount > 0 && <p className="discount"><span>Desconto</span><b>− R$ {discount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></p>}<div><span>TOTAL</span><strong>R$ {total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></div><small>{customer || "Consumidor final"} • {payment}</small><button className="finish-sale" disabled={!cart.length} onClick={finishSale}><CheckCircle2 size={17}/>{editingSale ? "Atualizar pedido" : "Finalizar venda"}<kbd>F10</kbd></button></div>
       </aside>
-    </div>
+    </div></div>
     {shortcutsOpen && <div className="shortcut-layer" role="dialog" aria-modal="true" aria-label="Atalhos do PDV"><button className="modal-backdrop" onClick={() => setShortcutsOpen(false)} aria-label="Fechar atalhos"/><div className="shortcut-card"><div><span><Keyboard size={19}/></span><div><small>PDV PROAR</small><h3>Atalhos de teclado</h3></div><button onClick={() => setShortcutsOpen(false)} aria-label="Fechar"><X size={16}/></button></div>{[["F1","Abrir esta ajuda"],["F2","Pesquisar produto ou serviço"],["F3","Selecionar cliente"],["F4","Forma de pagamento"],["F8","Desconto e outras opções"],["F10","Finalizar a venda"],["ESC","Fechar janela"]].map(([key,label]) => <p key={key}><kbd>{key}</kbd><span>{label}</span></p>)}</div></div>}
     </>}
   </section>;
