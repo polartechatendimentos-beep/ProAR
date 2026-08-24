@@ -2652,25 +2652,34 @@ export default function Home() {
           for (const previousLink of previousLinks) {
             const stillPresent = currentIndexes.some(entry => entry.link.reservationMovementId === previousLink.reservationMovementId);
             if (!stillPresent && previousLink.reservationMovementId && !previousLink.executionMovementId && !previousLink.releaseMovementId) {
-              const releaseId = `CM-${movementMoment}-release-${contractItem.id}-${movements.length}`;
-              movements.push(createCertameMovement({ id:releaseId, item:contractItem, type:"Liberação", quantity:previousLink.quantity, userId:authenticatedUser?.displayName || "Sistema", origin:"Ordem de Serviço", serviceOrderId:orderForPersistence.id, correlationId:`${orderForPersistence.id}:release:${previousLink.reservationMovementId}`, existingMovements:movements }));
+              const correlationId = `${orderForPersistence.id}:release:${previousLink.reservationMovementId}`;
+              if (!movements.some(movement=>movement.correlationId===correlationId)) {
+                const releaseId = `CM-${movementMoment}-release-${contractItem.id}-${movements.length}`;
+                movements.push(createCertameMovement({ id:releaseId, item:contractItem, type:"Liberação", quantity:previousLink.quantity, userId:authenticatedUser?.displayName || "Sistema", origin:"Ordem de Serviço", serviceOrderId:orderForPersistence.id, correlationId, existingMovements:movements }));
+              }
             }
           }
 
           for (const { link, index } of currentIndexes) {
             if (!link.reservationMovementId) {
-              const reservationId = `CM-${movementMoment}-reserve-${contractItem.id}-${index}`;
-              movements.push(createCertameMovement({ id:reservationId, item:contractItem, type:"Reserva", quantity:link.quantity, userId:authenticatedUser?.displayName || "Sistema", origin:"Ordem de Serviço", serviceOrderId:orderForPersistence.id, correlationId:`${orderForPersistence.id}:reserve:${contractItem.id}:${index}`, existingMovements:movements }));
+              const correlationId = `${orderForPersistence.id}:reserve:${contractItem.id}:${index}`;
+              const existingReservation = movements.find(movement=>movement.correlationId===correlationId);
+              const reservationId = existingReservation?.id ?? `CM-${movementMoment}-reserve-${contractItem.id}-${index}`;
+              if (!existingReservation) movements.push(createCertameMovement({ id:reservationId, item:contractItem, type:"Reserva", quantity:link.quantity, userId:authenticatedUser?.displayName || "Sistema", origin:"Ordem de Serviço", serviceOrderId:orderForPersistence.id, correlationId, existingMovements:movements }));
               nextContractItems[index] = { ...link, reservationMovementId:reservationId };
             }
             const persistedLink = nextContractItems[index];
             if (shouldExecute && !persistedLink.executionMovementId && !persistedLink.releaseMovementId) {
-              const executionId = `CM-${movementMoment}-execute-${contractItem.id}-${index}`;
-              movements.push(createCertameMovement({ id:executionId, item:contractItem, type:"Execução", quantity:persistedLink.quantity, userId:authenticatedUser?.displayName || "Sistema", origin:"Conclusão da Ordem de Serviço", serviceOrderId:orderForPersistence.id, correlationId:`${orderForPersistence.id}:execute:${persistedLink.reservationMovementId}`, existingMovements:movements }));
+              const correlationId = `${orderForPersistence.id}:execute:${persistedLink.reservationMovementId}`;
+              const existingExecution = movements.find(movement=>movement.correlationId===correlationId);
+              const executionId = existingExecution?.id ?? `CM-${movementMoment}-execute-${contractItem.id}-${index}`;
+              if (!existingExecution) movements.push(createCertameMovement({ id:executionId, item:contractItem, type:"Execução", quantity:persistedLink.quantity, userId:authenticatedUser?.displayName || "Sistema", origin:"Conclusão da Ordem de Serviço", serviceOrderId:orderForPersistence.id, correlationId, existingMovements:movements }));
               nextContractItems[index] = { ...persistedLink, executionMovementId:executionId };
             } else if (shouldRelease && !persistedLink.executionMovementId && !persistedLink.releaseMovementId) {
-              const releaseId = `CM-${movementMoment}-cancel-${contractItem.id}-${index}`;
-              movements.push(createCertameMovement({ id:releaseId, item:contractItem, type:"Liberação", quantity:persistedLink.quantity, userId:authenticatedUser?.displayName || "Sistema", origin:"Cancelamento da Ordem de Serviço", serviceOrderId:orderForPersistence.id, correlationId:`${orderForPersistence.id}:cancel:${persistedLink.reservationMovementId}`, existingMovements:movements }));
+              const correlationId = `${orderForPersistence.id}:cancel:${persistedLink.reservationMovementId}`;
+              const existingRelease = movements.find(movement=>movement.correlationId===correlationId);
+              const releaseId = existingRelease?.id ?? `CM-${movementMoment}-cancel-${contractItem.id}-${index}`;
+              if (!existingRelease) movements.push(createCertameMovement({ id:releaseId, item:contractItem, type:"Liberação", quantity:persistedLink.quantity, userId:authenticatedUser?.displayName || "Sistema", origin:"Cancelamento da Ordem de Serviço", serviceOrderId:orderForPersistence.id, correlationId, existingMovements:movements }));
               nextContractItems[index] = { ...persistedLink, releaseMovementId:releaseId };
             }
           }
