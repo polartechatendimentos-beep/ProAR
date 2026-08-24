@@ -58,6 +58,18 @@ const money = (value: number) => value.toLocaleString("pt-BR", {
   currency: "BRL",
 });
 
+function downloadContractReport(record: PublicContractRecord, report: "extrato" | "saldo" | "movimentacoes") {
+  const rows: (string | number)[][] = report === "movimentacoes"
+    ? [["Certame", "Item", "Tipo", "Reservado", "Executado", "Cancelado", "OS", "Data", "Origem"], ...(record.certameItems ?? []).flatMap(item => (item.movements ?? []).map(movement => [record.name, item.description, movement.type, movement.reservedDelta, movement.executedDelta, movement.cancelledDelta, movement.serviceOrderId ?? "", movement.createdAt, movement.origin]))]
+    : [["Certame", "Código", "Item", "Unidade", "Contratado", "Reservado", "Executado", "Saldo disponível", "Valor unitário", "Valor disponível"], ...(record.certameItems ?? []).map(item => { const balance=calculateCertameItemBalance(item,item.movements??[]);return [record.name,item.code??"",item.description,item.unit,balance.contractedQuantity,balance.reservedQuantity,balance.executedQuantity,balance.availableQuantity,item.unitValue,balance.availableValue]; })];
+  const csv = rows.map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(";")).join("\n");
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([`\ufeff${csv}`], { type:"text/csv;charset=utf-8" }));
+  link.download = `${report}-${record.id}.csv`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
 export function PublicContractsPanel({
   records,
   customers,
@@ -233,6 +245,7 @@ export function PublicContractsPanel({
         <p>{record.contractObject || record.description}</p>
         <div><span>Processo <b>{record.administrativeProcess || "Não informado"}</b></span><span>Contrato <b>{record.contractNumber || "Não informado"}</b></span><span>Itens <b>{record.certameItems?.length ?? 0}</b></span><span>Valor <b>{money(record.value ?? 0)}</b></span></div>
         <section>{(record.certameItems ?? []).map(item => { const balance = calculateCertameItemBalance(item, item.movements ?? []); return <div key={item.id}><span><b>{item.code || "Sem código"}</b>{item.description}</span><span>Contratado <b>{balance.contractedQuantity}</b></span><span>Reservado <b>{balance.reservedQuantity}</b></span><span>Executado <b>{balance.executedQuantity}</b></span><span>Saldo disponível <b>{balance.availableQuantity}</b></span></div>; })}</section>
+        <footer className="public-contract-report-actions"><button type="button" onClick={()=>downloadContractReport(record,"extrato")}>Extrato do Certame</button><button type="button" onClick={()=>downloadContractReport(record,"saldo")}>Saldo por item</button><button type="button" onClick={()=>downloadContractReport(record,"movimentacoes")}>Movimentações</button></footer>
       </article>)}
       {!records.length && <div className="linked-empty panel"><Landmark size={24}/><h4>Nenhum Certame cadastrado</h4><p>O monitor de oportunidades continua disponível abaixo. Cadastros contratuais só serão criados após confirmação do utilizador.</p></div>}
     </div>
