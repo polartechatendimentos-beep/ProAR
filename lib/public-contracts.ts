@@ -132,6 +132,9 @@ export function calculateCertameItemBalance(
 
 export function createCertameMovement(input: CertameMovementInput): CertameMovement {
   assertPositiveQuantity(input.quantity);
+  // A correlação representa uma operação de negócio (reserva, execução ou liberação)
+  // e precisa ser única mesmo se a chamada for repetida por reconexão ou retry.
+  assertUniqueMovement(input.existingMovements, { id: input.id, correlationId: input.correlationId });
   const quantity = precision(input.quantity);
   const balance = calculateCertameItemBalance(input.item, input.existingMovements);
 
