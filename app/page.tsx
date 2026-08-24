@@ -16,6 +16,7 @@ import "./pdv-layout-refinement.css";
 import "./header-visibility.css";
 import "./service-order-tracking.css";
 import "./public-contracts.css";
+import "./login-minimal.css";
 
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
@@ -33,6 +34,7 @@ import { PublicContractsPanel, type PublicContractRecord } from "@/components/Pu
 import { PublicCommitmentsPanel, type PublicCommitmentRecord } from "@/components/PublicCommitmentsPanel";
 import { TechnicalCompliancePanel } from "@/components/TechnicalCompliancePanel";
 import { calculateCertameItemBalance, createCertameMovement, financialOutstandingValue, financialRealizedValue } from "@/lib/public-contracts";
+import { improveTechnicalText } from "@/lib/text-assist";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type NavItem = { icon: IconType; name: string; badge?: string };
@@ -644,8 +646,11 @@ function quickPrintServiceOrder(order: ServiceOrder, company: TenantCompany) {
 
 function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders, customers, company }: { onOpen: (name: string) => void; onSelect: (order: ServiceOrder) => void; onDelete: (order: ServiceOrder) => void; onUpdate: (order: ServiceOrder) => void; serviceOrders: ServiceOrder[]; customers: Customer[]; company: TenantCompany }) {
   const [query, setQuery] = useState("");
+  const [visibility, setVisibility] = useState("Em aberto");
   const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
-  const visibleOrders = serviceOrders.filter(order => { const customer = customers.find(item => item.name === order.client); return !query.trim() || normalizeSearch([order.id, order.client, order.unit, order.address, order.tech, customer?.legalName, customer?.tradeName, customer?.doc, customer?.phone].filter(Boolean).join(" ")).includes(normalizeSearch(query)); });
+  const todayIso = new Date().toISOString().slice(0,10);
+  const isClosed = (status:string) => /conclu[ií]d|cancelad/i.test(status);
+  const visibleOrders = serviceOrders.filter(order => { const customer = customers.find(item => item.name === order.client); const matchesSearch=!query.trim() || normalizeSearch([order.id, order.client, order.unit, order.address, order.tech, customer?.legalName, customer?.tradeName, customer?.doc, customer?.phone].filter(Boolean).join(" ")).includes(normalizeSearch(query)); const matchesFilter=visibility === "Todas" || visibility === "Concluídas" ? /conclu[ií]d/i.test(order.status) : visibility === "Canceladas" ? /cancelad/i.test(order.status) : visibility === "Hoje" ? order.date === todayIso : !isClosed(order.status); return matchesSearch && matchesFilter; });
   serviceOrders = visibleOrders;
   const today = new Date().toISOString().slice(0, 10);
   const reviewAlerts = serviceOrders.filter(order => {
@@ -680,7 +685,7 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders, cu
     } catch (error) { onUpdate({ ...order, nfseStatus:"Erro", nfseValue:value }); window.alert(error instanceof Error ? error.message : "Não foi possível emitir a NFS-e."); }
   };
   return <section className="module-page service-orders">
-    <div className="module-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Pesquisar por cliente, OS, CPF/CNPJ, telefone ou unidade..."/></label><button className="outline-btn"><Filter size={14}/> Filtros</button><ContextReports title="Ordens de Serviço" rows={serviceOrders.map(order=>[order.id,order.client,order.status])} options={["Imprimir Ordem de Serviço","Relatório técnico","Certificado de higienização","Relatório fotográfico","Relatório da assistência técnica","Comprovante de entrega","Histórico completo da OS"]}/><button className="primary-btn" onClick={() => onOpen("Nova ordem de serviço")}><Plus size={16}/> Nova ordem de serviço</button></div>
+    <div className="module-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Pesquisar por cliente, OS, CPF/CNPJ, telefone ou unidade..."/></label><label>Exibir<select value={visibility} onChange={event=>setVisibility(event.target.value)}><option>Em aberto</option><option>Todas</option><option>Concluídas</option><option>Canceladas</option><option>Hoje</option></select></label><ContextReports title="Ordens de Serviço" rows={serviceOrders.map(order=>[order.id,order.client,order.status])} options={["Imprimir Ordem de Serviço","Relatório técnico","Certificado de higienização","Relatório fotográfico","Relatório da assistência técnica","Comprovante de entrega","Histórico completo da OS"]}/><button className="primary-btn" onClick={() => onOpen("Nova ordem de serviço")}><Plus size={16}/> Nova ordem de serviço</button></div>
     <div className="module-summary">
       <article><span><ClipboardList size={19}/></span><div><small>ORDENS ABERTAS</small><strong>{serviceOrders.filter(item => item.status !== "Concluída").length}</strong><em>{serviceOrders.filter(item => item.date === today).length} para hoje</em></div></article>
       <article><span><UserCheck size={19}/></span><div><small>TÉCNICOS EMPENHADOS</small><strong>{new Set(serviceOrders.map(item => item.tech).filter(Boolean)).size}</strong><em>Cadastros reais</em></div></article>
@@ -955,7 +960,7 @@ function OrderDetail({ order, customerPhone, company, catalog, contracts, close,
         </section>
         <section className="os-status-panel">
           <div className="execution-head"><div><span>ATUALIZAÇÃO OPERACIONAL</span><h3>Registrar status, fotos e comunicação</h3></div><small>Observações internas nunca são enviadas ao cliente.</small></div>
-          <div className="status-update-grid"><label>Novo status<select value={statusDraft} onChange={event => {setStatusDraft(event.target.value);setDirty(true);}}>{["Aberta","Agendada","Cliente confirmado","Técnico a caminho","Técnico no local","Em atendimento","Aguardando material","Aguardando aprovação","Aguardando retorno","Serviço concluído","Aguardando assinatura","Concluída","Reagendada","Cancelada"].map(status => <option key={status}>{status}</option>)}</select></label><label>Observação técnica interna<textarea value={internalUpdate} onChange={event => {setInternalUpdate(event.target.value);setDirty(true);}} placeholder="Visível somente para a equipe..."/></label><label>Atualização para o cliente<textarea value={customerUpdate} onChange={event => {setCustomerUpdate(event.target.value);setDirty(true);}} placeholder="Texto que será exibido no acompanhamento e preparado para WhatsApp..."/></label><label className="os-photo-upload"><Camera size={18}/><b>Adicionar fotos</b><small>{statusPhotos.length ? `${statusPhotos.length} foto(s) anexada(s)` : "Fotos opcionais nesta etapa"}</small><input type="file" accept="image/*" multiple onChange={event => void Promise.all(Array.from(event.target.files ?? []).map(attachStatusPhoto))}/></label></div>
+          <div className="status-update-grid"><label>Novo status<select value={statusDraft} onChange={event => {setStatusDraft(event.target.value);setDirty(true);}}>{["Aberta","Agendada","Cliente confirmado","Técnico a caminho","Técnico no local","Em atendimento","Aguardando material","Aguardando aprovação","Aguardando retorno","Serviço concluído","Aguardando assinatura","Concluída","Reagendada","Cancelada"].map(status => <option key={status}>{status}</option>)}</select></label><label>Observação técnica interna<textarea value={internalUpdate} onChange={event => {setInternalUpdate(event.target.value);setDirty(true);}} placeholder="Visível somente para a equipe..."/><button type="button" className="outline-btn" onClick={()=>{const suggestion=improveTechnicalText(internalUpdate);if(suggestion){setInternalUpdate(suggestion);setDirty(true);}}}>✦ Melhorar com IA</button></label><label>Atualização para o cliente<textarea value={customerUpdate} onChange={event => {setCustomerUpdate(event.target.value);setDirty(true);}} placeholder="Texto que será exibido no acompanhamento e preparado para WhatsApp..."/><button type="button" className="outline-btn" onClick={()=>{const suggestion=improveTechnicalText(customerUpdate,"cliente");if(suggestion){setCustomerUpdate(suggestion);setDirty(true);}}}>✦ Melhorar com IA</button></label><label className="os-photo-upload"><Camera size={18}/><b>Adicionar fotos</b><small>{statusPhotos.length ? `${statusPhotos.length} foto(s) anexada(s)` : "Fotos opcionais nesta etapa"}</small><input type="file" accept="image/*" multiple onChange={event => void Promise.all(Array.from(event.target.files ?? []).map(attachStatusPhoto))}/></label></div>
           {statusPhotos.length > 0 && <div className="os-photo-strip">{statusPhotos.map((photo,index)=><figure key={`${photo.slice(-18)}-${index}`}><img src={photo} alt={`Atualização ${index+1}`}/><button type="button" onClick={()=>setStatusPhotos(current=>current.filter((_,photoIndex)=>photoIndex!==index))}><X size={12}/></button></figure>)}</div>}
           <div className="status-update-actions"><button className="outline-btn" type="button" onClick={requestAssistance}><Package size={15}/> Levar equipamento para assistência</button><button className="primary-btn" type="button" onClick={registerStatusUpdate}><CheckCircle2 size={15}/> Registrar atualização</button></div>
         </section>
@@ -2012,24 +2017,11 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
   return <main className="login-page">
     <section className="login-brand">
       <img className="login-official-logo" src={tenantCompany?.logo_path || tenantCompany?.brand_config?.logo || "/proar-logo.png"} alt={tenantCompany?.trade_name || "ProAR — Gestão de Serviços"}/>
-      <span> SISTEMA DE GESTÃO DE SERVIÇOS</span>
-      <h1>{tenantCompany?.trade_name ? `Gestão completa para ${tenantCompany.trade_name}` : <>Gestão completa para sua empresa de <em>ar condicionado</em></>}</h1>
-      <div className="login-modules" aria-label="Módulos do sistema">
-        {[[UsersRound, "Clientes"], [FileText, "Orçamentos"], [ClipboardList, "Ordens de Serviço"], [Boxes, "Equipamentos"], [Package, "Estoque"], [WalletCards, "Financeiro"], [Wrench, "Obras"], [FileChartColumn, "Relatórios"]].map(([Icon, label]) => {
-          const ModuleIcon = Icon as IconType;
-          return <div className="login-module" key={label as string}><ModuleIcon size={27}/><small>{label as string}</small></div>;
-        })}
-      </div>
-      <div className="login-benefits">
-        <div><ShieldCheck size={24}/><b>Mais controle</b><small>Organize todas as áreas da sua empresa</small></div>
-        <div><Zap size={24}/><b>Mais eficiência</b><small>Automatize processos e ganhe tempo</small></div>
-        <div><CircleDollarSign size={24}/><b>Mais lucro</b><small>Reduza custos e acompanhe resultados</small></div>
-        <div><Grid2X2 size={24}/><b>Tudo em um só lugar</b><small>Informações integradas e seguras</small></div>
-      </div>
+      <span>SISTEMA DE GESTÃO</span>
     </section>
     <section className="login-panel">
       <form onSubmit={submit}>
-        <header className="login-form-heading"><h2>Bem-vindo de volta!</h2><p>Acesse sua conta para continuar</p></header>
+        <header className="login-form-heading"><h2>Acessar o ProAR</h2><p>Entre com suas credenciais</p></header>
         <i className="login-heading-line"/>
         <label>E-mail ou Usuário<div className="login-input"><UserRound size={19}/><input autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} placeholder="Digite seu e-mail ou usuário"/></div></label>
         <label>Senha<div className="password-field login-input"><LockKeyhole size={19}/><input type={showPassword ? "text" : "password"} autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} placeholder="Digite sua senha"/><button type="button" aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"} onClick={() => setShowPassword(value => !value)}>{showPassword ? <EyeOff size={19}/> : <Eye size={19}/>}</button></div></label>
@@ -2317,7 +2309,7 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
           <button type="button" disabled={!address.trim()} onClick={() => { setShowAddressMap(true); setAddressValidated(true); }}>{addressValidated ? <CheckCircle2 size={15}/> : <Search size={15}/>} {addressValidated ? "Endereço validado" : "Buscar e validar"}</button>
           {showAddressMap && address.trim() && <div className="address-map-preview"><iframe title={`Validação de ${address}`} src={`https://www.google.com/maps?q=${encodeURIComponent(address)}&output=embed`} loading="lazy" referrerPolicy="no-referrer-when-downgrade"/><a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`} target="_blank" rel="noreferrer">Ver resultado completo no Google Maps <ArrowRight size={12}/></a></div>}
         </div>
-        <label className="wide">Observações<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="Informações adicionais do cliente..."/></label>
+        <label className="wide">Observações<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="Informações adicionais do cliente..."/><button type="button" className="outline-btn" onClick={()=>setDescription(improveTechnicalText(description))}>✦ Melhorar com IA</button></label>
       </> : <>
         {isCatalogRegistration && <div className="wide kind-selector"><span>TIPO DO CADASTRO</span><label className={recordKind === "Serviço" ? "active" : ""}><input type="radio" name="record-kind" checked={recordKind === "Serviço"} onChange={() => setRecordKind("Serviço")}/><Wrench size={17}/><div><b>Serviço</b><small>Será disponibilizado nas ordens de serviço</small></div></label><label className={recordKind === "Produto" ? "active" : ""}><input type="radio" name="record-kind" checked={recordKind === "Produto"} onChange={() => setRecordKind("Produto")}/><Package size={17}/><div><b>Produto</b><small>Item físico, peça ou material de estoque</small></div></label></div>}
         {managementFlows[requestedModule] && <div className="wide module-form-guidance"><span><Grid2X2 size={18}/></span><div><b>Cadastro integrado de ${requestedModule.toLowerCase()}</b><small>Ao salvar, o registro ficará disponível nas abas, filtros e relatórios deste fluxo.</small></div></div>}
@@ -2390,7 +2382,7 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
 
         <label>{requestedModule === "Funcionários" ? "Telefone / WhatsApp" : "Telefone / contato"}<input placeholder="(00) 00000-0000"/></label><label>{requestedModule === "Funcionários" ? "Data de admissão" : requestedModule === "Compras" ? "Previsão de entrega" : requestedModule === "Financeiro" ? "Data de vencimento" : "Data"}<input type="date" value={date} onChange={event => setDate(event.target.value)}/></label>
         {requestedModule === "Funcionários" && <div className="wide permission-matrix"><div className="permission-head"><div><span>MATRIZ DE PERMISSÕES</span><h3>Acesso por módulo</h3></div><small>O menu e as ações respeitam o perfil selecionado.</small></div><div className="permission-table"><div className="permission-row permission-labels"><b>MÓDULO</b>{permissionActions.map(action => <b key={action}>{action}</b>)}</div>{permissionModules.map(module => <div className="permission-row" key={module}><strong>{module}</strong>{permissionActions.map(action => <label key={action}><input type="checkbox" checked={employeePermissions[module]?.includes(action) ?? false} onChange={() => togglePermission(module, action)}/><span/></label>)}</div>)}</div></div>}
-        <label className="wide">Descrição / observações<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder={requestedModule === "Funcionários" ? "Observações internas sobre o funcionário..." : "Inclua os detalhes deste cadastro..."}/></label>
+        <label className="wide">Descrição / observações<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder={requestedModule === "Funcionários" ? "Observações internas sobre o funcionário..." : "Inclua os detalhes deste cadastro..."}/>{isCatalogRegistration && <button type="button" className="outline-btn" onClick={()=>setDescription(improveTechnicalText(description))}>✦ Melhorar com IA</button>}</label>
         </>}
       </>}
     </>}
