@@ -2021,10 +2021,6 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
     }
   };
   return <main className="login-page">
-    <section className="login-brand">
-      <img className="login-official-logo" src={tenantCompany?.logo_path || tenantCompany?.brand_config?.logo || "/proar-logo.png"} alt={tenantCompany?.trade_name || "ProAR — Gestão de Serviços"}/>
-      <span>SISTEMA DE GESTÃO</span>
-    </section>
     <section className="login-panel">
       <form onSubmit={submit}>
         <header className="login-form-heading"><h2>Acessar o ProAR</h2><p>Entre com suas credenciais</p></header>
