@@ -2697,7 +2697,9 @@ export default function Home() {
       const stockPrefix = `OS-${updatedOrder.id.replace(/\D/g, "")}-`;
       const hasReceivable = (updatedModules.Financeiro ?? []).some(item => item.id === receivableId || item.serviceOrderId === updatedOrder.id);
       const productsUsed = (updatedOrder.catalogItems ?? []).filter(item => item.kind === "Produto");
-      if (!hasReceivable) updatedModules = { ...updatedModules, Financeiro: [{ id: receivableId, name: `Conta a receber • ${updatedOrder.id}`, client: updatedOrder.client, description: `Gerada pela conclusão da OS ${updatedOrder.id}`, createdAt: new Date().toLocaleString("pt-BR"), status: "Em aberto", date: new Date().toISOString().slice(0,10), value: 0, transactionType: "Receber", serviceOrderId: updatedOrder.id }, ...(updatedModules.Financeiro ?? [])] };
+      // OS vinculada a Certame segue o fluxo público: execução → fechamento → Empenho → faturamento.
+      // A conclusão técnica não cria Conta a Receber antecipada e não altera lançamentos históricos.
+      if (!updatedOrder.certameId && !hasReceivable) updatedModules = { ...updatedModules, Financeiro: [{ id: receivableId, name: `Conta a receber • ${updatedOrder.id}`, client: updatedOrder.client, description: `Gerada pela conclusão da OS ${updatedOrder.id}`, createdAt: new Date().toLocaleString("pt-BR"), status: "Em aberto", date: new Date().toISOString().slice(0,10), value: 0, transactionType: "Receber", serviceOrderId: updatedOrder.id }, ...(updatedModules.Financeiro ?? [])] };
       const stockEntries = productsUsed.filter(item => !(updatedModules.Estoque ?? []).some(stock => stock.id === `${stockPrefix}${item.id}`)).map(item => ({ id: `${stockPrefix}${item.id}`, name: `Saída por OS • ${item.name}`, client: updatedOrder.client, description: `Movimentação vinculada à ${updatedOrder.id}`, createdAt: new Date().toLocaleString("pt-BR"), status: "Concluído", category: "Saída por OS", serviceOrderId: updatedOrder.id, kind: "Produto" as const }));
       if (stockEntries.length) updatedModules = { ...updatedModules, Estoque: [...stockEntries, ...(updatedModules.Estoque ?? [])] };
     }
