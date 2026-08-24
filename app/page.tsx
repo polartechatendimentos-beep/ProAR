@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { PublicContractsPanel, type PublicContractRecord } from "@/components/PublicContractsPanel";
 import { PublicCommitmentsPanel, type PublicCommitmentRecord } from "@/components/PublicCommitmentsPanel";
+import { TechnicalCompliancePanel } from "@/components/TechnicalCompliancePanel";
 import { calculateCertameItemBalance, createCertameMovement, financialOutstandingValue, financialRealizedValue } from "@/lib/public-contracts";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
@@ -53,6 +54,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
   ]},
   { label: "OPERAÇÃO", items: [
     { icon: ClipboardList, name: "Ordens de serviço" },
+    { icon: ShieldCheck, name: "PMOC e conformidade" },
     { icon: Building2, name: "Obras" },
     { icon: Wrench, name: "Serviços" },
     { icon: Package, name: "Produtos" },
