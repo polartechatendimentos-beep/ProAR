@@ -30,6 +30,7 @@ import {
   UsersRound, WalletCards, Warehouse, Wrench, X, Zap, House, History, ImageIcon, RefreshCw
 } from "lucide-react";
 import { PublicContractsPanel, type PublicContractRecord } from "@/components/PublicContractsPanel";
+import { calculateCertameItemBalance, createCertameMovement } from "@/lib/public-contracts";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type NavItem = { icon: IconType; name: string; badge?: string };
@@ -100,6 +101,16 @@ type ServiceOrder = {
   assistance?: AssistanceEntry;
   pmoc?: PmocRecord;
   pmocExecutions?: PmocExecution[];
+  certameId?: string;
+  contractItems?: {
+    certameItemId: string;
+    description: string;
+    quantity: number;
+    unitValue: number;
+    reservationMovementId?: string;
+    executionMovementId?: string;
+    releaseMovementId?: string;
+  }[];
 };
 
 type ServiceOrderTimelineEvent = {
@@ -746,13 +757,15 @@ function SignaturePad({ label, value, onChange }: { label: string; value?: strin
   </div>;
 }
 
-function OrderDetail({ order, customerPhone, company, catalog, close, onUpdate, canEdit }: { order: ServiceOrder; customerPhone?: string; company: TenantCompany; catalog: ModuleRecord[]; close: () => void; onUpdate: (order: ServiceOrder) => Promise<unknown>; canEdit: boolean }) {
+function OrderDetail({ order, customerPhone, company, catalog, contracts, close, onUpdate, canEdit }: { order: ServiceOrder; customerPhone?: string; company: TenantCompany; catalog: ModuleRecord[]; contracts: PublicContractRecord[]; close: () => void; onUpdate: (order: ServiceOrder) => Promise<unknown>; canEdit: boolean }) {
   const [currentOrder, setCurrentOrder] = useState(order);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveNotice, setSaveNotice] = useState("");
   const [itemsTab, setItemsTab] = useState<"Serviços" | "Produtos">("Serviços");
   const [itemSearch, setItemSearch] = useState("");
+  const [contractItemId, setContractItemId] = useState("");
+  const [contractQuantity, setContractQuantity] = useState("1");
   const [statusDraft, setStatusDraft] = useState(order.status);
   const [internalUpdate, setInternalUpdate] = useState("");
   const [customerUpdate, setCustomerUpdate] = useState("");
@@ -791,8 +804,8 @@ function OrderDetail({ order, customerPhone, company, catalog, close, onUpdate, 
       const statusChanged = statusDraft !== currentOrder.status;
       const hasUpdate = statusChanged || Boolean(internalUpdate.trim() || customerUpdate.trim() || statusPhotos.length);
       const savedOrder = hasUpdate ? { ...currentOrder, trackingToken:trackingToken(), status: statusDraft, tone: toneForStatus(statusDraft), timeline: [...(currentOrder.timeline ?? []), { id:`evt-save-${Date.now()}`, createdAt:new Date().toISOString(), previousStatus:currentOrder.status, status:statusDraft, technician:currentOrder.tech, internalNote:internalUpdate.trim() || (statusChanged ? "Status atualizado pelo salvamento principal." : undefined), customerNote:customerUpdate.trim() || undefined, photos:statusPhotos.length ? statusPhotos : undefined, customerVisible:Boolean(customerUpdate.trim() || statusPhotos.length), whatsappQueued:Boolean(whatsappPhone && currentOrder.whatsappUpdatesEnabled !== false && (customerUpdate.trim() || statusChanged)) }] } : currentOrder;
-      await onUpdate(savedOrder);
-      setCurrentOrder(savedOrder); setStatusDraft(savedOrder.status); setInternalUpdate(""); setCustomerUpdate(""); setStatusPhotos([]); setDirty(false); setSaveNotice("✓ Alterações salvas");
+      const confirmedOrder = await onUpdate(savedOrder) as ServiceOrder;
+      setCurrentOrder(confirmedOrder); setStatusDraft(confirmedOrder.status); setInternalUpdate(""); setCustomerUpdate(""); setStatusPhotos([]); setDirty(false); setSaveNotice("✓ Alterações salvas");
       window.setTimeout(() => setSaveNotice(""), 2200);
     } catch { setSaveNotice("Não foi possível salvar esta Ordem de Serviço. Verifique os dados e tente novamente."); }
     finally { setSaving(false); }
@@ -881,6 +894,21 @@ function OrderDetail({ order, customerPhone, company, catalog, close, onUpdate, 
   };
   const removeCatalogItem = (id: string) => update({ catalogItems: (currentOrder.catalogItems ?? []).filter(item => item.id !== id) });
   const availableCatalogItems = catalog.filter(item => (item.kind || "Serviço") === itemsTab.slice(0,-1) && !currentOrder.catalogItems?.some(existing => existing.id === item.id) && `${item.name} ${item.description || ""}`.toLowerCase().includes(itemSearch.toLowerCase()));
+  const availableContracts = contracts.filter(contract => contract.client === currentOrder.client && !/encerr|suspens|cancel/i.test(contract.status ?? ""));
+  const selectedContract = availableContracts.find(contract => contract.id === currentOrder.certameId);
+  const selectedContractItem = selectedContract?.certameItems?.find(item => item.id === contractItemId);
+  const addContractItem = () => {
+    if (!selectedContractItem) return;
+    const quantity = Number(contractQuantity);
+    const balance = calculateCertameItemBalance(selectedContractItem, selectedContractItem.movements ?? []);
+    const alreadyLinked = (currentOrder.contractItems ?? []).filter(item => item.certameItemId === selectedContractItem.id).reduce((sum, item) => sum + item.quantity, 0);
+    if (!Number.isFinite(quantity) || quantity <= 0 || quantity + alreadyLinked > balance.availableQuantity) {
+      setSaveNotice(`Saldo do Certame insuficiente. Disponível para novas reservas: ${balance.availableQuantity}.`);
+      return;
+    }
+    update({ contractItems: [...(currentOrder.contractItems ?? []), { certameItemId:selectedContractItem.id, description:selectedContractItem.description, quantity, unitValue:selectedContractItem.unitValue }] });
+    setContractItemId(""); setContractQuantity("1"); setSaveNotice("");
+  };
   const formatMoment = (value?: string) => value ? new Date(value).toLocaleString("pt-BR") : "";
   return <div className="modal-layer" role="dialog" aria-modal="true" aria-label={`Ordem ${order.id}`}>
     <button className="modal-backdrop" onClick={requestClose} aria-label="Fechar ordem"/>
@@ -911,6 +939,16 @@ function OrderDetail({ order, customerPhone, company, catalog, close, onUpdate, 
           {statusPhotos.length > 0 && <div className="os-photo-strip">{statusPhotos.map((photo,index)=><figure key={`${photo.slice(-18)}-${index}`}><img src={photo} alt={`Atualização ${index+1}`}/><button type="button" onClick={()=>setStatusPhotos(current=>current.filter((_,photoIndex)=>photoIndex!==index))}><X size={12}/></button></figure>)}</div>}
           <div className="status-update-actions"><button className="outline-btn" type="button" onClick={requestAssistance}><Package size={15}/> Levar equipamento para assistência</button><button className="primary-btn" type="button" onClick={registerStatusUpdate}><CheckCircle2 size={15}/> Registrar atualização</button></div>
         </section>
+        {availableContracts.length > 0 && <section className="os-contract-panel">
+          <div className="execution-head"><div><span>CONTROLE CONTRATUAL INTERNO</span><h3>Itens utilizados do Certame</h3></div><small>Não substitui os serviços executados e não aparece no relatório técnico do cliente.</small></div>
+          <div className="os-contract-selector">
+            <label>Contratação / Certame<select value={currentOrder.certameId ?? ""} onChange={event => update({ certameId:event.target.value || undefined, contractItems:[] })}><option value="">Selecionar Certame</option>{availableContracts.map(contract => <option key={contract.id} value={contract.id}>{contract.name} • {contract.administrativeProcess || contract.id}</option>)}</select></label>
+            <label>Item contratual<select value={contractItemId} disabled={!selectedContract} onChange={event => setContractItemId(event.target.value)}><option value="">Selecionar item</option>{(selectedContract?.certameItems ?? []).map(item => { const balance=calculateCertameItemBalance(item,item.movements??[]); return <option key={item.id} value={item.id}>{item.code || "Item"} • {item.description} • saldo {balance.availableQuantity}</option>; })}</select></label>
+            <label>Quantidade<input type="number" min="0.001" step="0.001" value={contractQuantity} onChange={event => setContractQuantity(event.target.value)}/></label>
+            <button className="outline-btn" type="button" disabled={!selectedContractItem} onClick={addContractItem}><Plus size={14}/> Reservar ao salvar</button>
+          </div>
+          {(currentOrder.contractItems ?? []).length > 0 && <div className="os-contract-items">{currentOrder.contractItems?.map((item,index)=><article key={`${item.certameItemId}-${index}`}><span><b>{item.description}</b><small>{item.quantity} × {item.unitValue.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</small></span><strong>{(item.quantity*item.unitValue).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</strong><button type="button" disabled={Boolean(item.executionMovementId)} onClick={()=>update({contractItems:(currentOrder.contractItems??[]).filter((_,itemIndex)=>itemIndex!==index)})}><Trash2 size={14}/></button></article>)}</div>}
+        </section>}
         {assistanceOpen && <section className="assistance-panel"><div className="execution-head"><div><span>ASSISTÊNCIA TÉCNICA</span><h3>Recebimento obrigatório do equipamento</h3></div><small>Fotos e inspeção preservam o histórico da OS.</small></div>
           <div className="assistance-form"><label>Equipamento *<input value={assistance.equipment ?? ""} onChange={event=>setAssistance(value=>({...value,equipment:event.target.value}))}/></label><label>Marca<input value={assistance.brand ?? ""} onChange={event=>setAssistance(value=>({...value,brand:event.target.value}))}/></label><label>Modelo<input value={assistance.model ?? ""} onChange={event=>setAssistance(value=>({...value,model:event.target.value}))}/></label><label>Número de série *<input value={assistance.serialNumber ?? ""} onChange={event=>setAssistance(value=>({...value,serialNumber:event.target.value}))}/></label><label>Defeito informado *<textarea value={assistance.reportedDefect ?? ""} onChange={event=>setAssistance(value=>({...value,reportedDefect:event.target.value}))}/></label><label>Acessórios recebidos<input value={assistance.accessories ?? ""} onChange={event=>setAssistance(value=>({...value,accessories:event.target.value}))} placeholder="Controle, cabo, tampa..."/></label><label>Peças/acessórios ausentes<input value={assistance.missingParts ?? ""} onChange={event=>setAssistance(value=>({...value,missingParts:event.target.value}))} placeholder="Descreva ausências identificadas"/></label><label>Responsável pelo recebimento *<input value={assistance.receivedBy ?? ""} onChange={event=>setAssistance(value=>({...value,receivedBy:event.target.value}))}/></label><label>Estado geral<select value={assistance.condition ?? "Bom"} onChange={event=>setAssistance(value=>({...value,condition:event.target.value as AssistanceEntry["condition"]}))}>{["Excelente","Bom","Regular","Com avarias","Danificado"].map(item=><option key={item}>{item}</option>)}</select></label></div>
           <div className="inspection-checks">{[["riscos","Possui riscos"],["amassados","Possui amassados"],["partesQuebradas","Possui partes quebradas"],["pecasFaltando","Possui peças faltando"],["parafusosAusentes","Parafusos/tampas ausentes"],["oxidacao","Sinais de oxidação"],["manutencaoAnterior","Marcas de manutenção anterior"],["danosAparentes","Danos aparentes"] as const].map(([key,label])=><label key={key}><input type="checkbox" checked={Boolean(assistance.inspection?.[key])} onChange={event=>setAssistance(value=>({...value,inspection:{...(value.inspection ?? {}),[key]:event.target.checked}}))}/>{label}</label>)}</div>
@@ -2539,7 +2577,8 @@ export default function Home() {
     return () => { window.clearInterval(timer); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
   }, [online, authenticatedUser, activeCompany.id, syncing]);
   const updateServiceOrder = async (updatedOrder: ServiceOrder) => {
-    const updatedOrders = serviceOrders.map(order => order.id === updatedOrder.id ? updatedOrder : order);
+    const previousOrder = serviceOrders.find(order => order.id === updatedOrder.id);
+    let orderForPersistence: ServiceOrder = { ...updatedOrder, contractItems: (updatedOrder.contractItems ?? []).map(item => ({ ...item })) };
     const reminderId = `LEM-${updatedOrder.id.replace(/\D/g, "")}`;
     let updatedModules = { ...moduleRecords };
     const currentReminders = updatedModules.Lembretes ?? [];
@@ -2550,6 +2589,53 @@ export default function Home() {
     } else if (!updatedOrder.reminderEnabled) {
       updatedModules = { ...updatedModules, Lembretes: currentReminders.filter(item => item.id !== reminderId) };
     }
+    const previousContractItems = previousOrder?.contractItems ?? [];
+    const nextContractItems = orderForPersistence.contractItems ?? [];
+    const shouldExecute = /conclu[ií]da/i.test(orderForPersistence.status);
+    const shouldRelease = /cancelada/i.test(orderForPersistence.status);
+    const movementMoment = Date.now();
+    const contractRecords = (updatedModules.Certames ?? []) as PublicContractRecord[];
+    if (contractRecords.length && (previousContractItems.length || nextContractItems.length)) {
+      updatedModules = { ...updatedModules, Certames: contractRecords.map(contract => {
+        const belongsToCurrent = contract.id === orderForPersistence.certameId;
+        const belongsToPrevious = contract.id === previousOrder?.certameId;
+        if (!belongsToCurrent && !belongsToPrevious) return contract;
+        return { ...contract, certameItems:(contract.certameItems ?? []).map(contractItem => {
+          let movements = [...(contractItem.movements ?? [])];
+          const previousLinks = previousContractItems.filter(link => link.certameItemId === contractItem.id);
+          const currentIndexes = nextContractItems.map((link,index) => ({link,index})).filter(entry => entry.link.certameItemId === contractItem.id);
+
+          for (const previousLink of previousLinks) {
+            const stillPresent = currentIndexes.some(entry => entry.link.reservationMovementId === previousLink.reservationMovementId);
+            if (!stillPresent && previousLink.reservationMovementId && !previousLink.executionMovementId && !previousLink.releaseMovementId) {
+              const releaseId = `CM-${movementMoment}-release-${contractItem.id}-${movements.length}`;
+              movements.push(createCertameMovement({ id:releaseId, item:contractItem, type:"Liberação", quantity:previousLink.quantity, userId:authenticatedUser?.displayName || "Sistema", origin:"Ordem de Serviço", serviceOrderId:orderForPersistence.id, correlationId:`${orderForPersistence.id}:release:${previousLink.reservationMovementId}`, existingMovements:movements }));
+            }
+          }
+
+          for (const { link, index } of currentIndexes) {
+            if (!link.reservationMovementId) {
+              const reservationId = `CM-${movementMoment}-reserve-${contractItem.id}-${index}`;
+              movements.push(createCertameMovement({ id:reservationId, item:contractItem, type:"Reserva", quantity:link.quantity, userId:authenticatedUser?.displayName || "Sistema", origin:"Ordem de Serviço", serviceOrderId:orderForPersistence.id, correlationId:`${orderForPersistence.id}:reserve:${contractItem.id}:${index}`, existingMovements:movements }));
+              nextContractItems[index] = { ...link, reservationMovementId:reservationId };
+            }
+            const persistedLink = nextContractItems[index];
+            if (shouldExecute && !persistedLink.executionMovementId && !persistedLink.releaseMovementId) {
+              const executionId = `CM-${movementMoment}-execute-${contractItem.id}-${index}`;
+              movements.push(createCertameMovement({ id:executionId, item:contractItem, type:"Execução", quantity:persistedLink.quantity, userId:authenticatedUser?.displayName || "Sistema", origin:"Conclusão da Ordem de Serviço", serviceOrderId:orderForPersistence.id, correlationId:`${orderForPersistence.id}:execute:${persistedLink.reservationMovementId}`, existingMovements:movements }));
+              nextContractItems[index] = { ...persistedLink, executionMovementId:executionId };
+            } else if (shouldRelease && !persistedLink.executionMovementId && !persistedLink.releaseMovementId) {
+              const releaseId = `CM-${movementMoment}-cancel-${contractItem.id}-${index}`;
+              movements.push(createCertameMovement({ id:releaseId, item:contractItem, type:"Liberação", quantity:persistedLink.quantity, userId:authenticatedUser?.displayName || "Sistema", origin:"Cancelamento da Ordem de Serviço", serviceOrderId:orderForPersistence.id, correlationId:`${orderForPersistence.id}:cancel:${persistedLink.reservationMovementId}`, existingMovements:movements }));
+              nextContractItems[index] = { ...persistedLink, releaseMovementId:releaseId };
+            }
+          }
+          return { ...contractItem, movements };
+        }) };
+      }) as ModuleRecord[] };
+      orderForPersistence = { ...orderForPersistence, contractItems: nextContractItems };
+    }
+    const updatedOrders = serviceOrders.map(order => order.id === orderForPersistence.id ? orderForPersistence : order);
     // Conclusão nunca apaga lançamentos anteriores: cria somente integrações ainda inexistentes.
     if (/conclu[ií]da/i.test(updatedOrder.status)) {
       const receivableId = `REC-${updatedOrder.id.replace(/\D/g, "")}`;
@@ -2573,17 +2659,17 @@ export default function Home() {
       throw new Error(result.error || "Não foi possível confirmar a gravação no banco.");
     }
     const confirmedCustomers=result.state?.customers??customerRecords; const confirmedOrders=result.state?.serviceOrders??updatedOrders; const confirmedModules=mergeImportedServices(result.state?.moduleRecords??updatedModules);
-    setCustomerRecords(confirmedCustomers); setServiceOrders(confirmedOrders); setModuleRecords(confirmedModules); setSelectedOrder(updatedOrder); setStateRevision(Number(result.state?._revision||stateRevision+1));
+    setCustomerRecords(confirmedCustomers); setServiceOrders(confirmedOrders); setModuleRecords(confirmedModules); setSelectedOrder(orderForPersistence); setStateRevision(Number(result.state?._revision||stateRevision+1));
     localStorage.setItem(companyStorageKey(activeCompany.id,"customers"),JSON.stringify(confirmedCustomers)); localStorage.setItem(companyStorageKey(activeCompany.id,"service-orders"),JSON.stringify(confirmedOrders)); localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(confirmedModules));
     // O acompanhamento externo recebe somente o recorte liberado ao cliente;
     // observações internas, financeiro e demais dados operacionais ficam na base autenticada.
-    if (updatedOrder.trackingToken) {
-      const timeline = (updatedOrder.timeline ?? []).filter(event => event.customerVisible).map(event => ({ id:event.id, createdAt:event.createdAt, status:event.status, customerNote:event.customerNote, photos:event.photos, customerVisible:true }));
-      void fetch("/api/public-service-order", { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ companyId:activeCompany.id, orderId:updatedOrder.id, token:updatedOrder.trackingToken, client:updatedOrder.client, service:updatedOrder.service, date:updatedOrder.date, time:updatedOrder.time, status:updatedOrder.status, timeline }) });
+    if (orderForPersistence.trackingToken) {
+      const timeline = (orderForPersistence.timeline ?? []).filter(event => event.customerVisible).map(event => ({ id:event.id, createdAt:event.createdAt, status:event.status, customerNote:event.customerNote, photos:event.photos, customerVisible:true }));
+      void fetch("/api/public-service-order", { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ companyId:activeCompany.id, orderId:orderForPersistence.id, token:orderForPersistence.trackingToken, client:orderForPersistence.client, service:orderForPersistence.service, date:orderForPersistence.date, time:orderForPersistence.time, status:orderForPersistence.status, timeline }) });
     }
-    setSavedMessage(updatedOrder.status === "Concluída" && updatedOrder.reminderEnabled ? `Ordem ${updatedOrder.id} concluída e lembrete agendado.` : `Ordem ${updatedOrder.id} atualizada e sincronizada.`);
+    setSavedMessage(orderForPersistence.status === "Concluída" && orderForPersistence.reminderEnabled ? `Ordem ${orderForPersistence.id} concluída e lembrete agendado.` : `Ordem ${orderForPersistence.id} atualizada e sincronizada.`);
     window.setTimeout(() => setSavedMessage(""), 2500);
-    return updatedOrder;
+    return orderForPersistence;
   };
   const hasAction = (moduleName: string, action: "Visualizar" | "Criar" | "Editar" | "Excluir") => Boolean(authenticatedUser?.permissions?.includes("*") || authenticatedUser?.role === "Administrador" || authenticatedUser?.permissions?.includes(`${moduleName}:${action}`));
   const updateCustomer = (updatedCustomer: Customer) => {
@@ -2957,6 +3043,6 @@ export default function Home() {
       <footer><span>© 2026 ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
     {modal && <Modal title={modal} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalogRecords={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} supplierRecords={moduleRecords["Fornecedores"] ?? []} employeeRecords={moduleRecords["Funcionários"] ?? [tiagoEmployee]} close={() => setModal("")} onSave={saveRecord}/>}
-    {selectedOrder && <OrderDetail order={selectedOrder} customerPhone={customerRecords.find(customer => customer.name === selectedOrder.client)?.phone} company={activeCompany} catalog={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} close={() => setSelectedOrder(null)} onUpdate={updateServiceOrder} canEdit={hasAction("Ordens de serviço","Editar")}/>}{/* detalhe da OS */}
+    {selectedOrder && <OrderDetail order={selectedOrder} customerPhone={customerRecords.find(customer => customer.name === selectedOrder.client)?.phone} company={activeCompany} catalog={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} contracts={(moduleRecords.Certames ?? []) as PublicContractRecord[]} close={() => setSelectedOrder(null)} onUpdate={updateServiceOrder} canEdit={hasAction("Ordens de serviço","Editar")}/>}{/* detalhe da OS */}
   </div>;
 }
