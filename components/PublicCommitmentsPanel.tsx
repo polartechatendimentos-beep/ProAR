@@ -36,11 +36,12 @@ export type PublicCommitmentRecord = {
 
 const money = (value: number) => value.toLocaleString("pt-BR", { style:"currency", currency:"BRL" });
 
-export function PublicCommitmentsPanel({ orders, contracts, commitments, onSave }: {
+export function PublicCommitmentsPanel({ orders, contracts, commitments, onSave, onReadyToInvoice }: {
   orders: ContractOrder[];
   contracts: PublicContractRecord[];
   commitments: PublicCommitmentRecord[];
   onSave: (record: PublicCommitmentRecord) => Promise<boolean>;
+  onReadyToInvoice: (record: PublicCommitmentRecord) => Promise<boolean>;
 }) {
   const [creating, setCreating] = useState(false);
   const [number, setNumber] = useState("");
@@ -51,6 +52,7 @@ export function PublicCommitmentsPanel({ orders, contracts, commitments, onSave 
   const [authorization, setAuthorization] = useState("");
   const [selected, setSelected] = useState<Record<string,string>>({});
   const [saving, setSaving] = useState(false);
+  const [advancingId, setAdvancingId] = useState("");
   const [message, setMessage] = useState("");
 
   const allocationsByOrder = useMemo(() => commitments.flatMap(record => record.empenhoAllocations ?? []).reduce<Record<string,number>>((map, allocation) => {
@@ -94,6 +96,6 @@ export function PublicCommitmentsPanel({ orders, contracts, commitments, onSave 
     {message && <div className="public-contract-message"><CheckCircle2 size={15}/>{message}</div>}
     <div className="commitment-kpis"><article><small>OS AGUARDANDO EMPENHO</small><strong>{eligible.length}</strong></article><article><small>VALOR AGUARDANDO</small><strong>{money(eligible.reduce((sum,item)=>sum+item.available,0))}</strong></article><article><small>EMPENHOS RECEBIDOS</small><strong>{commitments.length}</strong></article><article><small>VALOR EMPENHADO</small><strong>{money(commitments.reduce((sum,item)=>sum+(item.value??0),0))}</strong></article></div>
     {creating && <form className="commitment-form panel" onSubmit={save}><div className="commitment-fields"><label>Número do Empenho<input value={number} onChange={event=>setNumber(event.target.value)} required/></label><label>Data<input type="date" value={date} onChange={event=>setDate(event.target.value)}/></label><label>Valor do Empenho<input type="number" min="0.01" step="0.01" value={value} onChange={event=>setValue(event.target.value)} required/></label><label>Ficha<input value={ficha} onChange={event=>setFicha(event.target.value)}/></label><label>Pedido de Compra<input value={purchaseOrder} onChange={event=>setPurchaseOrder(event.target.value)}/></label><label>Autorização de Fornecimento<input value={authorization} onChange={event=>setAuthorization(event.target.value)}/></label></div><section className="commitment-orders"><header><b>OS executadas disponíveis</b><strong>Total selecionado: {money(selectedTotal)}</strong></header>{eligible.map(entry=><label key={entry.order.id}><input type="checkbox" checked={selected[entry.order.id] !== undefined} onChange={event=>setSelected(current=>{const next={...current};if(event.target.checked)next[entry.order.id]=String(entry.available);else delete next[entry.order.id];return next;})}/><span><b>{entry.order.id} • {entry.order.client}</b><small>{entry.order.unit} • {entry.order.date} • disponível {money(entry.available)}</small></span><input type="number" min="0.01" max={entry.available} step="0.01" disabled={selected[entry.order.id]===undefined} value={selected[entry.order.id]??""} onChange={event=>setSelected(current=>({...current,[entry.order.id]:event.target.value}))}/></label>)}</section><footer><button type="button" className="outline-btn" disabled={saving} onClick={()=>{reset();setCreating(false)}}>Cancelar</button><button className="primary-btn" disabled={saving} type="submit">{saving?"Salvando...":"Salvar alterações"}</button></footer></form>}
-    <div className="commitment-list">{commitments.map(record=><article className="panel" key={record.id}><FileText size={18}/><span><b>{record.name}</b><small>{record.client} • {record.date || record.createdAt} • {(record.empenhoAllocations??[]).length} OS vinculada(s)</small></span><strong>{money(record.value??0)}</strong><em>{record.status}</em></article>)}{!commitments.length&&<div className="linked-empty panel"><HandCoins size={23}/><h4>Nenhum Empenho registrado</h4><p>Empenhos antigos não serão vinculados automaticamente.</p></div>}</div>
+    <div className="commitment-list">{commitments.map(record=><article className="panel" key={record.id}><FileText size={18}/><span><b>{record.name}</b><small>{record.client} • {record.date || record.createdAt} • {(record.empenhoAllocations??[]).length} OS vinculada(s)</small></span><strong>{money(record.value??0)}</strong><em>{record.status}</em>{record.status==="Empenho recebido"&&<button className="outline-btn" disabled={Boolean(advancingId)} onClick={async()=>{setAdvancingId(record.id);setMessage("Salvando...");const saved=await onReadyToInvoice(record);setAdvancingId("");setMessage(saved?"✓ Alteração efetuada":"Não foi possível enviar para faturamento.")}}>{advancingId===record.id?"Salvando...":"Pronto para faturar"}</button>}</article>)}{!commitments.length&&<div className="linked-empty panel"><HandCoins size={23}/><h4>Nenhum Empenho registrado</h4><p>Empenhos antigos não serão vinculados automaticamente.</p></div>}</div>
   </section>;
 }
