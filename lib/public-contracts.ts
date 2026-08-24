@@ -232,3 +232,13 @@ export function validateEmpenhoAllocations(
   }
   return { allocated, remaining: precision(empenhoValue - allocated) };
 }
+
+export function financialOutstandingValue(record: { value?: number; settledValue?: number; status?: string }) {
+  if (/^(Paga|Recebida|Cancelada)$/i.test(record.status ?? "")) return 0;
+  return Math.max(0, precision((record.value ?? 0) - (record.settledValue ?? 0)));
+}
+
+export function financialRealizedValue(record: { value?: number; settledValue?: number; status?: string }) {
+  if (record.settledValue !== undefined) return Math.max(0, precision(record.settledValue));
+  return /^(Paga|Recebida)$/i.test(record.status ?? "") ? Math.max(0, precision(record.value ?? 0)) : 0;
+}
