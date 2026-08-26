@@ -1119,6 +1119,7 @@ function SalesPDV({ customers, structures, records, sales, onSave }: { customers
   const [customer, setCustomer] = useState("");
   const [unit, setUnit] = useState("");
   const [payment, setPayment] = useState("PIX");
+  const [payments, setPayments] = useState<{ method: string; amount: number }[]>([]);
   const [priceTable, setPriceTable] = useState("Padrão");
   const [selectedItemId, setSelectedItemId] = useState("");
   const [notice, setNotice] = useState("");
@@ -1131,6 +1132,10 @@ function SalesPDV({ customers, structures, records, sales, onSave }: { customers
   const filteredCatalog = quickSaleCatalog.filter(item => `${item.name} ${item.code} ${item.kind}`.toLowerCase().includes(search.toLowerCase()));
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const total = Math.max(0, subtotal - discount);
+  const paidTotal = payments.reduce((sum, entry) => sum + Math.max(0, entry.amount || 0), 0);
+  const nonCashOverpayment = payments.filter(entry => entry.method !== "Dinheiro").reduce((sum, entry) => sum + Math.max(0, entry.amount || 0), 0) > total;
+  const remaining = Math.max(0, total - paidTotal);
+  const change = !nonCashOverpayment ? Math.max(0, paidTotal - total) : 0;
   const selectedCustomer = customers.find(item => item.name === customer);
   const customerUnits = customer ? customerStructures(customer, customers, structures) : [];
   useEffect(() => {
@@ -1175,13 +1180,15 @@ function SalesPDV({ customers, structures, records, sales, onSave }: { customers
       setNotice("Adicione pelo menos um item à venda.");
       return;
     }
+    if (remaining > 0) { setNotice(`Falta pagar R$ ${remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.`); setActiveTab("pagamento"); return; }
+    if (nonCashOverpayment) { setNotice("Valor informado no PIX/cartão é superior ao total. Ajuste o pagamento."); setActiveTab("pagamento"); return; }
     if (selectedCustomer?.financialStatus === "Bloqueado") { setNotice("Cliente bloqueado pelo financeiro. A venda não pode ser concluída."); return; }
     if (selectedCustomer?.creditLimit && (selectedCustomer.balancePosted ?? 0) + total > selectedCustomer.creditLimit && payment === "Boleto") { setNotice("Limite de crédito excedido para venda a prazo. Solicite liberação do financeiro."); return; }
     const sale: ModuleRecord = {
       ...(editingSale ?? {}), id: editingSale?.id ?? `VEN-${Date.now().toString().slice(-6)}`, name:`Venda • ${customer || "Consumidor final"}`, client:customer || "Consumidor final", unit, paymentMethod:payment, value:total, status:editingSale?.status || "Pedido confirmado", category:"Venda PDV", description:`Subtotal R$ ${subtotal.toLocaleString("pt-BR",{minimumFractionDigits:2})} • desconto R$ ${discount.toLocaleString("pt-BR",{minimumFractionDigits:2})}`, purchaseItems:cart.map(item=>({id:item.id,productId:item.id,description:item.name,quantity:item.quantity,unitValue:item.price,kind:item.kind})), createdAt:editingSale?.createdAt ?? new Date().toLocaleString("pt-BR"), date:editingSale?.date ?? new Date().toISOString().slice(0,10)
     };
     onSave(sale);
-    setCart([]); setDiscount(0); setCustomer(""); setUnit("Matriz"); setActiveTab("itens"); setEditingSale(null);
+    setCart([]); setDiscount(0); setPayments([]); setCustomer(""); setUnit("Matriz"); setActiveTab("itens"); setEditingSale(null);
     setNotice(editingSale ? `Pedido ${sale.id} atualizado e sincronizado.` : `Venda ${sale.id} finalizada e sincronizada — R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.`);
   };
   const editSavedSale = (sale: ModuleRecord) => {
@@ -1243,7 +1250,7 @@ function SalesPDV({ customers, structures, records, sales, onSave }: { customers
           {!filteredCatalog.length && <div className="linked-empty"><Package size={23}/><h4>Nenhum produto ou serviço cadastrado</h4><p>Cadastre os itens reais nos módulos Produtos e Serviços.</p></div>}
         </>}
         {activeTab === "cliente" && <div className="pdv-hidden-panel"><div className="pdv-panel-title"><UserRound size={20}/><div><h3>Cliente da venda</h3><p>Opcional para vendas rápidas.</p></div></div><label>Selecionar cliente<select value={customer} onChange={event => {setCustomer(event.target.value);setUnit("");}}><option value="">Consumidor final</option>{customers.map(item => <option key={item.doc} value={item.name}>{item.name} • {item.doc}</option>)}</select></label>{customer && <>{customerUnits.length ? <label>Unidade / filial / setor<select value={unit} onChange={event=>setUnit(event.target.value)}>{customerUnits.map(item=><option key={item.name} value={item.name}>{item.name} • {item.category || "Unidade"}</option>)}</select></label> : <p className="field-hint">Nenhuma unidade/filial/setor cadastrado para este cliente.</p>}<div className={`credit-check ${selectedCustomer?.financialStatus === "Bloqueado" ? "blocked" : ""}`}><CircleDollarSign size={17}/><div><b>Crédito</b><small>Disponível R$ {Math.max(0,(selectedCustomer?.creditLimit ?? 0)-(selectedCustomer?.balancePosted ?? 0)).toLocaleString("pt-BR",{minimumFractionDigits:2})}</small></div><strong>{selectedCustomer?.financialStatus ?? "Liberado"}</strong></div></>}<button className="outline-btn"><Plus size={14}/> Cadastro rápido</button></div>}
-        {activeTab === "pagamento" && <div className="pdv-hidden-panel"><div className="pdv-panel-title"><CreditCard size={20}/><div><h3>Forma de pagamento</h3><p>Escolha uma opção para concluir.</p></div></div><div className="payment-grid">{["PIX", "Dinheiro", "Cartão de débito", "Cartão de crédito", "Boleto", "Transferência"].map(option => <button className={payment === option ? "active" : ""} key={option} onClick={() => setPayment(option)}>{option}</button>)}</div></div>}
+        {activeTab === "pagamento" && <div className="pdv-hidden-panel"><div className="pdv-panel-title"><CreditCard size={20}/><div><h3>Pagamentos</h3><p>Informe uma ou mais formas de pagamento.</p></div></div><div className="payment-grid">{["PIX", "Dinheiro", "Cartão de débito", "Cartão de crédito", "Boleto", "Outros"].map(option => <button className={payment === option ? "active" : ""} key={option} onClick={() => { setPayment(option); setPayments(current => current.some(item => item.method === option) ? current : [...current, {method:option, amount:0}]); }}>{option}</button>)}</div><div className="pdv-payment-lines">{payments.map((entry,index)=><label key={`${entry.method}-${index}`}>{entry.method}<input type="number" min="0" step="0.01" value={entry.amount || ""} onChange={event=>setPayments(current=>current.map((item,i)=>i===index?{...item,amount:Number(event.target.value)||0}:item))}/><button type="button" onClick={()=>setPayments(current=>current.filter((_,i)=>i!==index))}><X size={13}/></button></label>)}</div><div className="pdv-payment-check"><span>Total informado <b>R$ {paidTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></span>{nonCashOverpayment?<em>Valor em PIX/cartão maior que a venda. Ajuste.</em>:remaining>0?<em>FALTA PAGAR: R$ {remaining.toLocaleString("pt-BR",{minimumFractionDigits:2})}</em>:change>0?<em>TROCO: R$ {change.toLocaleString("pt-BR",{minimumFractionDigits:2})}</em>:<em>RESTANTE: R$ 0,00</em>}</div></div>}
         {activeTab === "opcoes" && <div className="pdv-hidden-panel"><div className="pdv-panel-title"><Tag size={20}/><div><h3>Opções da venda</h3><p>Recursos menos utilizados ficam ocultos aqui.</p></div></div><label>Desconto em reais<input type="number" min="0" max={subtotal} value={discount || ""} onChange={event => setDiscount(Number(event.target.value))} placeholder="R$ 0,00"/></label><label>Observações<textarea placeholder="Informações adicionais para o comprovante..."/></label></div>}
       </div>
       <aside className="pdv-cart panel">
