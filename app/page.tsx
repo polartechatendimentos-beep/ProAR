@@ -209,7 +209,7 @@ type Customer = {
   financialStatus?: "Liberado" | "Alerta" | "Somente à vista" | "Bloqueado";
 };
 
-type HouseWorkStatus = "INÍCIO DE OBRA" | "AG. FRIGORÍGENA" | "AG. ACABAMENTO" | "AG. TUBULAÇÃO FORÇADA" | "AG. EXAUSTOR" | "AG. TAMPA FRIGORÍGENA" | "SERVIÇO CONCLUÍDO";
+type HouseWorkStatus = "INÍCIO DE OBRA" | "AG. FRIGORÍGENA" | "AG. ACABAMENTO" | "AG. TUBULAÇÃO FORÇADA" | "AG. ACABAMENTO EXAUSTÃO" | "AG. EXAUSTOR" | "AG. TAMPA FRIGORÍGENA" | "SERVIÇO CONCLUÍDO";
 type LegacyHouseWorkStatus = "AG FRIGORÍGENA" | "AG VENTO KIT" | "VENTOKIT E FRIGORÍGENA OK" | "AG ACABAMENTO" | "AG EXAUSTOR" | "AG TAMPA FRIGORÍGENA" | "FIM" | "ag_exaustor" | "ag_exautor";
 type HouseStagePhoto = { label: string; url: string };
 type HouseWorkUpdate = { id: string; status: HouseWorkStatus | LegacyHouseWorkStatus; previousStatus?: HouseWorkStatus; note: string; responsible?: string; photo?: string; photos?: string[] | HouseStagePhoto[]; createdAt: string; completedAt?: string; origin?: string };
@@ -227,7 +227,7 @@ const HOUSE_BLOCKS = [
 const RESERVA_IMPERIAL: WorkProject = { id: "reserva-imperial", name: "Reserva Imperial", blocks: HOUSE_BLOCKS.map(item => ({...item})), commonAreas: ["Academia", "Salão de Festas", "Área Gourmet", "Administrativo"], createdAt: "2026-08-11T00:00:00.000Z" };
 const HOUSE_STATUSES: { name: HouseWorkStatus; color: string }[] = [
   { name: "INÍCIO DE OBRA", color: "#64748b" }, { name: "AG. FRIGORÍGENA", color: "#ef4444" }, { name: "AG. ACABAMENTO", color: "#f59e0b" },
-  { name: "AG. TUBULAÇÃO FORÇADA", color: "#8b5cf6" }, { name: "AG. EXAUSTOR", color: "#06b6d4" },
+  { name: "AG. TUBULAÇÃO FORÇADA", color: "#8b5cf6" }, { name: "AG. ACABAMENTO EXAUSTÃO", color: "#a855f7" }, { name: "AG. EXAUSTOR", color: "#06b6d4" },
   { name: "AG. TAMPA FRIGORÍGENA", color: "#3b82f6" }, { name: "SERVIÇO CONCLUÍDO", color: "#16a34a" },
 ];
 const HOUSE_STAGE_PHOTOS: Record<HouseWorkStatus, string[]> = {
@@ -235,13 +235,14 @@ const HOUSE_STAGE_PHOTOS: Record<HouseWorkStatus, string[]> = {
   "AG. FRIGORÍGENA": ["Sala", "Quarto Frente", "Quarto Meio", "Quarto Fundo", "Home"],
   "AG. ACABAMENTO": ["Sala", "Quarto Frente", "Quarto Meio", "Quarto Fundo", "Home", "VTK Fundo"],
   "AG. TUBULAÇÃO FORÇADA": ["Tubulação Forçada"],
+  "AG. ACABAMENTO EXAUSTÃO": ["Acabamento Exaustão"],
   "AG. EXAUSTOR": ["VTK Exaustor", "Acabamento Externo"],
   "AG. TAMPA FRIGORÍGENA": ["Sala", "Quarto Frente", "Quarto Meio", "Quarto Fundo", "Home"],
   "SERVIÇO CONCLUÍDO": [],
 };
 // Evidências fotográficas são sempre opcionais. A ausência de foto jamais bloqueia
 // uma atualização de etapa; quando presente, ela continua vinculada ao histórico.
-const HOUSE_STAGE_OPTIONAL_PHOTOS: HouseWorkStatus[] = ["INÍCIO DE OBRA", "AG. FRIGORÍGENA", "AG. ACABAMENTO", "AG. TUBULAÇÃO FORÇADA", "AG. EXAUSTOR", "AG. TAMPA FRIGORÍGENA", "SERVIÇO CONCLUÍDO"];
+const HOUSE_STAGE_OPTIONAL_PHOTOS: HouseWorkStatus[] = ["INÍCIO DE OBRA", "AG. FRIGORÍGENA", "AG. ACABAMENTO", "AG. TUBULAÇÃO FORÇADA", "AG. ACABAMENTO EXAUSTÃO", "AG. EXAUSTOR", "AG. TAMPA FRIGORÍGENA", "SERVIÇO CONCLUÍDO"];
 const LEGACY_HOUSE_STATUS_MAP: Record<string, HouseWorkStatus> = {
   "AG FRIGORÍGENA": "AG. FRIGORÍGENA", "AG VENTO KIT": "AG. TUBULAÇÃO FORÇADA", "VENTOKIT E FRIGORÍGENA OK": "AG. TUBULAÇÃO FORÇADA",
   "AG ACABAMENTO": "AG. ACABAMENTO", "AG EXAUSTOR": "AG. EXAUSTOR", "AG. EXAUTOR": "AG. EXAUSTOR", "AG EXAUTOR": "AG. EXAUSTOR", "ag_exautor": "AG. EXAUSTOR", "ag-exautor": "AG. EXAUSTOR", "ag_exaustor": "AG. EXAUSTOR", "ag-exaustor": "AG. EXAUSTOR", "AG TAMPA FRIGORÍGENA": "AG. TAMPA FRIGORÍGENA", "FIM": "SERVIÇO CONCLUÍDO",
@@ -1222,7 +1223,7 @@ function SalesPDV({ customers, structures, records, sales, onSave }: { customers
       <div><span className="section-kicker"><ShoppingBag size={12}/> VENDA RÁPIDA</span><h2>PDV ProAR</h2><p>Produtos e serviços em um fluxo direto, sem campos desnecessários.</p></div>
       <div className="pdv-shortcuts"><button onClick={toggleFullScreen}><Grid2X2 size={14}/>{fullScreen ? "Sair da tela cheia" : "Maximizar PDV"}</button><button onClick={() => setShortcutsOpen(true)}><Keyboard size={14}/><kbd>F1</kbd> Atalhos</button><span>Caixa aberto</span></div>
     </div>
-    <div className="pdv-context"><label>Cliente<select value={customer} onChange={event=>{setCustomer(event.target.value);setUnit("");}}><option value="">Consumidor final</option>{customers.map(item=><option key={item.doc} value={item.name}>{item.name}</option>)}</select></label><label>Tabela de preço<select value={priceTable} onChange={event=>setPriceTable(event.target.value)}><option>Padrão</option><option>Varejo</option><option>Atacado</option><option>Construtora</option><option>Cliente especial</option></select></label><button className="outline-btn" onClick={()=>setShortcutsOpen(true)}><Keyboard size={14}/> Atalhos</button><button className="outline-btn" onClick={()=>setActiveTab("opcoes")}><MoreHorizontal size={14}/> Mais opções</button></div>
+    <div className="pdv-context"><label>Cliente<select value={customer} onChange={event=>{setCustomer(event.target.value);setUnit("");}}><option value="">Consumidor final</option>{customers.map(item=><option key={item.doc} value={item.name}>{item.name}</option>)}</select></label><label>Tabela de preço<select value={priceTable} onChange={event=>setPriceTable(event.target.value)}><option>Padrão</option><option>Varejo</option><option>Atacado</option><option>Construtora</option><option>Cliente especial</option></select></label><div className="pdv-top-total"><small>TOTAL DA VENDA</small><strong>R$ {total.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div><button className="outline-btn" onClick={()=>setShortcutsOpen(true)}><Keyboard size={14}/> Atalhos</button><button className="outline-btn" onClick={()=>setActiveTab("opcoes")}><MoreHorizontal size={14}/> Mais opções</button></div>
     {notice && <div className="pdv-notice"><CheckCircle2 size={15}/>{notice}<button onClick={() => setNotice("")}><X size={13}/></button></div>}
     <nav className="pdv-tabs" aria-label="Etapas da venda">
       <button className={activeTab === "itens" ? "active" : ""} onClick={() => setActiveTab("itens")}><ScanBarcode size={15}/><span>Itens</span><kbd>F2</kbd></button>
@@ -1397,7 +1398,7 @@ function FinancialModule({ records, onOpen, onUpdate, onIssueInvoice }: { record
     const nominalValue = Math.max(0, settling.value ?? 0);
     const isPaid = accumulated >= nominalValue;
     setSaving(true); setMessage("Salvando...");
-    const saved = await onUpdate({ ...settling, transactionType: payable(settling) ? "Pagar" : "Receber", settledValue: Math.min(nominalValue, accumulated), settlementDate: new Date().toISOString().slice(0, 10), settlementMethod: method, settlementAccount: account, interestValue: (settling.interestValue ?? 0) + interest, discountValue: (settling.discountValue ?? 0) + discount, status: isPaid ? (payable(settling) ? "Paga" : "Recebida") : "Pago parcialmente" });
+    const saved = await onUpdate({ ...settling, transactionType: payable(settling) ? "Pagar" : "Receber", settledValue: Math.min(nominalValue, accumulated), settlementDate: new Date().toISOString().slice(0, 10), settlementMethod: method, settlementAccount: account, interestValue: (settling.interestValue ?? 0) + interest, discountValue: (settling.discountValue ?? 0) + discount, status: isPaid ? (payable(settling) ? "Paga" : "Recebida") : (payable(settling) ? "P​aga parcialmente" : "Rece​bida parcialmente") });
     setSaving(false);
     if (!saved) { setMessage("Não foi possível salvar a alteração."); return; }
     setSettling(null); setMessage("✓ Alteração efetuada");
@@ -1779,7 +1780,7 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     {saveState !== "idle" && <div className={`work-save-bar ${saveState}`} role="status"><i/><span>{saveState === "saving" ? "Salvando..." : saveState === "saved" ? "✓ ALTERAÇÃO EFETUADA" : "Não foi possível salvar a alteração"}</span></div>}
     <div className="work-manager-bar"><div><span><Building2 size={17}/></span><label>Obra ativa<select value={activeProject.id} onChange={event=>selectWorkProject(event.target.value)}>{projects.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}</select></label><small>{activeProject.blocks.length} quadra(s) • {activeProject.blocks.reduce((total,item)=>total+item.houses,0)} casas • {activeProject.commonAreas.length} áreas comuns</small></div><button className="primary-btn" onClick={()=>setWorkManagerOpen(true)}><Plus size={15}/> Cadastrar obra</button></div>
     <div className="houses-hero"><div><span className="section-kicker"><House size={12}/> CONTROLE DE EXECUÇÃO</span><h2>{activeProject.name}</h2><p>Acompanhamento individual das casas e áreas comuns, com evidências e histórico de execução.</p></div><div className="houses-public-share"><span><MapPin size={18}/></span><div><small>ACESSO DO CLIENTE</small><b>{shareToken ? "Mapa público ativo" : "Criar link de acompanhamento"}</b><em>{shareToken ? "Atualização automática em tempo real" : "O cliente verá somente o andamento da obra"}</em></div><button onClick={refreshWorkMap}><ArrowDownRight size={14}/> Atualizar</button><button onClick={sendWorkMap}><ArrowUpRight size={14}/> Enviar</button><button onClick={sharePublicMap}><MessageCircle size={14}/>{shareToken ? "Link" : "Criar link"}</button>{shareToken && <a href={`/obra/${shareToken}`} target="_blank" rel="noreferrer"><Eye size={14}/> Visualizar</a>}</div><div className="houses-progress"><div><small>PROGRESSO GERAL</small><strong>{completion}%</strong></div><i><b style={{ width: `${completion}%` }}/></i><span>{completed} finalizadas de {houses.length} unidades cadastradas</span></div></div>
-    <div className="work-block-summary">{activeProject.blocks.map(({block})=>{const stat=blockProgress(block);return <button key={block} className={blockFilter===block?"active":""} onClick={()=>setBlockFilter(block)}><b>Quadra {block}</b><span>{stat.progress}%</span></button>})}</div>
+    <div className="work-block-summary">{activeProject.blocks.map(({block})=>{const stat=blockProgress(block);return <button key={block} style={{"--block-progress":`${stat.progress}%`} as React.CSSProperties} className={blockFilter===block?"active":""} onClick={()=>setBlockFilter(block)}><b>Quadra {block}</b><span>{stat.progress}%</span><small>{stat.entries.length} casas • {stat.done} concluídas • {stat.working} em andamento</small></button>})}</div>
     <div className="houses-kpis"><article><span><House size={18}/></span><div><small>TOTAL CADASTRADO</small><strong>{houses.length}</strong><em>{activeProject.blocks.length} quadras • {activeProject.commonAreas.length} áreas comuns</em></div></article>{HOUSE_STATUSES.map(status => { const total = houses.filter(house => normalizeHouseStatus(house.status) === status.name).length; return <article key={status.name}><i style={{background:status.color}}/><div><small>{status.name}</small><strong>{total}</strong><em>{Math.round(total / houses.length * 100)}% da obra</em></div></article>; })}</div>
     <div className="houses-toolbar"><label><Search size={15}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar quadra, casa ou área comum..."/></label><select value={blockFilter} onChange={event => setBlockFilter(event.target.value)}><option>Todas</option>{activeProject.blocks.map(item => <option key={item.block}>{item.block}</option>)}{activeProject.commonAreas.length > 0 && <option>Áreas Comuns</option>}</select><select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option>Todos</option>{HOUSE_STATUSES.map(item => <option key={item.name}>{item.name}</option>)}</select><span>{visible.length} unidade(s) exibida(s)</span></div>
     <div className="houses-legend">{HOUSE_STATUSES.map(status => <span key={status.name}><i style={{background:status.color}}/>{status.name}</span>)}</div>
