@@ -29,7 +29,7 @@ import {
   CreditCard, Keyboard, Menu, Minus, MoreHorizontal, Package, Phone, Plus, ReceiptText, ScanBarcode, School, Search, Settings,
   ShieldCheck, ShoppingBag, ShoppingCart, Store, TrendingUp, UserCheck, UserRound,
   MessageCircle, PenTool, Tag, Trash2, Database, LockKeyhole, UnlockKeyhole, ImagePlus,
-  UsersRound, WalletCards, Warehouse, Wrench, X, Zap, House, History, ImageIcon, RefreshCw
+  UsersRound, WalletCards, Warehouse, Wrench, X, Zap, House, History, ImageIcon, RefreshCw, Sparkles
 } from "lucide-react";
 import { PublicContractsPanel, type PublicContractRecord } from "@/components/PublicContractsPanel";
 import { PublicCommitmentsPanel, type PublicCommitmentRecord } from "@/components/PublicCommitmentsPanel";
@@ -392,6 +392,15 @@ type ModuleRecord = {
   installationDate?: string;
   nextMaintenanceDate?: string;
   equipmentUnit?: string;
+  frequency?: string;
+  current?: string;
+  power?: string;
+  refrigerantCharge?: string;
+  manufactureDate?: string;
+  manufacturerCode?: string;
+  equipmentLabelImage?: string;
+  equipmentLabelImageName?: string;
+  equipmentLabelHistory?: string[];
   parentUnit?: string;
   certameCustomerId?: string;
   administrativeProcess?: string;
@@ -449,7 +458,7 @@ type PurchaseItem = {
   unitValue: number;
   productId?: string;
   registerProduct?: boolean;
-  kind?: "Produto" | "Serviço";
+  kind?: "Produto" | "Serviço" | "Custo adicional";
 };
 
 type PurchaseInstallment = { number: string; dueDate: string; value: number };
@@ -504,15 +513,21 @@ function Sidebar({ current, setCurrent, open, close, permissions }: { current: s
   </>;
 }
 
-function Dashboard({ onNavigate, serviceOrders }: { onNavigate: (s: string) => void; serviceOrders: ServiceOrder[] }) {
+function Dashboard({ onNavigate, serviceOrders, modules }: { onNavigate: (s: string) => void; serviceOrders: ServiceOrder[]; modules: Record<string, ModuleRecord[]> }) {
   const [period, setPeriod] = useState("Este mês");
   const today = new Date().toISOString().slice(0, 10);
   const todayOrders = serviceOrders.filter(order => order.date === today);
+  const overdueOrders = serviceOrders.filter(order => order.date && order.date < today && !/conclu[ií]d|cancelad/i.test(order.status));
+  const workItems = [
+    ...overdueOrders.map(order => ({ id:`os-${order.id}`, title:`OS atrasada • ${order.id}`, detail:`${order.client} • ${order.service}`, module:"Ordens de serviço", tone:"red" })),
+    ...todayOrders.filter(order=>!/conclu[ií]d|cancelad/i.test(order.status)).map(order => ({ id:`today-${order.id}`, title:`Atendimento de hoje • ${order.id}`, detail:`${order.time || "Horário a definir"} • ${order.client}`, module:"Agenda", tone:"blue" })),
+    ...Object.entries(modules).flatMap(([module, records]) => records.filter(record => /aguardando|pendente|venc|atras|baixo estoque|sem estoque/i.test(`${record.status || ""} ${record.description || ""}`)).map(record => ({ id:`${module}-${record.id}`, title:record.name, detail:`${module} • ${record.status || "Próxima ação necessária"}`, module, tone:/venc|atras|sem estoque/i.test(`${record.status} ${record.description}`)?"red":"amber" })))
+  ].slice(0, 8);
   const dashboardStats = [
     { icon: ClipboardList, value: String(serviceOrders.filter(order => order.status !== "Concluída").length).padStart(2, "0"), label: "OS em aberto", note: `${todayOrders.length} programada(s) para hoje`, tone: "blue", trend: "Atual" },
     { icon: Activity, value: String(serviceOrders.filter(order => order.status === "Em andamento").length).padStart(2, "0"), label: "Em andamento", note: "Atendimentos ativos", tone: "cyan", trend: "Agora" },
     { icon: CheckCircle2, value: String(serviceOrders.filter(order => order.status === "Concluída").length).padStart(2, "0"), label: "Concluídas", note: "Total registrado", tone: "green", trend: "Atual" },
-    { icon: AlertTriangle, value: "00", label: "Atrasadas", note: "Nenhuma pendência", tone: "red", trend: "Atual" },
+    { icon: AlertTriangle, value: String(overdueOrders.length).padStart(2, "0"), label: "Atrasadas", note: overdueOrders.length ? "Exigem ação imediata" : "Nenhuma pendência", tone: "red", trend: "Atual" },
   ];
   return <>
     <section className="command-row">
@@ -540,8 +555,8 @@ function Dashboard({ onNavigate, serviceOrders }: { onNavigate: (s: string) => v
           <div className="finance-split"><div><span className="money-icon green"><ArrowUpRight size={17}/></span><small>A receber</small><strong>R$ 0,00</strong></div><div><span className="money-icon red"><ArrowDownRight size={17}/></span><small>A pagar</small><strong>R$ 0,00</strong></div></div>
         </div>
         <div className="panel alerts">
-          <div className="panel-head"><div><span className="section-kicker"><AlertTriangle size={12}/> ATENÇÃO</span><h2>Alertas importantes</h2><p>Nenhum alerta registrado</p></div><span>0</span></div>
-          <div className="linked-empty"><CheckCircle2 size={22}/><h4>Tudo certo por aqui</h4><p>Os alertas reais aparecerão neste painel.</p></div>
+          <div className="panel-head"><div><span className="section-kicker"><AlertTriangle size={12}/> CENTRAL DE TRABALHO DO DIA</span><h2>Próximas ações</h2><p>Somente o que precisa de atenção agora.</p></div><span>{workItems.length}</span></div>
+          {workItems.length ? <div className="workday-list">{workItems.map(item=><button key={item.id} className={item.tone} onClick={()=>onNavigate(item.module)}><i/><span><b>{item.title}</b><small>{item.detail}</small></span><ChevronRight size={15}/></button>)}</div> : <div className="linked-empty"><CheckCircle2 size={22}/><h4>Tudo certo por aqui</h4><p>Não há ações operacionais pendentes.</p></div>}
         </div>
       </aside>
     </section>
@@ -1071,20 +1086,25 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
   const [customer, setCustomer] = useState("");
   const [unit, setUnit] = useState("");
   const [validity, setValidity] = useState(7);
+  const [priceTable, setPriceTable] = useState("Padrão");
   const [discount, setDiscount] = useState(0);
+  const [surcharge, setSurcharge] = useState(0);
   const [payment, setPayment] = useState("PIX");
   const [observations, setObservations] = useState("");
   const [notice, setNotice] = useState("");
   const items = catalog.filter(item => (item.kind === "Produto" || item.kind === "Serviço") && item.status !== "Inativo" && (kindFilter === "Todos" || item.kind === kindFilter) && `${item.name} ${item.id} ${item.category}`.toLowerCase().includes(search.toLowerCase()));
-  const subtotal = cart.reduce((sum, item) => sum + item.quantity * item.unitValue, 0);
-  const total = Math.max(0, subtotal - discount);
+  const productsTotal = cart.filter(item => item.kind === "Produto").reduce((sum, item) => sum + item.quantity * item.unitValue, 0);
+  const servicesTotal = cart.filter(item => item.kind === "Serviço").reduce((sum, item) => sum + item.quantity * item.unitValue, 0);
+  const additionalCosts = cart.filter(item => item.kind === "Custo adicional").reduce((sum, item) => sum + item.quantity * item.unitValue, 0);
+  const subtotal = productsTotal + servicesTotal + additionalCosts;
+  const total = Math.max(0, subtotal - discount + surcharge);
   const add = (record: ModuleRecord) => setCart(current => { const existing = current.find(item => item.productId === record.id); return existing ? current.map(item => item.productId === record.id ? { ...item, quantity: item.quantity + 1 } : item) : [...current, { id:`ORC-ITEM-${Date.now()}-${current.length}`, productId:record.id, description:record.name, quantity:1, unitValue:record.value ?? 0, kind:record.kind }]; });
   const update = (id: string, changes: Partial<PurchaseItem>) => setCart(current => current.map(item => item.id === id ? { ...item, ...changes } : item).filter(item => item.quantity > 0));
   const save = () => {
     if (!customer || !cart.length) { setNotice("Selecione o cliente e adicione pelo menos um produto ou serviço."); return; }
     const validUntil = new Date(); validUntil.setDate(validUntil.getDate() + validity);
-    const record: ModuleRecord = { id:`ORC-${Date.now().toString().slice(-6)}`, name:`Orçamento • ${customer}`, client:customer, unit, description:`Condição: ${payment}${observations ? ` • ${observations}` : ""}`, createdAt:new Date().toLocaleString("pt-BR"), date:new Date().toISOString().slice(0,10), endDate:validUntil.toISOString().slice(0,10), status:"Em elaboração", value:total, category:"Produtos e serviços", purchaseItems:cart, paymentMethod:payment };
-    onSave(record); setCart([]); setDiscount(0); setObservations(""); setUnit(""); setNotice(`${record.id} salvo com sucesso.`);
+    const record: ModuleRecord = { id:`ORC-${Date.now().toString().slice(-6)}`, name:`Orçamento • ${customer}`, client:customer, unit, description:`Tabela: ${priceTable} • Condição: ${payment}${observations ? ` • ${observations}` : ""}`, createdAt:new Date().toLocaleString("pt-BR"), date:new Date().toISOString().slice(0,10), endDate:validUntil.toISOString().slice(0,10), status:"Em elaboração", value:total, category:"Produtos e serviços", purchaseItems:cart, paymentMethod:payment };
+    onSave(record); setCart([]); setDiscount(0); setSurcharge(0); setObservations(""); setUnit(""); setNotice(`${record.id} salvo com sucesso.`);
   };
   const customerUnits = customer ? customerStructures(customer, customers, structures) : [];
   useEffect(() => {
@@ -1919,7 +1939,7 @@ function GenericModule({ name, onOpen, onDelete, onUpdate, onConvert, companyCnp
       else if (detailTab === "Financeiro") content = list(supplierFinance, "Nenhum lançamento financeiro vinculado.");
       else if (detailTab === "Itens") content = detailRecord.purchaseItems?.length ? <div className="entity-items-table"><table><thead><tr><th>ITEM</th><th>QTD.</th><th>UNITÁRIO</th><th>TOTAL</th></tr></thead><tbody>{detailRecord.purchaseItems.map((item,index)=><tr key={`${item.description}-${index}`}><td><b>{item.description}</b></td><td>{item.quantity}</td><td>{money(item.unitValue)}</td><td>{money(item.quantity*item.unitValue)}</td></tr>)}</tbody></table></div> : <div className="entity-empty">Nenhum item informado.</div>;
       else if (detailTab === "Pagamento") content = <div className="entity-fields-grid">{field("Tipo", detailRecord.paymentType)}{field("Forma", detailRecord.paymentMethod)}{field("Parcelas", detailRecord.installments)}{field("Primeiro vencimento", detailRecord.firstDueDate)}{field("Valor total", money(detailRecord.value))}</div>;
-      else if (detailTab === "Dados técnicos") content = <div className="entity-fields-grid">{field("Tipo de equipamento", detailRecord.equipmentType)}{field("Marca", detailRecord.brand)}{field("Modelo", detailRecord.model)}{field("Capacidade", detailRecord.capacityBtus ? `${detailRecord.capacityBtus.toLocaleString("pt-BR")} BTUs` : "—")}{field("Número de série", detailRecord.serialNumber)}{field("Tensão", detailRecord.voltage)}{field("Fluido refrigerante", detailRecord.refrigerant)}{field("Local de instalação", detailRecord.installationLocation)}{field("Unidade / setor", detailRecord.equipmentUnit)}</div>;
+      else if (detailTab === "Dados técnicos") content = <><div className="entity-fields-grid">{field("Tipo de equipamento", detailRecord.equipmentType)}{field("Marca", detailRecord.brand)}{field("Modelo", detailRecord.model)}{field("Capacidade", detailRecord.capacityBtus ? `${detailRecord.capacityBtus.toLocaleString("pt-BR")} BTUs` : "—")}{field("Número de série", detailRecord.serialNumber)}{field("Tensão", detailRecord.voltage)}{field("Frequência", detailRecord.frequency)}{field("Corrente", detailRecord.current)}{field("Potência", detailRecord.power)}{field("Fluido refrigerante", detailRecord.refrigerant)}{field("Carga de refrigerante", detailRecord.refrigerantCharge)}{field("Fabricação", detailRecord.manufactureDate)}{field("Referência fabricante", detailRecord.manufacturerCode)}{field("Local de instalação", detailRecord.installationLocation)}{field("Unidade / setor", detailRecord.equipmentUnit)}</div>{detailRecord.equipmentLabelImage && <section className="equipment-label-history"><header><div><span>ETIQUETA VINCULADA</span><h3>Foto técnica original</h3></div><button className="outline-btn" onClick={() => onOpen("Novo • Equipamentos")}><Sparkles size={14}/> Ler nova etiqueta com IA</button></header><img src={detailRecord.equipmentLabelImage} alt={detailRecord.equipmentLabelImageName || "Etiqueta técnica"}/><small>{detailRecord.equipmentLabelHistory?.[0] || "Etiqueta cadastrada"}</small></section>}</>;
       else if (detailTab === "Ordens de serviço" || detailTab === "Manutenções") content = relatedOrders.length ? <div className="entity-history-list">{relatedOrders.map(order=><article key={order.id}><span><b>{order.id} • {order.service}</b><small>{order.client} • {order.unit}</small></span><time>{order.date}</time><strong>{order.status}</strong></article>)}</div> : <div className="entity-empty">Nenhuma ordem de serviço vinculada.</div>;
       else if (detailTab === "Garantias") content = <div className="entity-fields-grid">{field("Garantia", detailRecord.warrantyMonths ? `${detailRecord.warrantyMonths} meses` : "—")}{field("Data de instalação", detailRecord.installationDate)}{field("Próxima preventiva", detailRecord.nextMaintenanceDate)}</div>;
       else if (detailTab === "Estoque") content = <div className="entity-fields-grid">{field("Estoque atual", detailRecord.stockCurrent)}{field("Estoque mínimo", detailRecord.stockMin)}{field("Estoque máximo", detailRecord.stockMax)}{field("Localização", detailRecord.stockLocation)}{field("Custo", money(detailRecord.cost))}{field("Preço de venda", money(detailRecord.value))}</div>;
@@ -2013,6 +2033,15 @@ type ModalSave = {
   installationDate?: string;
   nextMaintenanceDate?: string;
   equipmentUnit?: string;
+  frequency?: string;
+  current?: string;
+  power?: string;
+  refrigerantCharge?: string;
+  manufactureDate?: string;
+  manufacturerCode?: string;
+  equipmentLabelImage?: string;
+  equipmentLabelImageName?: string;
+  equipmentLabelHistory?: string[];
 };
 
 type AuthenticatedUser = { username: string; displayName: string; role?: string; permissions?: string[]; companyId?: string; companySlug?: string; trialExpiresAt?: string };
@@ -2148,6 +2177,18 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
   const [installationDate, setInstallationDate] = useState("");
   const [nextMaintenanceDate, setNextMaintenanceDate] = useState("");
   const [equipmentUnit, setEquipmentUnit] = useState("");
+  const [frequency, setFrequency] = useState("");
+  const [currentDraw, setCurrentDraw] = useState("");
+  const [power, setPower] = useState("");
+  const [refrigerantCharge, setRefrigerantCharge] = useState("");
+  const [manufactureDate, setManufactureDate] = useState("");
+  const [manufacturerCode, setManufacturerCode] = useState("");
+  const [equipmentLabel, setEquipmentLabel] = useState<{ name: string; dataUrl: string } | null>(null);
+  const [labelReading, setLabelReading] = useState(false);
+  const [labelError, setLabelError] = useState("");
+  const [labelReview, setLabelReview] = useState<Record<string, string> | null>(null);
+  const labelFileRef = useRef<HTMLInputElement>(null);
+  const cameraFileRef = useRef<HTMLInputElement>(null);
   const [recordCategory, setRecordCategory] = useState("");
   const [recordKind, setRecordKind] = useState<"Serviço" | "Produto">(title.includes("Produtos") ? "Produto" : "Serviço");
   const [selectedCatalogIds, setSelectedCatalogIds] = useState<string[]>([]);
@@ -2188,6 +2229,38 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
   const updatePurchaseItem = (id: string, changes: Partial<PurchaseItem>) => setPurchaseItems(items => items.map(item => item.id === id ? { ...item, ...changes } : item));
   const addPurchaseItem = () => setPurchaseItems(items => [...items, { id: `ITEM-${Date.now()}-${items.length}`, description: "", quantity: 1, unitValue: 0 }]);
   const removePurchaseItem = (id: string) => setPurchaseItems(items => items.length === 1 ? items : items.filter(item => item.id !== id));
+  const readEquipmentLabel = (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { setLabelError("Selecione uma imagem da etiqueta do equipamento."); return; }
+    if (file.size > 8 * 1024 * 1024) { setLabelError("A imagem deve ter no máximo 8 MB."); return; }
+    const reader = new FileReader();
+    reader.onload = () => { setEquipmentLabel({ name: file.name, dataUrl: String(reader.result) }); setLabelError(""); setLabelReview(null); };
+    reader.readAsDataURL(file);
+  };
+  const analyseEquipmentLabel = async () => {
+    if (!equipmentLabel) { setLabelError("Tire uma foto ou anexe a etiqueta antes de usar a IA."); return; }
+    setLabelReading(true); setLabelError("");
+    try {
+      const response = await fetch("/api/equipment-label", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image: equipmentLabel.dataUrl }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Não foi possível analisar a etiqueta.");
+      setLabelReview(result.fields || {});
+    } catch (error) { setLabelError(error instanceof Error ? error.message : "Não foi possível analisar a etiqueta."); }
+    finally { setLabelReading(false); }
+  };
+  const applyLabelReading = () => {
+    if (!labelReview) return;
+    const value = (key: string) => labelReview[key] || "";
+    if (value("brand")) setCatalogBrand(value("brand")); if (value("model")) setCatalogModel(value("model"));
+    if (value("equipmentType")) setEquipmentType(value("equipmentType")); if (value("capacityBtus")) setCapacityBtus(value("capacityBtus").replace(/\D/g, ""));
+    if (value("serialNumber")) setSerialNumber(value("serialNumber")); if (value("voltage")) setVoltage(value("voltage"));
+    if (value("refrigerant")) setRefrigerant(value("refrigerant")); if (value("frequency")) setFrequency(value("frequency"));
+    if (value("current")) setCurrentDraw(value("current")); if (value("power")) setPower(value("power"));
+    if (value("refrigerantCharge")) setRefrigerantCharge(value("refrigerantCharge")); if (value("manufactureDate")) setManufactureDate(value("manufactureDate"));
+    if (value("manufacturerCode")) setManufacturerCode(value("manufacturerCode"));
+    if (!recordName && (value("model") || value("brand"))) setRecordName([value("brand"), value("model")].filter(Boolean).join(" "));
+    setLabelReview(null);
+  };
   const normalizeKey = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
   const importPurchaseXml = async (file?: File) => {
     if (!file) return;
@@ -2387,6 +2460,13 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
         </div>}
         {isEquipmentRegistration && <div className="wide module-form-guidance"><span><Boxes size={18}/></span><div><b>Cadastro técnico do equipamento</b><small>Vincule o equipamento ao cliente e registre os dados usados nas ordens de serviço e no histórico de manutenção.</small></div></div>}
         {isEquipmentRegistration && <>
+          <section className="wide equipment-label-reader">
+            <div className="equipment-label-reader-head"><div><span>FOTO / ETIQUETA DO EQUIPAMENTO</span><h3>Leitura técnica assistida por IA</h3><p>A foto original fica vinculada ao cadastro. Revise os dados antes de aplicar.</p></div><Sparkles size={20}/></div>
+            <div className="equipment-label-reader-content">
+              <div className={`equipment-label-preview ${equipmentLabel ? "has-image" : ""}`}>{equipmentLabel ? <img src={equipmentLabel.dataUrl} alt="Etiqueta técnica anexada"/> : <><ImageIcon size={28}/><span>Pré-visualização da etiqueta</span></>} </div>
+              <div className="equipment-label-actions"><input ref={cameraFileRef} className="visually-hidden" type="file" accept="image/*" capture="environment" onChange={event => { readEquipmentLabel(event.target.files?.[0]); event.currentTarget.value = ""; }}/><input ref={labelFileRef} className="visually-hidden" type="file" accept="image/*" onChange={event => { readEquipmentLabel(event.target.files?.[0]); event.currentTarget.value = ""; }}/><button type="button" className="outline-btn" onClick={() => cameraFileRef.current?.click()}><Camera size={15}/> Tirar foto</button><button type="button" className="outline-btn" onClick={() => labelFileRef.current?.click()}><ImagePlus size={15}/> Anexar imagem</button><button type="button" className="primary-btn" disabled={!equipmentLabel || labelReading} onClick={() => void analyseEquipmentLabel()}><Sparkles size={15}/> {labelReading ? "Analisando etiqueta..." : "Preencher com IA"}</button>{equipmentLabel && <small>{equipmentLabel.name} • imagem será salva no cadastro</small>}{labelError && <em>{labelError}</em>}</div>
+            </div>
+          </section>
           <label>Cliente<select value={recordClient} onChange={event => setRecordClient(event.target.value)}><option value="">Selecione o cliente</option>{customers.map(customer => <option key={customer.id} value={customer.name}>{customer.name}</option>)}</select></label>
           <label>Unidade / filial / setor<input value={equipmentUnit} onChange={event => setEquipmentUnit(event.target.value)} placeholder="Ex.: Matriz, Filial Olímpia, Sala administrativa"/></label>
           <label>Nome / identificação<input value={recordName} onChange={event => setRecordName(event.target.value)} placeholder="Ex.: Ar-condicionado Recepção"/></label>
@@ -2397,6 +2477,12 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
           <label>Número de série<input value={serialNumber} onChange={event=>setSerialNumber(event.target.value)} placeholder="Número de série do equipamento"/></label>
           <label>Tensão<select value={voltage} onChange={event=>setVoltage(event.target.value)}><option>127V</option><option>220V</option><option>220V Trifásico</option><option>380V Trifásico</option></select></label>
           <label>Fluido refrigerante<select value={refrigerant} onChange={event=>setRefrigerant(event.target.value)}><option>R22</option><option>R410A</option><option>R32</option><option>R454B</option><option>Outro</option></select></label>
+          <label>Frequência<input value={frequency} onChange={event=>setFrequency(event.target.value)} placeholder="Ex.: 60 Hz"/></label>
+          <label>Corrente<input value={currentDraw} onChange={event=>setCurrentDraw(event.target.value)} placeholder="Ex.: 5,2 A"/></label>
+          <label>Potência<input value={power} onChange={event=>setPower(event.target.value)} placeholder="Ex.: 1.150 W"/></label>
+          <label>Carga de refrigerante<input value={refrigerantCharge} onChange={event=>setRefrigerantCharge(event.target.value)} placeholder="Ex.: 0,62 kg"/></label>
+          <label>Data de fabricação<input value={manufactureDate} onChange={event=>setManufactureDate(event.target.value)} placeholder="Conforme etiqueta"/></label>
+          <label>Código / referência fabricante<input value={manufacturerCode} onChange={event=>setManufacturerCode(event.target.value)} placeholder="Código da etiqueta"/></label>
           <label>Local de instalação<input value={installationLocation} onChange={event=>setInstallationLocation(event.target.value)} placeholder="Ex.: Recepção / Sala Financeiro"/></label>
           <label>Data de instalação<input type="date" value={installationDate} onChange={event=>setInstallationDate(event.target.value)}/></label>
           <label>Próxima preventiva<input type="date" value={nextMaintenanceDate} onChange={event=>setNextMaintenanceDate(event.target.value)}/></label>
@@ -2432,7 +2518,8 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
         </>}
       </>}
     </>}
-  </div><div className="modal-actions"><button className="outline-btn" onClick={close}>Cancelar</button><button className="primary-btn" disabled={isNewOrder ? !selectedClient || !tech || !date || selectedClientData?.financialStatus === "Bloqueado" : isNewCustomer ? !recordName || !address.trim() || !addressValidated : requestedModule === "Compras" ? !recordName || !recordClient || !purchaseItems.some(item => item.description.trim() && item.quantity > 0) || purchaseTotal <= 0 || (paymentType === "A prazo" && !firstDueDate) : requestedModule === "Obras" ? !recordName || !recordClient || !workAddress : requestedModule === "Equipamentos" ? !recordName || !recordClient || !equipmentType : requestedModule === "Funcionários" ? !recordName || !employeeUsername.trim() || employeePassword.length < 4 : (!isLinkedStructure && !recordName)} onClick={() => onSave({ title, name: recordName, client: isNewOrder ? selectedClient : recordClient, doc, contact, phone, personType, organizationType, legalName: legalName || (personType === "PF" ? recordName : ""), tradeName: tradeName || (personType === "PJ" ? recordName : ""), email: customerEmail, zipCode, street, addressNumber, complement, neighborhood, city: customerCity, state: customerState, stateRegistration, municipalRegistration, cnaeMain, taxStatus, creditLimit, balancePosted, financialStatus, address: isNewOrder ? (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "") : address, unit, tech, date, time, description, status: recordStatus, value: requestedModule === "Compras" ? purchaseTotal : Number(recordValue) || 0, category: recordCategory, kind: recordKind, catalogItems: catalogRecords.filter(item => selectedCatalogIds.includes(item.id)).map(item => ({ id: item.id, name: item.name, kind: item.kind || "Serviço" })), purchaseItems: purchaseItems.filter(item => item.description.trim() && item.quantity > 0), paymentType, paymentMethod, installments: paymentType === "A prazo" ? Math.max(1, installments) : 1, firstDueDate, paymentInstallments, xmlImported, supplierDoc, supplierId, registerSupplier: xmlImported && !supplierId, engineer, workAddress, blockLot, endDate, progress, commission, cost: Number(recordCost) || 0, sku: catalogSku, barcode: catalogBarcode, brand: catalogBrand, model: catalogModel, supplier: catalogSupplier, stockCurrent: Number(catalogStockCurrent)||0, stockMin: Number(catalogStockMin)||0, stockMax: Number(catalogStockMax)||0, stockLocation: catalogStockLocation, warrantyMonths: Number(catalogWarranty)||0, estimatedMinutes: Number(catalogEstimatedMinutes)||0, unitOfMeasure: catalogUnit, employeeRole, employeePermissions, employeeUsername, employeePassword, equipmentType, capacityBtus: Number(capacityBtus)||0, serialNumber, voltage, refrigerant, installationLocation, installationDate, nextMaintenanceDate, equipmentUnit })}><CheckCircle2 size={15}/> Salvar registro</button></div></div>
+  </div><div className="modal-actions"><button className="outline-btn" onClick={close}>Cancelar</button><button className="primary-btn" disabled={isNewOrder ? !selectedClient || !tech || !date || selectedClientData?.financialStatus === "Bloqueado" : isNewCustomer ? !recordName || !address.trim() || !addressValidated : requestedModule === "Compras" ? !recordName || !recordClient || !purchaseItems.some(item => item.description.trim() && item.quantity > 0) || purchaseTotal <= 0 || (paymentType === "A prazo" && !firstDueDate) : requestedModule === "Obras" ? !recordName || !recordClient || !workAddress : requestedModule === "Equipamentos" ? !recordName || !recordClient || !equipmentType : requestedModule === "Funcionários" ? !recordName || !employeeUsername.trim() || employeePassword.length < 4 : (!isLinkedStructure && !recordName)} onClick={() => onSave({ title, name: recordName, client: isNewOrder ? selectedClient : recordClient, doc, contact, phone, personType, organizationType, legalName: legalName || (personType === "PF" ? recordName : ""), tradeName: tradeName || (personType === "PJ" ? recordName : ""), email: customerEmail, zipCode, street, addressNumber, complement, neighborhood, city: customerCity, state: customerState, stateRegistration, municipalRegistration, cnaeMain, taxStatus, creditLimit, balancePosted, financialStatus, address: isNewOrder ? (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "") : address, unit, tech, date, time, description, status: recordStatus, value: requestedModule === "Compras" ? purchaseTotal : Number(recordValue) || 0, category: recordCategory, kind: recordKind, catalogItems: catalogRecords.filter(item => selectedCatalogIds.includes(item.id)).map(item => ({ id: item.id, name: item.name, kind: item.kind || "Serviço" })), purchaseItems: purchaseItems.filter(item => item.description.trim() && item.quantity > 0), paymentType, paymentMethod, installments: paymentType === "A prazo" ? Math.max(1, installments) : 1, firstDueDate, paymentInstallments, xmlImported, supplierDoc, supplierId, registerSupplier: xmlImported && !supplierId, engineer, workAddress, blockLot, endDate, progress, commission, cost: Number(recordCost) || 0, sku: catalogSku, barcode: catalogBarcode, brand: catalogBrand, model: catalogModel, supplier: catalogSupplier, stockCurrent: Number(catalogStockCurrent)||0, stockMin: Number(catalogStockMin)||0, stockMax: Number(catalogStockMax)||0, stockLocation: catalogStockLocation, warrantyMonths: Number(catalogWarranty)||0, estimatedMinutes: Number(catalogEstimatedMinutes)||0, unitOfMeasure: catalogUnit, employeeRole, employeePermissions, employeeUsername, employeePassword, equipmentType, capacityBtus: Number(capacityBtus)||0, serialNumber, voltage, refrigerant, frequency, current: currentDraw, power, refrigerantCharge, manufactureDate, manufacturerCode, equipmentLabelImage: equipmentLabel?.dataUrl, equipmentLabelImageName: equipmentLabel?.name, equipmentLabelHistory: equipmentLabel ? [`Etiqueta cadastrada em ${new Date().toLocaleDateString("pt-BR")} por Usuário atual`] : [], installationLocation, installationDate, nextMaintenanceDate, equipmentUnit })}><CheckCircle2 size={15}/> Salvar registro</button></div></div>
+    {labelReview && <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Dados identificados pela IA"><button className="modal-backdrop" aria-label="Cancelar leitura" onClick={() => setLabelReview(null)}/><section className="modal label-review-modal"><div className="modal-head"><div><span><Sparkles size={14}/> DADOS IDENTIFICADOS PELA IA</span><h2>Confira antes de aplicar</h2><p>Somente informações legíveis são sugeridas. Campos não identificados permanecem em branco.</p></div><button onClick={() => setLabelReview(null)} aria-label="Fechar"><X size={18}/></button></div><div className="label-review-grid">{[["brand","Marca"],["model","Modelo"],["equipmentType","Tipo"],["capacityBtus","Capacidade"],["serialNumber","Número de série"],["voltage","Tensão"],["frequency","Frequência"],["current","Corrente"],["power","Potência"],["refrigerant","Fluido"],["refrigerantCharge","Carga de refrigerante"],["manufactureDate","Fabricação"],["manufacturerCode","Referência fabricante"]].map(([key,label]) => <label key={key}>{label}<input value={labelReview[key] || ""} placeholder="Não identificado" onChange={event => setLabelReview(current => current ? { ...current, [key]: event.target.value } : current)}/></label>)}</div><div className="modal-actions"><button className="outline-btn" onClick={() => setLabelReview(null)}>Cancelar</button><button className="outline-btn" onClick={() => {}}>Revisar</button><button className="primary-btn" onClick={applyLabelReading}><CheckCircle2 size={15}/> Aplicar dados</button></div></section></div>}
     {servicePickerOpen && <div className="service-picker-layer" role="dialog" aria-modal="true" aria-label="Selecionar serviços"><button type="button" className="service-picker-backdrop" aria-label="Fechar seleção de serviços" onClick={() => setServicePickerOpen(false)}/><section className="service-picker"><header><div><span>CATÁLOGO DE SERVIÇOS</span><h3>Selecionar vários serviços</h3><p>Pesquise e marque todos os itens necessários para esta ordem.</p></div><button type="button" aria-label="Fechar" onClick={() => setServicePickerOpen(false)}><X size={17}/></button></header><label className="service-picker-search"><Search size={17}/><input autoFocus value={serviceSearch} onChange={event => setServiceSearch(event.target.value)} placeholder="Pesquisar por nome ou categoria..."/><small>{visibleServiceOptions.length} resultado(s)</small></label><div className="service-picker-grid">{visibleServiceOptions.map(item => <label key={item.id} className={servicePickerIds.includes(item.id) ? "selected" : ""}><input type="checkbox" checked={servicePickerIds.includes(item.id)} onChange={() => setServicePickerIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])}/><span><Wrench size={17}/></span><div><b>{item.name}</b><small>{item.category || item.description || "Serviço cadastrado"}</small></div><CheckCircle2 size={16}/></label>)}</div>{!visibleServiceOptions.length && <div className="catalog-empty"><Search size={18}/><span>Nenhum serviço encontrado para esta pesquisa.</span></div>}<footer><span><b>{servicePickerIds.length}</b> serviço(s) marcado(s)</span><div><button type="button" className="outline-btn" onClick={() => setServicePickerOpen(false)}>Cancelar</button><button type="button" className="primary-btn" onClick={() => { setSelectedCatalogIds(servicePickerIds); setServicePickerOpen(false); }}><CheckCircle2 size={15}/> Aplicar seleção</button></div></footer></section></div>}
   </div>;
 }
@@ -2918,6 +3005,15 @@ export default function Home() {
         serialNumber: moduleName === "Equipamentos" ? data.serialNumber : undefined,
         voltage: moduleName === "Equipamentos" ? data.voltage : undefined,
         refrigerant: moduleName === "Equipamentos" ? data.refrigerant : undefined,
+        frequency: moduleName === "Equipamentos" ? data.frequency : undefined,
+        current: moduleName === "Equipamentos" ? data.current : undefined,
+        power: moduleName === "Equipamentos" ? data.power : undefined,
+        refrigerantCharge: moduleName === "Equipamentos" ? data.refrigerantCharge : undefined,
+        manufactureDate: moduleName === "Equipamentos" ? data.manufactureDate : undefined,
+        manufacturerCode: moduleName === "Equipamentos" ? data.manufacturerCode : undefined,
+        equipmentLabelImage: moduleName === "Equipamentos" ? data.equipmentLabelImage : undefined,
+        equipmentLabelImageName: moduleName === "Equipamentos" ? data.equipmentLabelImageName : undefined,
+        equipmentLabelHistory: moduleName === "Equipamentos" ? data.equipmentLabelHistory : undefined,
         installationLocation: moduleName === "Equipamentos" ? data.installationLocation : undefined,
         installationDate: moduleName === "Equipamentos" ? data.installationDate : undefined,
         nextMaintenanceDate: moduleName === "Equipamentos" ? data.nextMaintenanceDate : undefined,
@@ -3145,7 +3241,7 @@ export default function Home() {
       {savedMessage && <div className="save-toast" role="status"><CheckCircle2 size={16}/>{savedMessage}</div>}
       <div className="company-context"><Building2 size={13}/><span>{activeCompany.tradeName}</span><small>{activeCompany.cnpj || "CNPJ pendente"} • {activeCompany.city}/{activeCompany.state}</small></div>
       {current === "PMOC e conformidade" && <TechnicalCompliancePanel plans={(moduleRecords.PMOC ?? []) as any} fluids={(moduleRecords.Refrigerantes ?? []) as any} documents={(moduleRecords["Documentação / Habilitação"] ?? []) as any} onSave={(module,record)=>saveConfirmedModuleRecord(module,record)}/>}
-      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={record => updateModuleRecord("Unidades e setores",record)} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} company={activeCompany} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <><PublicContractsPanel records={(moduleRecords.Certames ?? []) as PublicContractRecord[]} customers={customerRecords} onSave={record => saveConfirmedModuleRecord("Certames", record)}/><PublicCommitmentsPanel orders={serviceOrders} contracts={(moduleRecords.Certames ?? []) as PublicContractRecord[]} commitments={(moduleRecords.Empenhos ?? []) as PublicCommitmentRecord[]} onSave={record=>saveConfirmedModuleRecord("Empenhos",record)} onReadyToInvoice={record=>saveConfirmedModuleRecord("Empenhos",{...record,status:"Pronto para faturar"},[{moduleName:"Financeiro",record:{id:`FAT-${record.id}`,name:`Faturamento • ${record.name}`,client:record.client,description:`Aguardando emissão de Nota Fiscal • ${record.empenhoProcess || "processo não informado"}`,createdAt:new Date().toLocaleString("pt-BR"),status:"Pronto para faturar",date:new Date().toISOString().slice(0,10),value:record.value??0,category:"Faturamento público",transactionType:"Receber",empenhoId:record.id}}])}/><BiddingModule/></> : current === "Orçamentos" ? <BudgetPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={record => updateModuleRecord("Orçamentos",record)} onConvert={convertBudget} onDelete={record => deleteModuleRecord("Orçamentos",record)}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} sales={moduleRecords.Vendas ?? []} onSave={record => updateModuleRecord("Vendas",record)}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders} company={activeCompany}/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} onOpen={setModal} onUpdate={record=>{const commitment=record.status==="Recebida"?(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId):undefined;const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Recebido"}}]:[];return saveConfirmedModuleRecord("Financeiro",record,related)}} onIssueInvoice={(record,invoiceNumber)=>{const commitment=(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId);const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Faturado"}}]:[];return saveConfirmedModuleRecord("Financeiro",{...record,status:"Em aberto",transactionType:"Receber",invoiceNumber,invoiceIssuedAt:new Date().toISOString()},related)}}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} onUpdate={updateServiceOrder} serviceOrders={serviceOrders} customers={customerRecords} company={activeCompany}/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []} allModules={moduleRecords} serviceOrders={serviceOrders}/>}</div>
+      <div className="page-content">{current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={record => updateModuleRecord("Unidades e setores",record)} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} company={activeCompany} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <><PublicContractsPanel records={(moduleRecords.Certames ?? []) as PublicContractRecord[]} customers={customerRecords} onSave={record => saveConfirmedModuleRecord("Certames", record)}/><PublicCommitmentsPanel orders={serviceOrders} contracts={(moduleRecords.Certames ?? []) as PublicContractRecord[]} commitments={(moduleRecords.Empenhos ?? []) as PublicCommitmentRecord[]} onSave={record=>saveConfirmedModuleRecord("Empenhos",record)} onReadyToInvoice={record=>saveConfirmedModuleRecord("Empenhos",{...record,status:"Pronto para faturar"},[{moduleName:"Financeiro",record:{id:`FAT-${record.id}`,name:`Faturamento • ${record.name}`,client:record.client,description:`Aguardando emissão de Nota Fiscal • ${record.empenhoProcess || "processo não informado"}`,createdAt:new Date().toLocaleString("pt-BR"),status:"Pronto para faturar",date:new Date().toISOString().slice(0,10),value:record.value??0,category:"Faturamento público",transactionType:"Receber",empenhoId:record.id}}])}/><BiddingModule/></> : current === "Orçamentos" ? <BudgetPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={record => updateModuleRecord("Orçamentos",record)} onConvert={convertBudget} onDelete={deleteModuleRecord("Orçamentos",record)}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} sales={moduleRecords.Vendas ?? []} onSave={record => updateModuleRecord("Vendas",record)}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders} company={activeCompany}/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} onOpen={setModal} onUpdate={record=>{const commitment=record.status==="Recebida"?(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId):undefined;const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Recebido"}}]:[];return saveConfirmedModuleRecord("Financeiro",record,related)}} onIssueInvoice={(record,invoiceNumber)=>{const commitment=(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId);const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Faturado"}}]:[];return saveConfirmedModuleRecord("Financeiro",{...record,status:"Em aberto",transactionType:"Receber",invoiceNumber,invoiceIssuedAt:new Date().toISOString()},related)}}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} onUpdate={updateServiceOrder} serviceOrders={serviceOrders} customers={customerRecords} company={activeCompany}/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []} allModules={moduleRecords} serviceOrders={serviceOrders}/>}</div>
       <footer><span>© 2026 ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
     {modal && <Modal title={modal} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalogRecords={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} supplierRecords={moduleRecords["Fornecedores"] ?? []} employeeRecords={moduleRecords["Funcionários"] ?? [tiagoEmployee]} close={() => setModal("")} onSave={saveRecord}/>}
