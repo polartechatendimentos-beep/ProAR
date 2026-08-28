@@ -3,17 +3,16 @@
 import "./public-work-map.css";
 import { AlertTriangle, Building2, History, House, ImageIcon, RefreshCw, X } from "lucide-react";
 import { use, useEffect, useState } from "react";
+import { WORK_STATUSES, getWorkProgress, getWorkStatusColor, normalizeWorkStatus } from "../../../lib/work-status";
 
 type StagePhoto = { label: string; url: string };
 type Update = { id: string; status: string; note?: string; responsible?: string; photo?: string; photos?: string[] | StagePhoto[]; createdAt: string };
 type Incident = { id: string; type: "Perda" | "Roubo"; note?: string; photo: string; responsible: string; createdAt: string };
 type WorkHouse = { id: string; block: string; lot: number; kind?: "house" | "common"; name?: string; status: string; note?: string; updatedAt?: string; photo?: string; history?: Update[]; incidents?: Incident[] };
 type PublicMap = { title: string; workName?: string; houses: WorkHouse[]; updatedAt: string };
-const colors = ["#64748b", "#ef4444", "#f59e0b", "#8b5cf6", "#06b6d4", "#3b82f6", "#16a34a"];
-const statuses = ["INÍCIO DE OBRA", "AG. FRIGORÍGENA", "AG. ACABAMENTO", "AG. TUBULAÇÃO FORÇADA", "AG. EXAUSTOR", "AG. TAMPA FRIGORÍGENA", "SERVIÇO CONCLUÍDO"];
-const legacy: Record<string,string> = { "AG FRIGORÍGENA":"AG. FRIGORÍGENA", "AG VENTO KIT":"AG. TUBULAÇÃO FORÇADA", "VENTOKIT E FRIGORÍGENA OK":"AG. TUBULAÇÃO FORÇADA", "AG ACABAMENTO":"AG. ACABAMENTO", "AG EXAUSTOR":"AG. EXAUSTOR", "AG. EXAUTOR":"AG. EXAUSTOR", "AG EXAUTOR":"AG. EXAUSTOR", "ag_exautor":"AG. EXAUSTOR", "AG TAMPA FRIGORÍGENA":"AG. TAMPA FRIGORÍGENA", "FIM":"SERVIÇO CONCLUÍDO" };
-const normalizeStatus = (status: string) => legacy[status] || status;
-const statusColor = (status: string) => colors[Math.max(0, statuses.indexOf(normalizeStatus(status)))] || "#64748b";
+const statuses = WORK_STATUSES;
+const normalizeStatus = normalizeWorkStatus;
+const statusColor = getWorkStatusColor;
 const updatePhotos = (update: Update): StagePhoto[] => (update.photos?.length ? update.photos : update.photo ? [update.photo] : []).map((photo,index) => typeof photo === "string" ? { label:`Foto ${index + 1}`,url:photo } : photo);
 
 export default function PublicWorkMap({ params }: { params: Promise<{ token: string }> }) {
@@ -25,7 +24,7 @@ export default function PublicWorkMap({ params }: { params: Promise<{ token: str
   useEffect(() => { void load(); const timer = window.setInterval(() => void load(), 30000); return () => window.clearInterval(timer); }, [token]);
   const blocks = [...new Set(map?.houses.map(house => house.block) ?? [])];
   const completed = map?.houses.filter(house => normalizeStatus(house.status) === "SERVIÇO CONCLUÍDO").length ?? 0;
-  const houseProgress = (house: WorkHouse) => Math.round(Math.max(0,statuses.indexOf(normalizeStatus(house.status))) / (statuses.length - 1) * 100);
+  const houseProgress = (house: WorkHouse) => getWorkProgress(house.status);
   const progress = map?.houses.length ? Math.round(map.houses.reduce((total,house)=>total+houseProgress(house),0)/map.houses.length) : 0;
   const blockSummary = (block: string) => {
     const houses = map?.houses.filter(house => house.block === block) ?? [];
