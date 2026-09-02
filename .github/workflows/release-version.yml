@@ -1,0 +1,27 @@
+name: Atualizar versão de produção
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  bump-version:
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Incrementar versão pública
+        run: node scripts/bump-release-version.mjs
+      - name: Salvar versão
+        run: |
+          git config user.name "proar-release-bot"
+          git config user.email "proar-release-bot@users.noreply.github.com"
+          git add lib/release-version.ts
+          git commit -m "chore(release): atualiza versão de produção" || exit 0
+          git push
