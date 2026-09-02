@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { searchAutomaticTenders, type PncpTender } from "../../licitacoes/route";
 import { loadWhatsAppConfig, sendWhatsAppTemplate } from "../../../../lib/proar-whatsapp";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
 type TenderStore = { items: (PncpTender & { discoveredAt: string; whatsappStatus?: string })[]; lastScan?: string; lastError?: string };
+type PncpTender = {
+  numeroControlePNCP?: string; objetoCompra?: string; anoCompra?: number; sequencialCompra?: number;
+  orgaoEntidade?: { cnpj?: string }; [key: string]: unknown;
+};
 
 function supabaseConfig() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -60,9 +63,16 @@ async function processCustomerReminders() {
   return { sent, pending: due.length - sent };
 }
 
-export async function runTenderMonitor() {
+// Route handlers may export only the HTTP methods and supported Next.js route
+// configuration. Keep the monitor private to this module so Next can validate
+// the route during the production build.
+async function runTenderMonitor(request: NextRequest) {
   const store = await loadStore();
-  const result = await searchAutomaticTenders({ radius: 300 });
+  const searchUrl = new URL("/api/licitacoes?raio=300", request.nextUrl.origin);
+  const response = await fetch(searchUrl, { cache: "no-store" });
+  if (!response.ok) throw new Error("Consulta de licitações indisponível");
+  const payload = await response.json() as { data?: PncpTender[]; warning?: string };
+  const result = { data: payload.data ?? [], failedSources: payload.warning ? [payload.warning] : [] };
   const known = new Set(store.items.map(item => item.numeroControlePNCP));
   const newItems = result.data.filter(item => item.numeroControlePNCP && !known.has(item.numeroControlePNCP));
   let whatsappStatus = "Nenhuma nova oportunidade";
@@ -82,6 +92,6 @@ export async function runTenderMonitor() {
 
 export async function GET(request: NextRequest) {
   if (!process.env.CRON_SECRET || request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-  try { const tenders = await runTenderMonitor(); const reminders = await processCustomerReminders(); return NextResponse.json({ success: true, ...tenders, reminders }); }
+  try { const tenders = await runTenderMonitor(request); const reminders = await processCustomerReminders(); return NextResponse.json({ success: true, ...tenders, reminders }); }
   catch (error) { console.error("Tender monitor failed", error); return NextResponse.json({ error: "Falha no monitor diário" }, { status: 500 }); }
 }
