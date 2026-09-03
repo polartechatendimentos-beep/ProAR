@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readSession } from "@/lib/proar-auth";
-import { insertOperational, listOperational } from "@/lib/operational-repository";
+import { insertOperational, listOperational, updateOperational } from "@/lib/operational-repository";
 
 const contactTypes = new Set(["engenharia", "fiscalizacao"]);
 
@@ -36,5 +36,26 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ saved: true, contact: rows[0] });
   } catch {
     return NextResponse.json({ error: "Não foi possível salvar o contato da obra." }, { status: 503 });
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  const user = readSession(request.cookies.get("proar_session")?.value);
+  if (!user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
+  try {
+    const body = await request.json();
+    const id = String(body.id || "");
+    if (!/^[a-f0-9-]{36}$/i.test(id) || !body.name || !contactTypes.has(body.contactType)) return NextResponse.json({ error: "Contato, tipo e nome válidos são obrigatórios." }, { status: 400 });
+    const rows = await updateOperational(user, "proar_work_contacts", `id=eq.${encodeURIComponent(id)}`, {
+      contact_type: body.contactType, name: String(body.name), company_name: body.companyName || null,
+      role_name: body.roleName || null, registry: body.registry || null, phone: body.phone || null,
+      whatsapp: body.whatsapp || null, email: body.email || null, is_primary: Boolean(body.isPrimary),
+      is_active: body.isActive !== false, starts_at: body.startsAt || null, ends_at: body.endsAt || null,
+      notes: body.notes || null, updated_at: new Date().toISOString(),
+    });
+    if (!rows[0]) return NextResponse.json({ error: "Contato não encontrado." }, { status: 404 });
+    return NextResponse.json({ saved: true, contact: rows[0] });
+  } catch {
+    return NextResponse.json({ error: "Não foi possível atualizar o contato da obra." }, { status: 503 });
   }
 }
