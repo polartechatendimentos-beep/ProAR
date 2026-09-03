@@ -77,3 +77,24 @@ export async function insertOperational<T = Record<string, unknown>>(
 
   return (await response.json()) as T[];
 }
+
+export async function updateOperational<T = Record<string, unknown>>(
+  user: OperationalUser,
+  table: string,
+  filter: string,
+  data: Record<string, unknown>,
+): Promise<T[]> {
+  assertTable(table);
+  const companyId = companyIdFor(user);
+  if (!filter) throw new Error("Filtro obrigatório para atualização operacional.");
+  const response = await supabaseRest(`${table}?${appendCompanyFilter(filter, companyId)}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`Falha ao atualizar ${table}: ${response.status} ${detail}`.trim());
+  }
+  return (await response.json()) as T[];
+}
