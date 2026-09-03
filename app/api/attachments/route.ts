@@ -29,8 +29,12 @@ export async function GET(request: NextRequest) {
   const entityId = request.nextUrl.searchParams.get("entityId");
   if (!validTarget(entityType, entityId)) return NextResponse.json({ error: "Registro de anexo inválido." }, { status: 400 });
   try {
-    const attachments = await listOperational(user, "proar_attachments", `entity_type=eq.${encodeURIComponent(entityType!)}&entity_id=eq.${encodeURIComponent(entityId!)}&order=created_at.desc`);
-    return NextResponse.json({ attachments });
+    const attachments = await listOperational<Record<string, unknown>>(user, "proar_attachments", `entity_type=eq.${encodeURIComponent(entityType!)}&entity_id=eq.${encodeURIComponent(entityId!)}&order=created_at.desc`);
+    const safeAttachments = attachments.map(({ storage_url: _storageUrl, ...attachment }) => ({
+      ...attachment,
+      view_url: `/api/attachments/${attachment.id}`,
+    }));
+    return NextResponse.json({ attachments: safeAttachments });
   } catch {
     return NextResponse.json({ error: "Anexos indisponíveis. Execute a migração operacional." }, { status: 503 });
   }
@@ -53,7 +57,7 @@ export async function POST(request: NextRequest) {
     const category = typeof categoryValue === "string" && categories.has(categoryValue) ? categoryValue : "documento";
     const company = String(user.companyId || "empresa").replace(/[^a-zA-Z0-9_-]/g, "-");
     const key = `proar/${company}/${entityType}/${encodeURIComponent(String(entityId))}/${Date.now()}-${cleanFileName(file.name)}`;
-    const uploaded = await put(key, file, { access: "public", addRandomSuffix: true, contentType: file.type });
+    const uploaded = await put(key, file, { access: "private", addRandomSuffix: true, contentType: file.type });
     const rows = await insertOperational(user, "proar_attachments", {
       entity_type: entityType, entity_id: entityId, category, storage_url: uploaded.url,
       file_name: file.name.slice(0, 240), mime_type: file.type, byte_size: file.size,
