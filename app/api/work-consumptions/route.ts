@@ -1,64 +1,86 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { db } from "@/db";
+import { workConsumptions, works } from "@/db/schema";
 import { readSession } from "@/lib/proar-auth";
-import { insertOperational, listOperational, updateOperational } from "@/lib/operational-repository";
+import { assertCompanyAccess, getEffectiveCompanyId } from "@/lib/company-access";
+import { desc, eq, and } from "drizzle-orm";
 
-const statuses = new Set(["previsto", "confirmado", "estornado"]);
-const positive = (value: unknown) => {
-  const number = Number(value);
-  return Number.isFinite(number) && number >= 0 ? number : null;
-};
-
-export async function GET(request: NextRequest) {
-  const user = readSession(request.cookies.get("proar_session")?.value);
-  if (!user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
-  const workId = request.nextUrl.searchParams.get("workId");
-  if (!workId) return NextResponse.json({ error: "Obra obrigatória." }, { status: 400 });
+export async function GET(request: Request) {
   try {
-    const consumptions = await listOperational(user, "proar_work_consumptions", `work_id=eq.${encodeURIComponent(workId)}&order=created_at.desc`);
-    return NextResponse.json({ consumptions });
-  } catch {
-    return NextResponse.json({ error: "Consumos da obra indisponíveis. Execute a migração operacional." }, { status: 503 });
+    const { searchParams } = new URL(request.url);
+    const workId = searchParams.get("work_id") ? Number(searchParams.get("work_id")) : null;
+    const token = searchParams.get("token");
+
+    if (token) {
+      const [foundWork] = await db.select().from(works).where(eq(works.tokenPublico, token)).limit(1);
+      if (!foundWork) {
+        return NextResponse.json({ success: false, error: "Obra não encontrada." }, { status: 404 });
+      }
+      const consumptions = await db
+        .select()
+        .from(workConsumptions)
+        .where(eq(workConsumptions.workId, foundWork.id))
+        .orderBy(desc(workConsumptions.data));
+      return NextResponse.json({ success: true, count: consumptions.length, data: consumptions });
+    }
+
+    const session = await readSession(request);
+    const companyId = session ? getEffectiveCompanyId(session) : 1;
+
+    let conditions = [eq(workConsumptions.companyId, companyId)];
+    if (workId) {
+      conditions.push(eq(workConsumptions.workId, workId));
+    }
+
+    const list = await db
+      .select()
+      .from(workConsumptions)
+      .where(and(...conditions))
+      .orderBy(desc(workConsumptions.data));
+
+    return NextResponse.json({ success: true, count: list.length, data: list });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
 
-export async function POST(request: NextRequest) {
-  const user = readSession(request.cookies.get("proar_session")?.value);
-  if (!user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
+export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const finalQuantity = positive(body.finalQuantity);
-    const plannedQuantity = positive(body.plannedQuantity) ?? 0;
-    const wastePercent = positive(body.wastePercent) ?? 0;
-    const status = String(body.status || "confirmado");
-    if (!body.workId || !body.workStage || !body.productId || finalQuantity === null || !statuses.has(status)) return NextResponse.json({ error: "Obra, etapa, produto, quantidade e situação válidos são obrigatórios." }, { status: 400 });
-    const rows = await insertOperational(user, "proar_work_consumptions", {
-      work_id: String(body.workId), block_code: body.blockCode || null, unit_code: body.unitCode || null,
-      work_stage: String(body.workStage), product_id: String(body.productId), stock_movement_id: body.stockMovementId || null,
-      planned_quantity: plannedQuantity, waste_percent: wastePercent, final_quantity: finalQuantity, status,
-      created_by: user.displayName || "Usuário",
-    });
-    await insertOperational(user, "proar_audit_events", {
-      entity_type: "consumo_obra", entity_id: String(rows[0]?.id || body.productId), action: "consumo_registrado",
-      after_data: { workId: body.workId, productId: body.productId, finalQuantity, status }, created_by: user.displayName || "Usuário",
-    });
-    return NextResponse.json({ saved: true, consumption: rows[0] }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: "Não foi possível registrar o consumo da obra. Verifique duplicidade por unidade, etapa e produto." }, { status: 409 });
-  }
-}
+    const session = await readSession(request);
+    if (!session) {
+      return NextResponse.json({ success: false, error: "Não autorizado." }, { status: 401 });
+    }
 
-export async function PATCH(request: NextRequest) {
-  const user = readSession(request.cookies.get("proar_session")?.value);
-  if (!user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
-  try {
     const body = await request.json();
-    const id = String(body.id || "");
-    const status = String(body.status || "");
-    if (!/^[a-f0-9-]{36}$/i.test(id) || !statuses.has(status)) return NextResponse.json({ error: "Consumo e situação válidos são obrigatórios." }, { status: 400 });
-    const rows = await updateOperational(user, "proar_work_consumptions", `id=eq.${encodeURIComponent(id)}`, { status });
-    if (!rows[0]) return NextResponse.json({ error: "Consumo não encontrado." }, { status: 404 });
-    return NextResponse.json({ saved: true, consumption: rows[0] });
-  } catch {
-    return NextResponse.json({ error: "Não foi possível atualizar o consumo da obra." }, { status: 503 });
+    const companyId = assertCompanyAccess(session, body.companyId);
+
+    if (!body.workId || !body.item || !body.quantidade) {
+      return NextResponse.json(
+        { success: false, error: "Campos obrigatórios: workId, item e quantidade." },
+        { status: 400 }
+      );
+    }
+
+    const qtd = Number(body.quantidade);
+    const unitPrice = body.valorUnitario ? Number(body.valorUnitario) : 0;
+    const total = body.valorTotal ? Number(body.valorTotal) : qtd * unitPrice;
+
+    const [newConsumption] = await db
+      .insert(workConsumptions)
+      .values({
+        workId: Number(body.workId),
+        companyId,
+        item: body.item,
+        categoria: body.categoria || "material",
+        quantidade: String(qtd),
+        unidade: body.unidade || "un",
+        valorUnitario: String(unitPrice),
+        valorTotal: String(total),
+      })
+      .returning();
+
+    return NextResponse.json({ success: true, data: newConsumption });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

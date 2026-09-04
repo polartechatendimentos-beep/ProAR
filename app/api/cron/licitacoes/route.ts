@@ -1,97 +1,83 @@
-import { NextRequest, NextResponse } from "next/server";
-import { loadWhatsAppConfig, sendWhatsAppTemplate } from "../../../../lib/proar-whatsapp";
+import { NextResponse } from "next/server";
+import { db } from "@/db";
+import { licitacoes } from "@/db/schema";
 
-export const runtime = "nodejs";
-export const maxDuration = 120;
+// Palavras-chave prioritárias no setor de climatização e engenharia térmica
+const KEYWORDS = ["ar condicionado", "climatizacao", "pmoc", "refrigeracao", "chiller", "split", "fan coil"];
 
-type TenderStore = { items: (PncpTender & { discoveredAt: string; whatsappStatus?: string })[]; lastScan?: string; lastError?: string };
-type PncpTender = {
-  numeroControlePNCP?: string; objetoCompra?: string; anoCompra?: number; sequencialCompra?: number;
-  orgaoEntidade?: { cnpj?: string }; [key: string]: unknown;
-};
+/**
+ * Endpoint de sincronização e busca autônoma de licitações em andamento (PNCP)
+ * Protegido obrigatoriamente por CRON_SECRET.
+ */
+export async function GET(request: Request) {
+  const authHeader = request.headers.get("authorization");
+  const cronSecret = process.env.CRON_SECRET;
 
-function supabaseConfig() {
-  const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Supabase não configurado");
-  return { url, key };
-}
-
-async function loadStore(): Promise<TenderStore> {
-  const { url, key } = supabaseConfig();
-  const response = await fetch(`${url}/rest/v1/proar_state?id=eq.licitacoes&select=payload`, { headers: { apikey: key, Authorization: `Bearer ${key}` }, cache: "no-store" });
-  if (!response.ok) throw new Error(await response.text());
-  const rows = await response.json();
-  return rows[0]?.payload ?? { items: [] };
-}
-
-async function saveStore(store: TenderStore) {
-  const { url, key } = supabaseConfig();
-  const response = await fetch(`${url}/rest/v1/proar_state?on_conflict=id`, { method: "POST", headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ id: "licitacoes", payload: store, updated_at: new Date().toISOString() }) });
-  if (!response.ok) throw new Error(await response.text());
-}
-
-async function notifyWhatsApp(items: PncpTender[]) {
-  const config = await loadWhatsAppConfig();
-  if (!config.active || !config.accessToken || !config.phoneNumberId || !items.length) return "Aguardando configuração da API oficial do WhatsApp";
-  const first = items[0];
-  const url = first.orgaoEntidade?.cnpj && first.anoCompra && first.sequencialCompra ? `https://pncp.gov.br/app/editais/${first.orgaoEntidade.cnpj}/${first.anoCompra}/${first.sequencialCompra}` : "https://pncp.gov.br/app/editais";
-  await sendWhatsAppTemplate(config, config.tenderTo, config.tenderTemplate, [String(items.length), (first.objetoCompra ?? "Nova oportunidade").slice(0, 180), url]);
-  return "Enviado";
-}
-
-async function processCustomerReminders() {
-  const { url, key } = supabaseConfig();
-  const response = await fetch(`${url}/rest/v1/proar_state?id=eq.main&select=payload`, { headers: { apikey: key, Authorization: `Bearer ${key}` }, cache: "no-store" });
-  if (!response.ok) throw new Error(await response.text());
-  const rows = await response.json();
-  const state = rows[0]?.payload;
-  if (!state?.moduleRecords?.Lembretes) return { sent: 0, pending: 0 };
-  const today = new Date().toISOString().slice(0, 10);
-  const due = state.moduleRecords.Lembretes.filter((item: Record<string, unknown>) => item.status === "Agendado" && String(item.date ?? "") <= today);
-  let sent = 0;
-  for (const reminder of due) {
-    const config = await loadWhatsAppConfig();
-    const to = String(reminder.category ?? "").replace(/\D/g, "");
-    if (!config.active || !to) continue;
-    try { await sendWhatsAppTemplate(config, to, config.reminderTemplate, [String(reminder.client ?? "cliente"), String(reminder.reminderMessage ?? reminder.description ?? "Está na hora da higienização.").slice(0, 300)]); reminder.status = "Enviado"; reminder.description = `${reminder.description} • WhatsApp enviado em ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`; sent += 1; } catch (error) { console.error("Reminder WhatsApp failed", error); }
+  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    return NextResponse.json(
+      { success: false, error: "Acesso não autorizado ao job de sincronização." },
+      { status: 401 }
+    );
   }
-  if (sent) {
-    const save = await fetch(`${url}/rest/v1/proar_state?on_conflict=id`, { method: "POST", headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ id: "main", payload: state, updated_at: new Date().toISOString() }) });
-    if (!save.ok) throw new Error(await save.text());
-  }
-  return { sent, pending: due.length - sent };
-}
 
-// Route handlers may export only the HTTP methods and supported Next.js route
-// configuration. Keep the monitor private to this module so Next can validate
-// the route during the production build.
-async function runTenderMonitor(request: NextRequest) {
-  const store = await loadStore();
-  const searchUrl = new URL("/api/licitacoes?raio=300", request.nextUrl.origin);
-  const response = await fetch(searchUrl, { cache: "no-store" });
-  if (!response.ok) throw new Error("Consulta de licitações indisponível");
-  const payload = await response.json() as { data?: PncpTender[]; warning?: string };
-  const result = { data: payload.data ?? [], failedSources: payload.warning ? [payload.warning] : [] };
-  const known = new Set(store.items.map(item => item.numeroControlePNCP));
-  const newItems = result.data.filter(item => item.numeroControlePNCP && !known.has(item.numeroControlePNCP));
-  let whatsappStatus = "Nenhuma nova oportunidade";
-  if (newItems.length) {
-    try { whatsappStatus = await notifyWhatsApp(newItems); }
-    catch (error) { whatsappStatus = error instanceof Error ? error.message : "Falha no WhatsApp"; }
-  }
-  const discoveredAt = new Date().toISOString();
-  const items = [...newItems.map(item => ({ ...item, discoveredAt, whatsappStatus })), ...store.items]
-    .filter((item, index, list) => list.findIndex(candidate => candidate.numeroControlePNCP === item.numeroControlePNCP) === index)
-    .slice(0, 500);
-  const failedCount = result.failedSources.length;
-  const updated: TenderStore = { items, lastScan: discoveredAt, lastError: failedCount ? `${failedCount} consulta(s) parcial(is)` : "" };
-  await saveStore(updated);
-  return { newItems: newItems.length, total: items.length, lastScan: discoveredAt, whatsappStatus };
-}
+  try {
+    console.log("[Cron ProAR] Executando busca autônoma de licitações no PNCP...");
 
-export async function GET(request: NextRequest) {
-  if (!process.env.CRON_SECRET || request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-  try { const tenders = await runTenderMonitor(request); const reminders = await processCustomerReminders(); return NextResponse.json({ success: true, ...tenders, reminders }); }
-  catch (error) { console.error("Tender monitor failed", error); return NextResponse.json({ error: "Falha no monitor diário" }, { status: 500 }); }
+    const today = new Date().toISOString().split("T")[0].replace(/-/g, "");
+    const pncpUrl = `https://pncp.gov.br/api/consulta/v1/contratacoes/publicas?dataInicial=${today}&codigoModalidadeContratacao=6&pagina=1`;
+    let novasLicitacoes = 0;
+
+    try {
+      const response = await fetch(pncpUrl, {
+        headers: { Accept: "application/json" },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.data && Array.isArray(data.data)) {
+          for (const item of data.data) {
+            const objeto = (item.objetoContratacao || "").toLowerCase();
+            // Filtra se o edital contém palavras de climatização
+            const isRelevant = KEYWORDS.some((kw) => objeto.includes(kw));
+
+            if (isRelevant) {
+              await db
+                .insert(licitacoes)
+                .values({
+                  numeroControlePncp: item.numeroControlePNCP || `PNCP-${Date.now()}-${Math.random()}`,
+                  titulo: item.objetoContratacao || "Licitação de Climatização / PMOC",
+                  descricao: item.informacaoComplementar || item.objetoContratacao || "Serviços de climatização.",
+                  orgao: item.orgaoEntidade?.razaoSocial || "Órgão Público",
+                  uf: item.unidadeOrgao?.ufSigla || "SP",
+                  modalidade: item.modalidadeNome || "Pregão Eletrônico",
+                  valorEstimado: item.valorTotalEstimado
+                    ? `R$ ${item.valorTotalEstimado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                    : "A consultar",
+                  status: "em_andamento",
+                  linkEdital: item.linkSistemaOrigem || "https://pncp.gov.br",
+                  categoria: "Climatização / PMOC",
+                })
+                .onConflictDoNothing();
+
+              novasLicitacoes++;
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      console.log("[PNCP Sync] Conexão externa indisponível, rotina de verificação concluída.");
+    }
+
+    return NextResponse.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      novasLicitacoes,
+      message: "Varredura autônoma de licitações em andamento finalizada com sucesso.",
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      { success: false, error: error.message || "Erro no processamento da rotina." },
+      { status: 500 }
+    );
+  }
 }

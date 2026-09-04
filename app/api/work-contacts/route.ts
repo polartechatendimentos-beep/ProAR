@@ -1,61 +1,78 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { db } from "@/db";
+import { workContacts, works } from "@/db/schema";
 import { readSession } from "@/lib/proar-auth";
-import { insertOperational, listOperational, updateOperational } from "@/lib/operational-repository";
+import { assertCompanyAccess, getEffectiveCompanyId } from "@/lib/company-access";
+import { eq, and } from "drizzle-orm";
 
-const contactTypes = new Set(["engenharia", "fiscalizacao"]);
-
-export async function GET(request: NextRequest) {
-  const user = readSession(request.cookies.get("proar_session")?.value);
-  if (!user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
-  const workId = request.nextUrl.searchParams.get("workId");
-  if (!workId) return NextResponse.json({ error: "Obra obrigatória." }, { status: 400 });
+export async function GET(request: Request) {
   try {
-    const contacts = await listOperational(user, "proar_work_contacts", `work_id=eq.${encodeURIComponent(workId)}&order=is_primary.desc,created_at.asc`);
-    return NextResponse.json({ contacts });
-  } catch {
-    return NextResponse.json({ error: "Contatos da obra indisponíveis. Execute a migração operacional." }, { status: 503 });
-  }
-}
+    const { searchParams } = new URL(request.url);
+    const workId = searchParams.get("work_id") ? Number(searchParams.get("work_id")) : null;
+    const token = searchParams.get("token");
 
-export async function POST(request: NextRequest) {
-  const user = readSession(request.cookies.get("proar_session")?.value);
-  if (!user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
-  try {
-    const body = await request.json();
-    if (!body.workId || !body.name || !contactTypes.has(body.contactType)) {
-      return NextResponse.json({ error: "Obra, tipo e nome são obrigatórios." }, { status: 400 });
+    if (token) {
+      const [foundWork] = await db.select().from(works).where(eq(works.tokenPublico, token)).limit(1);
+      if (!foundWork) {
+        return NextResponse.json({ success: false, error: "Obra não encontrada." }, { status: 404 });
+      }
+      const contacts = await db
+        .select()
+        .from(workContacts)
+        .where(eq(workContacts.workId, foundWork.id));
+      return NextResponse.json({ success: true, count: contacts.length, data: contacts });
     }
-    const rows = await insertOperational(user, "proar_work_contacts", {
-      work_id: String(body.workId), contact_type: body.contactType, name: String(body.name),
-      company_name: body.companyName || null, role_name: body.roleName || null, registry: body.registry || null,
-      phone: body.phone || null, whatsapp: body.whatsapp || null, email: body.email || null,
-      is_primary: Boolean(body.isPrimary), is_active: body.isActive !== false,
-      starts_at: body.startsAt || null, ends_at: body.endsAt || null, notes: body.notes || null,
-      created_by: user.displayName || "Usuário"
-    });
-    return NextResponse.json({ saved: true, contact: rows[0] });
-  } catch {
-    return NextResponse.json({ error: "Não foi possível salvar o contato da obra." }, { status: 503 });
+
+    const session = await readSession(request);
+    const companyId = session ? getEffectiveCompanyId(session) : 1;
+
+    let conditions = [eq(workContacts.companyId, companyId)];
+    if (workId) {
+      conditions.push(eq(workContacts.workId, workId));
+    }
+
+    const list = await db
+      .select()
+      .from(workContacts)
+      .where(and(...conditions));
+
+    return NextResponse.json({ success: true, count: list.length, data: list });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
 
-export async function PATCH(request: NextRequest) {
-  const user = readSession(request.cookies.get("proar_session")?.value);
-  if (!user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
+export async function POST(request: Request) {
   try {
+    const session = await readSession(request);
+    if (!session) {
+      return NextResponse.json({ success: false, error: "Não autorizado." }, { status: 401 });
+    }
+
     const body = await request.json();
-    const id = String(body.id || "");
-    if (!/^[a-f0-9-]{36}$/i.test(id) || !body.name || !contactTypes.has(body.contactType)) return NextResponse.json({ error: "Contato, tipo e nome válidos são obrigatórios." }, { status: 400 });
-    const rows = await updateOperational(user, "proar_work_contacts", `id=eq.${encodeURIComponent(id)}`, {
-      contact_type: body.contactType, name: String(body.name), company_name: body.companyName || null,
-      role_name: body.roleName || null, registry: body.registry || null, phone: body.phone || null,
-      whatsapp: body.whatsapp || null, email: body.email || null, is_primary: Boolean(body.isPrimary),
-      is_active: body.isActive !== false, starts_at: body.startsAt || null, ends_at: body.endsAt || null,
-      notes: body.notes || null, updated_at: new Date().toISOString(),
-    });
-    if (!rows[0]) return NextResponse.json({ error: "Contato não encontrado." }, { status: 404 });
-    return NextResponse.json({ saved: true, contact: rows[0] });
-  } catch {
-    return NextResponse.json({ error: "Não foi possível atualizar o contato da obra." }, { status: 503 });
+    const companyId = assertCompanyAccess(session, body.companyId);
+
+    if (!body.workId || !body.nome || !body.cargo) {
+      return NextResponse.json(
+        { success: false, error: "Campos obrigatórios: workId, nome e cargo." },
+        { status: 400 }
+      );
+    }
+
+    const [newContact] = await db
+      .insert(workContacts)
+      .values({
+        workId: Number(body.workId),
+        companyId,
+        nome: body.nome,
+        cargo: body.cargo,
+        telefone: body.telefone || null,
+        email: body.email || null,
+      })
+      .returning();
+
+    return NextResponse.json({ success: true, data: newContact });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

@@ -1,70 +1,97 @@
-import { put } from "@vercel/blob";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { db } from "@/db";
+import { attachments } from "@/db/schema";
 import { readSession } from "@/lib/proar-auth";
-import { insertOperational, listOperational } from "@/lib/operational-repository";
+import { assertCompanyAccess, getEffectiveCompanyId } from "@/lib/company-access";
+import { desc, eq, and } from "drizzle-orm";
 
-const entityTypes = new Set([
-  "ordem_servico", "obra", "alteracao_medida", "equipamento", "assistencia_tecnica",
-  "pmoc", "higienizacao_hospitalar", "cliente", "produto", "certame", "empenho", "relatorio",
-]);
+const ALLOWED_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/plain",
+];
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
-const categories = new Set(["foto", "situacao_atual", "croqui_projeto", "local_alteracao", "durante_execucao", "depois_alteracao", "documento", "certificado"]);
-const imageTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
-const documentTypes = new Set(["application/pdf"]);
-const maxBytes = 12 * 1024 * 1024;
-
-function cleanFileName(value: string) {
-  const normalized = value.normalize("NFKD").replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-");
-  return normalized.replace(/^-|-$/g, "").slice(0, 120) || "anexo";
-}
-
-function validTarget(entityType: unknown, entityId: unknown) {
-  return typeof entityType === "string" && entityTypes.has(entityType) && typeof entityId === "string" && entityId.trim().length > 0 && entityId.length <= 160;
-}
-
-export async function GET(request: NextRequest) {
-  const user = readSession(request.cookies.get("proar_session")?.value);
-  if (!user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
-  const entityType = request.nextUrl.searchParams.get("entityType");
-  const entityId = request.nextUrl.searchParams.get("entityId");
-  if (!validTarget(entityType, entityId)) return NextResponse.json({ error: "Registro de anexo inválido." }, { status: 400 });
+export async function GET(request: Request) {
   try {
-    const attachments = await listOperational<Record<string, unknown>>(user, "proar_attachments", `entity_type=eq.${encodeURIComponent(entityType!)}&entity_id=eq.${encodeURIComponent(entityId!)}&order=created_at.desc`);
-    const safeAttachments = attachments.map(({ storage_url: _storageUrl, ...attachment }) => ({
-      ...attachment,
-      view_url: `/api/attachments/${attachment.id}`,
-    }));
-    return NextResponse.json({ attachments: safeAttachments });
-  } catch {
-    return NextResponse.json({ error: "Anexos indisponíveis. Execute a migração operacional." }, { status: 503 });
+    const { searchParams } = new URL(request.url);
+    const parentType = searchParams.get("parent_type");
+    const parentId = searchParams.get("parent_id");
+
+    const session = await readSession(request);
+    const companyId = session ? getEffectiveCompanyId(session) : 1;
+
+    let conditions = [eq(attachments.companyId, companyId)];
+    if (parentType) conditions.push(eq(attachments.parentType, parentType));
+    if (parentId) conditions.push(eq(attachments.parentId, parentId));
+
+    const list = await db
+      .select()
+      .from(attachments)
+      .where(and(...conditions))
+      .orderBy(desc(attachments.criadoEm));
+
+    return NextResponse.json({ success: true, count: list.length, data: list });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
 
-export async function POST(request: NextRequest) {
-  const user = readSession(request.cookies.get("proar_session")?.value);
-  if (!user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
-  if (!process.env.BLOB_READ_WRITE_TOKEN) return NextResponse.json({ error: "Armazenamento de anexos não configurado." }, { status: 503 });
+export async function POST(request: Request) {
   try {
-    const form = await request.formData();
-    const entityType = form.get("entityType");
-    const entityId = form.get("entityId");
-    const categoryValue = form.get("category");
-    const caption = form.get("caption");
-    const file = form.get("file");
-    if (!validTarget(entityType, entityId) || !(file instanceof File)) return NextResponse.json({ error: "Registro e arquivo são obrigatórios." }, { status: 400 });
-    if (!imageTypes.has(file.type) && !documentTypes.has(file.type)) return NextResponse.json({ error: "Formato não suportado. Envie JPG, PNG, WEBP, HEIC/HEIF ou PDF." }, { status: 415 });
-    if (!file.size || file.size > maxBytes) return NextResponse.json({ error: "O arquivo deve ter no máximo 12 MB." }, { status: 413 });
-    const category = typeof categoryValue === "string" && categories.has(categoryValue) ? categoryValue : "documento";
-    const company = String(user.companyId || "empresa").replace(/[^a-zA-Z0-9_-]/g, "-");
-    const key = `proar/${company}/${entityType}/${encodeURIComponent(String(entityId))}/${Date.now()}-${cleanFileName(file.name)}`;
-    const uploaded = await put(key, file, { access: "private", addRandomSuffix: true, contentType: file.type });
-    const rows = await insertOperational(user, "proar_attachments", {
-      entity_type: entityType, entity_id: entityId, category, storage_url: uploaded.url,
-      file_name: file.name.slice(0, 240), mime_type: file.type, byte_size: file.size,
-      caption: typeof caption === "string" ? caption.slice(0, 1000) : null, created_by: user.displayName || "Usuário",
-    });
-    return NextResponse.json({ saved: true, attachment: rows[0] }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: "Não foi possível salvar o anexo." }, { status: 503 });
+    const session = await readSession(request);
+    if (!session) {
+      return NextResponse.json({ success: false, error: "Não autorizado." }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const companyId = assertCompanyAccess(session, body.companyId);
+
+    const { parentType, parentId, nomeArquivo, url, mimeType, tamanhoBytes } = body;
+
+    if (!parentType || !parentId || !nomeArquivo || !url) {
+      return NextResponse.json(
+        { success: false, error: "Campos obrigatórios: parentType, parentId, nomeArquivo, url." },
+        { status: 400 }
+      );
+    }
+
+    if (mimeType && !ALLOWED_MIME_TYPES.includes(mimeType.toLowerCase())) {
+      return NextResponse.json(
+        { success: false, error: `Tipo de arquivo não permitido (${mimeType}). Permitidos: Imagens (JPG, PNG, WebP) e Documentos (PDF, DOCX).` },
+        { status: 400 }
+      );
+    }
+
+    const size = Number(tamanhoBytes) || 0;
+    if (size > MAX_FILE_SIZE_BYTES) {
+      return NextResponse.json(
+        { success: false, error: "Arquivo excede o limite máximo permitido de 10 MB." },
+        { status: 400 }
+      );
+    }
+
+    const sanitizedName = nomeArquivo.replace(/[^a-zA-Z0-9._-]/g, "_");
+
+    const [newAttachment] = await db
+      .insert(attachments)
+      .values({
+        companyId,
+        parentType,
+        parentId: String(parentId),
+        nomeArquivo: sanitizedName,
+        url,
+        mimeType: mimeType || "application/octet-stream",
+        tamanhoBytes: size,
+      })
+      .returning();
+
+    return NextResponse.json({ success: true, data: newAttachment });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

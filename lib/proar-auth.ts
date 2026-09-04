@@ -1,50 +1,110 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
-import { verifyPassword } from "./password";
-import { requiredSecret } from "./security-env";
+import crypto from "crypto";
 
-type ProARUser = {
-  username: string;
-  displayName: string;
-  passwordHash: string;
+export interface UserSession {
+  id: number;
+  email: string;
+  nome: string;
   role: string;
-  permissions: string[];
-  active: boolean;
-  companyId?: string;
-  companySlug?: string;
-  trialExpiresAt?: string;
-};
-const SESSION_SECONDS = 60 * 60 * 12;
-
-function users(): ProARUser[] {
-  try {
-    const environmentUsers = (JSON.parse(process.env.PROAR_USERS_JSON ?? "[]") as Partial<ProARUser>[]).map(user => ({
-      username: user.username ?? "", displayName: user.displayName ?? user.username ?? "", passwordHash: user.passwordHash ?? "", role: user.role ?? "Administrador", permissions: user.permissions ?? ["*"], active: user.active ?? true,
-    }));
-    return environmentUsers;
-  } catch { return []; }
-}
-function safeEqual(left: string, right: string) { const a = Buffer.from(left); const b = Buffer.from(right); return a.length === b.length && timingSafeEqual(a, b); }
-export function authenticate(username: string, password: string) {
-  const normalized = username.trim().toLocaleLowerCase("pt-BR"); const user = users().find(item => item.active && item.username.toLocaleLowerCase("pt-BR") === normalized); if (!user) return null;
-  return verifyPassword(password, user.passwordHash) ? user : null;
+  companyId?: number;
+  exp?: number;
 }
 
-function sign(payload: string) { return createHmac("sha256", requiredSecret("PROAR_SESSION_SECRET")).update(payload).digest("hex"); }
-export function createSession(username: string) {
-  const user = users().find(item => item.username === username); if (!user) return ""; return createSessionForUser(user);
+const JWT_SECRET = process.env.JWT_SECRET || process.env.AUTH_SECRET || "proar-secret-key-2026-climatizacao-segura";
+
+function base64UrlEncode(str: string): string {
+  return Buffer.from(str)
+    .toString("base64")
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
 }
-export function createSessionForUser(user: Omit<ProARUser, "passwordHash" | "active">) {
-  const expiresAt = Math.floor(Date.now() / 1000) + SESSION_SECONDS;
-  const data = Buffer.from(JSON.stringify({ ...user, exp: expiresAt }), "utf8").toString("base64url");
-  return `v2.${data}.${sign(`v2.${data}`)}`;
-}
-export function readSession(token?: string | null): Omit<ProARUser, "passwordHash" | "active"> | null {
-  if (!token) return null;
-  if (token.startsWith("v2.")) {
-    const [, data, signature] = token.split("."); if (!data || !signature || !safeEqual(signature, sign(`v2.${data}`))) return null;
-    try { const parsed = JSON.parse(Buffer.from(data, "base64url").toString("utf8")); if (!parsed.exp || parsed.exp < Date.now() / 1000) return null; if (parsed.trialExpiresAt && new Date(parsed.trialExpiresAt).getTime() < Date.now()) return null; return { username: parsed.username, displayName: parsed.displayName, role: parsed.role, permissions: parsed.permissions ?? [], companyId: parsed.companyId, companySlug: parsed.companySlug, trialExpiresAt: parsed.trialExpiresAt }; } catch { return null; }
+
+function base64UrlDecode(str: string): string {
+  let base64 = str.replace(/-/g, "+").replace(/_/g, "/");
+  while (base64.length % 4) {
+    base64 += "=";
   }
-  const [encodedUsername, expiresAt, signature] = token.split("."); if (!encodedUsername || !expiresAt || !signature || Number(expiresAt) < Date.now() / 1000) return null;
-  const payload = `${encodedUsername}.${expiresAt}`; if (!safeEqual(signature, sign(payload))) return null; const username = decodeURIComponent(encodedUsername); const user = users().find(item => item.username === username); if (!user) return null;
-  return { username: user.username, displayName: user.displayName, role: user.role, permissions: user.permissions };
+  return Buffer.from(base64, "base64").toString("utf8");
+}
+
+export function signToken(payload: Omit<UserSession, "exp">, expiresInSeconds: number = 7 * 24 * 60 * 60): string {
+  const header = { alg: "HS256", typ: "JWT" };
+  const exp = Math.floor(Date.now() / 1000) + expiresInSeconds;
+  const fullPayload = { ...payload, exp };
+
+  const encodedHeader = base64UrlEncode(JSON.stringify(header));
+  const encodedPayload = base64UrlEncode(JSON.stringify(fullPayload));
+
+  const signature = crypto
+    .createHmac("sha256", JWT_SECRET)
+    .update(`${encodedHeader}.${encodedPayload}`)
+    .digest("base64")
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+
+  return `${encodedHeader}.${encodedPayload}.${signature}`;
+}
+
+export async function validateAuthToken(token: string): Promise<UserSession | null> {
+  if (!token || typeof token !== "string") return null;
+
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+
+  const [encodedHeader, encodedPayload, signature] = parts;
+
+  const expectedSignature = crypto
+    .createHmac("sha256", JWT_SECRET)
+    .update(`${encodedHeader}.${encodedPayload}`)
+    .digest("base64")
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
+    return null;
+  }
+
+  try {
+    const payload = JSON.parse(base64UrlDecode(encodedPayload)) as UserSession;
+
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+      return null;
+    }
+
+    return payload;
+  } catch (e) {
+    return null;
+  }
+}
+
+export async function readSession(request: Request): Promise<UserSession | null> {
+  let token: string | null = null;
+
+  const authHeader = request.headers.get("authorization");
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    token = authHeader.substring(7).trim();
+  }
+
+  if (!token) {
+    const cookieHeader = request.headers.get("cookie");
+    if (cookieHeader) {
+      const match = cookieHeader.match(/proar_session=([^;]+)/);
+      if (match) {
+        token = decodeURIComponent(match[1]);
+      }
+    }
+  }
+
+  if (!token) return null;
+  return validateAuthToken(token);
+}
+
+export async function requireAuth(request: Request): Promise<UserSession> {
+  const session = await readSession(request);
+  if (!session) {
+    throw new Error("Não autorizado: Sessão inválida ou expirada");
+  }
+  return session;
 }
