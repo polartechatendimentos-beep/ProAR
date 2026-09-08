@@ -111,6 +111,8 @@ export const works = pgTable("works", {
   engenheiroResponsavel: text("engenheiro_responsavel"),
   equipe: text("equipe").default("TEAM 11"),
   tokenPublico: text("token_publico").unique().notNull(),
+  senhaApontamentos: text("senha_apontamentos").default("123456").notNull(),
+  acessoApontamentosAtivo: boolean("acesso_apontamentos_ativo").default(true).notNull(),
   criadoEm: timestamp("criado_em").defaultNow().notNull(),
   atualizadoEm: timestamp("atualizado_em").defaultNow().notNull(),
 });
@@ -119,12 +121,33 @@ export const workFindings = pgTable("work_findings", {
   id: serial("id").primaryKey(),
   workId: integer("work_id").notNull(),
   companyId: integer("company_id").default(1).notNull(),
+  quadra: text("quadra").notNull(),
+  casa: text("casa").notNull(),
+  ambiente: text("ambiente").notNull(),
+  etapaRelacionada: text("etapa_relacionada").notNull(),
   titulo: text("titulo").notNull(),
-  descricao: text("descricao"),
-  tipo: text("tipo").default("nao_conformidade").notNull(),
-  gravidade: text("gravidade").default("media").notNull(),
-  status: text("status").default("aberto").notNull(),
+  descricao: text("descricao").notNull(),
+  tipo: text("tipo").default("nao_conformidade").notNull(), // nao_conformidade, qualidade, alteracao_necessaria, alteracao_medida, divergencia_projeto, servico_incompleto, correcao_necessaria, obs_engenharia, obs_fiscalizacao, outros
+  prioridade: text("prioridade").default("normal").notNull(), // baixa, normal, alta, urgente
+  situacao: text("situacao").default("pendente").notNull(), // pendente, em_analise, em_correcao, aguardando_conferencia, aprovada, cancelada
+  registradoPor: text("registrado_por").notNull(),
+  funcaoRegistrador: text("funcao_registrador").default("Fiscalização").notNull(), // Engenharia, Fiscalização, Construtora, Cliente, Outro
   fotos: jsonb("fotos").default([]),
+
+  // Resposta da PolarTech
+  observacaoPolartech: text("observacao_polartech"),
+  fotosCorrecao: jsonb("fotos_correcao").default([]),
+  responsavelCorrecao: text("responsavel_correcao"),
+  dataCorrecao: timestamp("data_correcao"),
+
+  // Conferência da Fiscalização/Engenharia
+  aprovadoPor: text("aprovado_por"),
+  dataAprovacao: timestamp("data_aprovacao"),
+  motivoReprovacao: text("motivo_reprovacao"),
+
+  // Linha do tempo auditável
+  historico: jsonb("historico").default([]),
+
   resolvidoEm: timestamp("resolvido_em"),
   criadoEm: timestamp("criado_em").defaultNow().notNull(),
   atualizadoEm: timestamp("atualizado_em").defaultNow().notNull(),
