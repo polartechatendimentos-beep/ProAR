@@ -124,7 +124,7 @@ export default function HomePage() {
                 activeTab === "contratos" ? "bg-blue-600 text-white shadow-sm" : "text-slate-400 hover:text-white hover:bg-slate-900"
               }`}
             >
-              <Landmark className="w-3.5 h-3.5" /> Contratos Públicos & PNCP
+              <Landmark className="w-3.5 h-3.5" /> Licitações IA + Bid Agent
             </button>
             <button
               onClick={() => setActiveTab("pmoc")}

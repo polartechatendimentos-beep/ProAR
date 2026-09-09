@@ -4,20 +4,103 @@ import { pgTable, serial, text, timestamp, boolean, jsonb, integer, numeric } fr
 export const licitacoes = pgTable("licitacoes", {
   id: serial("id").primaryKey(),
   numeroControlePncp: text("numero_controle_pncp"),
+  numeroPregao: text("numero_pregao"),
+  numeroProcesso: text("numero_processo"),
   titulo: text("titulo").notNull(),
   descricao: text("descricao"),
   orgao: text("orgao").notNull(),
+  plataforma: text("plataforma"),
   uf: text("uf").default("SP"),
   modalidade: text("modalidade").default("Pregão Eletrônico"),
+  tipoJulgamento: text("tipo_julgamento").default("menor_preco_global"),
+  modoDisputa: text("modo_disputa").default("aberto"),
   valorEstimado: text("valor_estimado"),
   dataAbertura: timestamp("data_abertura"),
+  horaSessao: text("hora_sessao"),
   dataFimProposta: timestamp("data_fim_proposta"),
+  responsavelInterno: text("responsavel_interno"),
+  pisoTecnico: text("piso_tecnico"),
+  pisoAbsoluto: text("piso_absoluto"),
+  margemMinima: text("margem_minima"),
+  habilitacaoPercentual: integer("habilitacao_percentual").default(0).notNull(),
+  checklistResumo: jsonb("checklist_resumo").default({}),
+  aiAnalise: jsonb("ai_analise").default({}),
   linkEdital: text("link_edital"),
   categoria: text("categoria"),
   status: text("status").default("em_andamento").notNull(),
   notificadoWhatsapp: boolean("notificado_whatsapp").default(false).notNull(),
   criadoEm: timestamp("criado_em").defaultNow().notNull(),
   atualizadoEm: timestamp("atualizado_em").defaultNow().notNull(),
+});
+
+export const licitacaoDocuments = pgTable("licitacao_documents", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").default(1).notNull(),
+  licitacaoId: integer("licitacao_id"),
+  tipo: text("tipo").notNull(),
+  empresa: text("empresa").notNull(),
+  cnpj: text("cnpj").notNull(),
+  emissao: timestamp("emissao"),
+  validade: timestamp("validade"),
+  orgaoEmissor: text("orgao_emissor"),
+  situacao: text("situacao").default("valido").notNull(),
+  arquivoNome: text("arquivo_nome"),
+  arquivoUrl: text("arquivo_url"),
+  iaValidou: boolean("ia_validou").default(false).notNull(),
+  ultimaUtilizacao: text("ultima_utilizacao"),
+  metadadosIa: jsonb("metadados_ia").default({}),
+  criadoEm: timestamp("criado_em").defaultNow().notNull(),
+  atualizadoEm: timestamp("atualizado_em").defaultNow().notNull(),
+});
+
+export const licitacaoChecklistItems = pgTable("licitacao_checklist_items", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").default(1).notNull(),
+  licitacaoId: integer("licitacao_id").notNull(),
+  categoria: text("categoria").notNull(),
+  requisito: text("requisito").notNull(),
+  status: text("status").default("pendente").notNull(), // atendido | revisar | nao_atendido | pendente | critico | vencendo
+  risco: text("risco").default("medio"),
+  justificativaIa: text("justificativa_ia"),
+  paginaClausula: text("pagina_clausula"),
+  documentoRelacionado: text("documento_relacionado"),
+  historico: jsonb("historico").default([]),
+  criadoEm: timestamp("criado_em").defaultNow().notNull(),
+  atualizadoEm: timestamp("atualizado_em").defaultNow().notNull(),
+});
+
+export const licitacaoBidSessions = pgTable("licitacao_bid_sessions", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").default(1).notNull(),
+  licitacaoId: integer("licitacao_id").notNull(),
+  portalNome: text("portal_nome").notNull(),
+  portalEndereco: text("portal_endereco"),
+  perfilPortal: text("perfil_portal"),
+  confiancaReconhecimento: integer("confianca_reconhecimento").default(0).notNull(),
+  modoOperacao: text("modo_operacao").default("observador").notNull(), // observador | assistido | semiautomatico | automatico
+  status: text("status").default("aguardando").notNull(), // aguardando | ativo | pausado | encerrado
+  killSwitchAtivado: boolean("kill_switch_ativado").default(false).notNull(),
+  gravacaoAtiva: boolean("gravacao_ativa").default(false).notNull(),
+  iniciadoEm: timestamp("iniciado_em"),
+  encerradoEm: timestamp("encerrado_em"),
+  criadoEm: timestamp("criado_em").defaultNow().notNull(),
+  atualizadoEm: timestamp("atualizado_em").defaultNow().notNull(),
+});
+
+export const licitacaoBidEvents = pgTable("licitacao_bid_events", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").default(1).notNull(),
+  licitacaoId: integer("licitacao_id").notNull(),
+  bidSessionId: integer("bid_session_id"),
+  horaEvento: timestamp("hora_evento").defaultNow().notNull(),
+  melhorMercado: text("melhor_mercado"),
+  nossoLance: text("nosso_lance"),
+  posicao: text("posicao"),
+  acao: text("acao").notNull(), // observado | enviado_manual | enviado_assistido | enviado_automatico | pausa | erro
+  origem: text("origem").default("agente").notNull(),
+  mensagemPregoeiro: text("mensagem_pregoeiro"),
+  metadados: jsonb("metadados").default({}),
+  criadoEm: timestamp("criado_em").defaultNow().notNull(),
 });
 
 // 2. Ordens de Serviço & Relatórios de Tarefa (PMOC)
