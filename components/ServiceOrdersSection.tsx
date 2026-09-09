@@ -1,5 +1,6 @@
-import { StandardDocumentReport } from "@/components/StandardDocumentReport";
 "use client";
+
+import { StandardDocumentReport } from "@/components/StandardDocumentReport";
 
 import React, { useState, useEffect } from "react";
 import { 
