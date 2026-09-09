@@ -46,6 +46,13 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    if (request.headers.get("x-work-external-auth")) {
+      return NextResponse.json(
+        { success: false, error: "Acesso externo não pode alterar consumo/materiais da PolarTech." },
+        { status: 403 }
+      );
+    }
+
     const session = await readSession(request);
     if (!session) {
       return NextResponse.json({ success: false, error: "Não autorizado." }, { status: 401 });

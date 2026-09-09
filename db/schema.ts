@@ -153,6 +153,71 @@ export const workFindings = pgTable("work_findings", {
   atualizadoEm: timestamp("atualizado_em").defaultNow().notNull(),
 });
 
+export const workExternalAccess = pgTable("work_external_access", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").default(1).notNull(),
+  workId: integer("work_id").notNull(),
+  accessTokenId: text("access_token_id").notNull(),
+  nome: text("nome").notNull(),
+  empresa: text("empresa"),
+  telefone: text("telefone"),
+  email: text("email"),
+  funcao: text("funcao").notNull(),
+  tipo: text("tipo").notNull(), // engenharia | fiscalizacao
+  passwordHash: text("password_hash").notNull(),
+  enabled: boolean("enabled").default(true).notNull(),
+  allowLinkAccess: boolean("allow_link_access").default(true).notNull(),
+  lastAccessAt: timestamp("last_access_at"),
+  createdBy: integer("created_by"),
+  updatedBy: integer("updated_by"),
+  criadoEm: timestamp("criado_em").defaultNow().notNull(),
+  atualizadoEm: timestamp("atualizado_em").defaultNow().notNull(),
+});
+
+export const workHousePriorities = pgTable("work_house_priorities", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").default(1).notNull(),
+  workId: integer("work_id").notNull(),
+  quadra: text("quadra").notNull(),
+  houseId: text("house_id").notNull(),
+  nivel: text("nivel").default("normal").notNull(),
+  motivo: text("motivo").notNull(),
+  observacao: text("observacao"),
+  fotos: jsonb("fotos").default([]),
+  solicitadoPor: text("solicitado_por").notNull(),
+  solicitanteTipo: text("solicitante_tipo").notNull(), // engenharia | fiscalizacao | interno
+  ativo: boolean("ativo").default(true).notNull(),
+  historico: jsonb("historico").default([]),
+  criadoEm: timestamp("criado_em").defaultNow().notNull(),
+  atualizadoEm: timestamp("atualizado_em").defaultNow().notNull(),
+});
+
+export const workRecommendations = pgTable("work_recommendations", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").default(1).notNull(),
+  workId: integer("work_id").notNull(),
+  scope: text("scope").default("casa_lote").notNull(),
+  quadra: text("quadra"),
+  houseId: text("house_id"),
+  ambiente: text("ambiente"),
+  etapa: text("etapa"),
+  categoria: text("categoria").notNull(),
+  titulo: text("titulo").notNull(),
+  recomendacao: text("recomendacao").notNull(),
+  justificativa: text("justificativa"),
+  impacto: text("impacto").default("medio").notNull(),
+  prioridade: text("prioridade").default("normal").notNull(),
+  prazoSugerido: text("prazo_sugerido"),
+  antesProximaEtapa: boolean("antes_proxima_etapa").default(false).notNull(),
+  situacao: text("situacao").default("nova").notNull(),
+  fotos: jsonb("fotos").default([]),
+  criadoPor: text("criado_por").notNull(),
+  tipoCriador: text("tipo_criador").notNull(), // engenharia | fiscalizacao | interno
+  historico: jsonb("historico").default([]),
+  criadoEm: timestamp("criado_em").defaultNow().notNull(),
+  atualizadoEm: timestamp("atualizado_em").defaultNow().notNull(),
+});
+
 export const workContacts = pgTable("work_contacts", {
   id: serial("id").primaryKey(),
   workId: integer("work_id").notNull(),

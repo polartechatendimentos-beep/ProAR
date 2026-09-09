@@ -31,6 +31,13 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    if (request.headers.get("x-work-external-auth")) {
+      return NextResponse.json(
+        { success: false, error: "Acesso externo não pode alterar cadastro operacional da obra." },
+        { status: 403 }
+      );
+    }
+
     const session = await readSession(request);
     if (!session) {
       return NextResponse.json({ success: false, error: "Acesso não autorizado." }, { status: 401 });
@@ -69,6 +76,8 @@ export async function POST(request: Request) {
         engenheiroResponsavel: body.engenheiroResponsavel || "Eng. Responsável Técnico ProAR",
         equipe: body.equipe || "TEAM 11",
         tokenPublico,
+        senhaApontamentos: body.senhaApontamentos || "123456",
+        acessoApontamentosAtivo: body.acessoApontamentosAtivo !== undefined ? Boolean(body.acessoApontamentosAtivo) : true,
       })
       .returning();
 
@@ -84,6 +93,64 @@ export async function POST(request: Request) {
     } catch (e) {}
 
     return NextResponse.json({ success: true, data: newWork });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    if (request.headers.get("x-work-external-auth")) {
+      return NextResponse.json(
+        { success: false, error: "Acesso externo não pode alterar cadastro operacional da obra." },
+        { status: 403 }
+      );
+    }
+
+    const session = await readSession(request);
+    if (!session) {
+      return NextResponse.json({ success: false, error: "Acesso não autorizado." }, { status: 401 });
+    }
+
+    const body = await request.json();
+    if (!body.id) {
+      return NextResponse.json({ success: false, error: "ID da obra é obrigatório." }, { status: 400 });
+    }
+
+    const [existing] = await db.select().from(works).where(eq(works.id, Number(body.id))).limit(1);
+    if (!existing) {
+      return NextResponse.json({ success: false, error: "Obra não encontrada." }, { status: 404 });
+    }
+
+    const companyId = assertCompanyAccess(session, existing.companyId);
+    const updateData: any = { atualizadoEm: new Date() };
+
+    if (body.nome !== undefined) updateData.nome = body.nome;
+    if (body.descricao !== undefined) updateData.descricao = body.descricao;
+    if (body.clienteNome !== undefined) updateData.clienteNome = body.clienteNome;
+    if (body.clienteCnpj !== undefined) updateData.clienteCnpj = body.clienteCnpj;
+    if (body.endereco !== undefined) updateData.endereco = body.endereco;
+    if (body.cidade !== undefined) updateData.cidade = body.cidade;
+    if (body.uf !== undefined) updateData.uf = body.uf;
+    if (body.dataInicio !== undefined) updateData.dataInicio = body.dataInicio ? new Date(body.dataInicio) : null;
+    if (body.previsaoTermino !== undefined) updateData.previsaoTermino = body.previsaoTermino ? new Date(body.previsaoTermino) : null;
+    if (body.valorContrato !== undefined) updateData.valorContrato = String(body.valorContrato || "0.00");
+    if (body.engenheiroResponsavel !== undefined) updateData.engenheiroResponsavel = body.engenheiroResponsavel;
+    if (body.equipe !== undefined) updateData.equipe = body.equipe;
+    if (body.acessoApontamentosAtivo !== undefined) updateData.acessoApontamentosAtivo = Boolean(body.acessoApontamentosAtivo);
+
+    const [updated] = await db.update(works).set(updateData).where(eq(works.id, existing.id)).returning();
+
+    await db.insert(auditEvents).values({
+      companyId,
+      userId: session.id,
+      acao: "UPDATE_WORK",
+      entidade: "works",
+      entidadeId: String(existing.id),
+      detalhes: { before: existing.nome, after: updated.nome, fields: Object.keys(updateData) },
+    }).catch(() => {});
+
+    return NextResponse.json({ success: true, data: updated });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

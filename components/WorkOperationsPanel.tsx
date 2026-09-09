@@ -69,6 +69,8 @@ export function WorkOperationsPanel() {
   const [loading, setLoading] = useState(true);
   const [activeSubTab, setActiveSubTab] = useState<"lista" | "fiscalizacao" | "gargalos" | "materiais" | "medidas">("lista");
   const [showNewModal, setShowNewModal] = useState(false);
+  const [editingWorkId, setEditingWorkId] = useState<number | null>(null);
+  const [externalLinks, setExternalLinks] = useState<Record<string, string>>({});
 
   // Apontamentos da Fiscalização
   const [findings, setFindings] = useState<FindingRecord[]>([]);
@@ -156,9 +158,10 @@ export function WorkOperationsPanel() {
     setSubmitting(true);
     try {
       const res = await fetch("/api/work-projects", {
-        method: "POST",
+        method: editingWorkId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          id: editingWorkId || undefined,
           nome,
           clienteNome,
           endereco,
@@ -170,11 +173,12 @@ export function WorkOperationsPanel() {
       const json = await res.json();
       if (json.success) {
         setShowNewModal(false);
+        setEditingWorkId(null);
         setNome("");
         setClienteNome("");
         setEndereco("");
         setValorContrato("");
-        setFeedbackMessage("✓ Obra cadastrada e token público gerado com sucesso.");
+        setFeedbackMessage(editingWorkId ? "✓ Obra atualizada com sucesso." : "✓ Obra cadastrada e token público gerado com sucesso.");
         setTimeout(() => setFeedbackMessage(null), 3500);
         fetchWorksAndFindings();
       }
@@ -182,6 +186,83 @@ export function WorkOperationsPanel() {
       alert("Não foi possível salvar. Código: ERR-OBRA-01");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openEditWorkModal = (work: WorkItem) => {
+    setEditingWorkId(work.id);
+    setNome(work.nome);
+    setClienteNome(work.clienteNome);
+    setEndereco(work.endereco);
+    setCidade(work.cidade);
+    setValorContrato(work.valorContrato ? String(work.valorContrato) : "");
+    setSenhaApontamentos(work.senhaApontamentos || "123456");
+    setShowNewModal(true);
+  };
+
+  const handleSaveExternalAccess = async (work: WorkItem, tipo: "engenharia" | "fiscalizacao") => {
+    const nomeCred = window.prompt(`Nome do responsável (${tipo}):`);
+    if (!nomeCred) return;
+    const funcaoCred = window.prompt(`Função (${tipo}):`, tipo === "engenharia" ? "Engenheiro Responsável" : "Fiscal da Obra");
+    if (!funcaoCred) return;
+    const senha = window.prompt(`Defina a senha do acesso ${tipo}:`);
+    if (!senha) return;
+    const email = window.prompt(`E-mail (${tipo}) [opcional]:`) || "";
+
+    const res = await fetch("/api/work-external-access", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workId: work.id,
+        tipo,
+        nome: nomeCred,
+        funcao: funcaoCred,
+        email,
+        senha,
+        enabled: true,
+        allowLinkAccess: true,
+      }),
+    });
+    const json = await res.json();
+    if (json.success) {
+      const key = `${work.id}:${tipo}`;
+      if (json.data?.accessLink) setExternalLinks((prev) => ({ ...prev, [key]: json.data.accessLink }));
+      setFeedbackMessage(`✓ Acesso ${tipo} salvo com sucesso.`);
+      setTimeout(() => setFeedbackMessage(null), 3500);
+    } else {
+      alert(json.error || "Falha ao salvar acesso externo.");
+    }
+  };
+
+  const handleResetExternalPassword = async (work: WorkItem, tipo: "engenharia" | "fiscalizacao") => {
+    const novaSenha = window.prompt(`Nova senha para ${tipo}:`);
+    if (!novaSenha) return;
+    const res = await fetch("/api/work-external-access", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workId: work.id, tipo, action: "reset_password", novaSenha }),
+    });
+    const json = await res.json();
+    if (json.success) {
+      setFeedbackMessage(`✓ Senha redefinida para ${tipo}.`);
+      setTimeout(() => setFeedbackMessage(null), 3500);
+    } else {
+      alert(json.error || "Falha ao redefinir senha.");
+    }
+  };
+
+  const handleBlockExternalAccess = async (work: WorkItem, tipo: "engenharia" | "fiscalizacao", block: boolean) => {
+    const res = await fetch("/api/work-external-access", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workId: work.id, tipo, action: block ? "block" : "unblock" }),
+    });
+    const json = await res.json();
+    if (json.success) {
+      setFeedbackMessage(`✓ Acesso ${tipo} ${block ? "bloqueado" : "ativado"}.`);
+      setTimeout(() => setFeedbackMessage(null), 3500);
+    } else {
+      alert(json.error || "Falha ao atualizar status do acesso.");
     }
   };
 
@@ -250,7 +331,10 @@ export function WorkOperationsPanel() {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setShowNewModal(true)}
+            onClick={() => {
+              setEditingWorkId(null);
+              setShowNewModal(true);
+            }}
             className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow transition"
           >
             <Plus className="w-4 h-4" /> Nova Obra
@@ -401,15 +485,35 @@ export function WorkOperationsPanel() {
                         <span className="font-bold text-slate-900 flex items-center gap-1.5">
                           <Lock className="w-3.5 h-3.5 text-blue-600" /> Acesso Engenharia / Fiscalização
                         </span>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
-                          Ativo
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${w.acessoApontamentosAtivo ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-700"}`}>
+                          {w.acessoApontamentosAtivo ? "Ativo" : "Bloqueado"}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between text-slate-600 bg-white p-2 rounded-lg border border-slate-200">
-                        <span>Senha para Apontamentos:</span>
-                        <span className="font-mono font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded">
-                          {w.senhaApontamentos || "123456"}
-                        </span>
+                      <div className="space-y-2 text-[11px]">
+                        {(["engenharia", "fiscalizacao"] as const).map((tipo) => (
+                          <div key={tipo} className="bg-white p-2 rounded-lg border border-slate-200">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-bold text-slate-700 uppercase">{tipo}</span>
+                              <div className="flex items-center gap-2">
+                                <button onClick={() => handleSaveExternalAccess(w, tipo)} className="text-blue-700 font-bold">Gerar acesso</button>
+                                <button onClick={() => handleResetExternalPassword(w, tipo)} className="text-amber-700 font-bold">Redefinir senha</button>
+                                <button onClick={() => handleBlockExternalAccess(w, tipo, true)} className="text-rose-700 font-bold">Bloquear</button>
+                                <button onClick={() => handleBlockExternalAccess(w, tipo, false)} className="text-emerald-700 font-bold">Ativar</button>
+                              </div>
+                            </div>
+                            {externalLinks[`${w.id}:${tipo}`] && (
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(externalLinks[`${w.id}:${tipo}`]);
+                                  alert(`✓ Link de ${tipo} copiado.`);
+                                }}
+                                className="mt-1 text-blue-600 font-semibold"
+                              >
+                                Copiar link individual
+                              </button>
+                            )}
+                          </div>
+                        ))}
                       </div>
                       <div className="flex justify-between items-center pt-1 text-[11px]">
                         <button
@@ -438,11 +542,19 @@ export function WorkOperationsPanel() {
                     <span className="text-slate-500 font-medium">
                       Equipe: <strong>{w.equipe}</strong>
                     </span>
-                    {w.valorContrato && (
-                      <span className="font-bold text-slate-800">
-                        R$ {Number(w.valorContrato).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => openEditWorkModal(w)}
+                        className="px-3 py-1 rounded-lg border border-blue-200 text-blue-700 font-bold"
+                      >
+                        Alterar Obra
+                      </button>
+                      {w.valorContrato && (
+                        <span className="font-bold text-slate-800">
+                          R$ {Number(w.valorContrato).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -747,8 +859,14 @@ export function WorkOperationsPanel() {
       {showNewModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-100">
-            <h3 className="text-lg font-bold text-slate-900 mb-1">Cadastrar Nova Obra de Climatização</h3>
-            <p className="text-xs text-slate-500 mb-4">Gera automaticamente o token de acompanhamento e senha para a fiscalização.</p>
+            <h3 className="text-lg font-bold text-slate-900 mb-1">
+              {editingWorkId ? "Alterar Obra" : "Cadastrar Nova Obra de Climatização"}
+            </h3>
+            <p className="text-xs text-slate-500 mb-4">
+              {editingWorkId
+                ? "Edição da obra existente preservando histórico, progresso, link público e registros relacionados."
+                : "Gera automaticamente o token de acompanhamento e senha para a fiscalização."}
+            </p>
 
             <form onSubmit={handleCreateWork} className="space-y-3 text-xs">
               <div>
@@ -823,7 +941,10 @@ export function WorkOperationsPanel() {
               <div className="pt-3 flex justify-end gap-3 border-t">
                 <button
                   type="button"
-                  onClick={() => setShowNewModal(false)}
+                  onClick={() => {
+                    setShowNewModal(false);
+                    setEditingWorkId(null);
+                  }}
                   className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-bold"
                 >
                   Cancelar
@@ -833,7 +954,7 @@ export function WorkOperationsPanel() {
                   disabled={submitting}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-black shadow"
                 >
-                  {submitting ? "Salvando..." : "Salvar Obra"}
+                  {submitting ? "Salvando..." : editingWorkId ? "Salvar Alterações" : "Salvar Obra"}
                 </button>
               </div>
             </form>

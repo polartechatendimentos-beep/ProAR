@@ -92,8 +92,11 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
   // Autenticação Externa da Engenharia / Fiscalização
   const [isAuthExterno, setIsAuthExterno] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [accessTokenId, setAccessTokenId] = useState("");
   const [inputSenha, setInputSenha] = useState("");
   const [authError, setAuthError] = useState("");
+  const [externalAuthToken, setExternalAuthToken] = useState("");
+  const [externalActor, setExternalActor] = useState<{ nome: string; funcao: string; tipo: string } | null>(null);
 
   // Modal Novo Apontamento
   const [showNovoModal, setShowNovoModal] = useState(false);
@@ -183,9 +186,23 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
     loadData();
     // Recupera autenticação de sessão se já logado nesta obra
     const saved = sessionStorage.getItem(`proar_auth_obra_${token}`);
+    const savedExternalToken = sessionStorage.getItem(`proar_external_token_${token}`) || "";
+    const savedActor = sessionStorage.getItem(`proar_external_actor_${token}`);
     if (saved === "true") {
       setIsAuthExterno(true);
+      setExternalAuthToken(savedExternalToken);
+      if (savedActor) {
+        try {
+          setExternalActor(JSON.parse(savedActor));
+          setNomeRegistrador(JSON.parse(savedActor).nome || "");
+          setFuncaoRegistrador(JSON.parse(savedActor).funcao || "Fiscalização");
+        } catch {}
+      }
     }
+
+    const query = new URLSearchParams(window.location.search);
+    const accessParam = query.get("access");
+    if (accessParam) setAccessTokenId(accessParam);
   }, [token]);
 
   const handleLoginExterno = async (e: React.FormEvent) => {
@@ -195,12 +212,22 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
       const res = await fetch("/api/work-auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, senha: inputSenha }),
+        body: JSON.stringify({ token, senha: inputSenha, accessTokenId }),
       });
       const json = await res.json();
       if (json.success && json.authorized) {
         setIsAuthExterno(true);
         sessionStorage.setItem(`proar_auth_obra_${token}`, "true");
+        if (json.externalAuthToken) {
+          setExternalAuthToken(json.externalAuthToken);
+          sessionStorage.setItem(`proar_external_token_${token}`, json.externalAuthToken);
+        }
+        if (json.ator) {
+          setExternalActor(json.ator);
+          setNomeRegistrador(json.ator.nome || "");
+          setFuncaoRegistrador(json.ator.funcao || "Fiscalização");
+          sessionStorage.setItem(`proar_external_actor_${token}`, JSON.stringify(json.ator));
+        }
         setShowAuthModal(false);
         setInputSenha("");
       } else {
@@ -214,6 +241,10 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
   const handleLogoutExterno = () => {
     setIsAuthExterno(false);
     sessionStorage.removeItem(`proar_auth_obra_${token}`);
+    sessionStorage.removeItem(`proar_external_token_${token}`);
+    sessionStorage.removeItem(`proar_external_actor_${token}`);
+    setExternalAuthToken("");
+    setExternalActor(null);
   };
 
   const handleCreateApontamento = async (e: React.FormEvent) => {
@@ -227,7 +258,10 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
     try {
       const res = await fetch("/api/work-findings", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(externalAuthToken ? { "x-work-external-auth": externalAuthToken } : {}),
+        },
         body: JSON.stringify({
           token,
           quadra,
@@ -238,8 +272,8 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
           descricao,
           tipo: tipoApontamento,
           prioridade,
-          registradoPor: nomeRegistrador,
-          funcaoRegistrador,
+          registradoPor: externalActor?.nome || nomeRegistrador,
+          funcaoRegistrador: externalActor?.funcao || funcaoRegistrador,
           fotos: [],
         }),
       });
@@ -266,11 +300,14 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
     try {
       const res = await fetch("/api/work-findings", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(externalAuthToken ? { "x-work-external-auth": externalAuthToken } : {}),
+        },
         body: JSON.stringify({
           id,
           action: "aprovar",
-          aprovadoPor: fiscalNome || "Engenharia / Fiscalização",
+          aprovadoPor: externalActor?.nome || fiscalNome || "Engenharia / Fiscalização",
         }),
       });
       const json = await res.json();
@@ -287,12 +324,15 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
     try {
       const res = await fetch("/api/work-findings", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(externalAuthToken ? { "x-work-external-auth": externalAuthToken } : {}),
+        },
         body: JSON.stringify({
           id: reprovandoId,
           action: "reprovar",
           motivoReprovacao,
-          reprovadoPor: fiscalNome || "Engenharia / Fiscalização",
+          reprovadoPor: externalActor?.nome || fiscalNome || "Engenharia / Fiscalização",
         }),
       });
       const json = await res.json();
@@ -669,6 +709,16 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
 
             <form onSubmit={handleLoginExterno} className="space-y-3">
               <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Identificador de acesso:</label>
+                <input
+                  type="text"
+                  placeholder="Token individual (opcional no modo legado)"
+                  value={accessTokenId}
+                  onChange={(e) => setAccessTokenId(e.target.value)}
+                  className="w-full text-sm p-2.5 border border-slate-300 rounded-xl outline-none focus:border-blue-600 font-mono"
+                />
+              </div>
+              <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Senha de Acesso:</label>
                 <input
                   type="password"
@@ -683,6 +733,12 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
 
               {authError && (
                 <p className="text-xs font-bold text-rose-600 bg-rose-50 p-2 rounded-lg">{authError}</p>
+              )}
+
+              {externalActor && (
+                <p className="text-[11px] text-emerald-700 bg-emerald-50 p-2 rounded-lg font-semibold">
+                  Identidade ativa: {externalActor.nome} ({externalActor.funcao})
+                </p>
               )}
 
               <button
@@ -833,7 +889,8 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
                     placeholder="Nome completo..."
                     value={nomeRegistrador}
                     onChange={(e) => setNomeRegistrador(e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded-lg outline-none font-medium"
+                    readOnly={Boolean(externalActor)}
+                    className="w-full p-2 border border-slate-300 rounded-lg outline-none font-medium bg-slate-50"
                   />
                 </div>
                 <div>
@@ -841,7 +898,8 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
                   <select
                     value={funcaoRegistrador}
                     onChange={(e) => setFuncaoRegistrador(e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded-lg outline-none font-medium"
+                    disabled={Boolean(externalActor)}
+                    className="w-full p-2 border border-slate-300 rounded-lg outline-none font-medium disabled:bg-slate-100"
                   >
                     <option value="Fiscalização">Fiscalização</option>
                     <option value="Engenharia">Engenharia</option>
