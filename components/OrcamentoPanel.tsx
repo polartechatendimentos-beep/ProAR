@@ -1,5 +1,6 @@
-import { StandardDocumentReport } from "@/components/StandardDocumentReport";
 "use client";
+
+import { StandardDocumentReport } from "@/components/StandardDocumentReport";
 
 import React, { useState } from "react";
 import { FileText, Plus, Trash2, Calculator, Send, Printer, MapPin, CheckCircle2 } from "lucide-react";
