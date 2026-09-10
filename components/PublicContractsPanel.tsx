@@ -33,7 +33,7 @@ type LicTab =
   | "relatorios";
 
 interface Licitacao {
-  id: number;
+  id: string | number;
   numeroPregao?: string;
   numeroProcesso?: string;
   titulo: string;
@@ -140,8 +140,11 @@ export function PublicContractsPanel() {
         setNotice(json.error || "Não foi possível consultar o PNCP agora.");
         return;
       }
-      setNotice(json.message || "Consulta PNCP concluída.");
-      await fetchLicitacoes(query);
+      setNotice(json.persistence ? `${json.message || "Consulta PNCP concluída."} ${json.persistence}` : (json.message || "Consulta PNCP concluída."));
+      if (Array.isArray(json.data)) {
+        setLicitacoes(json.data);
+        setLoading(false);
+      }
     } catch {
       setNotice("Não foi possível conectar ao PNCP. Tente novamente.");
     } finally {
