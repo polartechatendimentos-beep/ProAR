@@ -3,6 +3,7 @@ import { pgTable, serial, text, timestamp, boolean, jsonb, integer, numeric } fr
 // 1. Licitações e Monitoramento PNCP
 export const licitacoes = pgTable("licitacoes", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").default(1).notNull(),
   numeroControlePncp: text("numero_controle_pncp"),
   numeroPregao: text("numero_pregao"),
   numeroProcesso: text("numero_processo"),
