@@ -4,7 +4,7 @@ import { readSession } from "@/lib/proar-auth";
 import { listOperational } from "@/lib/operational-repository";
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const user = readSession(request.cookies.get("proar_session")?.value);
+  const user = await readSession(request);
   if (!user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
   const { id } = await context.params;
   if (!/^[a-f0-9-]{36}$/i.test(id)) return NextResponse.json({ error: "Anexo inválido." }, { status: 400 });
