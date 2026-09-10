@@ -394,7 +394,7 @@ export function PublicContractsPanel() {
                 <input className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Descrição resumida do objeto" value={newLic.titulo} onChange={(e) => setNewLic((s) => ({ ...s, titulo: e.target.value }))} required />
               </Field>
               <Field label="Descrição complementar" className="sm:col-span-2">
-                <textarea className="field min-h-20 resize-y" placeholder="Escopo, itens, exigências iniciais ou observações" value={newLic.descricao} onChange={(e) => setNewLic((s) => ({ ...s, descricao: e.target.value }))} />
+                <textarea className="w-full min-h-20 resize-y border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Escopo, itens, exigências iniciais ou observações" value={newLic.descricao} onChange={(e) => setNewLic((s) => ({ ...s, descricao: e.target.value }))} />
               </Field>
               <Field label="Plataforma">
                 <input className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Ex.: ComprasGov, BLL, Licitanet" value={newLic.plataforma} onChange={(e) => setNewLic((s) => ({ ...s, plataforma: e.target.value }))} />
@@ -437,6 +437,10 @@ export function PublicContractsPanel() {
       )}
     </div>
   );
+}
+
+function Field({ label, className = "", children }: { label: string; className?: string; children: React.ReactNode }) {
+  return <label className={`grid gap-1 font-semibold text-slate-700 ${className}`}><span>{label}</span>{children}</label>;
 }
 
 function Card({ title, value, icon }: { title: string; value: string; icon: React.ReactNode }) {
