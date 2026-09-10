@@ -12,6 +12,7 @@ const DEFAULT_TERMS = [
   "piso teto", "compressor", "higienização", "higienizacao"
 ];
 
+const text = (value: unknown) => value === null || value === undefined ? "" : String(value).trim();
 const normalize = (value: unknown) => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 const dateParam = (date: Date) => date.toISOString().slice(0, 10).replaceAll("-", "");
 
