@@ -5,7 +5,7 @@ import { insertOperational, listOperational } from "@/lib/operational-repository
 const statuses = new Set(["solicitada", "em_analise", "aprovada", "em_execucao", "executada", "conferida", "concluida", "rejeitada", "cancelada"]);
 
 export async function GET(request: NextRequest) {
-  const user = readSession(request.cookies.get("proar_session")?.value);
+  const user = await readSession(request);
   if (!user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
   const workId = request.nextUrl.searchParams.get("workId");
   if (!workId) return NextResponse.json({ error: "Obra obrigatória." }, { status: 400 });
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const user = readSession(request.cookies.get("proar_session")?.value);
+  const user = await readSession(request);
   if (!user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
   try {
     const body = await request.json();
@@ -30,9 +30,9 @@ export async function POST(request: NextRequest) {
       work_id: String(body.workId), block_code: body.blockCode || null, unit_code: body.unitCode || null,
       environment_name: body.environmentName || null, work_stage: body.workStage || null, change_type: body.changeType || null,
       original_measure: body.originalMeasure || null, new_measure: body.newMeasure || null, measure_unit: body.measureUnit || null,
-      description: String(body.description), reason: body.reason || null, requested_by: body.requestedBy || user.displayName || "Usuário",
+      description: String(body.description), reason: body.reason || null, requested_by: body.requestedBy || user.nome || user.email || "Usuário",
       requested_at: body.requestedAt || new Date().toISOString(), status, parent_request_id: body.parentRequestId || null,
-      revision: Number(body.revision) || 1, created_by: user.displayName || "Usuário"
+      revision: Number(body.revision) || 1, created_by: user.nome || user.email || "Usuário"
     });
     return NextResponse.json({ saved: true, change: rows[0] });
   } catch {
