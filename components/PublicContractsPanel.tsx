@@ -95,7 +95,9 @@ export function PublicContractsPanel() {
     numeroPregao: "",
     numeroProcesso: "",
     titulo: "",
+    descricao: "",
     plataforma: "",
+    modalidade: "Pregão Eletrônico",
     dataAbertura: "",
     horaSessao: "09:00",
     tipoJulgamento: "menor_preco_global",
@@ -167,7 +169,9 @@ export function PublicContractsPanel() {
           numeroPregao: "",
           numeroProcesso: "",
           titulo: "",
+          descricao: "",
           plataforma: "",
+          modalidade: "Pregão Eletrônico",
           dataAbertura: "",
           horaSessao: "09:00",
           tipoJulgamento: "menor_preco_global",
@@ -372,21 +376,59 @@ export function PublicContractsPanel() {
             <h3 className="text-lg font-bold text-slate-900 mb-1">Nova Licitação</h3>
             <p className="text-xs text-slate-500 mb-4">Cadastro do processo + preparação para análise IA e Bid Agent.</p>
             <form onSubmit={handleCreate} className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <input className="border rounded-lg p-2" placeholder="Órgão" value={newLic.orgao} onChange={(e) => setNewLic((s) => ({ ...s, orgao: e.target.value }))} required />
-              <input className="border rounded-lg p-2" placeholder="Número Pregão" value={newLic.numeroPregao} onChange={(e) => setNewLic((s) => ({ ...s, numeroPregao: e.target.value }))} />
-              <input className="border rounded-lg p-2" placeholder="Número Processo" value={newLic.numeroProcesso} onChange={(e) => setNewLic((s) => ({ ...s, numeroProcesso: e.target.value }))} />
-              <input className="border rounded-lg p-2" placeholder="Plataforma" value={newLic.plataforma} onChange={(e) => setNewLic((s) => ({ ...s, plataforma: e.target.value }))} />
-              <input className="border rounded-lg p-2 sm:col-span-2" placeholder="Objeto / Título" value={newLic.titulo} onChange={(e) => setNewLic((s) => ({ ...s, titulo: e.target.value }))} required />
-              <input className="border rounded-lg p-2" type="date" value={newLic.dataAbertura} onChange={(e) => setNewLic((s) => ({ ...s, dataAbertura: e.target.value }))} />
-              <input className="border rounded-lg p-2" type="time" value={newLic.horaSessao} onChange={(e) => setNewLic((s) => ({ ...s, horaSessao: e.target.value }))} />
-              <input className="border rounded-lg p-2" placeholder="Valor estimado" value={newLic.valorEstimado} onChange={(e) => setNewLic((s) => ({ ...s, valorEstimado: e.target.value }))} />
-              <input className="border rounded-lg p-2" placeholder="Responsável interno" value={newLic.responsavelInterno} onChange={(e) => setNewLic((s) => ({ ...s, responsavelInterno: e.target.value }))} />
-              <input className="border rounded-lg p-2 sm:col-span-2" placeholder="Link edital" value={newLic.linkEdital} onChange={(e) => setNewLic((s) => ({ ...s, linkEdital: e.target.value }))} />
-
+              <Field label="Órgão">
+                <input className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Ex.: Prefeitura de Tanabi" value={newLic.orgao} onChange={(e) => setNewLic((s) => ({ ...s, orgao: e.target.value }))} required />
+              </Field>
+              <Field label="Modalidade">
+                <select className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" value={newLic.modalidade} onChange={(e) => setNewLic((s) => ({ ...s, modalidade: e.target.value }))}>
+                  <option>Pregão Eletrônico</option><option>Concorrência</option><option>Dispensa</option><option>Inexigibilidade</option><option>Chamamento Público</option>
+                </select>
+              </Field>
+              <Field label="Número do pregão">
+                <input className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Ex.: PE 088/2026" value={newLic.numeroPregao} onChange={(e) => setNewLic((s) => ({ ...s, numeroPregao: e.target.value }))} />
+              </Field>
+              <Field label="Número do processo">
+                <input className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Número administrativo" value={newLic.numeroProcesso} onChange={(e) => setNewLic((s) => ({ ...s, numeroProcesso: e.target.value }))} />
+              </Field>
+              <Field label="Objeto da licitação" className="sm:col-span-2">
+                <input className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Descrição resumida do objeto" value={newLic.titulo} onChange={(e) => setNewLic((s) => ({ ...s, titulo: e.target.value }))} required />
+              </Field>
+              <Field label="Descrição complementar" className="sm:col-span-2">
+                <textarea className="w-full min-h-20 resize-y border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Escopo, itens, exigências iniciais ou observações" value={newLic.descricao} onChange={(e) => setNewLic((s) => ({ ...s, descricao: e.target.value }))} />
+              </Field>
+              <Field label="Plataforma">
+                <input className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Ex.: ComprasGov, BLL, Licitanet" value={newLic.plataforma} onChange={(e) => setNewLic((s) => ({ ...s, plataforma: e.target.value }))} />
+              </Field>
+              <Field label="Valor estimado">
+                <input className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="R$ 0,00" value={newLic.valorEstimado} onChange={(e) => setNewLic((s) => ({ ...s, valorEstimado: e.target.value }))} />
+              </Field>
+              <Field label="Data da sessão">
+                <input className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" type="date" value={newLic.dataAbertura} onChange={(e) => setNewLic((s) => ({ ...s, dataAbertura: e.target.value }))} />
+              </Field>
+              <Field label="Hora da sessão">
+                <input className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" type="time" value={newLic.horaSessao} onChange={(e) => setNewLic((s) => ({ ...s, horaSessao: e.target.value }))} />
+              </Field>
+              <Field label="Tipo de julgamento">
+                <select className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" value={newLic.tipoJulgamento} onChange={(e) => setNewLic((s) => ({ ...s, tipoJulgamento: e.target.value }))}>
+                  <option value="menor_preco_global">Menor preço global</option><option value="menor_preco_item">Menor preço por item</option><option value="menor_preco_lote">Menor preço por lote</option><option value="maior_desconto">Maior desconto</option><option value="tecnica_preco">Técnica e preço</option>
+                </select>
+              </Field>
+              <Field label="Modo de disputa">
+                <select className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" value={newLic.modoDisputa} onChange={(e) => setNewLic((s) => ({ ...s, modoDisputa: e.target.value }))}>
+                  <option value="aberto">Aberto</option><option value="aberto_fechado">Aberto e fechado</option><option value="fechado_aberto">Fechado e aberto</option><option value="fechado">Fechado</option>
+                </select>
+              </Field>
+              <Field label="Responsável interno">
+                <input className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Usuário responsável" value={newLic.responsavelInterno} onChange={(e) => setNewLic((s) => ({ ...s, responsavelInterno: e.target.value }))} />
+              </Field>
+              <Field label="Link do edital" className="sm:col-span-2">
+                <input className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" type="url" placeholder="https://..." value={newLic.linkEdital} onChange={(e) => setNewLic((s) => ({ ...s, linkEdital: e.target.value }))} />
+              </Field>
+              <p className="sm:col-span-2 text-slate-500">O edital poderá ser anexado e analisado com IA após a migração do banco e a configuração da credencial central.</p>
               <div className="sm:col-span-2 flex justify-end gap-2 pt-2 border-t">
                 <button type="button" onClick={() => setShowNewModal(false)} className="px-3 py-2 rounded-lg bg-slate-100 font-semibold">Cancelar</button>
                 <button disabled={saving} type="submit" className="px-3 py-2 rounded-lg bg-indigo-600 text-white font-semibold">
-                  {saving ? "Salvando..." : "Salvar e Analisar com IA"}
+                  {saving ? "Salvando..." : "Salvar licitação"}
                 </button>
               </div>
             </form>
@@ -395,6 +437,10 @@ export function PublicContractsPanel() {
       )}
     </div>
   );
+}
+
+function Field({ label, className = "", children }: { label: string; className?: string; children: React.ReactNode }) {
+  return <label className={`grid gap-1 font-semibold text-slate-700 ${className}`}><span>{label}</span>{children}</label>;
 }
 
 function Card({ title, value, icon }: { title: string; value: string; icon: React.ReactNode }) {
