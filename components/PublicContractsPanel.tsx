@@ -86,6 +86,7 @@ export function PublicContractsPanel() {
   const [licitacoes, setLicitacoes] = useState<Licitacao[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [notice, setNotice] = useState("");
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState<LicTab>("painel");
   const [showNewModal, setShowNewModal] = useState(false);
@@ -127,11 +128,22 @@ export function PublicContractsPanel() {
 
   const handleSyncPncp = async () => {
     setSyncing(true);
+    setNotice("");
     try {
-      await fetch("/api/cron/licitacoes");
+      const response = await fetch("/api/licitacoes/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uf: "SP", days: 14 }),
+      });
+      const json = await response.json();
+      if (!response.ok || !json.success) {
+        setNotice(json.error || "Não foi possível consultar o PNCP agora.");
+        return;
+      }
+      setNotice(json.message || "Consulta PNCP concluída.");
       await fetchLicitacoes(query);
-    } catch (e) {
-      console.error("Erro ao sincronizar PNCP:", e);
+    } catch {
+      setNotice("Não foi possível conectar ao PNCP. Tente novamente.");
     } finally {
       setSyncing(false);
     }
@@ -223,10 +235,12 @@ export function PublicContractsPanel() {
               className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition disabled:opacity-50"
             >
               <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin text-indigo-600" : ""}`} />
-              {syncing ? "Sincronizando..." : "Buscar PNCP"}
+              {syncing ? "Buscando..." : "Buscar oportunidades"}
             </button>
           </div>
         </div>
+
+        {notice && <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">{notice}</div>}
 
         <form onSubmit={handleSearch} className="flex items-center gap-2">
           <div className="relative flex-1">
