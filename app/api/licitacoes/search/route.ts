@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     const companyId = getEffectiveCompanyId(session, body.companyId ? Number(body.companyId) : null);
     const uf = String(body.uf || "SP").toUpperCase();
     const days = Math.max(1, Math.min(30, Number(body.days) || 14));
-    const terms = Array.isArray(body.terms) && body.terms.length ? body.terms.map(String) : DEFAULT_TERMS;
+    const terms: string[] = Array.isArray(body.terms) && body.terms.length ? body.terms.map((value: unknown) => String(value)) : DEFAULT_TERMS;
 
     const start = new Date();
     start.setDate(start.getDate() - days);
