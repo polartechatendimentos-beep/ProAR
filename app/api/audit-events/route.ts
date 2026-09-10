@@ -3,7 +3,7 @@ import { readSession } from "@/lib/proar-auth";
 import { insertOperational, listOperational } from "@/lib/operational-repository";
 
 export async function GET(request: NextRequest) {
-  const user = readSession(request.cookies.get("proar_session")?.value);
+  const user = await readSession(request);
   if (!user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
   const entityType = request.nextUrl.searchParams.get("entityType");
   const entityId = request.nextUrl.searchParams.get("entityId");
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const user = readSession(request.cookies.get("proar_session")?.value);
+  const user = await readSession(request);
   if (!user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
   try {
     const body = await request.json();
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     const rows = await insertOperational(user, "proar_audit_events", {
       entity_type: String(body.entityType), entity_id: String(body.entityId), action: String(body.action),
       before_data: body.beforeData || null, after_data: body.afterData || null, reason: body.reason || null,
-      created_by: user.displayName || "Usuário"
+      created_by: user.nome || user.email || "Usuário"
     });
     return NextResponse.json({ saved: true, event: rows[0] });
   } catch {
