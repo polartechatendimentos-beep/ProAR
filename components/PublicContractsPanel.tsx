@@ -57,6 +57,14 @@ interface Licitacao {
   responsavelInterno?: string;
 }
 
+export type PublicContractRecord = {
+  id: string;
+  name: string;
+  client?: string;
+  administrativeProcess?: string;
+  certameItems?: { id: string; description: string }[];
+};
+
 const SUBTABS: { id: LicTab; label: string }[] = [
   { id: "painel", label: "Painel" },
   { id: "oportunidades", label: "Oportunidades" },
