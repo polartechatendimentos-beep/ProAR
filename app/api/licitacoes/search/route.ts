@@ -52,13 +52,13 @@ export async function POST(request: Request) {
 
     for (const raw of candidates) {
       const item = raw as Record<string, unknown>;
-      const object = String(item.objetoContratacao || item.objetoCompra || item.descricao || "");
-      const itemUf = String((item.unidadeOrgao as Record<string, unknown> | undefined)?.ufSigla || (item.orgaoEntidade as Record<string, unknown> | undefined)?.uf || "").toUpperCase();
+      const object = text(item.objetoContratacao || item.objetoCompra || item.descricao);
+      const itemUf = text((item.unidadeOrgao as Record<string, unknown> | undefined)?.ufSigla || (item.orgaoEntidade as Record<string, unknown> | undefined)?.uf).toUpperCase();
       if (itemUf && itemUf !== uf) continue;
       if (!termsNormalized.some((term) => normalize(object).includes(term))) continue;
       found += 1;
 
-      const controlNumber = String(item.numeroControlePNCP || item.numeroControlePncp || "");
+      const controlNumber = text(item.numeroControlePNCP || item.numeroControlePncp);
       if (controlNumber) {
         const [existing] = await db.select({ id: licitacoes.id }).from(licitacoes)
           .where(and(eq(licitacoes.companyId, companyId), eq(licitacoes.numeroControlePncp, controlNumber))).limit(1);
@@ -68,14 +68,14 @@ export async function POST(request: Request) {
       await db.insert(licitacoes).values({
         companyId,
         numeroControlePncp: controlNumber || null,
-        numeroPregao: String(item.numeroCompra || item.numeroEdital || "") || null,
-        numeroProcesso: String(item.processo || item.numeroProcesso || "") || null,
+        numeroPregao: text(item.numeroCompra || item.numeroEdital) || null,
+        numeroProcesso: text(item.processo || item.numeroProcesso) || null,
         titulo: object || "Oportunidade encontrada no PNCP",
-        descricao: String(item.informacaoComplementar || object) || null,
-        orgao: String((item.orgaoEntidade as Record<string, unknown> | undefined)?.razaoSocial || item.nomeOrgao || "Órgão Público"),
+        descricao: text(item.informacaoComplementar || object) || null,
+        orgao: text((item.orgaoEntidade as Record<string, unknown> | undefined)?.razaoSocial || item.nomeOrgao) || "Órgão Público",
         plataforma: "PNCP",
         uf: itemUf || uf,
-        modalidade: String(item.modalidadeNome || "Licitação"),
+        modalidade: text(item.modalidadeNome) || "Licitação",
         tipoJulgamento: "a_confirmar",
         modoDisputa: "a_confirmar",
         valorEstimado: item.valorTotalEstimado ? Number(item.valorTotalEstimado).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : null,
@@ -84,7 +84,7 @@ export async function POST(request: Request) {
         responsavelInterno: session.nome,
         checklistResumo: {},
         aiAnalise: { source: "PNCP", importedAt: new Date().toISOString(), terms },
-        linkEdital: String(item.linkSistemaOrigem || item.url || "https://pncp.gov.br/app/editais"),
+        linkEdital: text(item.linkSistemaOrigem || item.url) || "https://pncp.gov.br/app/editais",
         categoria: "Climatização / PMOC",
         status: "oportunidade",
       });
