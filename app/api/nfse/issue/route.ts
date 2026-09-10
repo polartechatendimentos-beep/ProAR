@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { readSession } from "../../../../lib/proar-auth";
 
 export async function POST(request: NextRequest) {
-  const user = readSession(request.cookies.get("proar_session")?.value);
+  const user = await readSession(request);
   if (!user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
   const body = await request.json();
   const providerUrl = process.env.MIRASSOL_NFSE_API_URL;
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   const response = await fetch(providerUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${providerToken}` },
-    body: JSON.stringify({ ...body, municipality: "Mirassol", state: "SP", requestedBy: user.username }),
+    body: JSON.stringify({ ...body, municipality: "Mirassol", state: "SP", requestedBy: user.nome || user.email }),
     cache: "no-store",
   });
   const result = await response.json().catch(() => ({}));

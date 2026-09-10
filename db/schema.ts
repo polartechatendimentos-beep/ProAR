@@ -4,20 +4,103 @@ import { pgTable, serial, text, timestamp, boolean, jsonb, integer, numeric } fr
 export const licitacoes = pgTable("licitacoes", {
   id: serial("id").primaryKey(),
   numeroControlePncp: text("numero_controle_pncp"),
+  numeroPregao: text("numero_pregao"),
+  numeroProcesso: text("numero_processo"),
   titulo: text("titulo").notNull(),
   descricao: text("descricao"),
   orgao: text("orgao").notNull(),
+  plataforma: text("plataforma"),
   uf: text("uf").default("SP"),
   modalidade: text("modalidade").default("Pregão Eletrônico"),
+  tipoJulgamento: text("tipo_julgamento").default("menor_preco_global"),
+  modoDisputa: text("modo_disputa").default("aberto"),
   valorEstimado: text("valor_estimado"),
   dataAbertura: timestamp("data_abertura"),
+  horaSessao: text("hora_sessao"),
   dataFimProposta: timestamp("data_fim_proposta"),
+  responsavelInterno: text("responsavel_interno"),
+  pisoTecnico: text("piso_tecnico"),
+  pisoAbsoluto: text("piso_absoluto"),
+  margemMinima: text("margem_minima"),
+  habilitacaoPercentual: integer("habilitacao_percentual").default(0).notNull(),
+  checklistResumo: jsonb("checklist_resumo").default({}),
+  aiAnalise: jsonb("ai_analise").default({}),
   linkEdital: text("link_edital"),
   categoria: text("categoria"),
   status: text("status").default("em_andamento").notNull(),
   notificadoWhatsapp: boolean("notificado_whatsapp").default(false).notNull(),
   criadoEm: timestamp("criado_em").defaultNow().notNull(),
   atualizadoEm: timestamp("atualizado_em").defaultNow().notNull(),
+});
+
+export const licitacaoDocuments = pgTable("licitacao_documents", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").default(1).notNull(),
+  licitacaoId: integer("licitacao_id"),
+  tipo: text("tipo").notNull(),
+  empresa: text("empresa").notNull(),
+  cnpj: text("cnpj").notNull(),
+  emissao: timestamp("emissao"),
+  validade: timestamp("validade"),
+  orgaoEmissor: text("orgao_emissor"),
+  situacao: text("situacao").default("valido").notNull(),
+  arquivoNome: text("arquivo_nome"),
+  arquivoUrl: text("arquivo_url"),
+  iaValidou: boolean("ia_validou").default(false).notNull(),
+  ultimaUtilizacao: text("ultima_utilizacao"),
+  metadadosIa: jsonb("metadados_ia").default({}),
+  criadoEm: timestamp("criado_em").defaultNow().notNull(),
+  atualizadoEm: timestamp("atualizado_em").defaultNow().notNull(),
+});
+
+export const licitacaoChecklistItems = pgTable("licitacao_checklist_items", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").default(1).notNull(),
+  licitacaoId: integer("licitacao_id").notNull(),
+  categoria: text("categoria").notNull(),
+  requisito: text("requisito").notNull(),
+  status: text("status").default("pendente").notNull(), // atendido | revisar | nao_atendido | pendente | critico | vencendo
+  risco: text("risco").default("medio"),
+  justificativaIa: text("justificativa_ia"),
+  paginaClausula: text("pagina_clausula"),
+  documentoRelacionado: text("documento_relacionado"),
+  historico: jsonb("historico").default([]),
+  criadoEm: timestamp("criado_em").defaultNow().notNull(),
+  atualizadoEm: timestamp("atualizado_em").defaultNow().notNull(),
+});
+
+export const licitacaoBidSessions = pgTable("licitacao_bid_sessions", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").default(1).notNull(),
+  licitacaoId: integer("licitacao_id").notNull(),
+  portalNome: text("portal_nome").notNull(),
+  portalEndereco: text("portal_endereco"),
+  perfilPortal: text("perfil_portal"),
+  confiancaReconhecimento: integer("confianca_reconhecimento").default(0).notNull(),
+  modoOperacao: text("modo_operacao").default("observador").notNull(), // observador | assistido | semiautomatico | automatico
+  status: text("status").default("aguardando").notNull(), // aguardando | ativo | pausado | encerrado
+  killSwitchAtivado: boolean("kill_switch_ativado").default(false).notNull(),
+  gravacaoAtiva: boolean("gravacao_ativa").default(false).notNull(),
+  iniciadoEm: timestamp("iniciado_em"),
+  encerradoEm: timestamp("encerrado_em"),
+  criadoEm: timestamp("criado_em").defaultNow().notNull(),
+  atualizadoEm: timestamp("atualizado_em").defaultNow().notNull(),
+});
+
+export const licitacaoBidEvents = pgTable("licitacao_bid_events", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").default(1).notNull(),
+  licitacaoId: integer("licitacao_id").notNull(),
+  bidSessionId: integer("bid_session_id"),
+  horaEvento: timestamp("hora_evento").defaultNow().notNull(),
+  melhorMercado: text("melhor_mercado"),
+  nossoLance: text("nosso_lance"),
+  posicao: text("posicao"),
+  acao: text("acao").notNull(), // observado | enviado_manual | enviado_assistido | enviado_automatico | pausa | erro
+  origem: text("origem").default("agente").notNull(),
+  mensagemPregoeiro: text("mensagem_pregoeiro"),
+  metadados: jsonb("metadados").default({}),
+  criadoEm: timestamp("criado_em").defaultNow().notNull(),
 });
 
 // 2. Ordens de Serviço & Relatórios de Tarefa (PMOC)
@@ -111,6 +194,8 @@ export const works = pgTable("works", {
   engenheiroResponsavel: text("engenheiro_responsavel"),
   equipe: text("equipe").default("TEAM 11"),
   tokenPublico: text("token_publico").unique().notNull(),
+  senhaApontamentos: text("senha_apontamentos").default("123456").notNull(),
+  acessoApontamentosAtivo: boolean("acesso_apontamentos_ativo").default(true).notNull(),
   criadoEm: timestamp("criado_em").defaultNow().notNull(),
   atualizadoEm: timestamp("atualizado_em").defaultNow().notNull(),
 });
@@ -119,13 +204,99 @@ export const workFindings = pgTable("work_findings", {
   id: serial("id").primaryKey(),
   workId: integer("work_id").notNull(),
   companyId: integer("company_id").default(1).notNull(),
+  quadra: text("quadra").notNull(),
+  casa: text("casa").notNull(),
+  ambiente: text("ambiente").notNull(),
+  etapaRelacionada: text("etapa_relacionada").notNull(),
   titulo: text("titulo").notNull(),
-  descricao: text("descricao"),
-  tipo: text("tipo").default("nao_conformidade").notNull(),
-  gravidade: text("gravidade").default("media").notNull(),
-  status: text("status").default("aberto").notNull(),
+  descricao: text("descricao").notNull(),
+  tipo: text("tipo").default("nao_conformidade").notNull(), // nao_conformidade, qualidade, alteracao_necessaria, alteracao_medida, divergencia_projeto, servico_incompleto, correcao_necessaria, obs_engenharia, obs_fiscalizacao, outros
+  prioridade: text("prioridade").default("normal").notNull(), // baixa, normal, alta, urgente
+  situacao: text("situacao").default("pendente").notNull(), // pendente, em_analise, em_correcao, aguardando_conferencia, aprovada, cancelada
+  registradoPor: text("registrado_por").notNull(),
+  funcaoRegistrador: text("funcao_registrador").default("Fiscalização").notNull(), // Engenharia, Fiscalização, Construtora, Cliente, Outro
   fotos: jsonb("fotos").default([]),
+
+  // Resposta da PolarTech
+  observacaoPolartech: text("observacao_polartech"),
+  fotosCorrecao: jsonb("fotos_correcao").default([]),
+  responsavelCorrecao: text("responsavel_correcao"),
+  dataCorrecao: timestamp("data_correcao"),
+
+  // Conferência da Fiscalização/Engenharia
+  aprovadoPor: text("aprovado_por"),
+  dataAprovacao: timestamp("data_aprovacao"),
+  motivoReprovacao: text("motivo_reprovacao"),
+
+  // Linha do tempo auditável
+  historico: jsonb("historico").default([]),
+
   resolvidoEm: timestamp("resolvido_em"),
+  criadoEm: timestamp("criado_em").defaultNow().notNull(),
+  atualizadoEm: timestamp("atualizado_em").defaultNow().notNull(),
+});
+
+export const workExternalAccess = pgTable("work_external_access", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").default(1).notNull(),
+  workId: integer("work_id").notNull(),
+  accessTokenId: text("access_token_id").notNull(),
+  nome: text("nome").notNull(),
+  empresa: text("empresa"),
+  telefone: text("telefone"),
+  email: text("email"),
+  funcao: text("funcao").notNull(),
+  tipo: text("tipo").notNull(), // engenharia | fiscalizacao
+  passwordHash: text("password_hash").notNull(),
+  enabled: boolean("enabled").default(true).notNull(),
+  allowLinkAccess: boolean("allow_link_access").default(true).notNull(),
+  lastAccessAt: timestamp("last_access_at"),
+  createdBy: integer("created_by"),
+  updatedBy: integer("updated_by"),
+  criadoEm: timestamp("criado_em").defaultNow().notNull(),
+  atualizadoEm: timestamp("atualizado_em").defaultNow().notNull(),
+});
+
+export const workHousePriorities = pgTable("work_house_priorities", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").default(1).notNull(),
+  workId: integer("work_id").notNull(),
+  quadra: text("quadra").notNull(),
+  houseId: text("house_id").notNull(),
+  nivel: text("nivel").default("normal").notNull(),
+  motivo: text("motivo").notNull(),
+  observacao: text("observacao"),
+  fotos: jsonb("fotos").default([]),
+  solicitadoPor: text("solicitado_por").notNull(),
+  solicitanteTipo: text("solicitante_tipo").notNull(), // engenharia | fiscalizacao | interno
+  ativo: boolean("ativo").default(true).notNull(),
+  historico: jsonb("historico").default([]),
+  criadoEm: timestamp("criado_em").defaultNow().notNull(),
+  atualizadoEm: timestamp("atualizado_em").defaultNow().notNull(),
+});
+
+export const workRecommendations = pgTable("work_recommendations", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").default(1).notNull(),
+  workId: integer("work_id").notNull(),
+  scope: text("scope").default("casa_lote").notNull(),
+  quadra: text("quadra"),
+  houseId: text("house_id"),
+  ambiente: text("ambiente"),
+  etapa: text("etapa"),
+  categoria: text("categoria").notNull(),
+  titulo: text("titulo").notNull(),
+  recomendacao: text("recomendacao").notNull(),
+  justificativa: text("justificativa"),
+  impacto: text("impacto").default("medio").notNull(),
+  prioridade: text("prioridade").default("normal").notNull(),
+  prazoSugerido: text("prazo_sugerido"),
+  antesProximaEtapa: boolean("antes_proxima_etapa").default(false).notNull(),
+  situacao: text("situacao").default("nova").notNull(),
+  fotos: jsonb("fotos").default([]),
+  criadoPor: text("criado_por").notNull(),
+  tipoCriador: text("tipo_criador").notNull(), // engenharia | fiscalizacao | interno
+  historico: jsonb("historico").default([]),
   criadoEm: timestamp("criado_em").defaultNow().notNull(),
   atualizadoEm: timestamp("atualizado_em").defaultNow().notNull(),
 });

@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  if (!readSession(request.cookies.get("proar_session")?.value)) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
+  if (!await readSession(request)) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
   const { url, key } = config();
   if (!url || !key) return NextResponse.json({ error: "Base de dados indisponível." }, { status: 503 });
   const body = await request.json(); const id = snapshotId(body.companyId, body.orderId);

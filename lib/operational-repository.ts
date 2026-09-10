@@ -1,7 +1,7 @@
 import { supabaseRest } from "./supabase-rest";
 
 type OperationalUser = {
-  companyId?: string;
+  companyId?: string | number;
   username?: string;
   displayName?: string;
 };
@@ -25,7 +25,7 @@ function companyIdFor(user: OperationalUser) {
   if (!companyId) {
     throw new Error("Empresa não identificada na sessão.");
   }
-  return companyId;
+  return String(companyId);
 }
 
 function appendCompanyFilter(query: string, companyId: string) {

@@ -5,7 +5,7 @@ import { getOpenAiCredential, safeCompanyId } from "../../../lib/openai-credenti
 const FIELDS = ["brand", "model", "equipmentType", "capacityBtus", "serialNumber", "voltage", "frequency", "current", "power", "refrigerant", "refrigerantCharge", "manufactureDate", "manufacturerCode"] as const;
 
 export async function POST(request: NextRequest) {
-  const session=readSession(request.cookies.get("proar_session")?.value);
+  const session=await readSession(request);
   if(!session)return NextResponse.json({error:"Sessão inválida."},{status:401});
   const { image } = await request.json().catch(() => ({}));
   if (typeof image !== "string" || !image.startsWith("data:image/")) return NextResponse.json({ error: "Envie uma imagem válida da etiqueta." }, { status: 400 });

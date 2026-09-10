@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { readSession } from "../../../../lib/proar-auth";
 
 export async function POST(request: NextRequest) {
-  const user = readSession(request.cookies.get("proar_session")?.value);
+  const user = await readSession(request);
   if (!user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
   const { cnpj = "" } = await request.json();
   const document = String(cnpj).replace(/\D/g, "");
