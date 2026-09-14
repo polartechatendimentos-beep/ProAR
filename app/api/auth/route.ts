@@ -28,7 +28,7 @@ function hasTrustedOrigin(request: Request) {
   if (origin) return origin === requestOrigin;
 
   const referer = request.headers.get("referer");
-  if (!referer) return false;
+  if (!referer) return true;
 
   try {
     return new URL(referer).origin === requestOrigin;

@@ -359,6 +359,7 @@ export default function HomePage() {
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [logoutError, setLogoutError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
   const [globalSearch, setGlobalSearch] = useState("");
@@ -471,10 +472,20 @@ export default function HomePage() {
   };
 
   const handleLogout = async () => {
-    await fetch("/api/auth", { method: "DELETE" });
-    setSession(null);
-    setUserMenuOpen(false);
-    setSidebarOpen(false);
+    setLogoutError("");
+    try {
+      const response = await fetch("/api/auth", { method: "DELETE" });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok || !json.success) {
+        setLogoutError(json.error || "Não foi possível encerrar a sessão agora.");
+        return;
+      }
+      setSession(null);
+      setUserMenuOpen(false);
+      setSidebarOpen(false);
+    } catch {
+      setLogoutError("Não foi possível encerrar a sessão agora.");
+    }
   };
 
   const renderModuleContent = () => {
@@ -1813,6 +1824,9 @@ export default function HomePage() {
         )}
 
         <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
+          {logoutError && (
+            <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{logoutError}</div>
+          )}
           <div className="mb-6 rounded-3xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
