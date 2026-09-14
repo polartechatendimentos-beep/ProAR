@@ -54,6 +54,29 @@ function extractDocuments(payload: unknown) {
   });
 }
 
+function isValidCnpj(value: string) {
+  return /^\d{14}$/.test(value);
+}
+
+function isValidYear(value: string) {
+  return /^\d{4}$/.test(value);
+}
+
+function isValidSequence(value: string) {
+  return /^\d{1,20}$/.test(value);
+}
+
+async function fetchPncpEndpoint(path: string) {
+  const url = new URL(path, "https://pncp.gov.br");
+  return fetch(url, {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "ProAR-Licitacoes/1.0",
+    },
+    cache: "no-store",
+  });
+}
+
 export async function GET(request: Request) {
   const session = await readSession(request);
   if (!session) return NextResponse.json({ success: false, error: "Não autorizado." }, { status: 401 });
@@ -76,21 +99,23 @@ export async function GET(request: Request) {
       }, { status: 400 });
     }
 
-    const urls = [
-      `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${anoCompra}/${sequencialCompra}`,
-      `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/contratacoes/${anoCompra}/${sequencialCompra}`,
+    if (!isValidCnpj(cnpj) || !isValidYear(anoCompra) || !isValidSequence(sequencialCompra)) {
+      return NextResponse.json({
+        success: false,
+        error: "Identificação do processo PNCP inválida.",
+      }, { status: 400 });
+    }
+
+    const endpoints = [
+      `/api/consulta/v1/orgaos/${cnpj}/compras/${anoCompra}/${sequencialCompra}`,
+      `/api/consulta/v1/orgaos/${cnpj}/contratacoes/${anoCompra}/${sequencialCompra}`,
     ];
 
     let lastError = "O PNCP não respondeu à consulta de documentos no momento.";
+    let emptyResult: { data: ReturnType<typeof extractDocuments>; detail: { numeroControlePncp?: string; linkSistemaOrigem?: string; situacao?: string } } | null = null;
 
-    for (const url of urls) {
-      const response = await fetch(url, {
-        headers: {
-          Accept: "application/json",
-          "User-Agent": "ProAR-Licitacoes/1.0",
-        },
-        cache: "no-store",
-      });
+    for (const endpoint of endpoints) {
+      const response = await fetchPncpEndpoint(endpoint);
 
       if (!response.ok) {
         lastError = `O PNCP respondeu ${response.status} ao consultar os documentos.`;
@@ -101,16 +126,27 @@ export async function GET(request: Request) {
       const data = objectValue(payload);
       const documents = extractDocuments(payload);
 
-      return NextResponse.json({
-        success: true,
+      const detail = {
+        numeroControlePncp: text(data.numeroControlePNCP || data.numeroControlePncp || control) || undefined,
+        linkSistemaOrigem: text(data.linkSistemaOrigem || data.url) || undefined,
+        situacao: text(data.situacaoCompraNome || data.situacaoNome || data.situacao) || undefined,
+      };
+
+      if (documents.length > 0) {
+        return NextResponse.json({
+          success: true,
+          data: documents,
+          detail,
+        });
+      }
+
+      emptyResult = {
         data: documents,
-        detail: {
-          numeroControlePncp: text(data.numeroControlePNCP || data.numeroControlePncp || control) || undefined,
-          linkSistemaOrigem: text(data.linkSistemaOrigem || data.url) || undefined,
-          situacao: text(data.situacaoCompraNome || data.situacaoNome || data.situacao) || undefined,
-        },
-      });
+        detail,
+      };
     }
+
+    if (emptyResult) return NextResponse.json({ success: true, ...emptyResult });
 
     return NextResponse.json({ success: false, error: lastError }, { status: 502 });
   } catch (error) {

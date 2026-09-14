@@ -377,7 +377,16 @@ export function PublicContractsPanel() {
                 <article
                   key={item.id}
                   onDoubleClick={() => void openOpportunity(item)}
-                  className="border border-slate-200 rounded-xl p-4 flex flex-col gap-4 hover:border-indigo-300 hover:shadow-sm transition cursor-pointer"
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      void openOpportunity(item);
+                    }
+                  }}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Abrir ficha detalhada da licitação ${item.titulo}`}
+                  className="border border-slate-200 rounded-xl p-4 flex flex-col gap-4 hover:border-indigo-300 hover:shadow-sm transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                 >
                   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
                     <div className="space-y-2">
@@ -511,11 +520,16 @@ export function PublicContractsPanel() {
 
       {selectedOpportunity && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 p-4 flex items-center justify-center">
-          <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto border border-slate-200 shadow-xl">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="licitacao-detail-title"
+            className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto border border-slate-200 shadow-xl"
+          >
             <div className="sticky top-0 bg-white border-b border-slate-200 px-5 py-4 flex items-start justify-between gap-4">
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-indigo-600">Ficha detalhada da oportunidade</p>
-                <h3 className="text-lg font-bold text-slate-900 mt-1">{selectedOpportunity.titulo}</h3>
+                <h3 id="licitacao-detail-title" className="text-lg font-bold text-slate-900 mt-1">{selectedOpportunity.titulo}</h3>
                 <p className="text-xs text-slate-500 mt-1">{selectedOpportunity.orgao}</p>
               </div>
               <div className="flex items-center gap-2">
