@@ -77,6 +77,38 @@ async function fetchPncpEndpoint(path: string) {
   });
 }
 
+async function queryPncpEndpoint(endpoint: string, control?: string | null) {
+  const response = await fetchPncpEndpoint(endpoint);
+
+  if (!response.ok) {
+    return {
+      success: false as const,
+      error: `O PNCP respondeu ${response.status} ao consultar os documentos.`,
+    };
+  }
+
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    return {
+      success: false as const,
+      error: "O PNCP retornou uma resposta inválida ao consultar os documentos.",
+    };
+  }
+
+  const data = objectValue(payload);
+  return {
+    success: true as const,
+    documents: extractDocuments(payload),
+    detail: {
+      numeroControlePncp: text(data.numeroControlePNCP || data.numeroControlePncp || control) || undefined,
+      linkSistemaOrigem: text(data.linkSistemaOrigem || data.url) || undefined,
+      situacao: text(data.situacaoCompraNome || data.situacaoNome || data.situacao) || undefined,
+    },
+  };
+}
+
 export async function GET(request: Request) {
   const session = await readSession(request);
   if (!session) return NextResponse.json({ success: false, error: "Não autorizado." }, { status: 401 });
@@ -111,50 +143,27 @@ export async function GET(request: Request) {
       `/api/consulta/v1/orgaos/${cnpj}/contratacoes/${anoCompra}/${sequencialCompra}`,
     ];
 
-    let lastError = "O PNCP não respondeu à consulta de documentos no momento.";
-    let emptyResult: { data: ReturnType<typeof extractDocuments>; detail: { numeroControlePncp?: string; linkSistemaOrigem?: string; situacao?: string } } | null = null;
+    const results = await Promise.all(endpoints.map((endpoint) => queryPncpEndpoint(endpoint, control)));
 
-    for (const endpoint of endpoints) {
-      const response = await fetchPncpEndpoint(endpoint);
-
-      if (!response.ok) {
-        lastError = `O PNCP respondeu ${response.status} ao consultar os documentos.`;
-        continue;
-      }
-
-      let payload: unknown;
-      try {
-        payload = await response.json();
-      } catch {
-        lastError = "O PNCP retornou uma resposta inválida ao consultar os documentos.";
-        continue;
-      }
-
-      const data = objectValue(payload);
-      const documents = extractDocuments(payload);
-
-      const detail = {
-        numeroControlePncp: text(data.numeroControlePNCP || data.numeroControlePncp || control) || undefined,
-        linkSistemaOrigem: text(data.linkSistemaOrigem || data.url) || undefined,
-        situacao: text(data.situacaoCompraNome || data.situacaoNome || data.situacao) || undefined,
-      };
-
-      if (documents.length > 0) {
-        return NextResponse.json({
-          success: true,
-          data: documents,
-          detail,
-        });
-      }
-
-      emptyResult = {
-        data: documents,
-        detail,
-      };
+    const successWithDocuments = results.find((result) => result.success && result.documents.length > 0);
+    if (successWithDocuments && successWithDocuments.success) {
+      return NextResponse.json({
+        success: true,
+        data: successWithDocuments.documents,
+        detail: successWithDocuments.detail,
+      });
     }
 
-    if (emptyResult) return NextResponse.json({ success: true, ...emptyResult });
+    const successWithoutDocuments = results.find((result) => result.success);
+    if (successWithoutDocuments && successWithoutDocuments.success) {
+      return NextResponse.json({
+        success: true,
+        data: successWithoutDocuments.documents,
+        detail: successWithoutDocuments.detail,
+      });
+    }
 
+    const lastError = results.find((result) => !result.success)?.error || "O PNCP não respondeu à consulta de documentos no momento.";
     return NextResponse.json({ success: false, error: lastError }, { status: 502 });
   } catch (error) {
     return NextResponse.json({
