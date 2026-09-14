@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { PublicContractsPanel, type PublicContractRecord } from "@/components/PublicContractsPanel";
 import { PublicCommitmentsPanel, type PublicCommitmentRecord } from "@/components/PublicCommitmentsPanel";
+import { ServiceOrderWorkspace } from "@/components/ServiceOrderWorkspace";
 import { TechnicalCompliancePanel } from "@/components/TechnicalCompliancePanel";
 import { calculateCertameItemBalance, createCertameMovement, financialOutstandingValue, financialRealizedValue } from "@/lib/public-contracts";
 import { improveTechnicalText } from "@/lib/text-assist";
@@ -796,7 +797,7 @@ function SignaturePad({ label, value, onChange }: { label: string; value?: strin
   </div>;
 }
 
-function OrderDetail({ order, customerPhone, company, catalog, contracts, close, onUpdate, canEdit }: { order: ServiceOrder; customerPhone?: string; company: TenantCompany; catalog: ModuleRecord[]; contracts: PublicContractRecord[]; close: () => void; onUpdate: (order: ServiceOrder) => Promise<unknown>; canEdit: boolean }) {
+function OrderDetail({ order, customerPhone, company, catalog, contracts, close, onUpdate, canEdit, customers, structures, equipment }: { order: ServiceOrder; customerPhone?: string; company: TenantCompany; catalog: ModuleRecord[]; contracts: PublicContractRecord[]; close: () => void; onUpdate: (order: ServiceOrder) => Promise<unknown>; canEdit: boolean; customers: Customer[]; structures: ModuleRecord[]; equipment: ModuleRecord[] }) {
   const [currentOrder, setCurrentOrder] = useState(order);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -951,9 +952,10 @@ function OrderDetail({ order, customerPhone, company, catalog, contracts, close,
   const formatMoment = (value?: string) => value ? new Date(value).toLocaleString("pt-BR") : "";
   return <div className="modal-layer" role="dialog" aria-modal="true" aria-label={`Ordem ${order.id}`}>
     <button className="modal-backdrop" onClick={requestClose} aria-label="Fechar ordem"/>
-    <div className="modal order-detail-modal">
-      <div className="modal-head order-detail-head"><div><span>ORDEM DE SERVIÇO</span><h2>{order.id} • {order.client}</h2><p>{order.unit}</p></div><div className="order-detail-actions">{dirty && <small className="order-dirty-indicator">Alterações não salvas</small>}<ContextReports title={`OS ${currentOrder.id}`} rows={[["Cliente",currentOrder.client],["Status",currentOrder.status],["Técnico",currentOrder.tech]]} options={["Imprimir Ordem de Serviço","Relatório técnico","Certificado de higienização","Relatório fotográfico","Relatório da assistência técnica","Comprovante de entrega","Histórico completo da OS"]}/>{canEdit && <button className="primary-btn order-save-button" disabled={!dirty || saving || /^cancelada$/i.test(currentOrder.status)} onClick={()=>void saveChanges()}>{saving ? <RefreshCw size={15}/> : <CheckCircle2 size={15}/>} {saving ? "Salvando..." : "Salvar alterações"}</button>}<button onClick={requestClose} aria-label="Fechar"><X size={18}/></button></div></div>
+      <div className="modal order-detail-modal">
+      <div className="modal-head order-detail-head"><div><span>ORDEM DE SERVIÇO</span><h2>{order.id} • {order.client}</h2><p>{order.unit}</p></div><div className="order-detail-actions">{dirty && <small className="order-dirty-indicator">Alterações não salvas</small>}<ContextReports title={`OS ${currentOrder.id}`} rows={[['Cliente',currentOrder.client],["Status",currentOrder.status],["Técnico",currentOrder.tech]]} options={["Imprimir Ordem de Serviço","Relatório técnico","Certificado de higienização","Relatório fotográfico","Relatório da assistência técnica","Comprovante de entrega","Histórico completo da OS"]}/>{canEdit && <button className="primary-btn order-save-button" disabled={!dirty || saving || /^cancelada$/i.test(currentOrder.status)} onClick={()=>void saveChanges()}>{saving ? <RefreshCw size={15}/> : <CheckCircle2 size={15}/>} {saving ? "Salvando..." : "Salvar alterações"}</button>}<button onClick={requestClose} aria-label="Fechar"><X size={18}/></button></div></div>
       {saveNotice && <div className={`order-save-notice ${saveNotice.startsWith("✓") ? "saved" : saveNotice.startsWith("Não") ? "error" : "saving"}`}>{saveNotice}</div>}
+      <ServiceOrderWorkspace order={currentOrder} customers={customers as unknown as Record<string, unknown>[]} structures={structures as unknown as Record<string, unknown>[]} equipment={equipment as unknown as Record<string, unknown>[]} canEdit={canEdit} onSave={async next => { const saved = await onUpdate(next as ServiceOrder); setCurrentOrder(saved as ServiceOrder); setDirty(false); return saved; }}/>
       <div className="order-detail-content">
         <div className="order-overview">
           <article><CalendarDays size={17}/><div><small>AGENDAMENTO</small><strong>{order.date ? new Date(`${order.date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem data"} • {order.time || "A definir"}</strong></div></article>
@@ -3258,6 +3260,6 @@ export default function Home() {
       <footer><span>© 2026 ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
     {modal && <Modal title={modal} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalogRecords={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} supplierRecords={moduleRecords["Fornecedores"] ?? []} employeeRecords={moduleRecords["Funcionários"] ?? [tiagoEmployee]} close={() => setModal("")} onSave={saveRecord}/>}
-    {selectedOrder && <OrderDetail order={selectedOrder} customerPhone={customerRecords.find(customer => customer.name === selectedOrder.client)?.phone} company={activeCompany} catalog={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} contracts={(moduleRecords.Certames ?? []) as PublicContractRecord[]} close={() => setSelectedOrder(null)} onUpdate={updateServiceOrder} canEdit={hasAction("Ordens de serviço","Editar")}/>}{/* detalhe da OS */}
+    {selectedOrder && <OrderDetail order={selectedOrder} customerPhone={customerRecords.find(customer => customer.name === selectedOrder.client)?.phone} company={activeCompany} catalog={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} contracts={(moduleRecords.Certames ?? []) as PublicContractRecord[]} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} equipment={moduleRecords["Equipamentos"] ?? []} close={() => setSelectedOrder(null)} onUpdate={updateServiceOrder} canEdit={hasAction("Ordens de serviço","Editar")}/>}{/* detalhe da OS */}
   </div>;
 }
