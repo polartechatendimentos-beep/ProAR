@@ -43,12 +43,13 @@ async function findUserByIdentifier(identifier: string) {
 }
 
 function adminFallback(identifier: string, senha: string): AuthenticatedUser | null {
-  const defaultAdminEmail = process.env.ADMIN_EMAIL || "admin@proar.com.br";
-  const defaultAdminPass = process.env.ADMIN_PASSWORD || "admin123";
+  const defaultAdminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  const defaultAdminPass = process.env.ADMIN_PASSWORD;
+  if (!defaultAdminEmail || !defaultAdminPass) return null;
+
   const acceptedIdentifiers = new Set([
-    defaultAdminEmail.toLowerCase(),
+    defaultAdminEmail,
     defaultAdminEmail.split("@")[0]?.toLowerCase() || "admin",
-    "admin",
   ]);
 
   if (!acceptedIdentifiers.has(identifier) || senha !== defaultAdminPass) return null;

@@ -373,6 +373,10 @@ export default function HomePage() {
 
   const visibleModules = useMemo(() => getAllowedModules(session?.role), [session?.role]);
   const sidebarModules = useMemo(() => visibleModules.filter((item) => item.key !== "dashboard"), [visibleModules]);
+  const canAccessSettings = useMemo(
+    () => visibleModules.some((item) => item.key === "configuracoes"),
+    [visibleModules]
+  );
 
   useEffect(() => {
     const syncSession = async () => {
@@ -1695,7 +1699,9 @@ export default function HomePage() {
                     <div className="text-xs text-slate-400">{session.email}</div>
                   </div>
                   <div className="p-2">
-                    <button type="button" onClick={() => { setActiveTab("configuracoes"); setUserMenuOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-slate-200 hover:bg-slate-900"><Settings className="h-4 w-4" /> Configurações</button>
+                    {canAccessSettings && (
+                      <button type="button" onClick={() => { setActiveTab("configuracoes"); setUserMenuOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-slate-200 hover:bg-slate-900"><Settings className="h-4 w-4" /> Configurações</button>
+                    )}
                     <button type="button" onClick={() => void handleLogout()} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-rose-300 hover:bg-slate-900"><LogOut className="h-4 w-4" /> Sair</button>
                   </div>
                 </div>
