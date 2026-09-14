@@ -2,13 +2,13 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { signToken } from "@/lib/proar-auth";
+import { readSession, signToken } from "@/lib/proar-auth";
 import { verifyPassword } from "@/lib/password";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { email, senha } = body;
+    const { email, senha, remember = true } = body;
 
     if (!email || !senha) {
       return NextResponse.json(
@@ -43,13 +43,12 @@ export async function POST(request: Request) {
           companyId: user.companyId || 1,
         };
       }
-    } else {
-      // Fallback seguro de primeiro acesso para o administrador da matriz (Mirassol/SP)
-      // Se não cadastrado no banco, permite login com as credenciais padrão configuradas
-      const defaultAdminEmail = process.env.ADMIN_EMAIL || "admin@proar.com.br";
-      const defaultAdminPass = process.env.ADMIN_PASSWORD || "admin123";
+    } else if (process.env.ALLOW_BOOTSTRAP_ADMIN === "true") {
+      // Acesso inicial só é permitido quando habilitado explicitamente no ambiente.
+      const defaultAdminEmail = process.env.ADMIN_EMAIL;
+      const defaultAdminPass = process.env.ADMIN_PASSWORD;
 
-      if (email.toLowerCase().trim() === defaultAdminEmail.toLowerCase() && senha === defaultAdminPass) {
+      if (defaultAdminEmail && defaultAdminPass && email.toLowerCase().trim() === defaultAdminEmail.toLowerCase() && senha === defaultAdminPass) {
         isValid = true;
         authUser = {
           id: 1,
@@ -83,7 +82,7 @@ export async function POST(request: Request) {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60,
+      ...(remember ? { maxAge: 7 * 24 * 60 * 60 } : {}),
       path: "/",
     });
 
@@ -94,4 +93,30 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+}
+
+
+export async function GET(request: Request) {
+  try {
+    const session = await readSession(request);
+    if (!session) {
+      return NextResponse.json({ success: false }, { status: 401, headers: { "Cache-Control": "no-store" } });
+    }
+
+    return NextResponse.json({ success: true, user: session }, { headers: { "Cache-Control": "no-store" } });
+  } catch {
+    return NextResponse.json({ success: false }, { status: 401, headers: { "Cache-Control": "no-store" } });
+  }
+}
+
+export async function DELETE() {
+  const response = NextResponse.json({ success: true });
+  response.cookies.set("proar_session", "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 0,
+    path: "/",
+  });
+  return response;
 }
