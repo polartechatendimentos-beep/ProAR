@@ -377,16 +377,7 @@ export function PublicContractsPanel() {
                 <article
                   key={item.id}
                   onDoubleClick={() => void openOpportunity(item)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      void openOpportunity(item);
-                    }
-                  }}
-                  tabIndex={0}
-                  role="button"
-                  aria-label={`Abrir ficha detalhada da licitação ${item.titulo}`}
-                  className="border border-slate-200 rounded-xl p-4 flex flex-col gap-4 hover:border-indigo-300 hover:shadow-sm transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                  className="border border-slate-200 rounded-xl p-4 flex flex-col gap-4 hover:border-indigo-300 hover:shadow-sm transition cursor-pointer"
                 >
                   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
                     <div className="space-y-2">
@@ -546,6 +537,7 @@ export function PublicContractsPanel() {
                 <button
                   type="button"
                   onClick={() => setSelectedOpportunity(null)}
+                  aria-label="Fechar a ficha detalhada"
                   className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-100 text-slate-600"
                 >
                   <X className="w-4 h-4" />
@@ -623,10 +615,9 @@ export function PublicContractsPanel() {
                             Abrir <ExternalLink className="w-3 h-3" />
                           </a>
                           <a
-                            href={document.url}
+                            href={`/api/licitacoes/pncp-documents/download?url=${encodeURIComponent(document.url)}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            download
                             className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-indigo-600 text-xs font-semibold text-white"
                           >
                             Baixar <Download className="w-3 h-3" />
