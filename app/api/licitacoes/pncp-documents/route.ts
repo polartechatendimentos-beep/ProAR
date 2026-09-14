@@ -122,7 +122,14 @@ export async function GET(request: Request) {
         continue;
       }
 
-      const payload = await response.json();
+      let payload: unknown;
+      try {
+        payload = await response.json();
+      } catch {
+        lastError = "O PNCP retornou uma resposta inválida ao consultar os documentos.";
+        continue;
+      }
+
       const data = objectValue(payload);
       const documents = extractDocuments(payload);
 

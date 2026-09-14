@@ -42,27 +42,6 @@ async function findUserByIdentifier(identifier: string) {
   }
 }
 
-function adminFallback(identifier: string, senha: string): AuthenticatedUser | null {
-  const defaultAdminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
-  const defaultAdminPass = process.env.ADMIN_PASSWORD;
-  if (!defaultAdminEmail || !defaultAdminPass) return null;
-
-  const acceptedIdentifiers = new Set([
-    defaultAdminEmail,
-    defaultAdminEmail.split("@")[0]?.toLowerCase() || "admin",
-  ]);
-
-  if (!acceptedIdentifiers.has(identifier) || senha !== defaultAdminPass) return null;
-
-  return {
-    id: 1,
-    email: defaultAdminEmail,
-    nome: "Administrador ProAR",
-    role: "admin",
-    companyId: 1,
-  };
-}
-
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -92,9 +71,6 @@ export async function POST(request: Request) {
           companyId: user.companyId || 1,
         };
       }
-    } else {
-      authUser = adminFallback(identifier, senha);
-      isValid = Boolean(authUser);
     }
 
     if (!isValid || !authUser) {

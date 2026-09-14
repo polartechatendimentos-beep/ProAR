@@ -161,6 +161,7 @@ export function PublicContractsPanel() {
   const [documentsError, setDocumentsError] = useState("");
   const [newLic, setNewLic] = useState(INITIAL_NEW_LIC);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const documentsRequestRef = useRef(0);
 
   const fetchLicitacoes = async (q = "") => {
     try {
@@ -190,8 +191,9 @@ export function PublicContractsPanel() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedOpportunity]);
 
-  const loadDocuments = async (item: Licitacao) => {
+  const loadDocuments = async (item: Licitacao, requestId: number) => {
     if (!canLoadPncpDocuments(item)) {
+      if (documentsRequestRef.current !== requestId) return;
       setDocuments([]);
       setDocumentsError("");
       return;
@@ -208,6 +210,7 @@ export function PublicContractsPanel() {
     try {
       const response = await fetch(`/api/licitacoes/pncp-documents?${params.toString()}`);
       const json = await response.json();
+      if (documentsRequestRef.current !== requestId) return;
       if (!response.ok || !json.success) {
         setDocuments([]);
         setDocumentsError(json.error || "Não foi possível consultar os documentos oficiais agora.");
@@ -215,18 +218,22 @@ export function PublicContractsPanel() {
       }
       setDocuments(Array.isArray(json.data) ? json.data : []);
     } catch {
+      if (documentsRequestRef.current !== requestId) return;
       setDocuments([]);
       setDocumentsError("Não foi possível carregar os documentos do PNCP no momento.");
     } finally {
+      if (documentsRequestRef.current !== requestId) return;
       setDocumentsLoading(false);
     }
   };
 
   const openOpportunity = async (item: Licitacao) => {
+    const requestId = documentsRequestRef.current + 1;
+    documentsRequestRef.current = requestId;
     setSelectedOpportunity(item);
     setDocuments([]);
     setDocumentsError("");
-    await loadDocuments(item);
+    await loadDocuments(item, requestId);
   };
 
   const handleSyncPncp = async () => {

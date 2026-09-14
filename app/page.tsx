@@ -370,6 +370,7 @@ export default function HomePage() {
   const mobileSearchRef = useRef<HTMLDivElement | null>(null);
   const quickMenuRef = useRef<HTMLDivElement | null>(null);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
+  const mobileSidebarCloseRef = useRef<HTMLButtonElement | null>(null);
 
   const visibleModules = useMemo(() => getAllowedModules(session?.role), [session?.role]);
   const sidebarModules = useMemo(() => visibleModules.filter((item) => item.key !== "dashboard"), [visibleModules]);
@@ -414,6 +415,11 @@ export default function HomePage() {
     return () => document.removeEventListener("mousedown", closeMenus);
   }, []);
 
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    mobileSidebarCloseRef.current?.focus();
+  }, [sidebarOpen]);
+
   const searchResults = useMemo(() => {
     const term = globalSearch.trim().toLowerCase();
     if (!term) return SEARCH_TARGETS.map((item) => ({ type: "target" as const, ...item })).slice(0, 6);
@@ -428,6 +434,8 @@ export default function HomePage() {
 
     return [...moduleResults, ...targetResults].slice(0, 8);
   }, [globalSearch, visibleModules]);
+
+  const activeModule = visibleModules.find((item) => item.key === activeTab) || visibleModules[0];
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -1593,8 +1601,6 @@ export default function HomePage() {
     );
   }
 
-  const activeModule = visibleModules.find((item) => item.key === activeTab) || visibleModules[0];
-
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
       <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950 text-white shadow-xl">
@@ -1778,13 +1784,13 @@ export default function HomePage() {
 
         {sidebarOpen && (
           <div className="fixed inset-0 z-50 bg-slate-950/60 lg:hidden">
-            <div className="h-full w-[290px] bg-white shadow-2xl">
+            <div className="h-full w-[290px] bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="mobile-sidebar-title">
               <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
                 <div>
                   <div className="text-sm font-black text-slate-950">PROAR</div>
-                  <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Menu do sistema</div>
+                  <div id="mobile-sidebar-title" className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Menu do sistema</div>
                 </div>
-                <button type="button" onClick={() => setSidebarOpen(false)} className="grid h-10 w-10 place-items-center rounded-xl bg-slate-100 text-slate-600"><X className="h-5 w-5" /></button>
+                <button ref={mobileSidebarCloseRef} type="button" onClick={() => setSidebarOpen(false)} className="grid h-10 w-10 place-items-center rounded-xl bg-slate-100 text-slate-600"><X className="h-5 w-5" /></button>
               </div>
               <div className="p-5">
                 <div className="grid gap-2">
