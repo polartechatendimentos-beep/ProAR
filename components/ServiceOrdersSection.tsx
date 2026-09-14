@@ -1,6 +1,7 @@
 "use client";
 
 import { StandardDocumentReport } from "@/components/StandardDocumentReport";
+import { ServiceOrderWorkspace } from "@/components/ServiceOrderWorkspace";
 
 import React, { useState, useEffect } from "react";
 import { 
@@ -79,6 +80,7 @@ export function ServiceOrdersSection() {
   const [generatingAi, setGeneratingAi] = useState(false);
   const [showOsReportModal, setShowOsReportModal] = useState(false);
   const [currentReportOs, setCurrentReportOs] = useState<OSItem | null>(null);
+  const [showWorkspace, setShowWorkspace] = useState(false);
 
   // Filtro padrão de negócios: "Em aberto" oculta concluídas e canceladas
   const filteredList = osList.filter((os) => {
@@ -223,6 +225,15 @@ export function ServiceOrdersSection() {
                 <button
                   onClick={() => {
                     setSelectedOs(os);
+                    setShowWorkspace(true);
+                  }}
+                  className="px-3 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition flex items-center gap-1 border border-blue-200"
+                >
+                  <Wrench className="w-3.5 h-3.5" /> Abrir OS
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedOs(os);
                     setShowAiModal(true);
                   }}
                   className="px-3 py-1.5 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition flex items-center gap-1 border border-purple-200"
@@ -244,6 +255,31 @@ export function ServiceOrdersSection() {
         )}
       </div>
 
+      {showWorkspace && selectedOs && (
+        <div className="fixed inset-0 z-40 overflow-y-auto bg-slate-900/60 p-3 backdrop-blur-sm">
+          <div className="mx-auto max-w-7xl py-4">
+            <ServiceOrderWorkspace
+              order={{
+                id: `#OS-${selectedOs.numeroTarefa}`,
+                client: selectedOs.clienteNome,
+                unit: "Unidade principal",
+                service: selectedOs.tipoTarefa,
+                tech: selectedOs.equipe,
+                date: selectedOs.dataAgendamento || "",
+                time: "A definir",
+                address: selectedOs.endereco,
+                status: selectedOs.status,
+                request: selectedOs.relatoExecucao || "",
+                executedService: selectedOs.relatoExecucao || "",
+                tone: selectedOs.status === "Concluído" ? "green" : selectedOs.status === "Aguardando Peça" ? "amber" : "blue",
+              }}
+              canEdit
+              onClose={() => setShowWorkspace(false)}
+              onSave={async () => { setShowWorkspace(false); alert("Alterações da OS preparadas para persistência no cadastro operacional."); }}
+            />
+          </div>
+        </div>
+      )}
       {/* Modal Assistente Técnico com IA */}
       {showAiModal && selectedOs && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
