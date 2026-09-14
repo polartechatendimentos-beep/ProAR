@@ -94,20 +94,20 @@ const MODULES: ModuleItem[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, description: "Central operacional do dia, alertas e prioridades por perfil.", keywords: ["inicio", "dashboard", "painel", "indicadores"] },
   { key: "clientes", label: "Clientes", icon: Users, description: "Cadastro 360°, hierarquia oficial e histórico completo do cliente.", keywords: ["cliente", "cnpj", "cpf", "telefone", "documento"] },
   { key: "equipamentos", label: "Equipamentos", icon: Wrench, description: "Ativos técnicos com vínculo por unidade, sala e etiqueta inteligente.", keywords: ["equipamento", "serie", "patrimonio", "maquina", "condensadora"] },
-  { key: "orcamento", label: "Orçamentos", icon: FileText, description: "Propostas comerciais, deslocamento e preço técnico.", keywords: ["orcamento", "proposta", "cotacao", "km"] },
-  { key: "pdv", label: "PDV / Vendas", icon: ShoppingCart, description: "Pedidos, balcão, faturamento e conversão comercial.", keywords: ["pdv", "venda", "pedido", "caixa"] },
+  { key: "orcamento", label: "Orçamentos", icon: FileText, description: "Orçamentos operacionais com validade, tabela de preço e itens estruturados.", keywords: ["orcamento", "proposta", "cotacao", "km"] },
+  { key: "pdv", label: "PDV / Vendas", icon: ShoppingCart, description: "Cupom, atalhos de operação e destaque para último item inserido.", keywords: ["pdv", "venda", "pedido", "caixa"] },
   { key: "os", label: "Ordens Serviço", icon: Wrench, description: "Resumo técnico, serviços, equipamentos, fotos, financeiro e documentos.", keywords: ["os", "ordem", "servico", "chamado"] },
-  { key: "agenda", label: "Agenda", icon: CalendarDays, description: "Planejamento diário de equipes, visitas e manutenções.", keywords: ["agenda", "visita", "roteiro", "agendamento"] },
-  { key: "obras", label: "Obras", icon: Building2, description: "Etapas, fiscalizações, casas/lotes e consumo em campo.", keywords: ["obra", "casa", "lote", "fiscalizacao", "projeto"] },
-  { key: "pmoc", label: "PMOC", icon: ShieldCheck, description: "Conformidade, ART e registros técnicos obrigatórios.", keywords: ["pmoc", "art", "conformidade", "laudo"] },
-  { key: "contratos", label: "Licitações", icon: Landmark, description: "Certames, PNCP, documentos oficiais e empenhos.", keywords: ["licitacao", "certame", "pncp", "empenho", "edital"] },
-  { key: "estoque", label: "Estoque", icon: Package, description: "Entradas, saídas, inventário, custo e saldo disponível.", keywords: ["estoque", "produto", "saldo", "inventario"] },
-  { key: "compras", label: "Compras", icon: Briefcase, description: "Fornecedores, pedidos, recebimento e reposição.", keywords: ["compra", "fornecedor", "pedido compra"] },
-  { key: "financeiro", label: "Financeiro", icon: Wallet, description: "Contas, baixas, fluxo de caixa e inadimplência.", keywords: ["financeiro", "conta", "receber", "pagar", "fluxo caixa"] },
-  { key: "fiscal", label: "Fiscal", icon: Receipt, description: "Notas, tributos, certificados e configuração fiscal.", keywords: ["fiscal", "nota fiscal", "nfs-e", "tributo"] },
-  { key: "whatsapp", label: "WhatsApp", icon: Bell, description: "Alertas, comunicações e automações com clientes.", keywords: ["whatsapp", "mensagem", "alerta"] },
-  { key: "relatorios", label: "Relatórios", icon: FileBarChart2, description: "Visões gerenciais, auditoria e acompanhamento executivo.", keywords: ["relatorio", "indicador", "exportacao"] },
-  { key: "configuracoes", label: "Configurações", icon: Settings, description: "Preferências, acessos, IA e parâmetros do sistema.", keywords: ["configuracao", "usuario", "perfil", "permissao"] },
+  { key: "agenda", label: "Agenda", icon: CalendarDays, description: "Programação aberta por hoje, semana, mês e por técnico.", keywords: ["agenda", "visita", "roteiro", "agendamento"] },
+  { key: "obras", label: "Obras", icon: Building2, description: "Obra, quadras, casas, materiais, fiscalização e histórico.", keywords: ["obra", "casa", "lote", "fiscalizacao", "projeto"] },
+  { key: "pmoc", label: "PMOC", icon: ShieldCheck, description: "Contrato, responsável técnico, vigência e execuções PMOC.", keywords: ["pmoc", "art", "conformidade", "laudo"] },
+  { key: "contratos", label: "Licitações", icon: Landmark, description: "Radar, certames, empenhos, saldo contratual e documentos oficiais.", keywords: ["licitacao", "certame", "pncp", "empenho", "edital"] },
+  { key: "estoque", label: "Estoque", icon: Package, description: "Saldo, reservado, disponível e origem das movimentações.", keywords: ["estoque", "produto", "saldo", "inventario"] },
+  { key: "compras", label: "Compras", icon: Briefcase, description: "Notas, pedidos, fornecedores e materiais por obra.", keywords: ["compra", "fornecedor", "pedido compra"] },
+  { key: "financeiro", label: "Financeiro", icon: Wallet, description: "Receber, pagar, fluxo de caixa, conciliação e baixa parcial.", keywords: ["financeiro", "conta", "receber", "pagar", "fluxo caixa"] },
+  { key: "fiscal", label: "Fiscal", icon: Receipt, description: "Certificado digital, NF-e, NFS-e e sincronização fiscal.", keywords: ["fiscal", "nota fiscal", "nfs-e", "tributo"] },
+  { key: "whatsapp", label: "WhatsApp", icon: Bell, description: "Métricas de envio, falhas, origem da mensagem e rastreio operacional.", keywords: ["whatsapp", "mensagem", "alerta"] },
+  { key: "relatorios", label: "Relatórios", icon: FileBarChart2, description: "Central única de relatórios com motor comum entre módulos.", keywords: ["relatorio", "indicador", "exportacao"] },
+  { key: "configuracoes", label: "Configurações", icon: Settings, description: "Empresa, usuários, permissões, IA, fiscal, tabelas e auditoria.", keywords: ["configuracao", "usuario", "perfil", "permissao"] },
 ];
 
 const QUICK_CREATE = [
@@ -231,6 +231,70 @@ const OS_LINES = [
   ["Carga R32", "1", "450,00", "-", "450,00"],
 ] as const;
 
+const AGENDA_FILTERS = ["Hoje", "Semana", "Mês", "Por Técnico"];
+
+const AGENDA_ROWS = [
+  ["07:30", "João", "Prefeitura / Hospital", "Aberta"],
+  ["09:00", "Lucas", "Drogaria Santa Rita", "Aberta"],
+  ["10:30", "Caio", "Cliente Residencial", "Aberta"],
+] as const;
+
+const ORCAMENTO_ROWS = [
+  ["Serviço", "Higienização", "2", "250,00", "-", "500,00"],
+  ["Produto", "Capacitor", "1", "120,00", "-", "120,00"],
+] as const;
+
+const PDV_SHORTCUTS = [
+  "F1 Cliente",
+  "F2 Menu",
+  "F3 Operações",
+  "F4 Pagamento",
+  "F5 Recuperar",
+  "F6 Pesquisa",
+  "F7 Finalizar",
+  "F8 Canc item",
+  "F9 Canc venda",
+];
+
+const PDV_ITEMS = [
+  ["Serviço", "1 × 700,00", "700,00"],
+  ["Produto B", "1 × 250,00", "250,00"],
+  ["Produto A", "2 × 150,00", "300,00"],
+] as const;
+
+const OBRAS_TABS = [
+  "Visão Geral",
+  "Quadras",
+  "Casas/Lotes",
+  "Áreas Comuns",
+  "Engenharia / Fiscalização",
+  "Materiais / Consumo",
+  "Alterações de Projeto",
+  "Documentos",
+  "Histórico",
+];
+
+const MATERIAL_ROWS = [
+  ["Cobre 1/4", "800 m", "460 m", "340 m", "220 m"],
+  ["Cobre 3/8", "700 m", "410 m", "290 m", "180 m"],
+  ["PP 4 vias", "900 m", "540 m", "360 m", "250 m"],
+] as const;
+
+const MATERIAL_EXPECTED = [
+  ["Cobre 1/4", "9,00 m"],
+  ["Cobre 3/8", "9,00 m"],
+  ["Isolamento", "18,00 m"],
+  ["Cabo PP", "11,00 m"],
+  ["Caixa frigorígena", "1 un"],
+] as const;
+
+const PMOC_TABS = ["Plano de manutenção", "Execuções", "Equipamentos", "Documentos", "Relatório PMOC"];
+const LICITACOES_TABS = ["Radar de Oportunidades", "Certames", "Empenhos", "Saldo do Certame", "Documentos"];
+const COMPRA_TABS = ["Nova compra", "Notas recebidas", "Pedidos", "Fornecedores", "Materiais por obra"];
+const FINANCEIRO_TABS = ["Receber", "Pagar", "Fluxo Caixa", "Conciliação"];
+const RELATORIO_ACTIONS = ["Visualizar", "PDF", "Imprimir", "WhatsApp"];
+const CONFIG_TABS = ["Empresa", "Usuários", "Permissões", "IA", "WhatsApp", "Fiscal", "Tabelas de preço", "Serviços", "Produtos", "Status", "Notificações", "Auditoria"];
+
 function normalizeRole(role?: string) {
   return String(role || "").trim().toLowerCase();
 }
@@ -281,6 +345,10 @@ function toneClass(tone: DayMetric["tone"]) {
   if (tone === "warning") return "border-amber-200 bg-amber-50 text-amber-700";
   if (tone === "success") return "border-emerald-200 bg-emerald-50 text-emerald-700";
   return "border-slate-200 bg-white text-slate-700";
+}
+
+function tabPillClass(active = false) {
+  return active ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-600";
 }
 
 export default function HomePage() {
@@ -464,129 +532,56 @@ export default function HomePage() {
               </div>
             </section>
 
+            <section className="grid gap-6 xl:grid-cols-2">
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="grid h-11 w-11 place-items-center rounded-2xl bg-blue-50 text-blue-700"><Wrench className="h-5 w-5" /></div>
+                  <div>
+                    <h2 className="text-lg font-black text-slate-950">Modo mobile técnico</h2>
+                    <p className="text-sm text-slate-600">No celular, o técnico vê apenas o necessário para trabalhar.</p>
+                  </div>
+                </div>
+                <div className="mt-5 rounded-[28px] border border-slate-200 bg-slate-950 p-4 text-white">
+                  <div className="text-sm font-black">PROAR</div>
+                  <div className="mt-1 text-slate-300">Bom dia, João</div>
+                  <div className="mt-4 text-[11px] font-bold uppercase tracking-[0.16em] text-blue-300">Atendimentos de hoje</div>
+                  <div className="mt-3 space-y-3">
+                    {[
+                      ["09:00", "Hospital Municipal", "UTI • Sala 03"],
+                      ["13:30", "Drogaria", "Loja 02"],
+                    ].map(([hour, client, detail]) => (
+                      <div key={`${hour}-${client}`} className="rounded-2xl border border-slate-800 bg-slate-900 px-4 py-4">
+                        <div className="text-lg font-black">{hour}</div>
+                        <div className="mt-1 text-sm font-semibold">{client}</div>
+                        <div className="text-sm text-slate-400">{detail}</div>
+                        <button type="button" className="mt-3 rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white">Abrir OS</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="text-lg font-black text-slate-950">Arquitetura operacional</div>
+                <p className="mt-1 text-sm text-slate-600">Estruturas finais reforçadas no layout geral do sistema.</p>
+                <div className="mt-5 space-y-3 text-sm text-slate-700">
+                  {[
+                    "Cliente → Estrutura física → Sala/Ambiente → Equipamento → OS → Serviço → Financeiro → Histórico",
+                    "Obra → Quadra → Casa/Lote → Etapa → Materiais → Engenharia/Fiscalização → Histórico",
+                    "Prefeitura → Secretaria → Unidade → Setor → Sala → Equipamento → Certame → OS → Empenho",
+                  ].map((line) => (
+                    <div key={line} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 leading-6">{line}</div>
+                  ))}
+                </div>
+              </div>
+            </section>
+
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
               <WorkOperationsPanel />
               <PublicContractsPanel />
             </div>
           </div>
         );
-      case "orcamento":
-        return <OrcamentoPanel />;
-      case "pdv":
-        return <PdvBalcaoPanel />;
-      case "os":
-        return (
-          <div className="space-y-6">
-            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className="text-lg font-black text-slate-950">ORDEM DE SERVIÇO #001548</span>
-                    <span className="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-blue-700">Em atendimento</span>
-                  </div>
-                  <p className="mt-2 text-sm text-slate-600">Prefeitura → Saúde → Hospital → UTI → Sala 03</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button type="button" className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">Gerar sem valores</button>
-                  <button type="button" className="inline-flex items-center gap-2 rounded-2xl bg-blue-700 px-4 py-2 text-sm font-bold text-white"><Printer className="h-4 w-4" /> Imprimir relatório completo</button>
-                </div>
-              </div>
-
-              <div className="mt-5 flex flex-wrap gap-2">
-                {OS_TABS.map((tab) => (
-                  <span key={tab} className={`rounded-full px-3 py-1 text-xs font-semibold ${tab === "Resumo" ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-600"}`}>{tab}</span>
-                ))}
-              </div>
-
-              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                {OS_SUMMARY_FIELDS.map(([label, value]) => (
-                  <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</div>
-                    <div className="mt-2 text-sm font-semibold text-slate-900">{value}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-5 grid gap-4 xl:grid-cols-2">
-                {[
-                  "Solicitação do cliente",
-                  "Diagnóstico técnico",
-                  "Serviço executado",
-                  "Recomendação técnica",
-                ].map((label) => (
-                  <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-sm font-bold text-slate-900">{label}</div>
-                      <button type="button" className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700"><Sparkles className="h-3.5 w-3.5" /> IA</button>
-                    </div>
-                    <div className="mt-3 min-h-24 rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
-                      Campo pronto para preenchimento assistido por IA, sempre com revisão do usuário antes de salvar.
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-blue-50 text-blue-700"><FileText className="h-5 w-5" /></div>
-                <div>
-                  <h2 className="text-lg font-black text-slate-950">Serviços e valores</h2>
-                  <p className="text-sm text-slate-600">Estrutura da OS com composição de serviços, produtos e total consolidado.</p>
-                </div>
-              </div>
-              <div className="mt-5 overflow-hidden rounded-3xl border border-slate-200">
-                <table className="min-w-full divide-y divide-slate-200 text-sm">
-                  <thead className="bg-slate-50 text-left text-slate-500">
-                    <tr>
-                      {[
-                        "Descrição",
-                        "Qtd",
-                        "Unit.",
-                        "Desc.",
-                        "Total",
-                      ].map((header) => (
-                        <th key={header} className="px-4 py-3 font-semibold">{header}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
-                    {OS_LINES.map((row) => (
-                      <tr key={row[0]}>
-                        {row.map((value) => (
-                          <td key={`${row[0]}-${value}`} className="px-4 py-3">{value}</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                {[
-                  ["Produtos", "R$ 320,00"],
-                  ["Serviços", "R$ 900,00"],
-                  ["Desconto", "R$ 100,00"],
-                  ["Total", "R$ 1.120,00"],
-                ].map(([label, value]) => (
-                  <div key={label} className={`rounded-2xl px-4 py-4 ${label === "Total" ? "bg-slate-950 text-white" : "border border-slate-200 bg-slate-50 text-slate-900"}`}>
-                    <div className={`text-[11px] font-bold uppercase tracking-[0.16em] ${label === "Total" ? "text-slate-400" : "text-slate-400"}`}>{label}</div>
-                    <div className="mt-2 text-xl font-black">{value}</div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <ServiceOrdersSection />
-          </div>
-        );
-      case "obras":
-        return <WorkOperationsPanel />;
-      case "pmoc":
-        return <TechnicalCompliancePanel />;
-      case "contratos":
-        return <PublicContractsPanel />;
-      case "financeiro":
-        return <FinanceiroPanel />;
       case "clientes":
         return (
           <div className="space-y-6">
@@ -605,7 +600,7 @@ export default function HomePage() {
               </div>
               <div className="mt-5 flex flex-wrap gap-2">
                 {CLIENT_TABS.map((tab) => (
-                  <span key={tab} className={`rounded-full px-3 py-1 text-xs font-semibold ${tab === "Cadastro" ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-600"}`}>{tab}</span>
+                  <span key={tab} className={`rounded-full px-3 py-1 text-xs font-semibold ${tabPillClass(tab === "Cadastro")}`}>{tab}</span>
                 ))}
               </div>
             </section>
@@ -729,22 +724,760 @@ export default function HomePage() {
             </section>
           </div>
         );
+      case "orcamento":
+        return (
+          <div className="space-y-6">
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Novo orçamento</div>
+                  <h2 className="mt-2 text-2xl font-black text-slate-950">Estrutura com cliente, unidade, sala, validade e tabela de preço.</h2>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">+ Adicionar item</button>
+                  <button type="button" className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">Importar</button>
+                  <button type="button" className="inline-flex items-center gap-2 rounded-2xl bg-violet-600 px-4 py-2 text-sm font-bold text-white"><Sparkles className="h-4 w-4" /> IA</button>
+                </div>
+              </div>
+              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {[
+                  ["Cliente", "Selecionar cliente"],
+                  ["Unidade / Setor / Sala", "Hospital Municipal / UTI / Sala 03"],
+                  ["Validade", "7 dias"],
+                  ["Tabela de preço", "Padrão contratos"],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-900">{value}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-5 overflow-hidden rounded-3xl border border-slate-200">
+                <table className="min-w-full divide-y divide-slate-200 text-sm">
+                  <thead className="bg-slate-50 text-left text-slate-500">
+                    <tr>
+                      {["Tipo", "Descrição", "Qtd", "Unit.", "Desc.", "Total"].map((header) => (
+                        <th key={header} className="px-4 py-3 font-semibold">{header}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
+                    {ORCAMENTO_ROWS.map((row) => (
+                      <tr key={`${row[0]}-${row[1]}`}>
+                        {row.map((value) => (
+                          <td key={`${row[1]}-${value}`} className="px-4 py-3">{value}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+                {[
+                  ["Produtos", "120,00"],
+                  ["Serviços", "500,00"],
+                  ["Custos adicionais", "0,00"],
+                  ["Subtotal", "620,00"],
+                  ["Desconto", "0,00"],
+                  ["Total", "620,00"],
+                ].map(([label, value]) => (
+                  <div key={label} className={`rounded-2xl px-4 py-4 ${label === "Total" ? "bg-slate-950 text-white" : "border border-slate-200 bg-slate-50 text-slate-900"}`}>
+                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</div>
+                    <div className="mt-2 text-xl font-black">{value}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+            <OrcamentoPanel />
+          </div>
+        );
+      case "pdv":
+        return (
+          <div className="space-y-6">
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="grid gap-4 xl:grid-cols-[220px_1fr_320px]">
+                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-sm font-black text-slate-950">Atalhos</div>
+                  <div className="mt-4 grid gap-2">
+                    {PDV_SHORTCUTS.map((shortcut) => (
+                      <button key={shortcut} type="button" className="rounded-2xl bg-white px-4 py-3 text-left text-sm font-semibold text-slate-700 shadow-sm">{shortcut}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                  <div className="text-sm font-black text-slate-950">Cupom</div>
+                  <div className="mt-4 space-y-3">
+                    {PDV_ITEMS.map((item, index) => (
+                      <div key={item[0]} className={`grid grid-cols-[1fr_auto_auto] gap-3 rounded-2xl px-4 py-4 text-sm ${index === 0 ? "bg-blue-50 text-blue-950 ring-1 ring-blue-200" : "bg-slate-50 text-slate-700"}`}>
+                        <div className="font-semibold">{item[0]}</div>
+                        <div>{item[1]}</div>
+                        <div className="font-bold">{item[2]}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-4 text-xs text-blue-700">O último item inserido sobe para o topo e recebe destaque azul temporário.</p>
+                </div>
+                <div className="rounded-3xl border border-slate-200 bg-slate-950 p-4 text-white">
+                  <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Total da venda</div>
+                  <div className="mt-2 text-3xl font-black">R$ 1.250,00</div>
+                  <div className="mt-5 space-y-3 text-sm">
+                    {[
+                      ["Produto/Código", "Pesquisar item"],
+                      ["Qtd", "1"],
+                      ["Cliente", "Selecionar cliente"],
+                      ["Tabela", "Padrão balcão"],
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-2xl border border-slate-800 bg-slate-900 px-4 py-3">
+                        <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">{label}</div>
+                        <div className="mt-2 font-semibold">{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+            <PdvBalcaoPanel />
+          </div>
+        );
+      case "os":
+        return (
+          <div className="space-y-6">
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-lg font-black text-slate-950">ORDEM DE SERVIÇO #001548</span>
+                    <span className="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-blue-700">Em atendimento</span>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-600">Prefeitura → Saúde → Hospital → UTI → Sala 03</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">Gerar sem valores</button>
+                  <button type="button" className="inline-flex items-center gap-2 rounded-2xl bg-blue-700 px-4 py-2 text-sm font-bold text-white"><Printer className="h-4 w-4" /> Imprimir relatório completo</button>
+                </div>
+              </div>
+
+              <div className="mt-5 flex flex-wrap gap-2">
+                {OS_TABS.map((tab) => (
+                  <span key={tab} className={`rounded-full px-3 py-1 text-xs font-semibold ${tabPillClass(tab === "Resumo")}`}>{tab}</span>
+                ))}
+              </div>
+
+              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                {OS_SUMMARY_FIELDS.map(([label, value]) => (
+                  <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-900">{value}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-5 grid gap-4 xl:grid-cols-2">
+                {[
+                  "Solicitação do cliente",
+                  "Diagnóstico técnico",
+                  "Serviço executado",
+                  "Recomendação técnica",
+                ].map((label) => (
+                  <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-sm font-bold text-slate-900">{label}</div>
+                      <button type="button" className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700"><Sparkles className="h-3.5 w-3.5" /> IA</button>
+                    </div>
+                    <div className="mt-3 min-h-24 rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">Campo pronto para preenchimento assistido por IA, sempre com revisão do usuário antes de salvar.</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-blue-50 text-blue-700"><FileText className="h-5 w-5" /></div>
+                <div>
+                  <h2 className="text-lg font-black text-slate-950">Serviços e valores</h2>
+                  <p className="text-sm text-slate-600">Estrutura da OS com composição de serviços, produtos e total consolidado.</p>
+                </div>
+              </div>
+              <div className="mt-5 overflow-hidden rounded-3xl border border-slate-200">
+                <table className="min-w-full divide-y divide-slate-200 text-sm">
+                  <thead className="bg-slate-50 text-left text-slate-500">
+                    <tr>
+                      {["Descrição", "Qtd", "Unit.", "Desc.", "Total"].map((header) => (
+                        <th key={header} className="px-4 py-3 font-semibold">{header}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
+                    {OS_LINES.map((row) => (
+                      <tr key={row[0]}>
+                        {row.map((value) => (
+                          <td key={`${row[0]}-${value}`} className="px-4 py-3">{value}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {[
+                  ["Produtos", "R$ 320,00"],
+                  ["Serviços", "R$ 900,00"],
+                  ["Desconto", "R$ 100,00"],
+                  ["Total", "R$ 1.120,00"],
+                ].map(([label, value]) => (
+                  <div key={label} className={`rounded-2xl px-4 py-4 ${label === "Total" ? "bg-slate-950 text-white" : "border border-slate-200 bg-slate-50 text-slate-900"}`}>
+                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</div>
+                    <div className="mt-2 text-xl font-black">{value}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <ServiceOrdersSection />
+          </div>
+        );
       case "agenda":
-        return <PlaceholderModule title="Agenda" description="Visão compacta para programação diária, visitas técnicas, manutenções e deslocamentos da equipe." bullets={["Agenda por técnico, período e prioridade.", "Integração natural com OS, obras e PMOC.", "Pronta para receber filtros por unidade, rota e cliente."]} />;
+        return (
+          <div className="space-y-6">
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Agenda</div>
+                  <h2 className="mt-2 text-2xl font-black text-slate-950">Mostrar apenas operações abertas por padrão.</h2>
+                </div>
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">Filtro inicial ativo: operações abertas.</div>
+              </div>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {AGENDA_FILTERS.map((tab, index) => (
+                  <span key={tab} className={`rounded-full px-3 py-1 text-xs font-semibold ${tabPillClass(index === 0)}`}>{tab}</span>
+                ))}
+              </div>
+              <div className="mt-5 space-y-3">
+                {AGENDA_ROWS.map(([hour, tech, customer, status]) => (
+                  <div key={`${hour}-${tech}`} className="grid gap-3 rounded-2xl border border-slate-200 px-4 py-4 text-sm text-slate-700 md:grid-cols-[90px_160px_1fr_120px]">
+                    <div className="font-black text-slate-950">{hour}</div>
+                    <div className="font-semibold">{tech}</div>
+                    <div>{customer}</div>
+                    <div className="text-emerald-700 font-semibold">{status}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        );
+      case "obras":
+        return (
+          <div className="space-y-6">
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Obras</div>
+                  <h2 className="mt-2 text-2xl font-black text-slate-950">Green Village III</h2>
+                  <p className="mt-2 text-sm text-slate-600">74% concluído</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">Abrir Obra</button>
+                  <button type="button" className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">Alterar Obra</button>
+                  <button type="button" className="rounded-2xl bg-slate-950 px-4 py-2 text-sm font-bold text-white">Relatório</button>
+                </div>
+              </div>
+              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+                {[
+                  ["Casas", "142"],
+                  ["Concluídas", "105"],
+                  ["Em execução", "22"],
+                  ["Pendentes", "15"],
+                  ["Pendências", "3"],
+                  ["Recomendações", "6"],
+                ].map(([label, value]) => (
+                  <div key={label} className={`rounded-2xl px-4 py-4 ${label === "Pendências" ? "border border-rose-200 bg-rose-50 text-rose-700" : label === "Recomendações" ? "border border-violet-200 bg-violet-50 text-violet-700" : label === "Em execução" ? "border border-amber-200 bg-amber-50 text-amber-700" : "border border-slate-200 bg-slate-50 text-slate-900"}`}>
+                    <div className="text-[11px] font-bold uppercase tracking-[0.16em]">{label}</div>
+                    <div className="mt-2 text-2xl font-black">{value}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {OBRAS_TABS.map((tab, index) => (
+                  <span key={tab} className={`rounded-full px-3 py-1 text-xs font-semibold ${tabPillClass(index === 0)}`}>{tab}</span>
+                ))}
+              </div>
+            </section>
+
+            <section className="grid gap-6 xl:grid-cols-2">
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="grid h-11 w-11 place-items-center rounded-2xl bg-slate-100 text-slate-700"><ShieldCheck className="h-5 w-5" /></div>
+                  <div>
+                    <h3 className="text-lg font-black text-slate-950">Engenharia / Fiscalização</h3>
+                    <p className="text-sm text-slate-600">Cadastro na própria obra com acesso externo controlado.</p>
+                  </div>
+                </div>
+                <div className="mt-5 grid gap-3 md:grid-cols-2">
+                  {[
+                    ["Nome", "Engenheiro Responsável"],
+                    ["Empresa", "PolarTech Engenharia"],
+                    ["Telefone", "(17) 99999-0000"],
+                    ["E-mail", "engenharia@proar.com.br"],
+                    ["Função", "Responsável técnico"],
+                    ["Acesso via link", "Ativo"],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</div>
+                      <div className="mt-2 text-sm font-semibold text-slate-900">{value}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {["Gerar acesso", "Copiar link", "Redefinir senha", "Bloquear"].map((action) => (
+                    <button key={action} type="button" className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">{action}</button>
+                  ))}
+                </div>
+                <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">No acesso externo, pode fazer apontamento, marcar prioridade e adicionar recomendação, mas nunca alterar status operacional.</div>
+              </div>
+
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="grid h-11 w-11 place-items-center rounded-2xl bg-blue-50 text-blue-700"><Package className="h-5 w-5" /></div>
+                  <div>
+                    <h3 className="text-lg font-black text-slate-950">Materiais / Consumo</h3>
+                    <p className="text-sm text-slate-600">Comprado, disponível, reservado e consumido com avanço de etapa.</p>
+                  </div>
+                </div>
+                <div className="mt-5 overflow-hidden rounded-3xl border border-slate-200">
+                  <table className="min-w-full divide-y divide-slate-200 text-sm">
+                    <thead className="bg-slate-50 text-left text-slate-500">
+                      <tr>
+                        {["Material", "Comprado", "Consumido", "Saldo", "Necessário"].map((header) => (
+                          <th key={header} className="px-4 py-3 font-semibold">{header}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
+                      {MATERIAL_ROWS.map((row) => (
+                        <tr key={row[0]}>
+                          {row.map((value) => (
+                            <td key={`${row[0]}-${value}`} className="px-4 py-3">{value}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                  <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Alterar status</div>
+                  <div className="mt-2 text-sm font-semibold text-slate-900">AG. FRIGORÍGENA → AG. ACABAMENTO</div>
+                  <div className="mt-4 grid gap-2 md:grid-cols-2">
+                    {MATERIAL_EXPECTED.map(([label, value]) => (
+                      <div key={label} className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 text-sm text-slate-700 shadow-sm">
+                        <span>{label}</span>
+                        <span className="font-semibold text-slate-950">{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <button type="button" className="mt-4 rounded-2xl bg-blue-700 px-4 py-3 text-sm font-bold text-white">Confirmar consumo e avançar</button>
+                </div>
+              </div>
+            </section>
+
+            <WorkOperationsPanel />
+          </div>
+        );
+      case "pmoc":
+        return (
+          <div className="space-y-6">
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">PMOC</div>
+              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+                {[
+                  ["Cliente", "Prefeitura Municipal"],
+                  ["Unidade", "Hospital Municipal"],
+                  ["Contrato", "PMOC-2026-014"],
+                  ["Responsável técnico", "Kaio"],
+                  ["ART / TRT", "TRT 45678"],
+                  ["Vigência", "Até 12/2026"],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-900">{value}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {[
+                  ["Equipamentos", "24"],
+                  ["Em dia", "21"],
+                  ["Vencidos", "2"],
+                  ["Próximos", "1"],
+                ].map(([label, value]) => (
+                  <div key={label} className={`rounded-2xl px-4 py-4 ${label === "Vencidos" ? "border border-rose-200 bg-rose-50 text-rose-700" : label === "Próximos" ? "border border-amber-200 bg-amber-50 text-amber-700" : "border border-slate-200 bg-white text-slate-900"}`}>
+                    <div className="text-[11px] font-bold uppercase tracking-[0.16em]">{label}</div>
+                    <div className="mt-2 text-2xl font-black">{value}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {PMOC_TABS.map((tab, index) => (
+                  <span key={tab} className={`rounded-full px-3 py-1 text-xs font-semibold ${tabPillClass(index === 0)}`}>{tab}</span>
+                ))}
+              </div>
+            </section>
+            <TechnicalCompliancePanel />
+          </div>
+        );
+      case "contratos":
+        return (
+          <div className="space-y-6">
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Licitações</div>
+                  <h2 className="mt-2 text-2xl font-black text-slate-950">Radar de oportunidades, certames e saldo do certame sem misturar com estoque físico.</h2>
+                </div>
+                <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">Público: Prefeitura → Secretaria → Unidade → Setor → Sala → Equipamento → Certame → OS → Empenho.</div>
+              </div>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {LICITACOES_TABS.map((tab, index) => (
+                  <span key={tab} className={`rounded-full px-3 py-1 text-xs font-semibold ${tabPillClass(index === 0)}`}>{tab}</span>
+                ))}
+              </div>
+              <div className="mt-5 overflow-hidden rounded-3xl border border-slate-200">
+                <table className="min-w-full divide-y divide-slate-200 text-sm">
+                  <thead className="bg-slate-50 text-left text-slate-500">
+                    <tr>
+                      {["Certame", "Órgão", "Valor", "Prazo", "Status"].map((header) => (
+                        <th key={header} className="px-4 py-3 font-semibold">{header}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
+                    <tr>
+                      {[
+                        "033/2025",
+                        "Bálsamo",
+                        "R$ 480.000,00",
+                        "19/09/2026",
+                        "Ativo",
+                      ].map((value) => (
+                        <td key={value} className="px-4 py-3">{value}</td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+                {[
+                  ["Quantidade contratada", "240"],
+                  ["Quantidade utilizada", "82"],
+                  ["Saldo", "158"],
+                  ["Valor contratado", "R$ 480.000,00"],
+                  ["Valor consumido", "R$ 163.200,00"],
+                  ["Valor restante", "R$ 316.800,00"],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-900">{value}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-100 text-violet-700"><Sparkles className="h-5 w-5" /></div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-950">Radar ProAR</h3>
+                  <p className="text-sm text-slate-600">Inteligência de mercado para licitações, equipamentos, grandes obras e preços de serviços.</p>
+                </div>
+              </div>
+              <div className="mt-5 grid gap-3 lg:grid-cols-3">
+                {[
+                  ["Prioridade A", "Pregão - PMOC - Cidade X", "Distância: 82 km", "Score: 91/100"],
+                  ["Grandes Obras", "Complexo Residencial Norte", "Distância: 35 km", "Score: 86/100"],
+                  ["Preços de Serviços", "Reajuste regional PMOC", "Faixa: R$ 230 a R$ 310", "Score: 80/100"],
+                ].map(([tag, title, detail, score]) => (
+                  <div key={title} className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950">
+                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-violet-700">{tag}</div>
+                    <div className="mt-2 font-black">{title}</div>
+                    <div className="mt-2">{detail}</div>
+                    <div className="mt-1">{score}</div>
+                    <div className="mt-4 flex gap-2">
+                      {["Analisar", "Participar", "Descartar"].map((action) => (
+                        <button key={action} type="button" className="rounded-xl bg-white px-3 py-2 text-xs font-bold text-violet-700 shadow-sm">{action}</button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <PublicContractsPanel />
+          </div>
+        );
       case "estoque":
-        return <PlaceholderModule title="Estoque" description="Área dedicada a entradas, saídas, saldo mínimo e rastreabilidade dos itens já cadastrados no sistema." bullets={["Pesquisa por produto, SKU e localização.", "Resumo de saldo, custo e giro em visual executivo.", "Preservação total do histórico de estoque existente."]} />;
+        return (
+          <div className="space-y-6">
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Estoque</div>
+              <div className="mt-5 overflow-hidden rounded-3xl border border-slate-200">
+                <table className="min-w-full divide-y divide-slate-200 text-sm">
+                  <thead className="bg-slate-50 text-left text-slate-500">
+                    <tr>
+                      {["Produto", "Atual", "Reservado", "Disponível", "Mínimo"].map((header) => (
+                        <th key={header} className="px-4 py-3 font-semibold">{header}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
+                    {[
+                      ["Cobre 1/4", "200 m", "60 m", "140 m", "100 m"],
+                      ["R32", "8 kg", "2 kg", "6 kg", "4 kg"],
+                    ].map((row) => (
+                      <tr key={row[0]}>
+                        {row.map((value) => (
+                          <td key={`${row[0]}-${value}`} className="px-4 py-3">{value}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700">Movimentações com origem: compra, OS, obra, ajuste, devolução e perda.</div>
+            </section>
+          </div>
+        );
       case "compras":
-        return <PlaceholderModule title="Compras" description="Painel para acompanhar fornecedores, pedidos de compra, aprovações e recebimentos sem impactar a base operacional existente." bullets={["Atalho rápido para nova compra e fornecedor.", "Integração prevista com estoque e financeiro.", "Resumo de pedidos aguardando aprovação e entrega."]} />;
+        return (
+          <div className="space-y-6">
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Compras</div>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {COMPRA_TABS.map((tab, index) => (
+                  <span key={tab} className={`rounded-full px-3 py-1 text-xs font-semibold ${tabPillClass(index === 0)}`}>{tab}</span>
+                ))}
+              </div>
+              <div className="mt-5 overflow-hidden rounded-3xl border border-slate-200">
+                <table className="min-w-full divide-y divide-slate-200 text-sm">
+                  <thead className="bg-slate-50 text-left text-slate-500">
+                    <tr>
+                      {["NF", "Fornecedor", "Valor", "Obra", "Status"].map((header) => (
+                        <th key={header} className="px-4 py-3 font-semibold">{header}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
+                    <tr>
+                      {[
+                        "1256",
+                        "Fornecedor A",
+                        "8.200,00",
+                        "Green III",
+                        "Recebida",
+                      ].map((value) => (
+                        <td key={value} className="px-4 py-3">{value}</td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        );
+      case "financeiro":
+        return (
+          <div className="space-y-6">
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Financeiro</div>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {FINANCEIRO_TABS.map((tab, index) => (
+                  <span key={tab} className={`rounded-full px-3 py-1 text-xs font-semibold ${tabPillClass(index === 0)}`}>{tab}</span>
+                ))}
+              </div>
+              <div className="mt-5 overflow-hidden rounded-3xl border border-slate-200">
+                <table className="min-w-full divide-y divide-slate-200 text-sm">
+                  <thead className="bg-slate-50 text-left text-slate-500">
+                    <tr>
+                      {["Descrição", "Original", "Liquidado", "Restante", "Status"].map((header) => (
+                        <th key={header} className="px-4 py-3 font-semibold">{header}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
+                    <tr>
+                      {[
+                        "OS 1548",
+                        "984,70",
+                        "500,00",
+                        "484,70",
+                        "Parcial",
+                      ].map((value) => (
+                        <td key={value} className="px-4 py-3">{value}</td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-5 flex items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+                <span>Enquanto houver saldo de pelo menos R$ 0,01, o botão Dar baixa permanece ativo.</span>
+                <button type="button" className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white">Dar baixa</button>
+              </div>
+            </section>
+            <FinanceiroPanel />
+          </div>
+        );
       case "fiscal":
-        return <PlaceholderModule title="Fiscal" description="Ambiente para certificados, notas, parâmetros fiscais e acompanhamento documental da empresa." bullets={["Atalhos para NFS-e, DF-e e certidões.", "Layout corporativo alinhado à identidade PolarTech/ProAR.", "Nenhum dado fiscal atual é removido por esta atualização visual."]} />;
+        return (
+          <div className="space-y-6">
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="grid gap-6 xl:grid-cols-2">
+                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                  <div className="text-sm font-black text-slate-950">Certificado digital</div>
+                  <div className="mt-5 space-y-3 text-sm text-slate-700">
+                    {[
+                      ["Arquivo", "certificado.pfx"],
+                      ["Titular", "POLARTECH"],
+                      ["CNPJ", "XX.XXX.XXX/0001-XX"],
+                      ["Validade", "12/2026"],
+                      ["Status", "Ativo"],
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-2xl bg-white px-4 py-3 shadow-sm">
+                        <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</div>
+                        <div className="mt-2 font-semibold text-slate-900">{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    {["Testar certificado", "Alterar", "Remover"].map((action) => (
+                      <button key={action} type="button" className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">{action}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-3xl border border-slate-200 bg-white p-5">
+                  <div className="text-sm font-black text-slate-950">NF-e</div>
+                  <p className="mt-2 text-sm text-slate-600">Última sincronização: Hoje 08:42</p>
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    {["NF-e recebidas", "NF-e emitidas", "NFS-e"].map((tab) => (
+                      <span key={tab} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{tab}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        );
       case "whatsapp":
-        return <PlaceholderModule title="WhatsApp" description="Central de alertas e comunicação automatizada com clientes e equipe interna." bullets={["Avisos de licitações, OS e lembretes operacionais.", "Ativação rápida por perfil e contexto.", "Espaço pronto para templates e histórico de conversas."]} />;
+        return (
+          <div className="space-y-6">
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">WhatsApp</div>
+              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {[
+                  ["Enviadas hoje", "28"],
+                  ["Entregues", "25"],
+                  ["Lidas", "21"],
+                  ["Falhas", "3"],
+                ].map(([label, value]) => (
+                  <div key={label} className={`rounded-2xl px-4 py-4 ${label === "Falhas" ? "border border-rose-200 bg-rose-50 text-rose-700" : "border border-slate-200 bg-slate-50 text-slate-900"}`}>
+                    <div className="text-[11px] font-bold uppercase tracking-[0.16em]">{label}</div>
+                    <div className="mt-2 text-2xl font-black">{value}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-5 overflow-hidden rounded-3xl border border-slate-200">
+                <table className="min-w-full divide-y divide-slate-200 text-sm">
+                  <thead className="bg-slate-50 text-left text-slate-500">
+                    <tr>
+                      {["Data", "Cliente", "Tipo", "Status"].map((header) => (
+                        <th key={header} className="px-4 py-3 font-semibold">{header}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
+                    {[
+                      ["09:12", "João", "Lembrete", "Entregue"],
+                      ["09:15", "Prefeitura", "OS", "Lida"],
+                      ["09:22", "Maria", "Cobrança", "Falhou"],
+                    ].map((row) => (
+                      <tr key={`${row[0]}-${row[1]}`}>
+                        {row.map((value) => (
+                          <td key={`${row[1]}-${value}`} className="px-4 py-3">{value}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700">Detalhe da mensagem mostra origem, OS, cliente, telefone, ID da mensagem e horários de envio, entrega e leitura.</div>
+            </section>
+          </div>
+        );
       case "relatorios":
-        return <PlaceholderModule title="Relatórios" description="Camada gerencial para acompanhar desempenho, auditoria e documentos exportáveis." bullets={["Relatórios por cliente, técnico, obra e período.", "Atalho para desempenho comercial e operacional.", "Layout compacto com foco em leitura rápida."]} />;
+        return (
+          <div className="space-y-6">
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Central de Relatórios</div>
+              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {[
+                  ["Categoria", "OS"],
+                  ["Período inicial", "01/09/2026"],
+                  ["Período final", "14/09/2026"],
+                  ["Cliente", "Todos"],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-900">{value}</div>
+                  </div>
+                ))}
+              </div>
+              <button type="button" className="mt-5 rounded-2xl bg-blue-700 px-4 py-3 text-sm font-bold text-white">Gerar</button>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {RELATORIO_ACTIONS.map((action) => (
+                  <button key={action} type="button" className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">{action}</button>
+                ))}
+              </div>
+              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700">OS, clientes, equipamentos, vendas, financeiro, obras, certames, empenhos, PMOC, estoque, compras, orçamento e certificados usam o mesmo motor.</div>
+            </section>
+          </div>
+        );
       case "configuracoes":
-        return <PlaceholderModule title="Configurações" description="Configurações centrais do sistema, perfis, acessos e preferências operacionais." bullets={["Módulos habilitados conforme perfil do usuário logado.", "Atalhos para IA, fiscal, autenticação e parâmetros.", "Atualização visual sem exclusão de registros existentes."]} />;
+        return (
+          <div className="space-y-6">
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Configurações</div>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {CONFIG_TABS.map((tab, index) => (
+                  <span key={tab} className={`rounded-full px-3 py-1 text-xs font-semibold ${tabPillClass(index === 0)}`}>{tab}</span>
+                ))}
+              </div>
+              <div className="mt-5 grid gap-6 xl:grid-cols-2">
+                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                  <div className="text-sm font-black text-slate-950">IA</div>
+                  <div className="mt-5 space-y-3 text-sm text-slate-700">
+                    {[
+                      ["OpenAI", "Configurada"],
+                      ["Chave", "••••••••A92F"],
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-2xl bg-white px-4 py-3 shadow-sm">
+                        <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</div>
+                        <div className="mt-2 font-semibold text-slate-900">{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    {["Testar conexão", "Alterar credencial", "Remover"].map((action) => (
+                      <button key={action} type="button" className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">{action}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-3xl border border-slate-200 bg-white p-5">
+                  <div className="text-sm font-black text-slate-950">Auditoria operacional</div>
+                  <p className="mt-2 text-sm text-slate-600">Permissões, notificações, status e tabelas permanecem centralizados sem expor segredos completos.</p>
+                </div>
+              </div>
+            </section>
+          </div>
+        );
       default:
-        return null;
+        return <PlaceholderModule title="Módulo preservado" description="Área mantida no shell principal para futuras integrações operacionais." bullets={["Fluxo visual corporativo", "Preservação dos dados existentes", "Acesso controlado por perfil"]} />;
     }
   };
 
