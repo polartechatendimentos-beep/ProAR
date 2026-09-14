@@ -304,6 +304,7 @@ export default function HomePage() {
   const userMenuRef = useRef<HTMLDivElement | null>(null);
 
   const visibleModules = useMemo(() => getAllowedModules(session?.role), [session?.role]);
+  const sidebarModules = useMemo(() => visibleModules.filter((item) => item.key !== "dashboard"), [visibleModules]);
 
   useEffect(() => {
     const syncSession = async () => {
@@ -1021,7 +1022,7 @@ export default function HomePage() {
               </span>
             </button>
             <div className="mt-4 grid gap-2">
-              {visibleModules.map(({ key, label, icon: Icon }) => (
+              {sidebarModules.map(({ key, label, icon: Icon }) => (
                 <button
                   key={key}
                   type="button"
@@ -1048,7 +1049,7 @@ export default function HomePage() {
               </div>
               <div className="p-5">
                 <div className="grid gap-2">
-                  {visibleModules.map(({ key, label, icon: Icon }) => (
+                  {sidebarModules.map(({ key, label, icon: Icon }) => (
                     <button key={key} type="button" onClick={() => { setActiveTab(key); setSidebarOpen(false); }} className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold transition ${activeTab === key ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-100"}`}>
                       <Icon className="h-4 w-4" />
                       {label}

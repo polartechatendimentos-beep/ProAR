@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { users } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { readSession, signToken } from "@/lib/proar-auth";
 import { verifyPassword } from "@/lib/password";
 
@@ -21,16 +21,21 @@ async function findUserByIdentifier(identifier: string) {
   if (!identifier) return null;
   try {
     if (identifier.includes("@")) {
-      const userList = await db.select().from(users).where(eq(users.email, identifier)).limit(1);
+      const userList = await db.select().from(users).where(and(eq(users.email, identifier), eq(users.ativo, true))).limit(1);
       return userList[0] || null;
     }
 
-    const userList = await db.select().from(users).limit(200);
-    return userList.find((item) => {
-      const email = item.email.toLowerCase().trim();
-      const username = email.split("@")[0] || "";
-      return username === identifier;
-    }) || null;
+    const userList = await db
+      .select()
+      .from(users)
+      .where(
+        and(
+          eq(users.ativo, true),
+          sql`lower(split_part(${users.email}, '@', 1)) = ${identifier}`
+        )
+      )
+      .limit(1);
+    return userList[0] || null;
   } catch {
     console.warn("[Auth API] Consulta ao banco indisponível, avaliando credenciais de ambiente.");
     return null;
