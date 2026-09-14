@@ -29,6 +29,7 @@ type Props = {
   equipment?: RecordItem[];
   canEdit: boolean;
   onSave: (order: WorkspaceOrder) => Promise<unknown>;
+  onClose?: () => void;
 };
 
 const tabs = ["Resumo", "Serviços", "Equipamentos", "Fotos", "Histórico", "Financeiro", "Docs"] as const;
@@ -46,7 +47,7 @@ function money(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-export function ServiceOrderWorkspace({ order, customers = [], structures = [], equipment = [], canEdit, onSave }: Props) {
+export function ServiceOrderWorkspace({ order, customers = [], structures = [], equipment = [], canEdit, onSave, onClose }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("Resumo");
   const [draft, setDraft] = useState<WorkspaceOrder>(order);
   const [saving, setSaving] = useState(false);
@@ -103,7 +104,7 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
 
   return <section className="os-workspace" aria-label={`Área de trabalho da ${draft.id}`}>
     <header className="os-workspace-header">
-      <div className="os-title-block"><button className="os-icon-button" onClick={() => setNotice("Use o botão fechar da janela para retornar à lista.")} aria-label="Voltar"><X size={17}/></button><div><span className="os-kicker">ORDEM DE SERVIÇO</span><h2>{draft.id}</h2><p>{draft.client || "Cliente não informado"}</p></div></div>
+      <div className="os-title-block"><button className="os-icon-button" onClick={() => onClose?.()} aria-label="Voltar"><X size={17}/></button><div><span className="os-kicker">ORDEM DE SERVIÇO</span><h2>{draft.id}</h2><p>{draft.client || "Cliente não informado"}</p></div></div>
       <div className="os-header-actions"><span className={`os-status ${draft.tone || "blue"}`}><i/> {draft.status}</span><button className="os-primary-button" disabled={!canEdit || saving} onClick={() => void save()}><Save size={15}/> {saving ? "Salvando..." : "Salvar"}</button></div>
     </header>
 
