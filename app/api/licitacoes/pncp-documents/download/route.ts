@@ -4,15 +4,6 @@ import { getEffectiveCompanyId } from "@/lib/company-access";
 
 const text = (value: unknown) => value === null || value === undefined ? "" : String(value).trim();
 
-function isAllowedHost(hostname: string) {
-  return (
-    hostname === "pncp.gov.br" ||
-    hostname.endsWith(".pncp.gov.br") ||
-    hostname === "gov.br" ||
-    hostname.endsWith(".gov.br")
-  );
-}
-
 function sanitizeFilename(value: string) {
   return value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "documento-pncp";
 }
@@ -35,17 +26,21 @@ export async function GET(request: Request) {
     const requestedCompany = searchParams.get("company_id");
     getEffectiveCompanyId(session, requestedCompany ? Number(requestedCompany) : null);
 
-    const rawUrl = text(searchParams.get("url"));
-    if (!rawUrl) {
-      return NextResponse.json({ success: false, error: "URL do documento é obrigatória." }, { status: 400 });
+    const rawPath = text(searchParams.get("path"));
+    if (!rawPath) {
+      return NextResponse.json({ success: false, error: "Caminho do documento é obrigatório." }, { status: 400 });
     }
 
-    const targetUrl = new URL(rawUrl);
-    if (targetUrl.protocol !== "https:" || !isAllowedHost(targetUrl.hostname)) {
+    if (!rawPath.startsWith("/") || rawPath.startsWith("//") || /[\r\n]/.test(rawPath)) {
+      return NextResponse.json({ success: false, error: "Caminho do documento inválido." }, { status: 400 });
+    }
+
+    const targetUrl = new URL(rawPath, "https://pncp.gov.br");
+    if (targetUrl.hostname !== "pncp.gov.br") {
       return NextResponse.json({ success: false, error: "Host do documento não permitido." }, { status: 400 });
     }
 
-    const upstream = await fetch(targetUrl, {
+    const upstream = await fetch(targetUrl.toString(), {
       headers: {
         Accept: "*/*",
         "User-Agent": "ProAR-Licitacoes/1.0",

@@ -139,6 +139,19 @@ function formatStatusLabel(value?: string) {
   return value.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function formatDistance(value?: number | null) {
+  return value === null || value === undefined ? "Não calculada" : `${value} km`;
+}
+
+function buildPncpDownloadUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    return `/api/licitacoes/pncp-documents/download?path=${encodeURIComponent(`${parsed.pathname}${parsed.search}`)}`;
+  } catch {
+    return "#";
+  }
+}
+
 function canLoadPncpDocuments(item: Licitacao) {
   return Boolean(item.numeroControlePncp || (item.cnpj && item.anoCompra && item.sequencialCompra));
 }
@@ -379,48 +392,50 @@ export function PublicContractsPanel() {
                   onDoubleClick={() => void openOpportunity(item)}
                   className="border border-slate-200 rounded-xl p-4 flex flex-col gap-4 hover:border-indigo-300 hover:shadow-sm transition cursor-pointer"
                 >
-                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="px-2 py-0.5 rounded-full text-xs bg-indigo-100 text-indigo-800 font-bold">{item.modalidade}</span>
-                        <span className="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-700 font-semibold">{formatStatusLabel(item.status)}</span>
-                        <span className="text-xs text-slate-600">{item.numeroPregao || item.numeroProcesso || "Sem identificação interna"}</span>
-                        {item.notificadoWhatsapp && (
-                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 flex items-center gap-1">
-                            <Bell className="w-3 h-3" /> Alerta
-                          </span>
-                        )}
+                  <button
+                    type="button"
+                    onClick={() => void openOpportunity(item)}
+                    className="w-full text-left space-y-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    aria-label={`Abrir ficha detalhada da licitação ${item.titulo}`}
+                  >
+                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="px-2 py-0.5 rounded-full text-xs bg-indigo-100 text-indigo-800 font-bold">{item.modalidade}</span>
+                          <span className="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-700 font-semibold">{formatStatusLabel(item.status)}</span>
+                          <span className="text-xs text-slate-600">{item.numeroPregao || item.numeroProcesso || "Sem identificação interna"}</span>
+                          {item.notificadoWhatsapp && (
+                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                              <Bell className="w-3 h-3" /> Alerta
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-900">{item.titulo}</h3>
+                          <p className="text-xs text-slate-600 mt-1">{item.orgao} • {item.uf}</p>
+                        </div>
                       </div>
-                      <div>
-                        <h3 className="text-sm font-bold text-slate-900">{item.titulo}</h3>
-                        <p className="text-xs text-slate-600 mt-1">{item.orgao} • {item.uf}</p>
+                      <div className="flex flex-col items-start lg:items-end gap-2">
+                        <div className="text-xs text-slate-400">Valor estimado</div>
+                        <div className="text-sm font-bold text-slate-900">{item.valorEstimado || "A consultar"}</div>
+                        <span className="inline-flex items-center gap-1 text-xs text-indigo-600 font-bold">
+                          Ver ficha detalhada <ExternalLink className="w-3 h-3" />
+                        </span>
                       </div>
                     </div>
-                    <div className="flex flex-col items-start lg:items-end gap-2">
-                      <div className="text-xs text-slate-400">Valor estimado</div>
-                      <div className="text-sm font-bold text-slate-900">{item.valorEstimado || "A consultar"}</div>
-                      <button
-                        type="button"
-                        onClick={() => void openOpportunity(item)}
-                        className="inline-flex items-center gap-1 text-xs text-indigo-600 font-bold"
-                      >
-                        Ver ficha detalhada <ExternalLink className="w-3 h-3" />
-                      </button>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
+                      <DetailChip icon={<Building2 className="w-3.5 h-3.5" />} label="Unidade" value={item.unidade || "Não informada"} />
+                      <DetailChip icon={<MapPin className="w-3.5 h-3.5" />} label="Município" value={item.municipio ? `${item.municipio}/${item.uf}` : `UF ${item.uf}`} />
+                      <DetailChip icon={<CalendarDays className="w-3.5 h-3.5" />} label="Publicação" value={formatDateValue(item.dataPublicacao)} />
+                      <DetailChip icon={<CalendarDays className="w-3.5 h-3.5" />} label="Encerramento" value={formatDateValue(item.dataFimProposta, true)} />
                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
-                    <DetailChip icon={<Building2 className="w-3.5 h-3.5" />} label="Unidade" value={item.unidade || "Não informada"} />
-                    <DetailChip icon={<MapPin className="w-3.5 h-3.5" />} label="Município" value={item.municipio ? `${item.municipio}/${item.uf}` : `UF ${item.uf}`} />
-                    <DetailChip icon={<CalendarDays className="w-3.5 h-3.5" />} label="Publicação" value={formatDateValue(item.dataPublicacao)} />
-                    <DetailChip icon={<CalendarDays className="w-3.5 h-3.5" />} label="Encerramento" value={formatDateValue(item.dataFimProposta, true)} />
-                  </div>
+                  </button>
 
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-3 border-t border-slate-100">
                     <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
                       <span>CNPJ: {item.cnpj || "Aguardando PNCP"}</span>
                       <span>PNCP: {item.numeroControlePncp || "Sem número"}</span>
-                      <span>Distância: {item.distanciaKm ? `${item.distanciaKm} km` : "Não calculada"}</span>
+                      <span>Distância: {formatDistance(item.distanciaKm)}</span>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       {item.linkEdital && (
@@ -558,7 +573,7 @@ export function PublicContractsPanel() {
                 <InfoBlock label="Valor estimado" value={selectedOpportunity.valorEstimado || "A consultar"} />
                 <InfoBlock label="Processo" value={selectedOpportunity.numeroProcesso || "Não informado"} />
                 <InfoBlock label="Pregão/Edital" value={selectedOpportunity.numeroPregao || "Não informado"} />
-                <InfoBlock label="Distância" value={selectedOpportunity.distanciaKm ? `${selectedOpportunity.distanciaKm} km de Mirassol/SP` : "Não calculada"} />
+                <InfoBlock label="Distância" value={selectedOpportunity.distanciaKm === null || selectedOpportunity.distanciaKm === undefined ? "Não calculada" : `${selectedOpportunity.distanciaKm} km de Mirassol/SP`} />
               </div>
 
               {selectedOpportunity.descricao && (
@@ -615,7 +630,7 @@ export function PublicContractsPanel() {
                             Abrir <ExternalLink className="w-3 h-3" />
                           </a>
                           <a
-                            href={`/api/licitacoes/pncp-documents/download?url=${encodeURIComponent(document.url)}`}
+                            href={buildPncpDownloadUrl(document.url)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-indigo-600 text-xs font-semibold text-white"
