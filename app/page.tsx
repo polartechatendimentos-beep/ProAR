@@ -422,13 +422,19 @@ export default function HomePage() {
 
   const searchResults = useMemo(() => {
     const term = globalSearch.trim().toLowerCase();
-    if (!term) return SEARCH_TARGETS.map((item) => ({ type: "target" as const, ...item })).slice(0, 6);
+    if (!term) {
+      return SEARCH_TARGETS
+        .filter((item) => visibleModules.some((module) => module.key === item.moduleKey))
+        .map((item) => ({ type: "target" as const, ...item }))
+        .slice(0, 6);
+    }
 
     const moduleResults = visibleModules
       .filter((item) => [item.label, item.description, ...item.keywords].some((value) => value.toLowerCase().includes(term)))
       .map((item) => ({ type: "module" as const, item }));
 
     const targetResults = SEARCH_TARGETS
+      .filter((item) => visibleModules.some((module) => module.key === item.moduleKey))
       .filter((item) => [item.label, item.context, ...item.keywords].some((value) => value.toLowerCase().includes(term)))
       .map((item) => ({ type: "target" as const, ...item }));
 

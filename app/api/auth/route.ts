@@ -13,16 +13,21 @@ type AuthenticatedUser = {
   companyId: number;
 };
 
+type UserLookupResult = {
+  user: (typeof users.$inferSelect) | null;
+  ambiguous: boolean;
+};
+
 function normalizeIdentifier(value: unknown) {
   return String(value || "").trim().toLowerCase();
 }
 
-async function findUserByIdentifier(identifier: string) {
-  if (!identifier) return null;
+async function findUserByIdentifier(identifier: string): Promise<UserLookupResult> {
+  if (!identifier) return { user: null, ambiguous: false };
   try {
     if (identifier.includes("@")) {
       const userList = await db.select().from(users).where(and(eq(users.email, identifier), eq(users.ativo, true))).limit(1);
-      return userList[0] || null;
+      return { user: userList[0] || null, ambiguous: false };
     }
 
     const userList = await db
@@ -34,11 +39,14 @@ async function findUserByIdentifier(identifier: string) {
           sql`lower(split_part(${users.email}, '@', 1)) = ${identifier}`
         )
       )
-      .limit(1);
-    return userList[0] || null;
+      .limit(2);
+    return {
+      user: userList.length === 1 ? userList[0] : null,
+      ambiguous: userList.length > 1,
+    };
   } catch {
     console.warn("[Auth API] Consulta ao banco indisponível, avaliando credenciais de ambiente.");
-    return null;
+    return { user: null, ambiguous: false };
   }
 }
 
@@ -55,7 +63,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const user = await findUserByIdentifier(identifier);
+    const { user, ambiguous } = await findUserByIdentifier(identifier);
+
+    if (ambiguous) {
+      return NextResponse.json(
+        { success: false, message: "Este usuário está associado a mais de um e-mail ativo. Use o e-mail completo para entrar." },
+        { status: 400 }
+      );
+    }
 
     let isValid = false;
     let authUser: AuthenticatedUser | null = null;

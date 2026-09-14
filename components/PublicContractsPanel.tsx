@@ -236,6 +236,12 @@ export function PublicContractsPanel() {
     await loadDocuments(item, requestId);
   };
 
+  const refreshDocuments = async (item: Licitacao) => {
+    const requestId = documentsRequestRef.current + 1;
+    documentsRequestRef.current = requestId;
+    await loadDocuments(item, requestId);
+  };
+
   const handleSyncPncp = async () => {
     setSyncing(true);
     setNotice("");
@@ -600,7 +606,7 @@ export function PublicContractsPanel() {
                   {canLoadPncpDocuments(selectedOpportunity) && (
                     <button
                       type="button"
-                      onClick={() => void loadDocuments(selectedOpportunity)}
+                      onClick={() => void refreshDocuments(selectedOpportunity)}
                       className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-indigo-600 text-xs font-semibold text-white"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${documentsLoading ? "animate-spin" : ""}`} /> Atualizar anexos
