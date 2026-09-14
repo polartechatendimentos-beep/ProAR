@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { 
   Building2, Wrench, FileText, ShoppingCart, DollarSign, 
   ShieldCheck, Landmark, Search, Bell, Settings, LogOut, CheckCircle2
@@ -14,44 +14,12 @@ import { PdvBalcaoPanel } from "@/components/PdvBalcaoPanel";
 import { FinanceiroPanel } from "@/components/FinanceiroPanel";
 import { PublicContractsPanel } from "@/components/PublicContractsPanel";
 import { TechnicalCompliancePanel } from "@/components/TechnicalCompliancePanel";
-import { ProarLoginScreen } from "@/components/ProarLoginScreen";
 
 type TabType = "dashboard" | "os" | "obras" | "orcamento" | "pdv" | "financeiro" | "contratos" | "pmoc";
-
-type SessionUser = { id: number; email: string; nome: string; role: string; companyId?: number };
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
   const [globalSearch, setGlobalSearch] = useState("");
-  const [authChecked, setAuthChecked] = useState(false);
-  const [currentUser, setCurrentUser] = useState<SessionUser | null>(null);
-
-  useEffect(() => {
-    let active = true;
-
-    fetch("/api/auth", { credentials: "same-origin", cache: "no-store" })
-      .then(async (response) => {
-        if (!response.ok) return null;
-        const payload = await response.json();
-        return payload.success ? payload.user as SessionUser : null;
-      })
-      .catch(() => null)
-      .then((user) => {
-        if (!active) return;
-        setCurrentUser(user);
-        setAuthChecked(true);
-      });
-
-    return () => { active = false; };
-  }, []);
-
-  if (!authChecked) {
-    return <div className="min-h-screen bg-slate-950" aria-label="Carregando acesso seguro" />;
-  }
-
-  if (!currentUser) {
-    return <ProarLoginScreen onAuthenticated={setCurrentUser} />;
-  }
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col">
@@ -90,11 +58,11 @@ export default function HomePage() {
           {/* Perfil & Ações Rápidas */}
           <div className="flex items-center gap-3 shrink-0 text-xs">
             <div className="hidden sm:block text-right">
-              <span className="font-bold text-white block">{currentUser.nome}</span>
+              <span className="font-bold text-white block">Administrador Matriz</span>
               <span className="text-[10px] text-emerald-400 font-mono">Operando Online</span>
             </div>
             <div className="w-8 h-8 rounded-full bg-blue-600/30 border border-blue-500 flex items-center justify-center font-bold text-blue-300">
-              {currentUser.nome.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}
+              AD
             </div>
           </div>
         </div>
