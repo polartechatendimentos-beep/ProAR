@@ -1,0 +1,4 @@
+import {NextRequest,NextResponse} from "next/server";
+import {calculateAndPersistPreflight} from "@/lib/procurement";
+import {readSession} from "@/lib/proar-auth";
+export async function POST(request:NextRequest){const session=readSession(request.cookies.get("proar_session")?.value);if(!session)return NextResponse.json({error:"Sessão inválida."},{status:401});const body=await request.json(),canonicalId=String(body?.canonicalId||"").trim();if(!canonicalId)return NextResponse.json({error:"Oportunidade não informada."},{status:400});try{return NextResponse.json({success:true,data:await calculateAndPersistPreflight(session,canonicalId)});}catch(error){const message=error instanceof Error&&error.message==="Oportunidade não encontrada"?error.message:"Auditoria indisponível. Confirme a persistência da oportunidade.";return NextResponse.json({error:message},{status:message==="Oportunidade não encontrada"?404:503});}}
