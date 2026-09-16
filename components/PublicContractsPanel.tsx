@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { CheckCircle2, FileText, Landmark, Plus, Trash2 } from "lucide-react";
+import { ProcurementWorkspace } from "@/components/ProcurementWorkspace";
 import {
   calculateCertameItemBalance,
   type CertameItem,
@@ -193,6 +194,7 @@ export function PublicContractsPanel({
   };
 
   return <section className="public-contracts">
+    <ProcurementWorkspace />
     <header className="public-contracts-head">
       <div>
         <span className="section-kicker"><Landmark size={13}/> GESTÃO CONTRATUAL PÚBLICA</span>
