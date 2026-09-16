@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { 
-  Building2, Wrench, FileText, ShoppingCart, DollarSign, 
+  Building2, Wrench, FileText, ShoppingCart, DollarSign, UsersRound,
   ShieldCheck, Landmark, Search, Bell, Settings, LogOut, CheckCircle2
 } from "lucide-react";
 
@@ -14,8 +14,9 @@ import { PdvBalcaoPanel } from "@/components/PdvBalcaoPanel";
 import { FinanceiroPanel } from "@/components/FinanceiroPanel";
 import { PublicContractsPanel } from "@/components/PublicContractsPanel";
 import { TechnicalCompliancePanel } from "@/components/TechnicalCompliancePanel";
+import { CustomerProfileWorkspace } from "@/components/CustomerProfileWorkspace";
 
-type TabType = "dashboard" | "os" | "obras" | "orcamento" | "pdv" | "financeiro" | "contratos" | "pmoc";
+type TabType = "dashboard" | "clientes" | "os" | "obras" | "orcamento" | "pdv" | "financeiro" | "contratos" | "pmoc";
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
@@ -70,6 +71,14 @@ export default function HomePage() {
         {/* Barra de Navegação de Módulos Operacionais */}
         <nav className="bg-slate-950/90 border-t border-slate-800/80 px-4 sm:px-6 lg:px-8 overflow-x-auto">
           <div className="max-w-7xl mx-auto flex items-center gap-1 py-1.5 min-w-max">
+            <button
+              onClick={() => setActiveTab("clientes")}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                activeTab === "clientes" ? "bg-blue-600 text-white shadow-sm" : "text-slate-400 hover:text-white hover:bg-slate-900"
+              }`}
+            >
+              <UsersRound className="w-3.5 h-3.5" /> Clientes
+            </button>
             <button
               onClick={() => setActiveTab("dashboard")}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
@@ -166,6 +175,7 @@ export default function HomePage() {
 
         {/* Abas Específicas */}
         {activeTab === "os" && <ServiceOrdersSection />}
+        {activeTab === "clientes" && <CustomerProfileWorkspace />}
         {activeTab === "obras" && <WorkOperationsPanel />}
         {activeTab === "orcamento" && <OrcamentoPanel />}
         {activeTab === "pdv" && <PdvBalcaoPanel />}
