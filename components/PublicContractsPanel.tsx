@@ -30,7 +30,10 @@ type LicTab =
   | "pendencias"
   | "contratos"
   | "historico"
-  | "relatorios";
+  | "relatorios"
+  | "prazos"
+  | "empenhos"
+  | "fontes";
 
 interface Licitacao {
   id: string | number;
@@ -66,20 +69,23 @@ export type PublicContractRecord = {
 };
 
 const SUBTABS: { id: LicTab; label: string }[] = [
-  { id: "painel", label: "Painel" },
+  { id: "painel", label: "Radar" },
   { id: "oportunidades", label: "Oportunidades" },
-  { id: "processos", label: "Processos" },
-  { id: "editais", label: "Editais" },
+  { id: "processos", label: "Meus Processos" },
+  { id: "editais", label: "Editais e IA" },
   { id: "checklist", label: "Checklist IA" },
-  { id: "documentos", label: "Documentos" },
+  { id: "documentos", label: "Documentos da Empresa" },
   { id: "capacidade", label: "Capacidade Técnica" },
   { id: "propostas", label: "Propostas" },
-  { id: "sessao", label: "Sessão de Lances" },
-  { id: "bidagent", label: "Bid Agent" },
+  { id: "sessao", label: "Central de Lances" },
+  { id: "bidagent", label: "Lances Seguros" },
+  { id: "prazos", label: "Prazos" },
   { id: "pendencias", label: "Pendências" },
   { id: "contratos", label: "Contratos/Atas" },
+  { id: "empenhos", label: "Empenhos" },
   { id: "historico", label: "Histórico" },
   { id: "relatorios", label: "Relatórios" },
+  { id: "fontes", label: "Saúde das Fontes" },
 ];
 
 export function PublicContractsPanel() {
@@ -277,11 +283,17 @@ export function PublicContractsPanel() {
 
       <div className="p-6 space-y-4">
         {activeTab === "painel" && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card title="Licitações" value={String(resumo.total)} icon={<Landmark className="w-4 h-4" />} />
-            <Card title="Em andamento" value={String(resumo.emAndamento)} icon={<Gavel className="w-4 h-4" />} />
-            <Card title="Habilitação média" value={`${resumo.mediaHab}%`} icon={<ShieldCheck className="w-4 h-4" />} />
-            <Card title="Alertas críticos" value={String(resumo.criticos)} icon={<Bell className="w-4 h-4" />} />
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card title="No radar" value={String(resumo.total)} icon={<Landmark className="w-4 h-4" />} />
+              <Card title="Em andamento" value={String(resumo.emAndamento)} icon={<Gavel className="w-4 h-4" />} />
+              <Card title="Habilitação média" value={`${resumo.mediaHab}%`} icon={<ShieldCheck className="w-4 h-4" />} />
+              <Card title="Bloqueios críticos" value={String(resumo.criticos)} icon={<Bell className="w-4 h-4" />} />
+            </div>
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-950">
+              <p className="font-bold mb-1">Travas de operação</p>
+              <p><strong>Pronto para enviar</strong> deve ser calculado no servidor a partir de documentos, habilitação, preço e autorizações. A tela apenas exibe o resultado; nunca libera envio por conta própria.</p>
+            </div>
           </div>
         )}
 
@@ -341,8 +353,8 @@ export function PublicContractsPanel() {
 
         {activeTab === "documentos" && (
           <div className="border border-slate-200 rounded-xl p-4">
-            <h3 className="font-bold text-slate-900 flex items-center gap-2 mb-2"><Folder className="w-4 h-4 text-indigo-600" /> Cofre documental inteligente</h3>
-            <p className="text-xs text-slate-600">Base pronta para certidões, validade, reutilização e validação cruzada por IA em /api/licitacoes-documents.</p>
+            <h3 className="font-bold text-slate-900 flex items-center gap-2 mb-2"><Folder className="w-4 h-4 text-indigo-600" /> Documentos da empresa</h3>
+            <p className="text-xs text-slate-600">Certidões, atestados e documentos reutilizáveis com validade, emissor e vínculo ao processo. Itens vencidos ou ausentes entram como bloqueio de habilitação.</p>
           </div>
         )}
 
@@ -354,32 +366,45 @@ export function PublicContractsPanel() {
 
         {activeTab === "propostas" && (
           <div className="border border-slate-200 rounded-xl p-4 text-xs text-slate-700">
-            Formação de preço com piso técnico e piso absoluto por processo. Recomendação IA sem ultrapassar alçadas.
+            Formação de preço com custos, tributos, margem, piso técnico e piso absoluto por processo. Recomendação IA é assistiva e respeita a alçada definida.
           </div>
         )}
 
         {activeTab === "sessao" && (
-          <div className="border border-slate-200 rounded-xl p-4 text-xs text-slate-700">
-            Sessão de lances com trilha de eventos em /api/licitacoes-bid-events e controle de sessão em /api/licitacoes-bid-sessions.
+          <div className="border border-slate-200 rounded-xl p-4 text-xs text-slate-700 space-y-2">
+            <p className="font-bold text-slate-900">Central inteligente de lances</p>
+            <p>Sessão com trilha de eventos e controle de sessão. O valor sugerido precisa estar acima do piso absoluto e dentro das alçadas do processo.</p>
+            <div className="rounded-lg bg-slate-50 border border-slate-200 p-2">Padrão seguro: <strong>copiar valor</strong> para o portal. Qualquer integração autorizada exige confirmação explícita antes de enviar.</div>
           </div>
         )}
 
         {activeTab === "bidagent" && (
           <div className="border border-indigo-200 bg-indigo-50 rounded-xl p-4 space-y-2">
-            <h3 className="font-bold text-indigo-900 flex items-center gap-2"><Bot className="w-4 h-4" /> ProAR Bid Agent (Windows)</h3>
+            <h3 className="font-bold text-indigo-900 flex items-center gap-2"><Bot className="w-4 h-4" /> Simulador seguro de lances</h3>
             <p className="text-xs text-indigo-900">
-              Primeira operação recomendada: <strong>Modo Aprendizado + Observador</strong> (sem envio automático de lances).
+              Calcula margem e limite operacional, mas <strong>não envia lances automaticamente</strong>.
             </p>
             <ul className="text-xs text-indigo-800 list-disc pl-4 space-y-1">
-              <li>Selecionar janela do portal e iniciar aprendizado.</li>
-              <li>Reconhecer melhor lance, nosso lance, cronômetro, campo e botão de envio.</li>
-              <li>Registrar confiança por elemento e pausar se abaixo do limite.</li>
-              <li>Respeitar piso absoluto e kill switch (CTRL + ALT + F8).</li>
+              <li>Exibe piso técnico, piso absoluto e margem antes de qualquer ação.</li>
+              <li>O operador copia o valor e registra a decisão na trilha de auditoria.</li>
+              <li>Se houver integração autorizada, exige confiança suficiente e confirmação humana.</li>
+              <li>Alerta imediatamente quando o valor sugerido estiver abaixo do limite permitido.</li>
             </ul>
           </div>
         )}
 
-        {(activeTab === "pendencias" || activeTab === "contratos" || activeTab === "historico" || activeTab === "relatorios") && (
+        {activeTab === "prazos" && (
+          <div className="border border-slate-200 rounded-xl p-4 text-xs text-slate-700"><strong className="text-slate-900">Prazos e marcos</strong><p className="mt-1">Centraliza abertura, impugnação, esclarecimentos, recursos e validade da proposta. Alertas devem ser derivados das datas registradas no processo.</p></div>
+        )}
+
+        {activeTab === "fontes" && (
+          <div className="space-y-3 text-xs">
+            <p className="text-slate-600">A fonte e a data da última coleta acompanham cada oportunidade. Portais sem API autorizada permanecem como link manual, sem automação de acesso.</p>
+            {[['PNCP', 'Consulta integrada', 'Atualize pelo botão “Buscar oportunidades”'], ['Compras.gov.br', 'Aguardando conector autorizado', 'Registrar link manual até a autorização'], ['Portais locais', 'Manual', 'Abrir apenas o link oficial do edital']].map(([source, state, detail]) => <div key={source} className="border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-3"><div><p className="font-bold text-slate-900">{source}</p><p className="text-slate-500 mt-0.5">{detail}</p></div><span className="rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-700">{state}</span></div>)}
+          </div>
+        )}
+
+        {(activeTab === "pendencias" || activeTab === "contratos" || activeTab === "empenhos" || activeTab === "historico" || activeTab === "relatorios") && (
           <div className="border border-slate-200 rounded-xl p-4 text-xs text-slate-700 flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-indigo-600" />
             Estrutura preparada para auditoria completa, pendências pós-disputa, contratos e relatórios gerenciais.
