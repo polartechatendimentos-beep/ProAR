@@ -1,23 +1,28 @@
 import { NextResponse } from "next/server";
+import { enforceRateLimit } from "@/lib/request-security";
 
 export async function GET(request: Request, context: { params: Promise<{ cnpj: string }> }) {
+  const rateLimitResponse = enforceRateLimit(request, "cnpj", 20);
+  if (rateLimitResponse) return rateLimitResponse;
+
   const { cnpj } = await context.params;
   const cleanCnpj = (cnpj || "").replace(/\D/g, "");
 
   if (cleanCnpj.length !== 14) {
     return NextResponse.json(
       { success: false, error: "CNPJ inválido. O documento deve conter exatamente 14 dígitos." },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
   try {
     try {
-      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`, {
+      const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`, {
         headers: { "User-Agent": "ProAR-System/1.0" },
+        cache: "no-store",
       });
-      if (res.ok) {
-        const data = await res.json();
+      if (response.ok) {
+        const data = await response.json();
         return NextResponse.json({
           success: true,
           fonte: "BrasilAPI",
@@ -37,12 +42,12 @@ export async function GET(request: Request, context: { params: Promise<{ cnpj: s
           email: data.email,
         });
       }
-    } catch (e) {}
+    } catch {}
 
     try {
-      const res2 = await fetch(`https://receitaws.com.br/v1/cnpj/${cleanCnpj}`);
-      if (res2.ok) {
-        const data = await res2.json();
+      const response = await fetch(`https://receitaws.com.br/v1/cnpj/${cleanCnpj}`, { cache: "no-store" });
+      if (response.ok) {
+        const data = await response.json();
         if (data.status === "OK") {
           return NextResponse.json({
             success: true,
@@ -61,13 +66,13 @@ export async function GET(request: Request, context: { params: Promise<{ cnpj: s
           });
         }
       }
-    } catch (e) {}
+    } catch {}
 
     return NextResponse.json(
       { success: false, error: "CNPJ não localizado nas bases públicas ou indisponibilidade momentânea." },
-      { status: 404 }
+      { status: 404 },
     );
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : "Falha na consulta." }, { status: 500 });
   }
 }

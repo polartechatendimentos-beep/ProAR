@@ -1,24 +1,12 @@
 import { NextResponse } from "next/server";
-import { timingSafeEqual } from "node:crypto";
 import { db } from "@/db";
 import { licitacoes } from "@/db/schema";
+import { isCronAuthorized } from "@/lib/request-security";
 
 const KEYWORDS = ["ar condicionado", "climatizacao", "pmoc", "refrigeracao", "chiller", "split", "fan coil"];
 
-function safeEqual(left: string, right: string) {
-  const a = Buffer.from(left);
-  const b = Buffer.from(right);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-
-function authorized(request: Request) {
-  const secret = process.env.CRON_SECRET || "";
-  const auth = request.headers.get("authorization") || "";
-  return Boolean(secret) && safeEqual(auth, `Bearer ${secret}`);
-}
-
 export async function GET(request: Request) {
-  if (!authorized(request)) {
+  if (!isCronAuthorized(request)) {
     return NextResponse.json({ success: false, error: "Cron não autorizado." }, { status: 401 });
   }
 
@@ -32,7 +20,7 @@ export async function GET(request: Request) {
     if (!response.ok) {
       return NextResponse.json(
         { success: false, error: "PNCP indisponível.", sourceStatus: response.status, timestamp: new Date().toISOString() },
-        { status: 502 }
+        { status: 502 },
       );
     }
 
@@ -42,7 +30,7 @@ export async function GET(request: Request) {
 
     for (const item of rows) {
       const objeto = String(item.objetoCompra || item.objetoContratacao || "").toLowerCase();
-      if (!KEYWORDS.some((kw) => objeto.includes(kw))) continue;
+      if (!KEYWORDS.some((keyword) => objeto.includes(keyword))) continue;
 
       const numeroControle = item.numeroControlePNCP || item.numeroControlePncp;
       if (!numeroControle) continue;
@@ -80,7 +68,7 @@ export async function GET(request: Request) {
   } catch (error) {
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : "Erro no processamento da rotina." },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
