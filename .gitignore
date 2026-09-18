@@ -11,7 +11,8 @@
 /out/
 
 # production
-/build
+/build/
+/dist/
 
 # debug
 npm-debug.log*
@@ -25,8 +26,11 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
-# generated archives
+# generated archives and certificates
 *.zip
+*.tar.gz
+*.rar
+*.pfx
 
 # vercel
-.vercel
+.vercel/
