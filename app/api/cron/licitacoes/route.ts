@@ -1,73 +1,86 @@
 import { NextResponse } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { db } from "@/db";
 import { licitacoes } from "@/db/schema";
 
 const KEYWORDS = ["ar condicionado", "climatizacao", "pmoc", "refrigeracao", "chiller", "split", "fan coil"];
 
-export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
+function safeEqual(left: string, right: string) {
+  const a = Buffer.from(left);
+  const b = Buffer.from(right);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
-  if (cronSecret && authHeader !== "Bearer " + cronSecret) {
-    return NextResponse.json(
-      { success: false, error: "Acesso não autorizado ao job de sincronização." },
-      { status: 401 }
-    );
+function authorized(request: Request) {
+  const secret = process.env.CRON_SECRET || "";
+  const auth = request.headers.get("authorization") || "";
+  return Boolean(secret) && safeEqual(auth, `Bearer ${secret}`);
+}
+
+export async function GET(request: Request) {
+  if (!authorized(request)) {
+    return NextResponse.json({ success: false, error: "Cron não autorizado." }, { status: 401 });
   }
 
   try {
     const today = new Date().toISOString().split("T")[0].replace(/-/g, "");
-    const pncpUrl = `https://pncp.gov.br/api/consulta/v1/contratacoes/publicas?dataInicial=${today}&codigoModalidadeContratacao=6&pagina=1`;
+    const pncpUrl = `https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=${today}&dataFinal=${today}&codigoModalidadeContratacao=6&pagina=1&tamanhoPagina=50`;
     let novasLicitacoes = 0;
+    let registrosLidos = 0;
 
-    try {
-      const response = await fetch(pncpUrl, { headers: { Accept: "application/json" } });
-      if (response.ok) {
-        const data = await response.json();
-        if (data?.data && Array.isArray(data.data)) {
-          for (const item of data.data) {
-            const objeto = (item.objetoContratacao || "").toLowerCase();
-            const isRelevant = KEYWORDS.some((kw) => objeto.includes(kw));
-            if (!isRelevant) continue;
+    const response = await fetch(pncpUrl, { headers: { Accept: "application/json" }, cache: "no-store" });
+    if (!response.ok) {
+      return NextResponse.json(
+        { success: false, error: "PNCP indisponível.", sourceStatus: response.status, timestamp: new Date().toISOString() },
+        { status: 502 }
+      );
+    }
 
-            await db
-              .insert(licitacoes)
-              .values({
-                numeroControlePncp: item.numeroControlePNCP || `PNCP-${Date.now()}-${Math.random()}`,
-                numeroPregao: item.numeroCompra || null,
-                numeroProcesso: item.processo || null,
-                titulo: item.objetoContratacao || "Licitação de Climatização / PMOC",
-                descricao: item.informacaoComplementar || item.objetoContratacao || "Serviços de climatização.",
-                orgao: item.orgaoEntidade?.razaoSocial || "Órgão Público",
-                plataforma: item.nomeSistemaOrigem || "PNCP",
-                uf: item.unidadeOrgao?.ufSigla || "SP",
-                modalidade: item.modalidadeNome || "Pregão Eletrônico",
-                tipoJulgamento: "menor_preco_global",
-                modoDisputa: "aberto",
-                valorEstimado: item.valorTotalEstimado
-                  ? `R$ ${Number(item.valorTotalEstimado).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
-                  : "A consultar",
-                status: "em_andamento",
-                linkEdital: item.linkSistemaOrigem || "https://pncp.gov.br",
-                categoria: "Climatização / PMOC",
-              })
-              .onConflictDoNothing();
+    const payload = await response.json();
+    const rows = Array.isArray(payload?.data) ? payload.data : [];
+    registrosLidos = rows.length;
 
-            novasLicitacoes++;
-          }
-        }
-      }
-    } catch {
-      // Falha de conexão externa não interrompe a rotina.
+    for (const item of rows) {
+      const objeto = String(item.objetoCompra || item.objetoContratacao || "").toLowerCase();
+      if (!KEYWORDS.some((kw) => objeto.includes(kw))) continue;
+
+      const numeroControle = item.numeroControlePNCP || item.numeroControlePncp;
+      if (!numeroControle) continue;
+
+      await db.insert(licitacoes).values({
+        numeroControlePncp: numeroControle,
+        numeroPregao: item.numeroCompra || null,
+        numeroProcesso: item.processo || null,
+        titulo: item.objetoCompra || item.objetoContratacao || "Objeto não informado",
+        descricao: item.informacaoComplementar || item.objetoCompra || item.objetoContratacao || "Não informado",
+        orgao: item.orgaoEntidade?.razaoSocial || "Não informado",
+        plataforma: item.nomeSistemaOrigem || "Não confirmado",
+        uf: item.unidadeOrgao?.ufSigla || null,
+        modalidade: item.modalidadeNome || "Não informado",
+        tipoJulgamento: null,
+        modoDisputa: null,
+        valorEstimado: item.valorTotalEstimado != null
+          ? `R$ ${Number(item.valorTotalEstimado).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+          : "Não informado",
+        status: "em_andamento",
+        linkEdital: item.linkSistemaOrigem || null,
+        categoria: "Climatização / PMOC",
+      }).onConflictDoNothing();
+
+      novasLicitacoes += 1;
     }
 
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),
+      registrosLidos,
       novasLicitacoes,
-      message: "Varredura autônoma de licitações em andamento finalizada com sucesso.",
+      source: "PNCP",
     });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message || "Erro no processamento da rotina." }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : "Erro no processamento da rotina." },
+      { status: 500 }
+    );
   }
 }

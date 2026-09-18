@@ -25,5 +25,8 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
+# generated archives
+*.zip
+
 # vercel
 .vercel
