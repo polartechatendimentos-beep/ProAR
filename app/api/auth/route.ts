@@ -4,35 +4,37 @@ import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { readSession, signToken } from "@/lib/proar-auth";
 import { verifyPassword } from "@/lib/password";
+import { enforceRateLimit } from "@/lib/request-security";
 
 export async function POST(request: Request) {
+  const rateLimitResponse = enforceRateLimit(request, "auth-login", 10);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const body = await request.json();
-    const { email, senha, remember = true } = body;
+    const email = String(body?.email || "").trim().toLowerCase();
+    const senha = String(body?.senha || "");
+    const remember = body?.remember !== false;
 
     if (!email || !senha) {
       return NextResponse.json(
         { success: false, message: "Email e senha são obrigatórios." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    // 1. Busca usuário no banco de dados
     let user = null;
     try {
-      const userList = await db.select().from(users).where(eq(users.email, email.toLowerCase().trim())).limit(1);
-      if (userList.length > 0) {
-        user = userList[0];
-      }
-    } catch (dbErr) {
-      console.warn("[Auth API] Consulta ao banco indisponível, avaliando credenciais de ambiente.");
+      const userList = await db.select().from(users).where(eq(users.email, email)).limit(1);
+      user = userList[0] ?? null;
+    } catch {
+      // A indisponibilidade do banco não deve revelar detalhes internos ao cliente.
     }
 
-    // 2. Validação segura
     let isValid = false;
-    let authUser = null;
+    let authUser: { id: number; email: string; nome: string; role: string; companyId: number } | null = null;
 
-    if (user) {
+    if (user && user.ativo) {
       isValid = verifyPassword(senha, user.senhaHash);
       if (isValid) {
         authUser = {
@@ -44,11 +46,9 @@ export async function POST(request: Request) {
         };
       }
     } else if (process.env.ALLOW_BOOTSTRAP_ADMIN === "true") {
-      // Acesso inicial só é permitido quando habilitado explicitamente no ambiente.
-      const defaultAdminEmail = process.env.ADMIN_EMAIL;
+      const defaultAdminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
       const defaultAdminPass = process.env.ADMIN_PASSWORD;
-
-      if (defaultAdminEmail && defaultAdminPass && email.toLowerCase().trim() === defaultAdminEmail.toLowerCase() && senha === defaultAdminPass) {
+      if (defaultAdminEmail && defaultAdminPass && email === defaultAdminEmail && senha === defaultAdminPass) {
         isValid = true;
         authUser = {
           id: 1,
@@ -63,13 +63,11 @@ export async function POST(request: Request) {
     if (!isValid || !authUser) {
       return NextResponse.json(
         { success: false, message: "Credenciais inválidas. Verifique seu e-mail e senha." },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
-    // 3. Emissão de Token JWT Seguro (Validade 7 dias)
     const token = signToken(authUser, 7 * 24 * 60 * 60);
-
     const response = NextResponse.json({
       success: true,
       user: authUser,
@@ -77,7 +75,6 @@ export async function POST(request: Request) {
       message: "Autenticação realizada com sucesso.",
     });
 
-    // 4. Define cookie HttpOnly para segurança extra contra XSS
     response.cookies.set("proar_session", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -85,16 +82,14 @@ export async function POST(request: Request) {
       ...(remember ? { maxAge: 7 * 24 * 60 * 60 } : {}),
       path: "/",
     });
-
     return response;
-  } catch (error: any) {
+  } catch {
     return NextResponse.json(
-      { success: false, error: error.message || "Erro interno no processo de autenticação." },
-      { status: 500 }
+      { success: false, message: "Não foi possível concluir a autenticação." },
+      { status: 500 },
     );
   }
 }
-
 
 export async function GET(request: Request) {
   try {
@@ -102,7 +97,6 @@ export async function GET(request: Request) {
     if (!session) {
       return NextResponse.json({ success: false }, { status: 401, headers: { "Cache-Control": "no-store" } });
     }
-
     return NextResponse.json({ success: true, user: session }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ success: false }, { status: 401, headers: { "Cache-Control": "no-store" } });
