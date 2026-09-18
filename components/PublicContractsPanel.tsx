@@ -1,498 +1,524 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Landmark,
-  RefreshCw,
+  AlertTriangle,
+  BarChart3,
   Bell,
-  ExternalLink,
-  Search,
-  Plus,
   Bot,
-  ShieldCheck,
+  CheckCircle2,
+  Clipboard,
+  Clock3,
+  ExternalLink,
   FileCheck,
   Folder,
   Gavel,
-  BarChart3,
+  Landmark,
+  Link2,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Search,
+  ShieldAlert,
+  ShieldCheck,
+  Siren,
+  X,
 } from "lucide-react";
+import type { CertameItem, CertameMovement } from "@/lib/public-contracts";
+import { normalizeProcurementStatus, procurementStatusLabel } from "@/lib/procurement/domain";
 
-type LicTab =
-  | "painel"
-  | "oportunidades"
-  | "processos"
-  | "editais"
-  | "checklist"
-  | "documentos"
-  | "capacidade"
-  | "propostas"
-  | "sessao"
-  | "bidagent"
-  | "pendencias"
-  | "contratos"
-  | "historico"
-  | "relatorios"
-  | "prazos"
-  | "empenhos"
-  | "fontes";
+type LicTab = "radar" | "preflight" | "checklist" | "documentos" | "capacidade" | "propostas" | "lances" | "prazos" | "resultado" | "fontes" | "historico";
 
-interface Licitacao {
-  id: string | number;
-  numeroPregao?: string;
-  numeroProcesso?: string;
+type Licitacao = {
+  id: string | number | null;
+  numeroControlePncp?: string | null;
+  numeroPregao?: string | null;
+  numeroProcesso?: string | null;
   titulo: string;
+  descricao?: string | null;
   orgao: string;
-  uf: string;
-  modalidade: string;
-  valorEstimado?: string;
-  dataAbertura?: string;
-  status: string;
-  linkEdital?: string;
-  notificadoWhatsapp?: boolean;
-  habilitacaoPercentual?: number;
-  checklistResumo?: {
-    atendidos?: number;
-    revisar?: number;
-    criticos?: number;
-    pendentes?: number;
-  };
-  pisoAbsoluto?: string;
-  plataforma?: string;
-  responsavelInterno?: string;
-}
+  uf?: string | null;
+  modalidade?: string | null;
+  valorEstimado?: string | null;
+  dataAbertura?: string | null;
+  dataFimProposta?: string | null;
+  status?: string | null;
+  linkEdital?: string | null;
+  plataforma?: string | null;
+  source?: string | null;
+  sourceUrl?: string | null;
+  collectedAt?: string | null;
+  fingerprint?: string | null;
+  pisoTecnico?: string | null;
+  pisoAbsoluto?: string | null;
+  margemMinima?: string | null;
+  responsavelInterno?: string | null;
+  readyToSubmit?: boolean;
+  statusOriginal?: string | null;
+  relevance?: { matchedTerms?: string[]; context?: string; evidence?: string | null };
+};
+
+type PreflightCheck = { code: string; status: "PASS" | "WARNING" | "BLOCKER" | "NOT_APPLICABLE"; origin: string; message: string; correctiveAction: string };
+type Preflight = { readyToSubmit: boolean; calculatedAt: string; summary: { passed: number; warnings: number; blockers: number; notApplicable: number }; checks: PreflightCheck[]; dryRun: boolean };
+type Source = { id: string; name: string; mode: string; status: string; officialUrl: string; docsUrl?: string | null; note: string };
+type SourceHealth = { status: string; lastAttemptAt?: string | null; lastSuccessAt?: string | null; durationMs?: number; pagesRead?: number; accepted?: number; rejected?: number; duplicates?: number; errorMessage?: string; docsUrl?: string };
+type ChecklistItem = { id: number; categoria: string; requisito: string; status: string; risco?: string | null; paginaClausula?: string | null; documentoRelacionado?: string | null };
+type DocumentItem = { id: number; tipo: string; empresa: string; validade?: string | null; arquivoNome?: string | null; arquivoUrl?: string | null; computedStatus?: string; expiresInDays?: number | null };
+type BidSimulation = { suggestedBid: number | null; evaluatedBid: number | null; effectiveFloor: number | null; authorizationRequired: boolean; canCopy: boolean; canSubmitExternally: false; message: string };
 
 export type PublicContractRecord = {
   id: string;
   name: string;
   client?: string;
   administrativeProcess?: string;
-  certameItems?: { id: string; description: string }[];
+  certameItems?: (CertameItem & { movements?: CertameMovement[] })[];
 };
 
-const SUBTABS: { id: LicTab; label: string }[] = [
-  { id: "painel", label: "Radar" },
-  { id: "oportunidades", label: "Oportunidades" },
-  { id: "processos", label: "Meus Processos" },
-  { id: "editais", label: "Editais e IA" },
-  { id: "checklist", label: "Checklist IA" },
-  { id: "documentos", label: "Documentos da Empresa" },
-  { id: "capacidade", label: "Capacidade Técnica" },
-  { id: "propostas", label: "Propostas" },
-  { id: "sessao", label: "Central de Lances" },
-  { id: "bidagent", label: "Lances Seguros" },
+const TABS: { id: LicTab; label: string }[] = [
+  { id: "radar", label: "Radar" },
+  { id: "preflight", label: "Auditoria pré-envio" },
+  { id: "checklist", label: "Checklist" },
+  { id: "documentos", label: "Documentos" },
+  { id: "capacidade", label: "Capacidade técnica" },
+  { id: "propostas", label: "Proposta" },
+  { id: "lances", label: "Central de lances" },
   { id: "prazos", label: "Prazos" },
-  { id: "pendencias", label: "Pendências" },
-  { id: "contratos", label: "Contratos/Atas" },
-  { id: "empenhos", label: "Empenhos" },
+  { id: "resultado", label: "Resultado" },
+  { id: "fontes", label: "Saúde das fontes" },
   { id: "historico", label: "Histórico" },
-  { id: "relatorios", label: "Relatórios" },
-  { id: "fontes", label: "Saúde das Fontes" },
 ];
 
-export function PublicContractsPanel() {
-  const [licitacoes, setLicitacoes] = useState<Licitacao[]>([]);
+const emptyForm = {
+  orgao: "",
+  numeroPregao: "",
+  numeroProcesso: "",
+  titulo: "",
+  descricao: "",
+  plataforma: "Cadastro manual",
+  modalidade: "Pregão Eletrônico",
+  uf: "SP",
+  dataAbertura: "",
+  dataFimProposta: "",
+  horaSessao: "09:00",
+  tipoJulgamento: "menor_preco_global",
+  modoDisputa: "aberto",
+  valorEstimado: "",
+  responsavelInterno: "",
+  linkEdital: "",
+};
+
+function formatMoney(value: string | number | null | undefined) {
+  if (value === null || value === undefined || String(value).trim() === "") return "Não confirmado";
+  if (typeof value === "string" && /R\$/.test(value)) return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "Não confirmado";
+  const raw = String(value).trim();
+  const normalized = raw.includes(",")
+    ? raw.replace(/[^0-9,.-]/g, "").replace(/\./g, "").replace(",", ".")
+    : raw.replace(/[^0-9.-]/g, "");
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "Não confirmado";
+}
+
+function formatDate(value: string | null | undefined) {
+  if (!value) return "Não confirmado";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Não confirmado" : date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+}
+
+function rowKey(item: Licitacao) {
+  return String(item.id ?? item.numeroControlePncp ?? item.fingerprint ?? `${item.orgao}-${item.titulo}`);
+}
+
+export function PublicContractsPanel({ canEdit = true }: { canEdit?: boolean }) {
+  const [persisted, setPersisted] = useState<Licitacao[]>([]);
+  const [preview, setPreview] = useState<Licitacao[] | null>(null);
+  const [selected, setSelected] = useState<Licitacao | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
   const [query, setQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<LicTab>("painel");
+  const [uf, setUf] = useState("SP");
+  const [status, setStatus] = useState("todas");
+  const [activeTab, setActiveTab] = useState<LicTab>("radar");
   const [showNewModal, setShowNewModal] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [newLic, setNewLic] = useState({
-    orgao: "",
-    numeroPregao: "",
-    numeroProcesso: "",
-    titulo: "",
-    descricao: "",
-    plataforma: "",
-    modalidade: "Pregão Eletrônico",
-    dataAbertura: "",
-    horaSessao: "09:00",
-    tipoJulgamento: "menor_preco_global",
-    modoDisputa: "aberto",
-    valorEstimado: "",
-    responsavelInterno: "Administrador Matriz",
-    linkEdital: "",
-  });
+  const [newLic, setNewLic] = useState(emptyForm);
+  const [preflight, setPreflight] = useState<Preflight | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [sources, setSources] = useState<Source[]>([]);
+  const [sourceHealth, setSourceHealth] = useState<SourceHealth | null>(null);
+  const [bestMarket, setBestMarket] = useState("");
+  const [proposedBid, setProposedBid] = useState("");
+  const [minimumIncrement, setMinimumIncrement] = useState("1,00");
+  const [simulation, setSimulation] = useState<BidSimulation | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [expandedWhy, setExpandedWhy] = useState<string | null>(null);
+  const requestController = useRef<AbortController | null>(null);
+  const detailRequestId = useRef(0);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
 
-  const fetchLicitacoes = async (q = "") => {
+  const currentRows = preview ?? persisted;
+  const selectedPersistedId = selected && typeof selected.id === "number" ? selected.id : null;
+
+  const loadPersisted = useCallback(async () => {
+    setLoading(true);
+    setError("");
     try {
-      const res = await fetch(`/api/licitacoes?status=todas${q ? `&q=${encodeURIComponent(q)}` : ""}`);
-      const json = await res.json();
-      if (json.success) {
-        setLicitacoes(json.data || []);
-      }
-    } catch (e) {
-      console.error("Erro ao carregar licitações:", e);
+      const params = new URLSearchParams({ status });
+      if (query.trim()) params.set("q", query.trim());
+      if (uf) params.set("uf", uf);
+      const response = await fetch(`/api/licitacoes?${params.toString()}`, { cache: "no-store" });
+      const json = await response.json();
+      if (!response.ok || !json.success) throw new Error(json.error || "Não foi possível carregar as licitações.");
+      const rows = Array.isArray(json.data) ? json.data : [];
+      setPersisted(rows);
+      setPreview(null);
+      setNotice("Registros do ProAR atualizados. Nenhum dado foi modificado.");
+      setSelected(current => current && typeof current.id === "number" ? rows.find((row: Licitacao) => row.id === current.id) ?? null : null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível carregar as licitações.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [query, status, uf]);
+
+  useEffect(() => { void loadPersisted(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    fetchLicitacoes();
+    fetch("/api/licitacoes/sources", { cache: "no-store" })
+      .then(async response => ({ response, json: await response.json() }))
+      .then(({ response, json }) => { if (response.ok && json.success) setSources(json.data || []); })
+      .catch(() => undefined);
   }, []);
 
-  const handleSyncPncp = async () => {
+  useEffect(() => {
+    if (!showNewModal) return;
+    titleInputRef.current?.focus();
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setShowNewModal(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showNewModal]);
+
+  const selectProcess = (item: Licitacao, tab: LicTab = "preflight") => {
+    detailRequestId.current += 1;
+    setSelected(item);
+    setPreflight(null);
+    setChecklist([]);
+    setDocuments([]);
+    setSimulation(null);
+    setActiveTab(tab);
+  };
+
+  const searchPncp = async () => {
+    requestController.current?.abort();
+    const controller = new AbortController();
+    requestController.current = controller;
     setSyncing(true);
+    setError("");
     setNotice("");
     try {
       const response = await fetch("/api/licitacoes/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uf: "SP", days: 14 }),
+        body: JSON.stringify({ uf, days: 14, maxPages: 2, terms: query.trim() ? [query.trim()] : undefined }),
+        signal: controller.signal,
       });
       const json = await response.json();
-      if (!response.ok || !json.success) {
-        setNotice(json.error || "Não foi possível consultar o PNCP agora.");
-        return;
-      }
-      setNotice(json.persistence ? `${json.message || "Consulta PNCP concluída."} ${json.persistence}` : (json.message || "Consulta PNCP concluída."));
-      if (Array.isArray(json.data)) {
-        setLicitacoes(json.data);
-        setLoading(false);
-      }
-    } catch {
-      setNotice("Não foi possível conectar ao PNCP. Tente novamente.");
+      if (!response.ok || !json.success) throw new Error(json.error || json.message || "Não foi possível consultar o PNCP.");
+      setPreview(Array.isArray(json.data) ? json.data : []);
+      setSourceHealth(json.health || null);
+      if (Array.isArray(json.sources)) setSources(json.sources);
+      setNotice(`${json.message || "Consulta concluída."} ${json.persistence?.message || "Prévia não persistida."}`);
+      setSelected(null);
+      setActiveTab("radar");
+    } catch (cause) {
+      if ((cause as Error)?.name !== "AbortError") setError(cause instanceof Error ? cause.message : "Não foi possível consultar o PNCP.");
     } finally {
-      setSyncing(false);
+      if (requestController.current === controller) setSyncing(false);
     }
   };
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    await fetchLicitacoes(query);
-  };
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newLic.orgao || !newLic.titulo) return;
-
-    setSaving(true);
+  const runPreflight = useCallback(async () => {
+    if (!selectedPersistedId) return;
+    const requestId = ++detailRequestId.current;
+    setDetailLoading(true);
+    setError("");
     try {
-      const payload = {
-        ...newLic,
-        status: "em_andamento",
-        habilitacaoPercentual: 0,
-        checklistResumo: { atendidos: 0, revisar: 0, criticos: 0, pendentes: 0 },
-      };
-
-      const res = await fetch("/api/licitacoes", {
+      const response = await fetch("/api/licitacoes/preflight", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ licitacaoId: selectedPersistedId, dryRun: true }),
       });
-      const json = await res.json();
-      if (json.success) {
-        setShowNewModal(false);
-        setNewLic({
-          orgao: "",
-          numeroPregao: "",
-          numeroProcesso: "",
-          titulo: "",
-          descricao: "",
-          plataforma: "",
-          modalidade: "Pregão Eletrônico",
-          dataAbertura: "",
-          horaSessao: "09:00",
-          tipoJulgamento: "menor_preco_global",
-          modoDisputa: "aberto",
-          valorEstimado: "",
-          responsavelInterno: "Administrador Matriz",
-          linkEdital: "",
-        });
-        fetchLicitacoes(query);
-      }
+      const json = await response.json();
+      if (!response.ok || !json.success) throw new Error(json.error || "Não foi possível executar o preflight.");
+      if (requestId === detailRequestId.current) setPreflight(json.data);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível executar o preflight.");
     } finally {
-      setSaving(false);
+      setDetailLoading(false);
     }
+  }, [selectedPersistedId]);
+
+  const loadChecklist = useCallback(async () => {
+    if (!selectedPersistedId) return;
+    const requestId = ++detailRequestId.current;
+    setDetailLoading(true);
+    try {
+      const response = await fetch(`/api/licitacoes-checklist?licitacao_id=${selectedPersistedId}`, { cache: "no-store" });
+      const json = await response.json();
+      if (!response.ok || !json.success) throw new Error(json.error || "Checklist indisponível.");
+      if (requestId === detailRequestId.current) setChecklist(json.data || []);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Checklist indisponível.");
+    } finally { setDetailLoading(false); }
+  }, [selectedPersistedId]);
+
+  const loadDocuments = useCallback(async () => {
+    if (!selectedPersistedId) return;
+    const requestId = ++detailRequestId.current;
+    setDetailLoading(true);
+    try {
+      const response = await fetch(`/api/licitacoes-documents?licitacao_id=${selectedPersistedId}`, { cache: "no-store" });
+      const json = await response.json();
+      if (!response.ok || !json.success) throw new Error(json.error || "Documentos indisponíveis.");
+      if (requestId === detailRequestId.current) setDocuments(json.data || []);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Documentos indisponíveis.");
+    } finally { setDetailLoading(false); }
+  }, [selectedPersistedId]);
+
+  useEffect(() => {
+    if (activeTab === "preflight" && selectedPersistedId && !preflight) void runPreflight();
+    if (activeTab === "checklist" && selectedPersistedId && !checklist.length) void loadChecklist();
+    if (activeTab === "documentos" && selectedPersistedId && !documents.length) void loadDocuments();
+  }, [activeTab, selectedPersistedId, preflight, checklist.length, documents.length, runPreflight, loadChecklist, loadDocuments]);
+
+  const simulate = async () => {
+    if (!selectedPersistedId) return;
+    const requestId = ++detailRequestId.current;
+    setDetailLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/licitacoes-bids/simulate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ licitacaoId: selectedPersistedId, bestMarket, proposedBid, minimumIncrement }),
+      });
+      const json = await response.json();
+      if (!response.ok || !json.success) throw new Error(json.error || "Simulação indisponível.");
+      if (requestId === detailRequestId.current) setSimulation(json.data);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Simulação indisponível.");
+    } finally { setDetailLoading(false); }
   };
 
-  const resumo = useMemo(() => {
-    const total = licitacoes.length;
-    const emAndamento = licitacoes.filter((l) => l.status === "em_andamento").length;
-    const mediaHab = total
-      ? Math.round(licitacoes.reduce((acc, l) => acc + (l.habilitacaoPercentual || 0), 0) / total)
-      : 0;
-    const criticos = licitacoes.reduce((acc, l) => acc + (l.checklistResumo?.criticos || 0), 0);
-    return { total, emAndamento, mediaHab, criticos };
-  }, [licitacoes]);
+  const copyBid = async () => {
+    if (!simulation?.canCopy || simulation.evaluatedBid === null) return;
+    await navigator.clipboard.writeText(simulation.evaluatedBid.toFixed(2).replace(".", ","));
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  };
+
+  const handleCreate = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!canEdit) return;
+    setSaving(true);
+    setError("");
+    try {
+      const response = await fetch("/api/licitacoes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...newLic, status: "rascunho" }) });
+      const json = await response.json();
+      if (!response.ok || !json.success) throw new Error(json.error || "Não foi possível salvar a licitação.");
+      setShowNewModal(false);
+      setNewLic(emptyForm);
+      setNotice("Licitação cadastrada em rascunho e registrada na auditoria.");
+      await loadPersisted();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível salvar a licitação.");
+    } finally { setSaving(false); }
+  };
+
+  const metrics = useMemo(() => {
+    const now = Date.now();
+    const next48h = currentRows.filter(item => {
+      if (!item.dataAbertura) return false;
+      const delta = new Date(item.dataAbertura).getTime() - now;
+      return delta >= 0 && delta <= 48 * 3600000;
+    }).length;
+    return {
+      total: currentRows.length,
+      next48h,
+      ready: 0,
+      blockers: preflight?.summary.blockers ?? "—",
+    };
+  }, [currentRows, preflight]);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-      <div className="p-6 border-b border-slate-200 flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-label="Workspace de licitações públicas">
+      <header className="border-b border-slate-200 bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 p-5 text-white">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
-            <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <Landmark className="w-6 h-6 text-indigo-600" />
-              LICITAÇÕES IA + BID AGENT
-            </h2>
-            <p className="text-sm text-slate-500 mt-1">
-              Descoberta, checklist de habilitação, proposta, disputa e pós-disputa em fluxo único.
-            </p>
+            <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em] text-indigo-200">
+              <span>ProAR Procurement Workspace</span>
+              <span className="rounded-full border border-emerald-300/40 bg-emerald-400/10 px-2 py-1 text-emerald-200">Fontes externas somente leitura</span>
+            </div>
+            <h2 className="flex items-center gap-2 text-2xl font-black"><Landmark className="h-7 w-7 text-indigo-300" /> Licitações públicas</h2>
+            <p className="mt-1 max-w-3xl text-sm text-slate-300">RADAR → EDITAL → CHECKLIST → PROPOSTA → AUDITORIA → LANCES → RESULTADO → CONTRATO/ARP → EMPENHO → OS → FINANCEIRO</p>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowNewModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg"
-            >
-              <Plus className="w-4 h-4" /> Nova Licitação
-            </button>
-            <button
-              onClick={handleSyncPncp}
-              disabled={syncing}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin text-indigo-600" : ""}`} />
-              {syncing ? "Buscando..." : "Buscar oportunidades"}
-            </button>
+          <div className="flex flex-wrap gap-2">
+            {canEdit && <button type="button" onClick={() => setShowNewModal(true)} className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-bold text-slate-950 hover:bg-slate-100"><Plus className="h-4 w-4" /> Nova licitação</button>}
+            <button type="button" onClick={() => void loadPersisted()} disabled={loading} className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm font-bold hover:bg-white/20 disabled:opacity-60"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Recarregar ProAR</button>
+            <button type="button" onClick={() => void searchPncp()} disabled={syncing} className="inline-flex items-center gap-2 rounded-lg bg-indigo-500 px-3 py-2 text-sm font-bold hover:bg-indigo-400 disabled:opacity-60"><RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} /> {syncing ? "Consultando..." : "Consultar PNCP"}</button>
           </div>
         </div>
 
-        {notice && <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">{notice}</div>}
-
-        <form onSubmit={handleSearch} className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar por órgão, objeto, número do pregão, processo..."
-              className="w-full border border-slate-300 rounded-lg py-2 pl-9 pr-3 text-sm"
-            />
-          </div>
-          <button type="submit" className="px-3.5 py-2 text-sm font-semibold bg-slate-900 text-white rounded-lg">
-            Buscar
-          </button>
+        <form onSubmit={event => { event.preventDefault(); void loadPersisted(); }} className="mt-5 grid gap-2 sm:grid-cols-[minmax(240px,1fr)_100px_150px_auto]">
+          <label className="relative"><span className="sr-only">Buscar licitações</span><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Objeto, órgão, processo, pregão ou termo HVAC" className="w-full rounded-lg border border-white/15 bg-white px-9 py-2 text-sm text-slate-900 outline-none ring-indigo-400 focus:ring-2" /></label>
+          <label><span className="sr-only">UF</span><select value={uf} onChange={event => setUf(event.target.value)} className="w-full rounded-lg border border-white/15 bg-white px-3 py-2 text-sm text-slate-900"><option value="">Todas UF</option><option value="SP">SP</option><option value="MG">MG</option><option value="PR">PR</option><option value="RJ">RJ</option><option value="MS">MS</option></select></label>
+          <label><span className="sr-only">Status</span><select value={status} onChange={event => setStatus(event.target.value)} className="w-full rounded-lg border border-white/15 bg-white px-3 py-2 text-sm text-slate-900"><option value="todas">Todos os status</option><option value="rascunho">Rascunho</option><option value="oportunidade">Oportunidade</option><option value="em_andamento">Em andamento</option><option value="em_disputa">Em disputa</option><option value="vencedora">Vencedora</option><option value="cancelada">Cancelada</option><option value="abertas">Abertas para participação</option><option value="encerradas">Encerradas / canceladas</option></select></label>
+          <button type="submit" className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-bold hover:bg-slate-600">Buscar no ProAR</button>
         </form>
+      </header>
 
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {SUBTABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg whitespace-nowrap ${
-                activeTab === tab.id ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+      <div className="border-b border-slate-200 bg-slate-50 px-5 py-3">
+        {error && <div role="alert" className="mb-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"><Siren className="mt-0.5 h-4 w-4 shrink-0" /> {error}</div>}
+        {notice && <div className="mb-3 flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900"><Bell className="mt-0.5 h-4 w-4 shrink-0" /> {notice}</div>}
+        {preview && <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"><span><strong>Prévia PNCP:</strong> estes resultados não foram persistidos e não alteram dados reais.</span><button type="button" onClick={() => { setPreview(null); setSelected(null); }} className="font-bold underline">Voltar aos registros do ProAR</button></div>}
+        <nav role="tablist" aria-label="Etapas de licitações" className="flex gap-2 overflow-x-auto pb-1">
+          {TABS.map(tab => <button key={tab.id} type="button" role="tab" aria-selected={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-bold ${activeTab === tab.id ? "bg-indigo-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"}`}>{tab.label}</button>)}
+        </nav>
       </div>
 
-      <div className="p-6 space-y-4">
-        {activeTab === "painel" && (
+      <div className="space-y-5 p-5">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Metric title={preview ? "Oportunidades na prévia" : "Registros no ProAR"} value={String(metrics.total)} icon={<Landmark className="h-4 w-4" />} />
+          <Metric title="Abertura em até 48h" value={String(metrics.next48h)} icon={<Clock3 className="h-4 w-4" />} />
+          <Metric title="Prontas para envio" value={String(metrics.ready)} icon={<ShieldCheck className="h-4 w-4" />} help="Calculado somente pelo backend" />
+          <Metric title="Bloqueadores do processo" value={String(metrics.blockers)} icon={<ShieldAlert className="h-4 w-4" />} help="Selecione e audite um processo" />
+        </div>
+
+        {activeTab === "radar" && (
+          <div className="overflow-hidden rounded-xl border border-slate-200">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-4 py-3">
+              <div><h3 className="font-black text-slate-900">Radar de oportunidades e processos</h3><p className="text-xs text-slate-500">Fonte, atualização e incerteza permanecem visíveis. Score não é inventado quando faltam dados.</p></div>
+              {sourceHealth && <HealthBadge health={sourceHealth} />}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-[1050px] w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-500"><tr><th className="px-4 py-3">Score</th><th className="px-4 py-3">Fonte</th><th className="px-4 py-3">Órgão / UF</th><th className="px-4 py-3">Objeto</th><th className="px-4 py-3">Modalidade</th><th className="px-4 py-3">Valor</th><th className="px-4 py-3">Abertura</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Por que aparece?</th><th className="px-4 py-3">Ação</th></tr></thead>
+                <tbody className="divide-y divide-slate-100">
+                  {loading ? <tr><td colSpan={10} className="px-4 py-12 text-center text-slate-500"><Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" /> Carregando...</td></tr> : currentRows.length === 0 ? <tr><td colSpan={10} className="px-4 py-12 text-center text-slate-500">Nenhuma oportunidade encontrada para os filtros atuais.</td></tr> : currentRows.map(item => (
+                    <tr key={rowKey(item)} className={selected && rowKey(selected) === rowKey(item) ? "bg-indigo-50" : "hover:bg-slate-50"}>
+                      <td className="px-4 py-3 font-bold text-slate-400">Não calculado</td>
+                      <td className="px-4 py-3"><span className="rounded-full bg-indigo-100 px-2 py-1 font-bold text-indigo-800">{item.source || item.plataforma || "Manual"}</span><div className="mt-1 text-[10px] text-slate-400">{item.collectedAt ? formatDate(item.collectedAt) : "Origem sem coleta automática"}</div></td>
+                      <td className="px-4 py-3"><strong className="block text-slate-800">{item.orgao}</strong><span className="text-slate-500">{item.uf || "Não confirmado"}</span></td>
+                      <td className="max-w-[320px] px-4 py-3"><strong className="line-clamp-2 text-slate-800">{item.titulo}</strong><span className="text-slate-500">{item.numeroPregao || item.numeroProcesso || "Número não confirmado"}</span></td>
+                      <td className="px-4 py-3 text-slate-700">{item.modalidade || "Não confirmado"}</td>
+                      <td className="px-4 py-3 font-bold text-slate-800">{formatMoney(item.valorEstimado)}</td>
+                      <td className="px-4 py-3 text-slate-700">{formatDate(item.dataAbertura)}</td>
+                      <td className="px-4 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 font-bold text-slate-700">{procurementStatusLabel(item.status, item.dataFimProposta)}</span><div className="mt-1 text-[10px] text-slate-400">Fonte: {item.statusOriginal || item.status || "Não confirmado"}</div></td>
+                      <td className="max-w-[220px] px-4 py-3 align-top"><button type="button" className="font-bold text-indigo-700 underline" onClick={() => setExpandedWhy(expandedWhy === rowKey(item) ? null : rowKey(item))}>🔎 Ver evidência</button>{expandedWhy === rowKey(item) && <div className="mt-2 rounded-lg border border-indigo-100 bg-indigo-50 p-2 text-[10px] text-indigo-950"><b>Contexto:</b> {item.relevance?.context === "frota_automotiva_revisar" ? "Possível contexto de frota automotiva — requer revisão." : "HVAC / climatização"}<br /><b>Termos:</b> {item.relevance?.matchedTerms?.join(", ") || "Não confirmado"}<br /><b>Evidência:</b> {item.relevance?.evidence || item.sourceUrl || "Não confirmado"}</div>}</td>
+                      <td className="px-4 py-3"><button type="button" onClick={() => selectProcess(item)} className="rounded-lg bg-slate-900 px-3 py-2 font-bold text-white hover:bg-indigo-700">Analisar</button>{item.linkEdital ? <a href={item.linkEdital} target="_blank" rel="noopener noreferrer" className="ml-2 inline-flex items-center gap-1 font-bold text-indigo-700">Fonte <ExternalLink className="h-3 w-3" /></a> : <span className="ml-2 text-slate-400">Sem link</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab !== "radar" && activeTab !== "fontes" && (
+          <SelectedProcess item={selected} preview={Boolean(preview)} onBack={() => setActiveTab("radar")} />
+        )}
+
+        {activeTab === "preflight" && selected && (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card title="No radar" value={String(resumo.total)} icon={<Landmark className="w-4 h-4" />} />
-              <Card title="Em andamento" value={String(resumo.emAndamento)} icon={<Gavel className="w-4 h-4" />} />
-              <Card title="Habilitação média" value={`${resumo.mediaHab}%`} icon={<ShieldCheck className="w-4 h-4" />} />
-              <Card title="Bloqueios críticos" value={String(resumo.criticos)} icon={<Bell className="w-4 h-4" />} />
-            </div>
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-950">
-              <p className="font-bold mb-1">Travas de operação</p>
-              <p><strong>Pronto para enviar</strong> deve ser calculado no servidor a partir de documentos, habilitação, preço e autorizações. A tela apenas exibe o resultado; nunca libera envio por conta própria.</p>
-            </div>
-          </div>
-        )}
-
-        {(activeTab === "oportunidades" || activeTab === "processos" || activeTab === "editais") && (
-          <div className="space-y-3">
-            {loading ? (
-              <div className="py-8 text-slate-500 text-center">Carregando licitações...</div>
-            ) : licitacoes.length === 0 ? (
-              <div className="py-8 text-slate-500 text-center">Nenhuma licitação encontrada.</div>
-            ) : (
-              licitacoes.map((item) => (
-                <div key={item.id} className="border border-slate-200 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className="px-2 py-0.5 rounded-full text-xs bg-indigo-100 text-indigo-800 font-bold">{item.modalidade}</span>
-                      <span className="text-xs text-slate-600">{item.numeroPregao || "Sem nº pregão"}</span>
-                      {item.notificadoWhatsapp && (
-                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 flex items-center gap-1">
-                          <Bell className="w-3 h-3" /> Alerta
-                        </span>
-                      )}
-                    </div>
-                    <h3 className="text-sm font-bold text-slate-900">{item.titulo}</h3>
-                    <p className="text-xs text-slate-600">{item.orgao} • {item.uf}</p>
-                    <p className="text-xs text-slate-500">Resp.: {item.responsavelInterno || "-"} • Plataforma: {item.plataforma || "-"}</p>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xs text-slate-400">Valor estimado</div>
-                    <div className="text-sm font-bold text-slate-900">{item.valorEstimado || "A consultar"}</div>
-                    <a
-                      href={item.linkEdital || "https://pncp.gov.br"}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-indigo-600 font-bold mt-1"
-                    >
-                      Abrir edital <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-        {activeTab === "checklist" && (
-          <div className="border border-slate-200 rounded-xl p-4">
-            <h3 className="font-bold text-slate-900 flex items-center gap-2 mb-2"><FileCheck className="w-4 h-4 text-indigo-600" /> Checklist IA</h3>
-            <p className="text-xs text-slate-600 mb-3">Semáforo de habilitação com justificativa, página e cláusula do edital.</p>
-            {licitacoes.slice(0, 4).map((l) => (
-              <div key={l.id} className="text-xs border-t py-2 flex items-center justify-between">
-                <span className="font-semibold text-slate-700">{l.numeroPregao || l.titulo}</span>
-                <span className="font-bold text-indigo-700">{l.habilitacaoPercentual || 0}%</span>
+            {!selectedPersistedId ? <HonestLimit title="Auditoria indisponível para prévia" text="A oportunidade PNCP ainda não foi persistida. Criar processo será implementado com deduplicação antes de ativar escrita." /> : detailLoading && !preflight ? <LoadingBlock /> : preflight ? <>
+              <div className={`rounded-xl border p-4 ${preflight.readyToSubmit ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}>
+                <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-black text-slate-900">{preflight.readyToSubmit ? "Pronta para envio" : "Não liberada para envio"}</h3><p className="text-sm text-slate-700">{preflight.summary.blockers} bloqueador(es), {preflight.summary.warnings} alerta(s), {preflight.summary.passed} conforme.</p></div><button type="button" onClick={() => void runPreflight()} className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">Recalcular prévia</button></div>
+                <p className="mt-2 text-xs text-slate-600">Resultado calculado no backend. Esta execução é somente leitura e não altera status.</p>
               </div>
-            ))}
+              <div className="grid gap-3 lg:grid-cols-2">{preflight.checks.map(check => <PreflightCard key={check.code} check={check} />)}</div>
+            </> : <HonestLimit title="Auditoria ainda não executada" text="Selecione um processo persistido para calcular os bloqueadores no backend." />}
           </div>
         )}
 
-        {activeTab === "documentos" && (
-          <div className="border border-slate-200 rounded-xl p-4">
-            <h3 className="font-bold text-slate-900 flex items-center gap-2 mb-2"><Folder className="w-4 h-4 text-indigo-600" /> Documentos da empresa</h3>
-            <p className="text-xs text-slate-600">Certidões, atestados e documentos reutilizáveis com validade, emissor e vínculo ao processo. Itens vencidos ou ausentes entram como bloqueio de habilitação.</p>
+        {activeTab === "checklist" && selected && (detailLoading && !checklist.length ? <LoadingBlock /> : checklist.length ? <div className="overflow-hidden rounded-xl border border-slate-200"><table className="w-full min-w-[720px] text-left text-xs"><thead className="bg-slate-50 text-slate-500"><tr><th className="px-4 py-3">Categoria</th><th className="px-4 py-3">Exigência</th><th className="px-4 py-3">Página/seção</th><th className="px-4 py-3">Risco</th><th className="px-4 py-3">Resultado</th></tr></thead><tbody className="divide-y divide-slate-100">{checklist.map(item => <tr key={item.id}><td className="px-4 py-3 font-bold">{item.categoria}</td><td className="px-4 py-3">{item.requisito}</td><td className="px-4 py-3">{item.paginaClausula || "Não confirmado"}</td><td className="px-4 py-3">{item.risco || "Não confirmado"}</td><td className="px-4 py-3"><StatusPill value={item.status} /></td></tr>)}</tbody></table></div> : <HonestLimit title="Checklist não estruturado" text="Sem itens revisados. A auditoria pré-envio manterá este processo bloqueado." />)}
+
+        {activeTab === "documentos" && selected && (detailLoading && !documents.length ? <LoadingBlock /> : documents.length ? <div className="grid gap-3 md:grid-cols-2">{documents.map(document => <div key={document.id} className="rounded-xl border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><div><strong className="text-sm text-slate-900">{document.tipo}</strong><p className="text-xs text-slate-500">{document.empresa}</p></div><StatusPill value={document.computedStatus || "não confirmado"} /></div><p className="mt-3 text-xs text-slate-600">Validade: {formatDate(document.validade)}{typeof document.expiresInDays === "number" ? ` • ${document.expiresInDays} dia(s)` : ""}</p>{document.arquivoUrl ? <a href={document.arquivoUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-indigo-700">Abrir evidência <ExternalLink className="h-3 w-3" /></a> : <p className="mt-2 text-xs font-bold text-red-700">Sem evidência de arquivo</p>}</div>)}</div> : <HonestLimit title="Cofre sem evidências vinculadas" text="Documentos ausentes ou sem validade impedem a liberação para envio." />)}
+
+        {activeTab === "capacidade" && selected && <HonestLimit title="Capacidade técnica — bloqueador obrigatório" text="O schema atual ainda não estrutura atestados, quantitativos e matriz Exigência × Comprovado. O sistema não presumirá atendimento." />}
+        {activeTab === "propostas" && selected && <HonestLimit title="Proposta — bloqueador obrigatório" text="Itens, lotes, custos, tributos, margens e totais ainda não possuem modelo estruturado. Nenhuma proposta incompleta será marcada como pronta." />}
+
+        {activeTab === "lances" && selected && (
+          !selectedPersistedId ? <HonestLimit title="Copiloto indisponível para prévia" text="A simulação exige um processo persistido com pisos autorizados." /> : <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+            <div className="rounded-xl border border-slate-200 p-4"><h3 className="flex items-center gap-2 font-black text-slate-900"><Bot className="h-5 w-5 text-indigo-600" /> Copiloto de decisão</h3><p className="mt-1 text-xs text-slate-500">Simula e copia valores. Nunca envia lance a portal externo.</p><div className="mt-4 grid gap-3 sm:grid-cols-3"><Field label="Melhor lance conhecido"><input value={bestMarket} onChange={event => setBestMarket(event.target.value)} placeholder="R$ 0,00" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200" /></Field><Field label="Nosso lance (opcional)"><input value={proposedBid} onChange={event => setProposedBid(event.target.value)} placeholder="R$ 0,00" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200" /></Field><Field label="Intervalo mínimo"><input value={minimumIncrement} onChange={event => setMinimumIncrement(event.target.value)} placeholder="1,00" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200" /></Field></div><button type="button" onClick={() => void simulate()} disabled={detailLoading} className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-60">Simular com segurança</button></div>
+            <div className={`rounded-xl border p-4 ${simulation?.authorizationRequired ? "border-red-300 bg-red-50" : "border-slate-200 bg-slate-50"}`}><h3 className="font-black text-slate-900">Resultado da simulação</h3>{simulation ? <><div className="mt-3 grid grid-cols-2 gap-3 text-xs"><DataPoint label="Piso efetivo" value={simulation.effectiveFloor === null ? "Não confirmado" : formatMoney(simulation.effectiveFloor)} /><DataPoint label="Sugestão" value={simulation.suggestedBid === null ? "Não calculada" : formatMoney(simulation.suggestedBid)} /></div><p className={`mt-3 text-sm font-bold ${simulation.authorizationRequired ? "text-red-800" : "text-slate-700"}`}>{simulation.message}</p><button type="button" onClick={() => void copyBid()} disabled={!simulation.canCopy} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-40"><Clipboard className="h-4 w-4" /> {copied ? "Valor copiado" : "Copiar valor"}</button><p className="mt-2 text-[11px] font-bold text-red-700">Envio externo: bloqueado</p></> : <p className="mt-3 text-sm text-slate-500">Informe os dados para uma recomendação explicável.</p>}</div>
           </div>
         )}
 
-        {activeTab === "capacidade" && (
-          <div className="border border-slate-200 rounded-xl p-4 text-xs text-slate-700">
-            Currículo técnico digital (atestados, contratos, NF, OS e PMOC) com vinculação por pregão e quantitativos.
-          </div>
-        )}
+        {activeTab === "prazos" && selected && <div className="grid gap-3 sm:grid-cols-2"><DataCard icon={<Clock3 className="h-5 w-5" />} title="Abertura / sessão" value={formatDate(selected.dataAbertura)} /><DataCard icon={<Bell className="h-5 w-5" />} title="Fim para propostas" value={formatDate(selected.dataFimProposta)} /></div>}
+        {activeTab === "resultado" && selected && <div className="rounded-xl border border-slate-200 p-4"><h3 className="font-black text-slate-900">Fluxo pós-resultado</h3><div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-700">{["Licitação", "Contrato / ARP", "Saldo do certame", "Empenho", "OS", "Financeiro"].map((step, index) => <React.Fragment key={step}><span className={`rounded-full px-3 py-2 ${index === 0 ? "bg-indigo-600 text-white" : "bg-slate-100"}`}>{step}</span>{index < 5 && <span>→</span>}</React.Fragment>)}</div><p className="mt-3 text-xs text-slate-500">Saldo do certame é administrativo/contratual e permanece separado do estoque físico.</p></div>}
 
-        {activeTab === "propostas" && (
-          <div className="border border-slate-200 rounded-xl p-4 text-xs text-slate-700">
-            Formação de preço com custos, tributos, margem, piso técnico e piso absoluto por processo. Recomendação IA é assistiva e respeita a alçada definida.
-          </div>
-        )}
-
-        {activeTab === "sessao" && (
-          <div className="border border-slate-200 rounded-xl p-4 text-xs text-slate-700 space-y-2">
-            <p className="font-bold text-slate-900">Central inteligente de lances</p>
-            <p>Sessão com trilha de eventos e controle de sessão. O valor sugerido precisa estar acima do piso absoluto e dentro das alçadas do processo.</p>
-            <div className="rounded-lg bg-slate-50 border border-slate-200 p-2">Padrão seguro: <strong>copiar valor</strong> para o portal. Qualquer integração autorizada exige confirmação explícita antes de enviar.</div>
-          </div>
-        )}
-
-        {activeTab === "bidagent" && (
-          <div className="border border-indigo-200 bg-indigo-50 rounded-xl p-4 space-y-2">
-            <h3 className="font-bold text-indigo-900 flex items-center gap-2"><Bot className="w-4 h-4" /> Simulador seguro de lances</h3>
-            <p className="text-xs text-indigo-900">
-              Calcula margem e limite operacional, mas <strong>não envia lances automaticamente</strong>.
-            </p>
-            <ul className="text-xs text-indigo-800 list-disc pl-4 space-y-1">
-              <li>Exibe piso técnico, piso absoluto e margem antes de qualquer ação.</li>
-              <li>O operador copia o valor e registra a decisão na trilha de auditoria.</li>
-              <li>Se houver integração autorizada, exige confiança suficiente e confirmação humana.</li>
-              <li>Alerta imediatamente quando o valor sugerido estiver abaixo do limite permitido.</li>
-            </ul>
-          </div>
-        )}
-
-        {activeTab === "prazos" && (
-          <div className="border border-slate-200 rounded-xl p-4 text-xs text-slate-700"><strong className="text-slate-900">Prazos e marcos</strong><p className="mt-1">Centraliza abertura, impugnação, esclarecimentos, recursos e validade da proposta. Alertas devem ser derivados das datas registradas no processo.</p></div>
-        )}
-
-        {activeTab === "fontes" && (
-          <div className="space-y-3 text-xs">
-            <p className="text-slate-600">A fonte e a data da última coleta acompanham cada oportunidade. Portais sem API autorizada permanecem como link manual, sem automação de acesso.</p>
-            {[['PNCP', 'Consulta integrada', 'Atualize pelo botão “Buscar oportunidades”'], ['Compras.gov.br', 'Aguardando conector autorizado', 'Registrar link manual até a autorização'], ['Portais locais', 'Manual', 'Abrir apenas o link oficial do edital']].map(([source, state, detail]) => <div key={source} className="border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-3"><div><p className="font-bold text-slate-900">{source}</p><p className="text-slate-500 mt-0.5">{detail}</p></div><span className="rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-700">{state}</span></div>)}
-          </div>
-        )}
-
-        {(activeTab === "pendencias" || activeTab === "contratos" || activeTab === "empenhos" || activeTab === "historico" || activeTab === "relatorios") && (
-          <div className="border border-slate-200 rounded-xl p-4 text-xs text-slate-700 flex items-center gap-2">
-            <BarChart3 className="w-4 h-4 text-indigo-600" />
-            Estrutura preparada para auditoria completa, pendências pós-disputa, contratos e relatórios gerenciais.
-          </div>
-        )}
+        {activeTab === "fontes" && <div className="grid gap-3 lg:grid-cols-2">{sources.map(source => <div key={source.id} className="rounded-xl border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-black text-slate-900">{source.name}</h3><p className="mt-1 text-xs text-slate-500">{source.note}</p></div><StatusPill value={source.status} /></div><div className="mt-3 flex flex-wrap gap-3 text-xs font-bold"><a href={source.officialUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-indigo-700"><Link2 className="h-3 w-3" /> Site oficial</a>{source.docsUrl && <a href={source.docsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-indigo-700"><ExternalLink className="h-3 w-3" /> Documentação</a>}</div></div>)}</div>}
+        {activeTab === "historico" && selected && <HonestLimit title="Auditoria server-side ativa" text="Criação, revisão de checklist, documentos, preflight registrado e decisões de lance geram eventos no backend. A consulta consolidada do histórico ficará bloqueada até unificar as duas trilhas existentes sem alterar o schema." />}
       </div>
 
       {showNewModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 p-4 flex items-center justify-center">
-          <div className="bg-white rounded-xl w-full max-w-2xl p-5 border">
-            <h3 className="text-lg font-bold text-slate-900 mb-1">Nova Licitação</h3>
-            <p className="text-xs text-slate-500 mb-4">Cadastro do processo + preparação para análise IA e Bid Agent.</p>
-            <form onSubmit={handleCreate} className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <Field label="Órgão">
-                <input className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Ex.: Prefeitura de Tanabi" value={newLic.orgao} onChange={(e) => setNewLic((s) => ({ ...s, orgao: e.target.value }))} required />
-              </Field>
-              <Field label="Modalidade">
-                <select className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" value={newLic.modalidade} onChange={(e) => setNewLic((s) => ({ ...s, modalidade: e.target.value }))}>
-                  <option>Pregão Eletrônico</option><option>Concorrência</option><option>Dispensa</option><option>Inexigibilidade</option><option>Chamamento Público</option>
-                </select>
-              </Field>
-              <Field label="Número do pregão">
-                <input className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Ex.: PE 088/2026" value={newLic.numeroPregao} onChange={(e) => setNewLic((s) => ({ ...s, numeroPregao: e.target.value }))} />
-              </Field>
-              <Field label="Número do processo">
-                <input className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Número administrativo" value={newLic.numeroProcesso} onChange={(e) => setNewLic((s) => ({ ...s, numeroProcesso: e.target.value }))} />
-              </Field>
-              <Field label="Objeto da licitação" className="sm:col-span-2">
-                <input className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Descrição resumida do objeto" value={newLic.titulo} onChange={(e) => setNewLic((s) => ({ ...s, titulo: e.target.value }))} required />
-              </Field>
-              <Field label="Descrição complementar" className="sm:col-span-2">
-                <textarea className="w-full min-h-20 resize-y border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Escopo, itens, exigências iniciais ou observações" value={newLic.descricao} onChange={(e) => setNewLic((s) => ({ ...s, descricao: e.target.value }))} />
-              </Field>
-              <Field label="Plataforma">
-                <input className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Ex.: ComprasGov, BLL, Licitanet" value={newLic.plataforma} onChange={(e) => setNewLic((s) => ({ ...s, plataforma: e.target.value }))} />
-              </Field>
-              <Field label="Valor estimado">
-                <input className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="R$ 0,00" value={newLic.valorEstimado} onChange={(e) => setNewLic((s) => ({ ...s, valorEstimado: e.target.value }))} />
-              </Field>
-              <Field label="Data da sessão">
-                <input className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" type="date" value={newLic.dataAbertura} onChange={(e) => setNewLic((s) => ({ ...s, dataAbertura: e.target.value }))} />
-              </Field>
-              <Field label="Hora da sessão">
-                <input className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" type="time" value={newLic.horaSessao} onChange={(e) => setNewLic((s) => ({ ...s, horaSessao: e.target.value }))} />
-              </Field>
-              <Field label="Tipo de julgamento">
-                <select className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" value={newLic.tipoJulgamento} onChange={(e) => setNewLic((s) => ({ ...s, tipoJulgamento: e.target.value }))}>
-                  <option value="menor_preco_global">Menor preço global</option><option value="menor_preco_item">Menor preço por item</option><option value="menor_preco_lote">Menor preço por lote</option><option value="maior_desconto">Maior desconto</option><option value="tecnica_preco">Técnica e preço</option>
-                </select>
-              </Field>
-              <Field label="Modo de disputa">
-                <select className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" value={newLic.modoDisputa} onChange={(e) => setNewLic((s) => ({ ...s, modoDisputa: e.target.value }))}>
-                  <option value="aberto">Aberto</option><option value="aberto_fechado">Aberto e fechado</option><option value="fechado_aberto">Fechado e aberto</option><option value="fechado">Fechado</option>
-                </select>
-              </Field>
-              <Field label="Responsável interno">
-                <input className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Usuário responsável" value={newLic.responsavelInterno} onChange={(e) => setNewLic((s) => ({ ...s, responsavelInterno: e.target.value }))} />
-              </Field>
-              <Field label="Link do edital" className="sm:col-span-2">
-                <input className="w-full border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" type="url" placeholder="https://..." value={newLic.linkEdital} onChange={(e) => setNewLic((s) => ({ ...s, linkEdital: e.target.value }))} />
-              </Field>
-              <p className="sm:col-span-2 text-slate-500">O edital poderá ser anexado e analisado com IA após a migração do banco e a configuração da credencial central.</p>
-              <div className="sm:col-span-2 flex justify-end gap-2 pt-2 border-t">
-                <button type="button" onClick={() => setShowNewModal(false)} className="px-3 py-2 rounded-lg bg-slate-100 font-semibold">Cancelar</button>
-                <button disabled={saving} type="submit" className="px-3 py-2 rounded-lg bg-indigo-600 text-white font-semibold">
-                  {saving ? "Salvando..." : "Salvar licitação"}
-                </button>
-              </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" role="presentation" onMouseDown={event => { if (event.currentTarget === event.target) setShowNewModal(false); }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="new-lic-title" className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3"><div><h3 id="new-lic-title" className="text-lg font-black text-slate-900">Nova licitação</h3><p className="text-xs text-slate-500">Cadastro manual em rascunho. Prontidão será calculada pelo backend.</p></div><button type="button" onClick={() => setShowNewModal(false)} aria-label="Fechar" className="rounded-lg p-2 hover:bg-slate-100"><X className="h-5 w-5" /></button></div>
+            <form onSubmit={handleCreate} className="mt-4 grid gap-3 text-xs sm:grid-cols-2">
+              <Field label="Objeto da licitação" className="sm:col-span-2"><input ref={titleInputRef} required value={newLic.titulo} onChange={event => setNewLic(state => ({ ...state, titulo: event.target.value }))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200" /></Field>
+              <Field label="Órgão"><input required value={newLic.orgao} onChange={event => setNewLic(state => ({ ...state, orgao: event.target.value }))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200" /></Field>
+              <Field label="UF"><input maxLength={2} value={newLic.uf} onChange={event => setNewLic(state => ({ ...state, uf: event.target.value.toUpperCase() }))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200" /></Field>
+              <Field label="Número do pregão"><input value={newLic.numeroPregao} onChange={event => setNewLic(state => ({ ...state, numeroPregao: event.target.value }))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200" /></Field>
+              <Field label="Processo administrativo"><input value={newLic.numeroProcesso} onChange={event => setNewLic(state => ({ ...state, numeroProcesso: event.target.value }))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200" /></Field>
+              <Field label="Modalidade"><select value={newLic.modalidade} onChange={event => setNewLic(state => ({ ...state, modalidade: event.target.value }))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"><option>Pregão Eletrônico</option><option>Concorrência</option><option>Dispensa</option><option>Inexigibilidade</option></select></Field>
+              <Field label="Plataforma"><input value={newLic.plataforma} onChange={event => setNewLic(state => ({ ...state, plataforma: event.target.value }))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200" /></Field>
+              <Field label="Abertura"><input type="datetime-local" value={newLic.dataAbertura} onChange={event => setNewLic(state => ({ ...state, dataAbertura: event.target.value }))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200" /></Field>
+              <Field label="Fim das propostas"><input type="datetime-local" value={newLic.dataFimProposta} onChange={event => setNewLic(state => ({ ...state, dataFimProposta: event.target.value }))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200" /></Field>
+              <Field label="Valor estimado"><input value={newLic.valorEstimado} onChange={event => setNewLic(state => ({ ...state, valorEstimado: event.target.value }))} placeholder="R$ 0,00" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200" /></Field>
+              <Field label="Responsável"><input value={newLic.responsavelInterno} onChange={event => setNewLic(state => ({ ...state, responsavelInterno: event.target.value }))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200" /></Field>
+              <Field label="Link oficial do edital" className="sm:col-span-2"><input type="url" value={newLic.linkEdital} onChange={event => setNewLic(state => ({ ...state, linkEdital: event.target.value }))} placeholder="https://..." className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200" /></Field>
+              <Field label="Descrição complementar" className="sm:col-span-2"><textarea value={newLic.descricao} onChange={event => setNewLic(state => ({ ...state, descricao: event.target.value }))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 min-h-24 resize-y" /></Field>
+              <div className="sm:col-span-2 flex justify-end gap-2 border-t pt-4"><button type="button" onClick={() => setShowNewModal(false)} className="rounded-lg bg-slate-100 px-4 py-2 font-bold">Cancelar</button><button type="submit" disabled={saving} className="rounded-lg bg-indigo-600 px-4 py-2 font-bold text-white disabled:opacity-60">{saving ? "Salvando..." : "Salvar rascunho"}</button></div>
             </form>
           </div>
         </div>
       )}
-    </div>
+    </section>
   );
 }
 
-function Field({ label, className = "", children }: { label: string; className?: string; children: React.ReactNode }) {
-  return <label className={`grid gap-1 font-semibold text-slate-700 ${className}`}><span>{label}</span>{children}</label>;
+function Metric({ title, value, icon, help }: { title: string; value: string; icon: React.ReactNode; help?: string }) {
+  return <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="flex items-center justify-between text-xs font-bold text-slate-500"><span>{title}</span>{icon}</div><div className="mt-1 text-2xl font-black text-slate-900">{value}</div>{help && <p className="mt-1 text-[10px] text-slate-400">{help}</p>}</div>;
 }
 
-function Card({ title, value, icon }: { title: string; value: string; icon: React.ReactNode }) {
-  return (
-    <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
-      <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
-        <span>{title}</span>
-        {icon}
-      </div>
-      <div className="mt-1 text-2xl font-black text-slate-900">{value}</div>
-    </div>
-  );
+function HealthBadge({ health }: { health: SourceHealth }) {
+  const healthy = health.status === "healthy";
+  return <span className={`rounded-full px-3 py-1 text-xs font-bold ${healthy ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{healthy ? "PNCP saudável" : "PNCP degradado"} • {health.pagesRead ?? 0} pág. • {health.accepted ?? 0} aceitos</span>;
 }
+
+function SelectedProcess({ item, preview, onBack }: { item: Licitacao | null; preview: boolean; onBack: () => void }) {
+  if (!item) return <HonestLimit title="Selecione um processo no Radar" text="As etapas operacionais são sempre vinculadas a uma oportunidade ou licitação específica." />;
+  return <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="flex flex-wrap gap-2"><span className="rounded-full bg-indigo-600 px-2 py-1 text-[10px] font-bold uppercase text-white">{preview ? "Prévia PNCP" : "Processo ProAR"}</span><span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold text-slate-700">{item.status || "Não confirmado"}</span></div><h3 className="mt-2 font-black text-slate-900">{item.titulo}</h3><p className="text-xs text-slate-600">{item.orgao} • {item.numeroPregao || item.numeroProcesso || "Número não confirmado"}</p></div><button type="button" onClick={onBack} className="text-xs font-bold text-indigo-700 underline">Voltar ao Radar</button></div></div>;
+}
+
+function PreflightCard({ check }: { check: PreflightCheck }) {
+  const styles = check.status === "PASS" ? "border-emerald-200 bg-emerald-50" : check.status === "WARNING" ? "border-amber-200 bg-amber-50" : check.status === "BLOCKER" ? "border-red-200 bg-red-50" : "border-slate-200 bg-slate-50";
+  const Icon = check.status === "PASS" ? CheckCircle2 : check.status === "BLOCKER" ? AlertTriangle : FileCheck;
+  return <div className={`rounded-xl border p-4 ${styles}`}><div className="flex items-start gap-3"><Icon className="mt-0.5 h-5 w-5 shrink-0" /><div><div className="flex flex-wrap items-center gap-2"><strong className="text-sm text-slate-900">{check.code}</strong><StatusPill value={check.status} /></div><p className="mt-1 text-xs text-slate-700">{check.message}</p><p className="mt-2 text-[11px] text-slate-500"><strong>Origem:</strong> {check.origin}</p><p className="text-[11px] text-slate-500"><strong>Correção:</strong> {check.correctiveAction}</p></div></div></div>;
+}
+
+function HonestLimit({ title, text }: { title: string; text: string }) {
+  return <div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><h3 className="flex items-center gap-2 font-black text-amber-950"><ShieldAlert className="h-5 w-5" /> {title}</h3><p className="mt-2 text-sm text-amber-900">{text}</p></div>;
+}
+
+function LoadingBlock() { return <div className="rounded-xl border border-slate-200 p-10 text-center text-sm text-slate-500"><Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" /> Carregando dados vinculados...</div>; }
+function StatusPill({ value }: { value: string }) { const normalized = value.toLowerCase(); const good = ["pass", "atendido", "vigente", "active", "healthy"].some(part => normalized.includes(part)); const bad = ["block", "critico", "vencido", "indisponivel", "authorization"].some(part => normalized.includes(part)); return <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${good ? "bg-emerald-100 text-emerald-800" : bad ? "bg-red-100 text-red-800" : "bg-slate-100 text-slate-700"}`}>{value.replaceAll("_", " ")}</span>; }
+function Field({ label, className = "", children }: { label: string; className?: string; children: React.ReactNode }) { return <label className={`grid gap-1 font-bold text-slate-700 ${className}`}><span>{label}</span>{children}</label>; }
+function DataPoint({ label, value }: { label: string; value: string }) { return <div><div className="text-slate-500">{label}</div><div className="mt-1 font-black text-slate-900">{value}</div></div>; }
+function DataCard({ icon, title, value }: { icon: React.ReactNode; title: string; value: string }) { return <div className="rounded-xl border border-slate-200 p-4"><div className="flex items-center gap-2 text-slate-500">{icon}<span className="text-xs font-bold">{title}</span></div><p className="mt-2 font-black text-slate-900">{value}</p></div>; }
