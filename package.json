@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint . --no-config-lookup --no-warn-ignored",
     "typecheck": "tsc --noEmit",
+    "test": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push"
   },
