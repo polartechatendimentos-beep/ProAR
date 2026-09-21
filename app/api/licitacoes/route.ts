@@ -47,6 +47,16 @@ async function fetchPage(dataFinal: string, uf: string, page = 1) {
   return Array.isArray(payload?.data) ? payload.data as PncpTender[] : [];
 }
 
+async function fetchPages(dataFinal: string, uf: string, maxPages = 5) {
+  const items: PncpTender[] = [];
+  for (let page = 1; page <= maxPages; page += 1) {
+    const current = await fetchPage(dataFinal, uf, page);
+    items.push(...current);
+    if (current.length < 50) break;
+  }
+  return items;
+}
+
 type ComprasTender = {
   numeroControlePNCP?: string; anoCompraPncp?: number; sequencialCompraPncp?: number;
   objetoCompra?: string; modalidadeNome?: string; dataEncerramentoPropostaPncp?: string;
@@ -118,7 +128,7 @@ export async function searchAutomaticTenders(options?: { start?: Date; end?: Dat
   // As consultas estaduais rodam simultaneamente. Assim, uma fonte lenta não
   // bloqueia as demais nem estoura o limite da função serverless da Vercel.
   const [pncpSettled, comprasSettled] = await Promise.all([
-    Promise.allSettled(UFS.map(uf => fetchPage(dataFinal, uf))),
+    Promise.allSettled(UFS.map(uf => fetchPages(dataFinal, uf))),
     Promise.allSettled(MODALITIES.map(code => fetchCompras(publicationStart, publicationEnd, code))),
   ]);
   const raw = [
