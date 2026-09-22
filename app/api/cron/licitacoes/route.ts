@@ -60,7 +60,7 @@ async function processCustomerReminders() {
   return { sent, pending: due.length - sent };
 }
 
-export async function runTenderMonitor() {
+async function runTenderMonitor() {
   const store = await loadStore();
   const result = await searchAutomaticTenders({ radius: 300 });
   const known = new Set(store.items.map(item => item.numeroControlePNCP));

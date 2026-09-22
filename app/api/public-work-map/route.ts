@@ -8,6 +8,7 @@ const safeCompany = (value: unknown) => String(value || "polartech-principal").r
 const safeWork = (value: unknown) => String(value || "reserva-imperial").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 100) || "reserva-imperial";
 const mapId = (company: unknown, work: unknown) => { const companyId=safeCompany(company); const workId=safeWork(work); return workId === "reserva-imperial" ? `workmap-${companyId}` : `workmap-${companyId}-${workId}`; };
 const headers = (key: string) => ({ apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" });
+const publicView = (map: Record<string, unknown> | null | undefined) => map ? { ...map, externalAccess: undefined, houses: Array.isArray(map.houses) ? map.houses.map(house => { const item = house as Record<string, unknown>; const { externalObservations: _externalObservations, ...safeHouse } = item; return safeHouse; }) : [] } : null;
 
 export async function GET(request: NextRequest) {
   const requestedCompany = request.nextUrl.searchParams.get("company");
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
   if (!response.ok) return NextResponse.json({ error: "Não foi possível carregar o mapa." }, { status: 502 });
   const rows = await response.json() as { payload?: Record<string, unknown> }[];
   const map = rows.find(row => row.payload?.token === token)?.payload;
-  return map ? NextResponse.json({ map }) : NextResponse.json({ error: "Link não localizado ou desativado." }, { status: 404 });
+  return map ? NextResponse.json({ map: publicView(map) }) : NextResponse.json({ error: "Link não localizado ou desativado." }, { status: 404 });
 }
 
 export async function PUT(request: NextRequest) {
@@ -47,7 +48,7 @@ export async function PUT(request: NextRequest) {
   const baseRevision = Number(body.baseRevision || 0);
   if (currentMap && !body.force && baseRevision !== currentRevision) return NextResponse.json({ error: "A base online possui uma versão mais recente.", conflict: true, map: currentMap }, { status: 409 });
   const token = currentMap?.token || randomBytes(24).toString("base64url");
-  const payload = { companyId, workId, workName: String(body.workName || currentMap?.workName || body.title || "Obra"), token, revision: currentRevision + 1, title: String(body.title || "Acompanhamento da obra"), houses: Array.isArray(body.houses) ? body.houses : [], updatedAt: new Date().toISOString() };
+  const payload = { companyId, workId, workName: String(body.workName || currentMap?.workName || body.title || "Obra"), token, revision: currentRevision + 1, title: String(body.title || "Acompanhamento da obra"), houses: Array.isArray(body.houses) ? body.houses : [], externalAccess: Array.isArray(body.externalAccess) ? body.externalAccess : currentMap?.externalAccess ?? [], updatedAt: new Date().toISOString() };
   const saveResponse = await fetch(`${url}/rest/v1/proar_state?on_conflict=id`, { method: "POST", headers: { ...headers(key), Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ id, payload, updated_at: new Date().toISOString() }) });
   return saveResponse.ok ? NextResponse.json({ saved: true, token, map: payload }) : NextResponse.json({ error: "Não foi possível publicar o mapa." }, { status: 502 });
 }
