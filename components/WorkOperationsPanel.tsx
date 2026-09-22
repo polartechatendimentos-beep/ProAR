@@ -5,7 +5,7 @@ import {
   Building2, Plus, ExternalLink, MapPin, AlertTriangle, 
   CheckCircle2, Clock, Wrench, Layers, ChevronRight, Filter, 
   UserCheck, Shield, FileText, ArrowUpRight, CheckSquare, RefreshCw,
-  Lock, Key, Copy, Check, Send, RotateCcw, X
+  Lock, Key, Copy, Check, Send, RotateCcw, X, Search
 } from "lucide-react";
 
 export const OBRA_STATUS_LIST = [
@@ -88,8 +88,13 @@ export function WorkOperationsPanel() {
   const [senhaApontamentos, setSenhaApontamentos] = useState("123456");
   const [submitting, setSubmitting] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+  const [workQuery, setWorkQuery] = useState("");
+  const [workStatusFilter, setWorkStatusFilter] = useState("Todas");
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchWorksAndFindings = async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
       const [resWorks, resFindings] = await Promise.all([
         fetch("/api/work-projects"),
@@ -99,50 +104,16 @@ export function WorkOperationsPanel() {
       const jsonWorks = await resWorks.json();
       const jsonFindings = await resFindings.json();
 
-      if (jsonWorks.success && jsonWorks.data.length > 0) {
-        setWorks(jsonWorks.data);
-      } else {
-        setWorks([
-          {
-            id: 1,
-            codigo: "OBR-2026-042",
-            nome: "Instalação VRF Central - Hospital Regional / Bloco Cirúrgico",
-            clienteNome: "Secretaria de Saúde do Estado de SP",
-            endereco: "Av. Philadelpho Manoel Gouveia Neto, 1850",
-            cidade: "São José do Rio Preto",
-            progresso: 65,
-            status: "ag_tubulacao_forcada",
-            tokenPublico: "obr-demo-token-proar-2026",
-            senhaApontamentos: "123456",
-            acessoApontamentosAtivo: true,
-            valorContrato: "185000.00",
-            engenheiroResponsavel: "Eng. Mecânico Responsável (CREA-SP)",
-            equipe: "TEAM 11 ProAR",
-          },
-          {
-            id: 2,
-            codigo: "OBR-2026-055",
-            nome: "Infraestrutura Frigorígena - Residencial Damha V (Lotes 12 a 24)",
-            clienteNome: "Construtora & Incorporadora Noroeste",
-            endereco: "Rodovia Washington Luís, KM 438",
-            cidade: "Mirassol",
-            progresso: 32,
-            status: "ag_frigorigena",
-            tokenPublico: "damha-v-proar-mirassol",
-            senhaApontamentos: "damha2026",
-            acessoApontamentosAtivo: true,
-            valorContrato: "94500.00",
-            engenheiroResponsavel: "Eng. Eletricista / CREA-SP Ativo",
-            equipe: "TEAM 02",
-          },
-        ]);
-      }
+      if (!resWorks.ok || !jsonWorks.success) throw new Error(jsonWorks.error || "Não foi possível carregar as obras.");
+      setWorks(Array.isArray(jsonWorks.data) ? jsonWorks.data : []);
 
       if (jsonFindings.success && jsonFindings.data) {
         setFindings(jsonFindings.data);
       }
     } catch (e) {
       console.error(e);
+      setWorks([]);
+      setLoadError(e instanceof Error ? e.message : "Não foi possível carregar as obras.");
     } finally {
       setLoading(false);
     }
@@ -310,6 +281,17 @@ export function WorkOperationsPanel() {
     return true;
   });
 
+  const visibleWorks = works.filter((work) => {
+    const normalizedQuery = workQuery.trim().toLocaleLowerCase("pt-BR");
+    const matchesQuery = !normalizedQuery || [work.codigo, work.nome, work.clienteNome, work.endereco, work.cidade, work.equipe]
+      .filter(Boolean)
+      .join(" ")
+      .toLocaleLowerCase("pt-BR")
+      .includes(normalizedQuery);
+    const matchesStatus = workStatusFilter === "Todas" || work.status === workStatusFilter;
+    return matchesQuery && matchesStatus;
+  });
+
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       {/* Top Header */}
@@ -439,8 +421,27 @@ export function WorkOperationsPanel() {
         {/* ABA 1: LISTA DE OBRAS + CONFIGURAÇÃO DE SENHA (ITEM 12)       */}
         {/* ============================================================== */}
         {activeSubTab === "lista" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {works.map((w) => {
+          <div className="space-y-5">
+            <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+              <label className="relative flex-1 min-w-0">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input value={workQuery} onChange={(event) => setWorkQuery(event.target.value)} placeholder="Buscar por obra, cliente, cidade, código ou equipe..." className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+              </label>
+              <div className="flex items-center gap-2">
+                <select value={workStatusFilter} onChange={(event) => setWorkStatusFilter(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
+                  <option value="Todas">Todas as etapas</option>
+                  {OBRA_STATUS_LIST.map((status) => <option key={status.id} value={status.id}>{status.label}</option>)}
+                </select>
+                <button type="button" onClick={() => void fetchWorksAndFindings()} disabled={loading} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:border-blue-300 disabled:opacity-60">
+                  <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Atualizar
+                </button>
+              </div>
+            </div>
+            {loadError && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-800">{loadError} Nenhum dado de demonstração foi inserido.</div>}
+            {!loading && !loadError && works.length === 0 && <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center"><Building2 className="mx-auto mb-3 h-8 w-8 text-slate-300" /><p className="font-bold text-slate-700">Nenhuma obra cadastrada</p><p className="mt-1 text-xs text-slate-500">Cadastre uma obra ou atualize a lista para consultar os dados reais da empresa.</p></div>}
+            {!loading && works.length > 0 && visibleWorks.length === 0 && <div className="rounded-xl border border-slate-200 bg-white px-6 py-8 text-center text-xs text-slate-500">Nenhuma obra corresponde aos filtros atuais.</div>}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {visibleWorks.map((w) => {
               const currentStatusObj = OBRA_STATUS_LIST.find((s) => s.id === w.status) || OBRA_STATUS_LIST[1];
               return (
                 <div
@@ -559,6 +560,7 @@ export function WorkOperationsPanel() {
                 </div>
               );
             })}
+            </div>
           </div>
         )}
 

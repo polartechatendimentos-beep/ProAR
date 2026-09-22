@@ -223,7 +223,7 @@ export function PublicContractsPanel({ canEdit = true }: { canEdit?: boolean }) 
       const response = await fetch("/api/licitacoes/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uf, days: 14, maxPages: 2, terms: query.trim() ? [query.trim()] : undefined }),
+        body: JSON.stringify({ uf, days: 30, maxPages: 3, openOnly: true, terms: query.trim() ? [query.trim()] : undefined }),
         signal: controller.signal,
       });
       const json = await response.json();
