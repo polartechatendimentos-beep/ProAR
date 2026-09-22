@@ -32,21 +32,28 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}));
     getEffectiveCompanyId(session, body.companyId ? Number(body.companyId) : null);
 
-    const uf = String(body.uf || "SP").trim().toUpperCase();
+    const uf = body.uf === undefined ? "SP" : String(body.uf).trim().toUpperCase() || null;
     const days = Math.max(1, Math.min(60, Number(body.days) || 30));
-    const maxPages = Math.max(1, Math.min(5, Number(body.maxPages) || 5));
+    const maxPages = Math.max(1, Math.min(5, Number(body.maxPages) || 3));
+    const openOnly = body.openOnly !== false;
     const terms = parseTerms(body.terms);
     const modalityCodes = Array.isArray(body.modalityCodes) && body.modalityCodes.length
       ? body.modalityCodes.map(Number).filter(Number.isFinite)
       : MODALITY_CODES;
 
-    const result = await searchPncp({ uf, days, maxPages, terms, modalityCodes });
+    const result = await searchPncp({ uf: uf ?? undefined, days, maxPages, terms, modalityCodes, openOnly });
     const normalizedTerms = terms.map(normalizedText).filter(Boolean);
 
     const data = (result.data as ProcurementRecord[]).filter(item => {
       const searchable = normalizedText([
         item.titulo,
         item.descricao,
+        item.orgao,
+        item.unidade,
+        item.numeroPregao,
+        item.numeroProcesso,
+        item.modalidade,
+        item.statusOriginal,
         ...(Array.isArray(item.items) ? item.items : []),
       ].join(" "));
       return normalizedTerms.some(term => searchable.includes(term));
@@ -66,13 +73,15 @@ export async function POST(request: Request) {
       data,
       health,
       message: data.length
-        ? `${data.length} oportunidade(s) encontrada(s) no PNCP para ${uf}.`
+        ? `${data.length} oportunidade(s) ${openOnly ? "com propostas abertas" : "publicada(s)"} encontrada(s) no PNCP${uf ? ` para ${uf}` : ""}.`
         : result.success
           ? "Nenhuma oportunidade encontrada no PNCP para os filtros atuais."
           : "Consulta parcial: a fonte PNCP apresentou indisponibilidade durante a coleta.",
       persistence: "Resultados oficiais carregados para conferência; nenhum dado fictício é criado.",
+      endpoint: openOnly ? "https://pncp.gov.br/api/consulta/v1/contratacoes/proposta" : "https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao",
+      openOnly,
       complementarySources: ["Compras.gov.br", "BLL Compras", "Portal de Compras Públicas", "Licitanet", "BBMNET", "Licitações-e"],
-    }, { status: result.success || data.length ? 200 : 502 });
+    }, { status: result.success || data.length > 0 ? 200 : 502 });
   } catch (error) {
     return NextResponse.json({
       success: false,
