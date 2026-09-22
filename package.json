@@ -7,10 +7,12 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "NODE_ENV=production next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm run lint && npm run build",
+    "validate:fast": "npm run typecheck && npm run lint && npm test",
+    "validate": "npm run validate:fast && npm run build",
+    "check": "npm run validate",
     "test": "node --test",
     "lint": "eslint app/api/licitacoes/route.ts",
     "db:generate": "drizzle-kit generate"

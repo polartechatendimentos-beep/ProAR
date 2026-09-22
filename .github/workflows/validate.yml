@@ -2,8 +2,21 @@ name: Validar ProAR
 
 on:
   pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
   push:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+
+concurrency:
+  group: proar-validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   validate:
@@ -15,7 +28,5 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: npm run typecheck
-      - run: npm run lint
-      - run: npm test
-      - run: npm run build
+      - name: Quality gate
+        run: npm run validate
