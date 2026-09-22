@@ -5,7 +5,7 @@ const PNCP_URL = "https://pncp.gov.br/api/consulta/v1/contratacoes/proposta";
 const PNCP_API_BASE = "https://pncp.gov.br/api/pncp";
 const COMPRAS_URL = "https://dadosabertos.compras.gov.br/modulo-contratacoes/1_consultarContratacoes_PNCP_14133";
 const UFS = ["SP", "MG", "MS", "PR", "GO"] as const;
-const MODALITIES = [4, 6, 8, 9, 12] as const;
+const MODALITIES = [4, 5, 6, 7, 8, 9, 12] as const;
 const REQUEST_TIMEOUT_MS = 6500;
 const climateTerms = /ar\s*-?\s*condicionado|condicionador(?:es)? de ar|climatiza|refrigera|pmoc|hvac|split|multi\s*split|cassete|piso\s*teto|evaporador|condensador|chiller|vrf|fluido refrigerante|g[aá]s refrigerante|compressor frigor[ií]fico/i;
 const excludedTerms = /purificador(?:es)? de [aá]gua|equipamento fotodocumentador|mobili[aá]rio|geladeira dom[eé]stica|bebedouro(?!.*refrigera)/i;
@@ -35,8 +35,8 @@ function identifySource(item: PncpTender): PncpTender["sourcePortal"] {
   return "PNCP";
 }
 
-async function fetchPage(dataFinal: string, uf: string, page = 1) {
-  const query = new URLSearchParams({ dataFinal, pagina: String(page), tamanhoPagina: "50", uf });
+async function fetchPage(dataInicial: string, dataFinal: string, uf: string, page = 1) {
+  const query = new URLSearchParams({ dataInicial, dataFinal, pagina: String(page), tamanhoPagina: "50", uf });
   const response = await fetch(`${PNCP_URL}?${query}`, {
     headers: { Accept: "application/json" },
     cache: "no-store",
@@ -47,10 +47,10 @@ async function fetchPage(dataFinal: string, uf: string, page = 1) {
   return Array.isArray(payload?.data) ? payload.data as PncpTender[] : [];
 }
 
-async function fetchPages(dataFinal: string, uf: string, maxPages = 5) {
+async function fetchPages(dataInicial: string, dataFinal: string, uf: string, maxPages = 5) {
   const items: PncpTender[] = [];
   for (let page = 1; page <= maxPages; page += 1) {
-    const current = await fetchPage(dataFinal, uf, page);
+    const current = await fetchPage(dataInicial, dataFinal, uf, page);
     items.push(...current);
     if (current.length < 50) break;
   }
@@ -121,6 +121,7 @@ async function readMonitorStore() {
 export async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radius?: number; all?: boolean; term?: string }) {
   const today = options?.start ?? new Date();
   const end = options?.end ?? new Date(today.getTime() + 60 * 86400000);
+  const dataInicial = today.toISOString().slice(0, 10).replaceAll("-", "");
   const dataFinal = end.toISOString().slice(0, 10).replaceAll("-", "");
   const publicationStart = new Date(today.getTime() - 60 * 86400000).toISOString().slice(0, 10);
   const publicationEnd = today.toISOString().slice(0, 10);
@@ -128,7 +129,7 @@ export async function searchAutomaticTenders(options?: { start?: Date; end?: Dat
   // As consultas estaduais rodam simultaneamente. Assim, uma fonte lenta não
   // bloqueia as demais nem estoura o limite da função serverless da Vercel.
   const [pncpSettled, comprasSettled] = await Promise.all([
-    Promise.allSettled(UFS.map(uf => fetchPages(dataFinal, uf))),
+    Promise.allSettled(UFS.map(uf => fetchPages(dataInicial, dataFinal, uf))),
     Promise.allSettled(MODALITIES.map(code => fetchCompras(publicationStart, publicationEnd, code))),
   ]);
   const raw = [
