@@ -143,11 +143,12 @@ export async function searchPncp(options: {
   const start = new Date();
   start.setDate(start.getDate() - days);
   const end = new Date();
-  end.setDate(end.getDate() + 30);
+  end.setDate(end.getDate() + (openOnly ? days : 0));
   const accepted: ProcurementRecord[] = [];
   let rejected = 0;
   let pagesRead = 0;
   let httpStatus = 200;
+  let degradedError: Error | null = null;
 
   for (const modalityCode of modalityCodes) {
     for (let page = 1; page <= maxPages; page += 1) {
@@ -189,45 +190,32 @@ export async function searchPncp(options: {
         }
         if (!hasNextPage(payload, page, rows)) break;
       } catch (error) {
-        return {
-          success: false,
-          source: "PNCP",
-          data: accepted,
-          health: {
-            status: accepted.length ? "degraded" : "unavailable",
-            lastAttemptAt: collectedAt,
-            lastSuccessAt: accepted.length ? collectedAt : null,
-            durationMs: Date.now() - startedAt,
-            httpStatus,
-            pagesRead,
-            accepted: accepted.length,
-            rejected,
-            errorCode: error instanceof Error ? error.message : "PNCP_ERROR",
-            errorMessage: "A fonte oficial ficou indisponível; resultados já carregados foram preservados.",
-            docsUrl: PNCP_DOCS,
-            endpoint: openOnly ? "contratacoes/proposta" : "contratacoes/publicacao",
-            openOnly,
-          },
-        };
+        degradedError = error instanceof Error ? error : new Error("PNCP_ERROR");
+        break;
       }
     }
   }
 
   const unique = Array.from(new Map(accepted.map(item => [String(item.numeroControlePncp || item.fingerprint), item])).values());
+  const healthStatus = degradedError ? (pagesRead || unique.length ? "degraded" : "unavailable") : "healthy";
   return {
-    success: true,
+    success: Boolean(pagesRead || unique.length),
     source: "PNCP",
     data: unique,
     health: {
-      status: "healthy",
+      status: healthStatus,
       lastAttemptAt: collectedAt,
-      lastSuccessAt: collectedAt,
+      lastSuccessAt: pagesRead ? collectedAt : null,
       durationMs: Date.now() - startedAt,
       httpStatus,
       pagesRead,
       accepted: unique.length,
       rejected,
       duplicates: accepted.length - unique.length,
+      ...(degradedError ? {
+        errorCode: degradedError.message,
+        errorMessage: "A fonte oficial ficou parcialmente indisponível; resultados já carregados foram preservados.",
+      } : {}),
       docsUrl: PNCP_DOCS,
       endpoint: openOnly ? "contratacoes/proposta" : "contratacoes/publicacao",
       openOnly,
