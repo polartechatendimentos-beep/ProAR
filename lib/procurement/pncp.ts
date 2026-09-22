@@ -1,7 +1,8 @@
 import crypto from "crypto";
 import { HVAC_TERMS, decimalText, normalizedText, normalizeProcurementStatus, procurementFingerprint, safeIsoDate, safeOfficialUrl, safeText, type ProcurementRecord } from "./domain";
 
-const PNCP_ENDPOINT = "https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao";
+const PNCP_PUBLICATION_ENDPOINT = "https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao";
+const PNCP_OPEN_PROPOSALS_ENDPOINT = "https://pncp.gov.br/api/consulta/v1/contratacoes/proposta";
 const PNCP_DOCS = "https://pncp.gov.br/api/consulta/swagger-ui/index.html";
 const PAGE_SIZE = 50;
 
@@ -127,16 +128,18 @@ export async function searchPncp(options: {
   terms?: string[];
   maxPages?: number;
   modalityCodes?: number[];
+  openOnly?: boolean;
   timeoutMs?: number;
 }) {
   const startedAt = Date.now();
   const collectedAt = new Date().toISOString();
   const days = Math.max(1, Math.min(60, Number(options.days) || 14));
-  const maxPages = Math.max(1, Math.min(5, Number(options.maxPages) || 2));
+  const maxPages = Math.max(1, Math.min(5, Number(options.maxPages) || 5));
   const timeoutMs = Math.max(3000, Math.min(20000, Number(options.timeoutMs) || 9000));
   const uf = safeText(options.uf)?.toUpperCase() ?? null;
   const terms = (options.terms?.length ? options.terms : [...HVAC_TERMS]).slice(0, 40).map(normalizedText).filter(Boolean);
-  const modalityCodes = (options.modalityCodes?.length ? options.modalityCodes : [6]).slice(0, 5);
+  const modalityCodes = (options.modalityCodes?.length ? options.modalityCodes : [4, 5, 6, 7, 8, 9, 12]).slice(0, 7);
+  const openOnly = options.openOnly !== false;
   const start = new Date();
   start.setDate(start.getDate() - days);
   const end = new Date();
@@ -148,10 +151,15 @@ export async function searchPncp(options: {
 
   for (const modalityCode of modalityCodes) {
     for (let page = 1; page <= maxPages; page += 1) {
-      const url = new URL(PNCP_ENDPOINT);
-      url.searchParams.set("dataInicial", dateParam(start));
-      url.searchParams.set("dataFinal", dateParam(end));
+      const url = new URL(openOnly ? PNCP_OPEN_PROPOSALS_ENDPOINT : PNCP_PUBLICATION_ENDPOINT);
+      if (openOnly) {
+        url.searchParams.set("dataFinal", dateParam(end));
+      } else {
+        url.searchParams.set("dataInicial", dateParam(start));
+        url.searchParams.set("dataFinal", dateParam(end));
+      }
       url.searchParams.set("codigoModalidadeContratacao", String(modalityCode));
+      if (uf) url.searchParams.set("uf", uf);
       url.searchParams.set("pagina", String(page));
       url.searchParams.set("tamanhoPagina", String(PAGE_SIZE));
       try {
@@ -161,8 +169,18 @@ export async function searchPncp(options: {
         const rows = payloadRows(payload);
         for (const row of rows) {
           const normalized = normalizePncpRecord(row, collectedAt);
-          const searchable = normalizedText([normalized.titulo, normalized.descricao, ...(normalized.items as string[] ?? [])].join(" "));
-          if (uf && normalized.uf && normalized.uf !== uf) continue;
+          const searchable = normalizedText([
+            normalized.titulo,
+            normalized.descricao,
+            normalized.orgao,
+            normalized.unidade,
+            normalized.numeroPregao,
+            normalized.numeroProcesso,
+            normalized.modalidade,
+            normalized.statusOriginal,
+            ...(normalized.items as string[] ?? []),
+          ].join(" "));
+          if (uf && normalized.uf !== uf) continue;
           if (!normalized.titulo || !normalized.orgao || !terms.some(term => searchable.includes(term))) {
             rejected += 1;
             continue;
@@ -187,6 +205,8 @@ export async function searchPncp(options: {
             errorCode: error instanceof Error ? error.message : "PNCP_ERROR",
             errorMessage: "A fonte oficial ficou indisponível; resultados já carregados foram preservados.",
             docsUrl: PNCP_DOCS,
+            endpoint: openOnly ? "contratacoes/proposta" : "contratacoes/publicacao",
+            openOnly,
           },
         };
       }
@@ -209,6 +229,8 @@ export async function searchPncp(options: {
       rejected,
       duplicates: accepted.length - unique.length,
       docsUrl: PNCP_DOCS,
+      endpoint: openOnly ? "contratacoes/proposta" : "contratacoes/publicacao",
+      openOnly,
     },
   };
 }
