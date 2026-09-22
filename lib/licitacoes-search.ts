@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { municipalityDistances } from "../../../lib/municipality-distances";
+import { municipalityDistances } from "./municipality-distances";
 
 const PNCP_URL = "https://pncp.gov.br/api/consulta/v1/contratacoes/proposta";
 const PNCP_API_BASE = "https://pncp.gov.br/api/pncp";
@@ -178,7 +178,7 @@ async function readMonitorStore() {
   return rows[0]?.payload ?? { items: [], lastScan: null, lastError: "" };
 }
 
-async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radius?: number; all?: boolean; term?: string }) {
+export async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radius?: number; all?: boolean; term?: string }) {
   const today = options?.start ?? new Date();
   const end = options?.end ?? new Date(today.getTime() + 60 * 86400000);
   const dataInicial = today.toISOString().slice(0, 10).replaceAll("-", "");

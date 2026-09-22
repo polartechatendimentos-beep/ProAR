@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { searchAutomaticTenders, type PncpTender } from "../../licitacoes/route";
+import { searchAutomaticTenders, type PncpTender } from "../../../../lib/licitacoes-search";
 import { loadWhatsAppConfig, sendWhatsAppTemplate } from "../../../../lib/proar-whatsapp";
 
 export const runtime = "nodejs";
