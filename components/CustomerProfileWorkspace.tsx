@@ -17,6 +17,7 @@ const dateLabel = (raw: unknown) => { if (!raw) return "—"; const date = new D
 
 export function CustomerProfileWorkspace({ customer, structures, serviceOrders, modules, canEdit, onBack, onOpen, onUpdateCustomer, onUpdateStructure }: Props) {
   const [tab, setTab] = useState<Tab>("Cadastro");
+  const [documentLookup, setDocumentLookup] = useState<{ loading: boolean; message: string; kind: "idle" | "success" | "error" }>({ loading: false, message: "", kind: "idle" });
   const [structureType, setStructureType] = useState("Todos");
   const [roomQuery, setRoomQuery] = useState("");
   const [roomId, setRoomId] = useState("");
@@ -35,6 +36,48 @@ export function CustomerProfileWorkspace({ customer, structures, serviceOrders, 
   }, [customer, modules, serviceOrders]);
   const filteredHistory = allHistory.filter(item => historyFilter === "Todos" || item.type.toLowerCase().includes(historyFilter.toLowerCase()) || (historyFilter === "Alterações cadastrais" && item.type === "Cadastro"));
   const updateDraft = (key: string, next: unknown) => setDraft(current => ({ ...current, [key]: next }));
+  const inputValue = (key: string) => draft[key] == null || draft[key] === "—" ? "" : String(draft[key]);
+  const lookupCnpj = async (raw: string) => {
+    const digits = raw.replace(/\D/g, "");
+    if (digits.length !== 14) {
+      setDocumentLookup({ loading: false, message: "", kind: "idle" });
+      return;
+    }
+    setDocumentLookup({ loading: true, message: "Consultando dados do CNPJ...", kind: "idle" });
+    try {
+      const response = await fetch(`/api/cnpj/${digits}`, { cache: "no-store" });
+      const result = await response.json() as Record<string, unknown> & { error?: string };
+      if (!response.ok) throw new Error(result.error || "CNPJ não encontrado.");
+      setDraft(current => ({
+        ...current,
+        doc: String(result.cnpj || digits),
+        legalName: String(result.legalName || current.legalName || ""),
+        tradeName: String(result.tradeName || current.tradeName || ""),
+        email: String(result.email || current.email || ""),
+        phone: String(result.phone || current.phone || ""),
+        zipCode: String(result.zipCode || current.zipCode || ""),
+        street: String(result.street || current.street || ""),
+        addressNumber: String(result.addressNumber || current.addressNumber || ""),
+        complement: String(result.complement || current.complement || ""),
+        neighborhood: String(result.neighborhood || current.neighborhood || ""),
+        city: String(result.city || current.city || ""),
+        state: String(result.state || current.state || ""),
+        stateRegistration: String(result.stateRegistration || current.stateRegistration || ""),
+        cnaeMain: String(result.cnaeMain || current.cnaeMain || ""),
+        taxStatus: String(result.taxStatus || current.taxStatus || ""),
+      }));
+      setDocumentLookup({ loading: false, message: "Dados preenchidos automaticamente. Revise e salve as alterações.", kind: "success" });
+    } catch (error) {
+      setDocumentLookup({ loading: false, message: error instanceof Error ? error.message : "Não foi possível consultar o CNPJ.", kind: "error" });
+    }
+  };
+  const handleDocumentChange = (raw: string) => {
+    const digits = raw.replace(/\D/g, "").slice(0, 14);
+    const formatted = digits.length <= 2 ? digits : digits.length <= 5 ? `${digits.slice(0, 2)}.${digits.slice(2)}` : digits.length <= 8 ? `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5)}` : digits.length <= 12 ? `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8)}` : `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`;
+    updateDraft("doc", formatted);
+    if (digits.length === 14) void lookupCnpj(digits);
+    else setDocumentLookup({ loading: false, message: "", kind: "idle" });
+  };
   const saveCustomer = () => onUpdateCustomer(draft);
   const structureList = customerStructures.filter(item => structureType === "Todos" || value(item, "category", "type", "organizationType") === structureType);
   const roomList = rooms.filter(item => `${value(item, "name", "unit")} ${value(item, "code", "codigo")} ${value(item, "sector", "setor")}`.toLowerCase().includes(roomQuery.toLowerCase()));
@@ -47,11 +90,11 @@ export function CustomerProfileWorkspace({ customer, structures, serviceOrders, 
     <header className="customer-profile-header"><button className="customer-back" onClick={onBack}><ChevronRight size={16} className="rotate-180"/> Clientes</button><div className="customer-profile-identity"><span>{customer.name.split(" ").map(part => part[0]).slice(0, 2).join("")}</span><div><small>PERFIL 360° DO CLIENTE</small><h2>{customer.name}</h2><p>{value(customer, "doc")} • {value(customer, "city")} / {value(customer, "state")}</p></div></div><div className="customer-profile-actions"><button className="outline-btn" onClick={() => onOpen("Relatórios")}><FileText size={14}/> Relatórios</button><button className="primary-btn" onClick={saveCustomer} disabled={!canEdit}><Save size={14}/> Salvar alterações</button></div></header>
     <nav className="customer-profile-tabs" aria-label="Abas principais do cliente">{tabs.map(item => <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}</nav>
 
-    {tab === "Cadastro" && <div className="profile-pane"><div className="profile-pane-head"><div><span className="section-kicker"><UserRound size={12}/> CADASTRO</span><h3>Dados gerais do cliente</h3><p>Identificação, contato, endereço e condições financeiras.</p></div><button className="outline-btn" onClick={() => setDraft(customer)}><X size={14}/> Descartar alterações</button></div><div className="profile-section-grid">
-      <article className="profile-card"><h4>Identificação</h4><div className="profile-form-grid">{[["legalName", "Razão Social"], ["tradeName", "Nome Fantasia"], ["doc", "CNPJ / CPF"], ["stateRegistration", "Inscrição Estadual"], ["municipalRegistration", "Inscrição Municipal"], ["createdAt", "Data de cadastro"], ["segment", "Segmento"], ["size", "Porte"], ["website", "Site"]].map(([key, label]) => <label key={key}>{label}<input value={value(draft, key)} onChange={event => updateDraft(key, event.target.value)} /></label>)}</div></article>
-      <article className="profile-card"><h4>Contato</h4><div className="profile-form-grid">{[["phone", "Telefone"], ["whatsapp", "WhatsApp"], ["email", "E-mail"], ["contact", "Contato principal"], ["contactRole", "Cargo"], ["additionalContacts", "Contatos adicionais"]].map(([key, label]) => <label key={key}>{label}<input value={value(draft, key)} onChange={event => updateDraft(key, event.target.value)} /></label>)}</div></article>
-      <article className="profile-card wide"><h4>Endereço</h4><div className="profile-form-grid">{[["zipCode", "CEP"], ["street", "Logradouro"], ["addressNumber", "Número"], ["complement", "Complemento"], ["neighborhood", "Bairro"], ["city", "Cidade"], ["state", "UF"], ["reference", "Referência"]].map(([key, label]) => <label key={key}>{label}<input value={value(draft, key)} onChange={event => updateDraft(key, event.target.value)} /></label>)}</div></article>
-      <article className="profile-card wide"><h4>Financeiro</h4><div className="profile-form-grid">{[["paymentCondition", "Condição de pagamento padrão"], ["priceTable", "Tabela de preço"], ["preferredPaymentMethod", "Forma de pagamento preferencial"], ["dueDay", "Dia de vencimento"], ["financialNote", "Observação financeira"]].map(([key, label]) => <label key={key}>{label}<input value={value(draft, key)} onChange={event => updateDraft(key, event.target.value)} /></label>)}</div></article>
+    {tab === "Cadastro" && <div className="profile-pane"><div className="profile-pane-head"><div><span className="section-kicker"><UserRound size={12}/> CADASTRO</span><h3>Dados gerais do cliente</h3><p>Identificação, contato, endereço e condições financeiras.</p></div><button className="outline-btn" onClick={() => { setDraft(customer); setDocumentLookup({ loading: false, message: "", kind: "idle" }); }}><X size={14}/> Descartar alterações</button></div><div className="profile-section-grid">
+      <article className="profile-card"><h4>Identificação</h4><div className="profile-form-grid">{[["legalName", "Razão Social"], ["tradeName", "Nome Fantasia"], ["doc", "CNPJ / CPF"], ["stateRegistration", "Inscrição Estadual"], ["municipalRegistration", "Inscrição Municipal"], ["createdAt", "Data de cadastro"], ["segment", "Segmento"], ["size", "Porte"], ["website", "Site"]].map(([key, label]) => <label key={key}>{label}<input value={inputValue(key)} onChange={event => key === "doc" ? handleDocumentChange(event.target.value) : updateDraft(key, event.target.value)} onBlur={event => key === "doc" && void lookupCnpj(event.target.value)} placeholder={key === "doc" ? "00.000.000/0000-00" : undefined} inputMode={key === "doc" ? "numeric" : undefined} /></label>)}{documentLookup.message && <div className={`wide document-lookup-status ${documentLookup.kind}`}>{documentLookup.loading ? "Consultando dados do CNPJ..." : documentLookup.message}</div>}</div></article>
+      <article className="profile-card"><h4>Contato</h4><div className="profile-form-grid">{[["phone", "Telefone"], ["whatsapp", "WhatsApp"], ["email", "E-mail"], ["contact", "Contato principal"], ["contactRole", "Cargo"], ["additionalContacts", "Contatos adicionais"]].map(([key, label]) => <label key={key}>{label}<input value={inputValue(key)} onChange={event => updateDraft(key, event.target.value)} /></label>)}</div></article>
+      <article className="profile-card wide"><h4>Endereço</h4><div className="profile-form-grid">{[["zipCode", "CEP"], ["street", "Logradouro"], ["addressNumber", "Número"], ["complement", "Complemento"], ["neighborhood", "Bairro"], ["city", "Cidade"], ["state", "UF"], ["reference", "Referência"]].map(([key, label]) => <label key={key}>{label}<input value={inputValue(key)} onChange={event => updateDraft(key, event.target.value)} /></label>)}</div></article>
+      <article className="profile-card wide"><h4>Financeiro</h4><div className="profile-form-grid">{[["paymentCondition", "Condição de pagamento padrão"], ["priceTable", "Tabela de preço"], ["preferredPaymentMethod", "Forma de pagamento preferencial"], ["dueDay", "Dia de vencimento"], ["financialNote", "Observação financeira"]].map(([key, label]) => <label key={key}>{label}<input value={inputValue(key)} onChange={event => updateDraft(key, event.target.value)} /></label>)}</div></article>
     </div></div>}
 
     {tab === "Unidades / Secretarias / Áreas" && <div className="profile-pane"><div className="profile-pane-head"><div><span className="section-kicker"><Building2 size={12}/> ESTRUTURA ORGANIZACIONAL</span><h3>{tabLabel}</h3><p>{isPublic ? "Organize a prefeitura e seus órgãos sem misturar secretarias, unidades ou setores." : "Unidades, filiais, áreas e locais vinculados a este cliente."}</p></div><div className="profile-action-row"><button className="outline-btn" onClick={() => onOpen(`Nova unidade, filial ou setor • ${customer.name}`)}><Plus size={14}/> Nova Unidade</button><button className="primary-btn" onClick={() => onOpen(`Novo setor • ${customer.name}`)}><Plus size={14}/> Novo Setor</button></div></div><div className="profile-filter-row"><label><Filter size={14}/> Tipo<select value={structureType} onChange={event => setStructureType(event.target.value)}><option>Todos</option>{Array.from(new Set(customerStructures.map(item => value(item, "category", "type")))).filter(item => item !== "—").map(item => <option key={item}>{item}</option>)}</select></label></div><div className="hierarchy-list">{structureList.map(item => <article className="hierarchy-card" key={String(item.id)}><div className="hierarchy-icon"><Building2 size={19}/></div><div><span>{value(item, "category", "type")}</span><h4>{value(item, "name", "unit")}</h4><p>{value(item, "parentUnit", "parent", "secretary", "area")} {value(item, "sector", "setor") !== "—" ? `→ ${value(item, "sector", "setor")}` : ""}</p></div><div className="hierarchy-meta"><small>Responsável</small><b>{value(item, "contact", "responsible")}</b><small>{value(item, "address", "city")}</small></div><button className="icon-action" onClick={() => onUpdateStructure(item)} aria-label="Abrir cadastro"><Edit3 size={15}/></button></article>)}{!structureList.length && <div className="empty-state"><Building2 size={25}/><h4>Nenhuma unidade ou área cadastrada</h4><p>Use os botões acima para iniciar a hierarquia do cliente.</p></div>}</div></div>}
