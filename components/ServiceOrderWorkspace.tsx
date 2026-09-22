@@ -58,9 +58,15 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
 
   const customer = customers.find(item => text(item, "name", "client") === draft.client) || customers.find(item => text(item, "legalName", "tradeName") === draft.client);
   const customerStructures = structures.filter(item => text(item, "client", "customer", "customerName") === draft.client);
-  const selectedStructure = customerStructures.find(item => text(item, "name", "unit") === draft.unit) || structures.find(item => text(item, "name", "unit") === draft.unit);
-  const selectedRoom = text(selectedStructure, "room", "environment", "ambiente") || String(draft.environment || draft.room || "Sala/Ambiente não informado");
-  const linkedEquipment = equipment.filter(item => text(item, "client", "customer", "customerName") === draft.client || text(item, "unit", "location", "environment") === draft.unit).slice(0, 8);
+  const selectedStructure = customerStructures.find(item => text(item, "name", "unit") === String(draft.room || "")) || customerStructures.find(item => text(item, "name", "unit") === draft.unit) || structures.find(item => text(item, "name", "unit") === draft.unit);
+  const selectedRoom = text(selectedStructure, "room", "environment", "ambiente", "name") || String(draft.environment || draft.room || "Sala/Ambiente não informado");
+  const linkedEquipment = equipment.filter(item => {
+    const sameClient = text(item, "client", "customer", "customerName") === draft.client;
+    const sameRoom = text(item, "room", "environment", "ambiente", "installationLocation") === selectedRoom;
+    const sameUnit = text(item, "unit", "location", "equipmentUnit", "parentUnit") === draft.unit;
+    const sameSector = !draft.sector || text(item, "sector", "setor", "secretary", "area") === draft.sector;
+    return (sameClient || sameUnit) && (sameRoom || sameUnit) && sameSector;
+  }).slice(0, 8);
   const catalog = draft.catalogItems || [];
   const servicesTotal = Number(draft.servicesTotal || catalog.filter(item => item.kind === "Serviço").reduce((sum, item) => sum + Number((item as unknown as RecordItem).price || 0), 0));
   const productsTotal = Number(draft.productsTotal || catalog.filter(item => item.kind === "Produto").reduce((sum, item) => sum + Number((item as unknown as RecordItem).price || 0), 0));
