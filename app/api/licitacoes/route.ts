@@ -178,6 +178,14 @@ async function readMonitorStore() {
   return rows[0]?.payload ?? { items: [], lastScan: null, lastError: "" };
 }
 
+function filterStoredItems(items: PncpTender[], term: string, radius: number) {
+  const normalizedTerm = normalize(term);
+  return items.filter(item => {
+    const searchable = normalize(`${item.objetoCompra ?? ""} ${item.orgaoEntidade?.razaoSocial ?? ""} ${item.unidadeOrgao?.municipioNome ?? ""} ${item.unidadeOrgao?.nomeUnidade ?? ""}`);
+    return (!normalizedTerm || searchable.includes(normalizedTerm)) && (item.distanciaMirassol ?? 0) <= radius;
+  });
+}
+
 async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radius?: number; all?: boolean; term?: string }) {
   const today = options?.start ?? new Date();
   const end = options?.end ?? new Date(today.getTime() + 60 * 86400000);
@@ -243,9 +251,14 @@ export async function GET(request: NextRequest) {
       const ano = Number(request.nextUrl.searchParams.get("ano") ?? 0);
       const sequencial = Number(request.nextUrl.searchParams.get("sequencial") ?? 0);
       if (cnpj.length !== 14 || !ano || !sequencial) return NextResponse.json({ data: null, error: "Identificadores da contratação incompletos." }, { status: 400 });
-      const response = await fetch(`${PNCP_CONSULTA_BASE}/orgaos/${cnpj}/compras/${ano}/${sequencial}`, { headers: { Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-      if (!response.ok) return NextResponse.json({ data: null, warning: `O PNCP não retornou os detalhes desta contratação (${response.status}).` }, { status: 502 });
-      return NextResponse.json({ data: await response.json(), source: "PNCP consulta detalhada" });
+      try {
+        const response = await fetch(`${PNCP_CONSULTA_BASE}/orgaos/${cnpj}/compras/${ano}/${sequencial}`, { headers: { Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+        if (!response.ok) return NextResponse.json({ data: null, warning: `O PNCP não retornou os detalhes desta contratação (${response.status}).` }, { status: 502 });
+        return NextResponse.json({ data: await response.json(), source: "PNCP consulta detalhada" });
+      } catch (error) {
+        console.error("PNCP detail failed", error);
+        return NextResponse.json({ data: null, warning: "O PNCP demorou para responder aos detalhes desta contratação. Tente novamente ou abra o edital oficial." }, { status: 504 });
+      }
     }
     if (request.nextUrl.searchParams.get("documents") === "1") {
       const cnpj = (request.nextUrl.searchParams.get("cnpj") ?? "").replace(/\D/g, "");
@@ -272,7 +285,8 @@ export async function GET(request: NextRequest) {
 
     if (!result.data.length && result.failedSources.length >= UFS.length) {
       const store = await readMonitorStore();
-      if (store.items?.length) return NextResponse.json({ data: store.items, lastScan: store.lastScan, source: "Última busca válida", radius, warning: "Consulta oficial temporariamente indisponível; exibindo o último resultado salvo." });
+      const storedMatches = filterStoredItems(store.items ?? [], term, radius);
+      if (storedMatches.length) return NextResponse.json({ data: storedMatches, lastScan: store.lastScan, source: "Última busca válida filtrada", radius, warning: "Consulta oficial temporariamente indisponível; exibindo somente resultados salvos compatíveis com a pesquisa." });
     }
 
     const portalCounts = result.data.reduce<Record<string, number>>((acc, item) => {
@@ -285,7 +299,10 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("PNCP search failed", error);
     const store = await readMonitorStore();
-    if (store.items?.length) return NextResponse.json({ data: store.items, lastScan: store.lastScan, source: "Última busca válida", warning: "Consulta oficial temporariamente indisponível; exibindo o último resultado salvo." });
+    const term = request.nextUrl.searchParams.get("q")?.trim() ?? "";
+    const radius = Math.min(300, Math.max(1, Number(request.nextUrl.searchParams.get("raio") ?? 300)));
+    const storedMatches = filterStoredItems(store.items ?? [], term, radius);
+    if (storedMatches.length) return NextResponse.json({ data: storedMatches, lastScan: store.lastScan, source: "Última busca válida filtrada", radius, warning: "Consulta oficial temporariamente indisponível; exibindo somente resultados salvos compatíveis com a pesquisa." });
     return NextResponse.json({ data: [], warning: "Os portais oficiais estão temporariamente indisponíveis. Use Atualizar para tentar novamente." });
   }
 }
