@@ -524,6 +524,7 @@ function Sidebar({ current, setCurrent, open, close, permissions }: { current: s
       <div className="help-card"><div><Headphones size={17}/></div><strong>Suporte ProAR</strong><p>Conte com a nossa equipe sempre que precisar.</p><button>Falar com especialista <ArrowRight size={12}/></button></div>
       <div className="secure"><ShieldCheck size={13}/><span>Ambiente seguro</span><b>v2.0</b></div>
     </aside>
+    <nav className="mobile-nav" aria-label="Navegação rápida"><button className={current === "Painel inicial" ? "active" : ""} onClick={() => setCurrent("Painel inicial")}><LayoutDashboard size={18}/><span>Início</span></button><button className={current === "Agenda" ? "active" : ""} onClick={() => setCurrent("Agenda")}><CalendarDays size={18}/><span>Agenda</span></button><button className={current === "Ordens de serviço" ? "active" : ""} onClick={() => setCurrent("Ordens de serviço")}><ClipboardList size={18}/><span>Ordens</span></button><button className={current === "Clientes" ? "active" : ""} onClick={() => setCurrent("Clientes")}><UsersRound size={18}/><span>Clientes</span></button><button className={current === "Configurações" ? "active" : ""} onClick={() => setCurrent("Configurações")}><MoreHorizontal size={18}/><span>Mais</span></button></nav>
   </>;
 }
 
