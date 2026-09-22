@@ -7,6 +7,10 @@ const COMPRAS_URL = "https://dadosabertos.compras.gov.br/modulo-contratacoes/1_c
 const UFS = ["SP", "MG", "MS", "PR", "GO"] as const;
 const MODALITIES = [4, 5, 6, 7, 8, 9, 12] as const;
 const REQUEST_TIMEOUT_MS = 6500;
+const COMPRAS_TIMEOUT_MS = 7500;
+const MAX_RETRIES = 1;
+const PNCP_CONCURRENCY = 3;
+const COMPRAS_CONCURRENCY = 2;
 const climateTerms = /ar\s*-?\s*condicionado|condicionador(?:es)? de ar|climatiza|refrigera|pmoc|hvac|split|multi\s*split|cassete|piso\s*teto|evaporador|condensador|chiller|vrf|fluido refrigerante|g[aá]s refrigerante|compressor frigor[ií]fico/i;
 const excludedTerms = /purificador(?:es)? de [aá]gua|equipamento fotodocumentador|mobili[aá]rio|geladeira dom[eé]stica|bebedouro(?!.*refrigera)/i;
 
@@ -27,6 +31,54 @@ export type PncpTender = {
   distanciaMirassol?: number;
 };
 
+type SourceDiagnostic = {
+  source: string;
+  status: "ok" | "error";
+  attempts: number;
+  durationMs: number;
+  count: number;
+  error?: string;
+};
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+function isRetryable(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /(^|\s)(408|425|429|500|502|503|504)(\s|$)|timeout|abort|fetch failed|network/i.test(message);
+}
+
+async function withRetry<T>(label: string, operation: () => Promise<T>, maxRetries = MAX_RETRIES) {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt += 1) {
+    try {
+      return { value: await operation(), attempts: attempt };
+    } catch (error) {
+      lastError = error;
+      if (attempt > maxRetries || !isRetryable(error)) break;
+      await sleep(350 * 2 ** (attempt - 1));
+    }
+  }
+  throw new Error(`${label}: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+}
+
+async function runLimited<T, R>(items: readonly T[], concurrency: number, worker: (item: T) => Promise<R>) {
+  const results: PromiseSettledResult<R>[] = new Array(items.length);
+  let cursor = 0;
+  const run = async () => {
+    while (true) {
+      const index = cursor++;
+      if (index >= items.length) return;
+      try {
+        results[index] = { status: "fulfilled", value: await worker(items[index]) };
+      } catch (reason) {
+        results[index] = { status: "rejected", reason };
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, run));
+  return results;
+}
+
 function identifySource(item: PncpTender): PncpTender["sourcePortal"] {
   const origin = normalize(`${item.linkSistemaOrigem ?? ""} ${item.usuarioNome ?? ""}`);
   if (/bllcompras|bll compras|bolsa de licitacoes do brasil/.test(origin)) return "BLL Compras";
@@ -37,24 +89,29 @@ function identifySource(item: PncpTender): PncpTender["sourcePortal"] {
 
 async function fetchPage(dataInicial: string, dataFinal: string, uf: string, page = 1) {
   const query = new URLSearchParams({ dataInicial, dataFinal, pagina: String(page), tamanhoPagina: "50", uf });
-  const response = await fetch(`${PNCP_URL}?${query}`, {
-    headers: { Accept: "application/json" },
-    cache: "no-store",
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  const result = await withRetry(`PNCP-${uf}-página-${page}`, async () => {
+    const response = await fetch(`${PNCP_URL}?${query}`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!response.ok) throw new Error(`respondeu ${response.status}`);
+    const payload = await response.json();
+    return Array.isArray(payload?.data) ? payload.data as PncpTender[] : [];
   });
-  if (!response.ok) throw new Error(`PNCP ${uf} respondeu ${response.status}`);
-  const payload = await response.json();
-  return Array.isArray(payload?.data) ? payload.data as PncpTender[] : [];
+  return { items: result.value, attempts: result.attempts };
 }
 
 async function fetchPages(dataInicial: string, dataFinal: string, uf: string, maxPages = 5) {
   const items: PncpTender[] = [];
+  let attempts = 0;
   for (let page = 1; page <= maxPages; page += 1) {
     const current = await fetchPage(dataInicial, dataFinal, uf, page);
-    items.push(...current);
-    if (current.length < 50) break;
+    attempts += current.attempts;
+    items.push(...current.items);
+    if (current.items.length < 50) break;
   }
-  return items;
+  return { items, attempts };
 }
 
 type ComprasTender = {
@@ -98,12 +155,15 @@ async function fetchCompras(dataInicial: string, dataFinal: string, codigoModali
     pagina: "1",
     tamanhoPagina: "500",
   });
-  const response = await fetch(`${COMPRAS_URL}?${query}`, {
-    headers: { Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(8000),
+  const result = await withRetry(`Compras.gov.br-modalidade-${codigoModalidade}`, async () => {
+    const response = await fetch(`${COMPRAS_URL}?${query}`, {
+      headers: { Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(COMPRAS_TIMEOUT_MS),
+    });
+    if (!response.ok) throw new Error(`respondeu ${response.status}`);
+    const payload = await response.json();
+    return Array.isArray(payload?.resultado) ? (payload.resultado as ComprasTender[]).map(mapComprasTender) : [];
   });
-  if (!response.ok) throw new Error(`Compras.gov.br modalidade ${codigoModalidade} respondeu ${response.status}`);
-  const payload = await response.json();
-  return Array.isArray(payload?.resultado) ? (payload.resultado as ComprasTender[]).map(mapComprasTender) : [];
+  return { items: result.value, attempts: result.attempts };
 }
 
 async function readMonitorStore() {
@@ -126,18 +186,31 @@ export async function searchAutomaticTenders(options?: { start?: Date; end?: Dat
   const publicationStart = new Date(today.getTime() - 60 * 86400000).toISOString().slice(0, 10);
   const publicationEnd = today.toISOString().slice(0, 10);
 
-  // As consultas estaduais rodam simultaneamente. Assim, uma fonte lenta não
-  // bloqueia as demais nem estoura o limite da função serverless da Vercel.
+  // Cada UF/modalidade é independente: limitar concorrência evita sobrecarga
+  // do PNCP e retryar somente falhas transitórias mantém resultados parciais.
+  const startedAt = new Map<string, number>();
   const [pncpSettled, comprasSettled] = await Promise.all([
-    Promise.allSettled(UFS.map(uf => fetchPages(dataInicial, dataFinal, uf))),
-    Promise.allSettled(MODALITIES.map(code => fetchCompras(publicationStart, publicationEnd, code))),
+    runLimited(UFS, PNCP_CONCURRENCY, async uf => {
+      const key = `PNCP-${uf}`; startedAt.set(key, Date.now());
+      const value = await fetchPages(dataInicial, dataFinal, uf);
+      return { value, diagnostic: { source: key, status: "ok" as const, attempts: value.attempts, durationMs: Date.now() - (startedAt.get(key) ?? Date.now()), count: value.items.length } };
+    }),
+    runLimited(MODALITIES, COMPRAS_CONCURRENCY, async code => {
+      const key = `Compras.gov.br-${code}`; startedAt.set(key, Date.now());
+      const value = await fetchCompras(publicationStart, publicationEnd, code);
+      return { value, diagnostic: { source: key, status: "ok" as const, attempts: value.attempts, durationMs: Date.now() - (startedAt.get(key) ?? Date.now()), count: value.items.length } };
+    }),
   ]);
   const raw = [
-    ...pncpSettled.flatMap(result => result.status === "fulfilled" ? result.value : []),
-    ...comprasSettled.flatMap(result => result.status === "fulfilled" ? result.value : []),
+    ...pncpSettled.flatMap(result => result.status === "fulfilled" ? result.value.value.items : []),
+    ...comprasSettled.flatMap(result => result.status === "fulfilled" ? result.value.value.items : []),
   ];
-  const failedSources = pncpSettled.flatMap((result, index) => result.status === "rejected" ? [`PNCP-${UFS[index]}`] : []);
-  if (comprasSettled.every(result => result.status === "rejected")) failedSources.push("Compras.gov.br");
+  const diagnostics: SourceDiagnostic[] = [
+    ...pncpSettled.map((result, index) => result.status === "fulfilled" ? result.value.diagnostic : { source: `PNCP-${UFS[index]}`, status: "error" as const, attempts: MAX_RETRIES + 1, durationMs: Date.now() - (startedAt.get(`PNCP-${UFS[index]}`) ?? Date.now()), count: 0, error: result.reason instanceof Error ? result.reason.message : String(result.reason) }),
+    ...comprasSettled.map((result, index) => result.status === "fulfilled" ? result.value.diagnostic : { source: `Compras.gov.br-${MODALITIES[index]}`, status: "error" as const, attempts: MAX_RETRIES + 1, durationMs: Date.now() - (startedAt.get(`Compras.gov.br-${MODALITIES[index]}`) ?? Date.now()), count: 0, error: result.reason instanceof Error ? result.reason.message : String(result.reason) }),
+  ];
+  const failedSources = diagnostics.filter(item => item.status === "error").map(item => item.source);
+  for (const item of diagnostics.filter(item => item.status === "error")) console.warn("PNCP source unavailable", item);
 
   const radius = options?.radius ?? 300;
   const startTime = new Date(today.toISOString().slice(0, 10) + "T00:00:00-03:00").getTime();
@@ -145,7 +218,8 @@ export async function searchAutomaticTenders(options?: { start?: Date; end?: Dat
   const term = normalize(options?.term ?? "");
   const filtered = raw.filter(item => {
     const object = item.objetoCompra ?? "";
-    if (!options?.all && (term ? !normalize(object).includes(term) : (!climateTerms.test(object) || excludedTerms.test(object)))) return false;
+    const searchable = normalize(`${object} ${item.orgaoEntidade?.razaoSocial ?? ""} ${item.unidadeOrgao?.municipioNome ?? ""} ${item.unidadeOrgao?.nomeUnidade ?? ""}`);
+    if (!options?.all && (term ? !searchable.includes(term) : (!climateTerms.test(object) || excludedTerms.test(object)))) return false;
     const closing = item.dataEncerramentoProposta ? new Date(item.dataEncerramentoProposta).getTime() : 0;
     const published = item.dataPublicacaoPncp ? new Date(item.dataPublicacaoPncp).getTime() : 0;
     // O conjunto do Compras.gov.br nem sempre informa o encerramento. Nesses casos,
@@ -159,7 +233,7 @@ export async function searchAutomaticTenders(options?: { start?: Date; end?: Dat
   });
   const unique = Array.from(new Map(filtered.map(item => [item.numeroControlePNCP || `${item.orgaoEntidade?.cnpj}-${item.anoCompra}-${item.sequencialCompra}`, item])).values());
   unique.sort((a, b) => new Date(a.dataEncerramentoProposta ?? 0).getTime() - new Date(b.dataEncerramentoProposta ?? 0).getTime());
-  return { data: unique.slice(0, 500), failedSources };
+  return { data: unique.slice(0, 500), failedSources, diagnostics };
 }
 
 export async function GET(request: NextRequest) {
@@ -196,7 +270,7 @@ export async function GET(request: NextRequest) {
       const portal = item.sourcePortal ?? "PNCP"; acc[portal] = (acc[portal] ?? 0) + 1; return acc;
     }, {});
     return NextResponse.json({
-      data: result.data, source: "PNCP e portais de origem", radius, portalCounts,
+      data: result.data, source: "PNCP e portais de origem", radius, portalCounts, partial: result.failedSources.length > 0, sourceDiagnostics: result.diagnostics,
       warning: result.failedSources.length ? `Consulta parcial: ${result.failedSources.join(", ")} não respondeu. Os demais resultados foram carregados.` : "",
     });
   } catch (error) {
