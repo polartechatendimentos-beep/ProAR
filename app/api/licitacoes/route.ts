@@ -6,10 +6,10 @@ const PNCP_CONSULTA_BASE = "https://pncp.gov.br/api/consulta/v1";
 const COMPRAS_URL = "https://dadosabertos.compras.gov.br/modulo-contratacoes/1_consultarContratacoes_PNCP_14133";
 const UFS = ["SP", "MG", "MS", "PR", "GO"] as const;
 const MODALITIES = [4, 5, 6, 7, 8, 9, 12] as const;
-const REQUEST_TIMEOUT_MS = 10000;
-const COMPRAS_TIMEOUT_MS = 10000;
+const REQUEST_TIMEOUT_MS = 6500;
+const COMPRAS_TIMEOUT_MS = 7000;
 const MAX_RETRIES = 1;
-const PNCP_CONCURRENCY = 1;
+const PNCP_CONCURRENCY = 3;
 const COMPRAS_CONCURRENCY = 2;
 const CITY_CODES: Record<string, { ibge: string; distance: number }> = {
   "jose bonifacio": { ibge: "3525706", distance: 62 },
@@ -216,7 +216,7 @@ async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radi
   // do PNCP e retryar somente falhas transitórias mantém resultados parciais.
   const startedAt = new Map<string, number>();
   const [pncpSettled, comprasSettled] = await Promise.all([
-    runLimited(UFS, PNCP_CONCURRENCY, async uf => {
+    runLimited(municipality ? [] : UFS, PNCP_CONCURRENCY, async uf => {
       const key = `PNCP-${uf}`; startedAt.set(key, Date.now());
       const value = await fetchPages(dataInicial, dataFinal, uf);
       return { value, diagnostic: { source: key, status: "ok" as const, attempts: value.attempts, durationMs: Date.now() - (startedAt.get(key) ?? Date.now()), count: value.items.length } };
