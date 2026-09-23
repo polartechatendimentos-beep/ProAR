@@ -6,11 +6,14 @@ const PNCP_CONSULTA_BASE = "https://pncp.gov.br/api/consulta/v1";
 const COMPRAS_URL = "https://dadosabertos.compras.gov.br/modulo-contratacoes/1_consultarContratacoes_PNCP_14133";
 const UFS = ["SP", "MG", "MS", "PR", "GO"] as const;
 const MODALITIES = [4, 5, 6, 7, 8, 9, 12] as const;
-const REQUEST_TIMEOUT_MS = 6500;
-const COMPRAS_TIMEOUT_MS = 7500;
+const REQUEST_TIMEOUT_MS = 10000;
+const COMPRAS_TIMEOUT_MS = 10000;
 const MAX_RETRIES = 1;
-const PNCP_CONCURRENCY = 3;
+const PNCP_CONCURRENCY = 1;
 const COMPRAS_CONCURRENCY = 2;
+const CITY_CODES: Record<string, { ibge: string; distance: number }> = {
+  "jose bonifacio": { ibge: "3525706", distance: 62 },
+};
 const climateTerms = /ar\s*-?\s*condicionado|condicionador(?:es)? de ar|climatiza|refrigera|pmoc|hvac|split|multi\s*split|cassete|piso\s*teto|evaporador|condensador|chiller|vrf|fluido refrigerante|g[aá]s refrigerante|compressor frigor[ií]fico/i;
 const excludedTerms = /purificador(?:es)? de [aá]gua|equipamento fotodocumentador|mobili[aá]rio|geladeira dom[eé]stica|bebedouro(?!.*refrigera)/i;
 
@@ -91,8 +94,13 @@ async function fetchPage(dataInicial: string, dataFinal: string, uf: string, pag
   const query = new URLSearchParams({ dataInicial, dataFinal, pagina: String(page), tamanhoPagina: "50", uf });
   const result = await withRetry(`PNCP-${uf}-página-${page}`, async () => {
     const response = await fetch(`${PNCP_URL}?${query}`, {
-      headers: { Accept: "application/json" },
-      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.5",
+        "User-Agent": "ProAR-Licitacoes/1.0 (+https://polartech.proar.online)",
+        Referer: "https://polartech.proar.online/",
+      },
+      next: { revalidate: 300 },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     if (!response.ok) throw new Error(`respondeu ${response.status}`);
@@ -146,7 +154,7 @@ function mapComprasTender(item: ComprasTender): PncpTender {
   };
 }
 
-async function fetchCompras(dataInicial: string, dataFinal: string, codigoModalidade: number) {
+async function fetchCompras(dataInicial: string, dataFinal: string, codigoModalidade: number, municipalityCode?: string) {
   const query = new URLSearchParams({
     dataPublicacaoPncpInicial: dataInicial,
     dataPublicacaoPncpFinal: dataFinal,
@@ -155,10 +163,18 @@ async function fetchCompras(dataInicial: string, dataFinal: string, codigoModali
     pagina: "1",
     tamanhoPagina: "500",
   });
+  if (municipalityCode) query.set("unidadeOrgaoCodigoIbge", municipalityCode);
   const result = await withRetry(`Compras.gov.br-modalidade-${codigoModalidade}`, async () => {
     const response = await fetch(`${COMPRAS_URL}?${query}`, {
-      headers: { Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(COMPRAS_TIMEOUT_MS),
+      headers: {
+        Accept: "application/json",
+        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.5",
+        "User-Agent": "ProAR-Licitacoes/1.0 (+https://polartech.proar.online)",
+        Referer: "https://polartech.proar.online/",
+      },
+      next: { revalidate: 300 }, signal: AbortSignal.timeout(COMPRAS_TIMEOUT_MS),
     });
+    if (!response.ok && municipalityCode && response.status === 404) return [];
     if (!response.ok) throw new Error(`respondeu ${response.status}`);
     const payload = await response.json();
     return Array.isArray(payload?.resultado) ? (payload.resultado as ComprasTender[]).map(mapComprasTender) : [];
@@ -193,6 +209,8 @@ async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radi
   const dataFinal = end.toISOString().slice(0, 10).replaceAll("-", "");
   const publicationStart = new Date(today.getTime() - 60 * 86400000).toISOString().slice(0, 10);
   const publicationEnd = today.toISOString().slice(0, 10);
+  const normalizedTerm = normalize(options?.term ?? "");
+  const municipality = Object.entries(CITY_CODES).find(([name]) => normalizedTerm.includes(name))?.[1];
 
   // Cada UF/modalidade é independente: limitar concorrência evita sobrecarga
   // do PNCP e retryar somente falhas transitórias mantém resultados parciais.
@@ -205,7 +223,7 @@ async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radi
     }),
     runLimited(MODALITIES, COMPRAS_CONCURRENCY, async code => {
       const key = `Compras.gov.br-${code}`; startedAt.set(key, Date.now());
-      const value = await fetchCompras(publicationStart, publicationEnd, code);
+      const value = await fetchCompras(publicationStart, publicationEnd, code, municipality?.ibge);
       return { value, diagnostic: { source: key, status: "ok" as const, attempts: value.attempts, durationMs: Date.now() - (startedAt.get(key) ?? Date.now()), count: value.items.length } };
     }),
   ]);
@@ -223,7 +241,7 @@ async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radi
   const radius = options?.radius ?? 300;
   const startTime = new Date(today.toISOString().slice(0, 10) + "T00:00:00-03:00").getTime();
   const endTime = new Date(end.toISOString().slice(0, 10) + "T23:59:59-03:00").getTime();
-  const term = normalize(options?.term ?? "");
+  const term = normalizedTerm;
   const filtered = raw.filter(item => {
     const object = item.objetoCompra ?? "";
     const searchable = normalize(`${object} ${item.orgaoEntidade?.razaoSocial ?? ""} ${item.unidadeOrgao?.municipioNome ?? ""} ${item.unidadeOrgao?.nomeUnidade ?? ""}`);
@@ -233,7 +251,8 @@ async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radi
     // O conjunto do Compras.gov.br nem sempre informa o encerramento. Nesses casos,
     // mantém publicações recentes; registros com encerramento conhecido e vencido saem.
     if (closing ? (closing < startTime || closing > endTime) : (!published || published < today.getTime() - 60 * 86400000)) return false;
-    const distance = municipalityDistances[String(item.unidadeOrgao?.codigoIbge ?? "")] ?? cityDistances[normalize(item.unidadeOrgao?.municipioNome ?? "")];
+    const municipalityName = normalize(item.unidadeOrgao?.municipioNome ?? "");
+    const distance = municipalityDistances[String(item.unidadeOrgao?.codigoIbge ?? "")] ?? CITY_CODES[municipalityName]?.distance ?? cityDistances[municipalityName];
     if (distance === undefined || distance > radius) return false;
     item.distanciaMirassol = distance;
     item.sourcePortal = item.sourcePortal ?? identifySource(item);
