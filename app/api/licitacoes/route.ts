@@ -270,13 +270,14 @@ export async function GET(request: NextRequest) {
       const ano = Number(request.nextUrl.searchParams.get("ano") ?? 0);
       const sequencial = Number(request.nextUrl.searchParams.get("sequencial") ?? 0);
       if (cnpj.length !== 14 || !ano || !sequencial) return NextResponse.json({ data: null, error: "Identificadores da contratação incompletos." }, { status: 400 });
+      const linkSistemaOrigem = `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${sequencial}`;
       try {
         const response = await fetch(`${PNCP_CONSULTA_BASE}/orgaos/${cnpj}/compras/${ano}/${sequencial}`, { headers: { Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-        if (!response.ok) return NextResponse.json({ data: null, warning: `O PNCP não retornou os detalhes desta contratação (${response.status}).` }, { status: 502 });
+        if (!response.ok) return NextResponse.json({ data: null, linkSistemaOrigem, warning: `O PNCP não retornou os detalhes desta contratação (${response.status}). O edital oficial continua disponível.` });
         return NextResponse.json({ data: await response.json(), source: "PNCP consulta detalhada" });
       } catch (error) {
         console.error("PNCP detail failed", error);
-        return NextResponse.json({ data: null, warning: "O PNCP demorou para responder aos detalhes desta contratação. Tente novamente ou abra o edital oficial." }, { status: 504 });
+        return NextResponse.json({ data: null, linkSistemaOrigem, warning: "O PNCP demorou para responder aos detalhes desta contratação. O edital oficial continua disponível." });
       }
     }
     if (request.nextUrl.searchParams.get("documents") === "1") {
