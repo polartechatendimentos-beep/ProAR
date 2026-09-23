@@ -2143,7 +2143,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
 }
 
 function Modal({ title, customers, structures, catalogRecords, supplierRecords, employeeRecords, close, onSave }: { title: string; customers: Customer[]; structures: ModuleRecord[]; catalogRecords: ModuleRecord[]; supplierRecords: ModuleRecord[]; employeeRecords: ModuleRecord[]; close: () => void; onSave: (data: ModalSave) => void | Promise<void> }) {
-  const isLinkedStructure = title.startsWith("Nova unidade, filial ou setor");
+  const isLinkedStructure = title.startsWith("Nova unidade, filial ou setor") || title.startsWith("Novo setor") || title.startsWith("Nova sala");
   const isNewOrder = title === "Nova ordem de serviço";
   const isNewCustomer = title === "Novo cliente";
   const isCatalogRegistration = title.includes("Serviços") || title.includes("Produtos");
@@ -2221,7 +2221,7 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
   const [labelReview, setLabelReview] = useState<Record<string, string> | null>(null);
   const labelFileRef = useRef<HTMLInputElement>(null);
   const cameraFileRef = useRef<HTMLInputElement>(null);
-  const [recordCategory, setRecordCategory] = useState("");
+  const [recordCategory, setRecordCategory] = useState(title.toLocaleLowerCase("pt-BR").includes("sala") ? "Sala" : title.toLocaleLowerCase("pt-BR").includes("setor") ? "Setor" : "");
   const [parentStructureId, setParentStructureId] = useState("");
   const [room, setRoom] = useState("");
   const [environmentType, setEnvironmentType] = useState("Sala");
@@ -2403,7 +2403,7 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
   return <div className="modal-layer" role="dialog" aria-modal="true" aria-label={title}><button className="modal-backdrop" onClick={close} aria-label="Fechar janela"/><div className="modal"><div className="modal-head"><div><span>{isLinkedStructure ? "ESTRUTURA DO CLIENTE • LIMITE DE 20" : "CADASTRO PROAR"}</span><h2>{isLinkedStructure ? "Nova unidade, filial ou setor" : title}</h2>{isLinkedStructure && <p>Este registro será vinculado a <strong>{parentCustomer}</strong>.</p>}</div><button onClick={close} aria-label="Fechar"><X size={18}/></button></div><div className="form-grid">
     {isLinkedStructure ? <>
       <label>Cliente principal<input value={parentCustomer} readOnly/></label>
-      <label>Tipo de vínculo<select value={recordCategory} onChange={event => setRecordCategory(event.target.value)}><option>Unidade</option><option>Filial</option><option>Setor</option><option>Secretaria</option><option>Departamento</option><option>Empresa vinculada</option></select></label>
+      <label>Tipo de vínculo<select value={recordCategory} onChange={event => setRecordCategory(event.target.value)}><option>Unidade</option><option>Filial</option><option>Secretaria</option><option>Setor</option><option>Sala</option><option>Ambiente</option><option>Departamento</option><option>Empresa vinculada</option></select></label>
       <label className="wide">Vincular dentro de<select value={parentStructureId} onChange={event => setParentStructureId(event.target.value)}><option value="">Cliente principal (nível raiz)</option>{parentCandidates.map(item => <option key={item.id} value={item.id}>{item.name} • {item.category || "estrutura"}</option>)}</select><small>Use a estrutura imediatamente superior: Prefeitura → Secretaria → Unidade → Setor → Sala.</small></label>
       <div className="wide customer-auto-document"><div><span>IDENTIFICAÇÃO AUTOMÁTICA DA FILIAL</span><h3>Consultar CNPJ</h3><p>Digite o CNPJ da filial/unidade. O ProAR busca os dados cadastrais e mantém todos os campos liberados para alteração antes de salvar.</p></div></div>
       <label>CNPJ<input value={doc} onChange={event => void lookupCustomerDocument(event.target.value)} placeholder="00.000.000/0000-00" inputMode="numeric"/></label>
