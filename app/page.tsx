@@ -18,6 +18,7 @@ import "./service-order-tracking.css";
 import "./public-contracts.css";
 import "./login-minimal.css";
 import "./operational-refresh.css";
+import "./design-system-proar.css";
 
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
