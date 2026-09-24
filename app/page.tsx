@@ -511,8 +511,8 @@ function Header({ title, subtitle, onMenu, onNew, searchItems, pendingItems, onS
   </header>;
 }
 
-function Sidebar({ current, setCurrent, open, close, permissions }: { current: string; setCurrent: (s: string) => void; open: boolean; close: () => void; permissions?: string[] }) {
-  const allowed = (name: string) => Boolean(permissions?.includes("*") || permissions?.includes(name));
+function Sidebar({ current, setCurrent, open, close, permissions, role }: { current: string; setCurrent: (s: string) => void; open: boolean; close: () => void; permissions?: string[]; role?: string }): { current: string; setCurrent: (s: string) => void; open: boolean; close: () => void; permissions?: string[] }) {
+  const allowed = (name: string) => Boolean(role === "Administrador" || permissions?.includes("*") || permissions?.includes(name));
   return <>
     {open && <button className="backdrop" aria-label="Fechar menu" onClick={close} />}
     <aside className={`sidebar ${open ? "open" : ""}`}>
