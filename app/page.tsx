@@ -475,7 +475,7 @@ type PurchaseItem = {
   productId?: string;
   registerProduct?: boolean;
   kind?: "Produto" | "Serviço" | "Custo adicional";
-};
+const newOptions = ["Cliente", "Unidade", "Equipamento", "Orçamento", "Venda", "Ordem de Serviço", "Agendamento", "Compra", "Produto", "Serviço", "Conta a pagar", "Conta a receber"]; return <header>;
 
 type PurchaseInstallment = { number: string; dueDate: string; value: number };
 
@@ -492,8 +492,9 @@ function Header({ title, subtitle, onMenu, onNew, searchItems, pendingItems, onS
   const [showPending, setShowPending] = useState(false);
   const normalizedQuery = query.trim().toLocaleLowerCase("pt-BR");
   const results = normalizedQuery ? searchItems.filter(item => `${item.title} ${item.detail}`.toLocaleLowerCase("pt-BR").includes(normalizedQuery)).slice(0, 8) : [];
-  const newOptions = ["Cliente", "Unidade", "Equipamento", "Orçamento", "Venda", "Ordem de Serviço", "Agendamento", "Compra", "Produto", "Serviço", "Conta a pagar", "Conta a receber"];
-function Sidebar({ current, setCurrent, open, close, permissions, role }: { current: string; setCurrent: (s: string) => void; open: boolean; close: () => void; permissions?: string[]; role?: string }): { current: string; setCurrent: (s: string) => void; open: boolean; close: () => void; permissions?: string[] }) {
+  
+  
+function Sidebar({ current, setCurrent, open, close, permissions, role }: { current: string; setCurrent: (s: string) => void; open: boolean; close: () => void; permissions?: string[]; role?: string }) {
     <div className="headline">
       <button className="menu-toggle" aria-label="Abrir menu" onClick={onMenu}><Menu size={20}/></button>
       <div className="header-module-mark"><img src="/icon.png" alt="ProAR"/></div>
@@ -511,7 +512,7 @@ function Sidebar({ current, setCurrent, open, close, permissions, role }: { curr
   </header>;
 }
 
-function Sidebar({ current, setCurrent, open, close, permissions, role }: { current: string; setCurrent: (s: string) => void; open: boolean; close: () => void; permissions?: string[]; role?: string }): { current: string; setCurrent: (s: string) => void; open: boolean; close: () => void; permissions?: string[] }) {
+function Sidebar({ current, setCurrent, open, close, permissions, role }: { current: string; setCurrent: (s: string) => void; open: boolean; close: () => void; permissions?: string[]; role?: string }) {
   const allowed = (name: string) => Boolean(role === "Administrador" || permissions?.includes("*") || permissions?.includes(name));
   return <>
     {open && <button className="backdrop" aria-label="Fechar menu" onClick={close} />}
