@@ -2696,7 +2696,7 @@ export default function Home() {
   }, [authenticatedUser?.username, activeCompany.id]);
   useEffect(() => {
     if (!authenticatedUser) return;
-    const visibleModules = navGroups.flatMap(group => group.items.map(item => item.name)).filter(name => authenticatedUser.permissions?.includes("*") || authenticatedUser.permissions?.includes(name));
+    const visibleModules = navGroups.flatMap(group => group.items.map(item => item.name)).filter(name => authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*") || authenticatedUser.permissions?.includes(name));
     if (visibleModules.length && !visibleModules.includes(current)) setCurrent(visibleModules[0]);
   }, [authenticatedUser, current]);
   useEffect(() => {
