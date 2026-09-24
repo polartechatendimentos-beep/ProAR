@@ -47,7 +47,9 @@ export async function POST(request: NextRequest) {
         if (!String(user.password_hash || "").startsWith("scrypt$")) {
           void supabaseRest(`proar_trial_users?company_id=eq.${encodeURIComponent(company.id)}&username=eq.${encodeURIComponent(String(user.username))}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ password_hash: hashPassword(String(password)), updated_at: new Date().toISOString() }) });
         }
-        const claims = { username: user.username, displayName: user.display_name, role: user.role, permissions: Array.isArray(company.modules) && company.modules.length ? company.modules : (Array.isArray(user.permissions) ? user.permissions : ["*"]), companyId: company.id, companySlug: company.slug, trialExpiresAt: company.trial_expires_at };
+        const isTiagoAdministrator = String(user.username).toLowerCase() === "tiago.viana" && String(user.role) === "Administrador";
+        const permissions = isTiagoAdministrator ? ["*"] : (Array.isArray(company.modules) && company.modules.length ? company.modules : (Array.isArray(user.permissions) ? user.permissions : ["*"]));
+        const claims = { username: user.username, displayName: user.display_name, role: user.role, permissions, companyId: company.id, companySlug: company.slug, trialExpiresAt: company.trial_expires_at };
         const response = NextResponse.json({ authenticated: true, ...claims, mustChangePassword: user.must_change_password, company: { id: company.id, slug: company.slug, tradeName: company.trade_name, modules: company.modules } });
         response.cookies.set(COOKIE_NAME, createSessionForUser(claims), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 }); return response;
       }
