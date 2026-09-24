@@ -493,7 +493,7 @@ function Header({ title, subtitle, onMenu, onNew, searchItems, pendingItems, onS
   const normalizedQuery = query.trim().toLocaleLowerCase("pt-BR");
   const results = normalizedQuery ? searchItems.filter(item => `${item.title} ${item.detail}`.toLocaleLowerCase("pt-BR").includes(normalizedQuery)).slice(0, 8) : [];
   const newOptions = ["Cliente", "Unidade", "Equipamento", "Orçamento", "Venda", "Ordem de Serviço", "Agendamento", "Compra", "Produto", "Serviço", "Conta a pagar", "Conta a receber"];
-  return <header className="topbar">
+function Sidebar({ current, setCurrent, open, close, permissions, role }: { current: string; setCurrent: (s: string) => void; open: boolean; close: () => void; permissions?: string[]; role?: string }): { current: string; setCurrent: (s: string) => void; open: boolean; close: () => void; permissions?: string[] }) {
     <div className="headline">
       <button className="menu-toggle" aria-label="Abrir menu" onClick={onMenu}><Menu size={20}/></button>
       <div className="header-module-mark"><img src="/icon.png" alt="ProAR"/></div>
