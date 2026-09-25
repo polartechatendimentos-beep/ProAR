@@ -8,10 +8,30 @@ import { validateCompanyAccess } from "../../../lib/company-access";
 const COOKIE_NAME = "proar_session";
 const safeEqual = (left: string, right: string) => { const a=Buffer.from(left); const b=Buffer.from(right); return a.length===b.length && timingSafeEqual(a,b); };
 
+async function authenticateLegacyEmployee(username: string, password: string) {
+  if (!supabaseConfigured()) return null;
+  const normalized = username.trim().toLocaleLowerCase("pt-BR");
+  const response = await supabaseRest("proar_state?select=id,payload");
+  if (!response.ok) return null;
+  const rows = await response.json() as { id: string; payload?: { moduleRecords?: Record<string, Array<Record<string, unknown>>> } }[];
+  const primaryCompanyId = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
+  for (const row of rows) {
+    const employees = row.payload?.moduleRecords?.["Funcionários"] ?? [];
+    const employee = employees.find(item => item.status !== "Inativo" && String(item.employeeUsername ?? "").trim().toLocaleLowerCase("pt-BR") === normalized);
+    if (!employee) continue;
+    const storedHash = String(employee.employeePasswordHash ?? "");
+    if (!storedHash || !verifyPassword(password, storedHash)) continue;
+    const permissionsMap = (employee.employeePermissions ?? {}) as Record<string, string[]>;
+    const permissions = String(employee.employeeRole || "") === "Administrador" ? ["*"] : Object.entries(permissionsMap).flatMap(([module, actions]) => actions.includes("Visualizar") ? [module, ...actions.map(action => `${module}:${action}`)] : []);
+    return { username: String(employee.employeeUsername || normalized), displayName: String(employee.name || normalized), role: String(employee.employeeRole || "Utilizador"), permissions, companyId: primaryCompanyId, legacy: true };
+  }
+  return null;
+}
+
 export async function GET(request: NextRequest) {
   const user = readSession(request.cookies.get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.json({ authenticated: false }, { status: 401 });
-  if (user.companyId) {
+  if (user.companyId && !user.legacy) {
     const access = await validateCompanyAccess(user.companyId);
     if (!access.ok) {
       const response = NextResponse.json({ authenticated: false, error: access.reason }, { status: 403 });
@@ -30,6 +50,11 @@ export async function POST(request: NextRequest) {
   if (staticUser) {
     const claims = { username: staticUser.username, displayName: staticUser.displayName, role: staticUser.role, permissions: staticUser.permissions };
     const response = NextResponse.json({ authenticated: true, ...claims }); response.cookies.set(COOKIE_NAME, createSessionForUser(claims), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 }); return response;
+  }
+
+  const legacyEmployee = await authenticateLegacyEmployee(String(username), String(password));
+  if (legacyEmployee) {
+    const response = NextResponse.json({ authenticated: true, ...legacyEmployee }); response.cookies.set(COOKIE_NAME, createSessionForUser(legacyEmployee), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 }); return response;
   }
 
   if (resolvedTenant && supabaseConfigured()) {
