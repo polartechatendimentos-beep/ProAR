@@ -475,7 +475,7 @@ type PurchaseItem = {
   productId?: string;
   registerProduct?: boolean;
   kind?: "Produto" | "Serviço" | "Custo adicional";
-const newOptions = ["Cliente", "Unidade", "Equipamento", "Orçamento", "Venda", "Ordem de Serviço", "Agendamento", "Compra", "Produto", "Serviço", "Conta a pagar", "Conta a receber"]; return <header>;
+};
 
 type PurchaseInstallment = { number: string; dueDate: string; value: number };
 
@@ -492,9 +492,8 @@ function Header({ title, subtitle, onMenu, onNew, searchItems, pendingItems, onS
   const [showPending, setShowPending] = useState(false);
   const normalizedQuery = query.trim().toLocaleLowerCase("pt-BR");
   const results = normalizedQuery ? searchItems.filter(item => `${item.title} ${item.detail}`.toLocaleLowerCase("pt-BR").includes(normalizedQuery)).slice(0, 8) : [];
-  
-  
-function Sidebar({ current, setCurrent, open, close, permissions, role }: { current: string; setCurrent: (s: string) => void; open: boolean; close: () => void; permissions?: string[]; role?: string }) {
+  const newOptions = ["Cliente", "Unidade", "Equipamento", "Orçamento", "Venda", "Ordem de Serviço", "Agendamento", "Compra", "Produto", "Serviço", "Conta a pagar", "Conta a receber"];
+  return <header className="topbar">
     <div className="headline">
       <button className="menu-toggle" aria-label="Abrir menu" onClick={onMenu}><Menu size={20}/></button>
       <div className="header-module-mark"><img src="/icon.png" alt="ProAR"/></div>
@@ -3358,7 +3357,7 @@ export default function Home() {
   if (checkingSession) return <div className="session-loading"><div className="brand-mark brand-logo"><img src="/icon.png" alt="ProAR"/></div><p>A carregar o ProAR...</p></div>;
   if (!authenticatedUser) return <LoginScreen onLogin={handleLogin}/>;
   return <div className="app-shell">
-    <Sidebar current={current} setCurrent={setCurrent} open={menuOpen} close={() => setMenuOpen(false)} permissions={authenticatedUser.permissions}/>
+    <Sidebar current={current} setCurrent={setCurrent} open={menuOpen} close={() => setMenuOpen(false)} permissions={authenticatedUser.permissions} role={authenticatedUser.role}/>
     <main className="main">
       <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNew={openNew} searchItems={globalSearchItems} pendingItems={pendingItems} onSearchSelect={openGlobalSearch} onPendingSelect={openPending} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onSwitchUser={logout} online={online} syncing={syncing} onPull={() => void pullFromDatabase()} onPush={() => void pushToDatabase()}/>
       {syncPhase !== "idle" && <div className={`sync-progress ${syncPhase}`} role="status" aria-label={syncPhase === "complete" ? "Dados atualizados" : "Sincronizando dados"}><i/></div>}
