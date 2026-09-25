@@ -67,6 +67,15 @@ async function readState(db: { url: string; key: string }, id: string) {
   return rows[0]?.payload ?? null;
 }
 
+async function readOperationalStates(db: { url: string; key: string }) {
+  const response = await fetch(`${db.url}/rest/v1/proar_state?select=payload&limit=200`, { headers: tenantHeaders(db.key), cache: "no-store" });
+  if (!response.ok) return [] as StatePayload[];
+  const rows = await response.json() as { payload?: StatePayload }[];
+  return rows.map(row => row.payload).filter((payload): payload is StatePayload => Boolean(
+    payload && (Array.isArray(payload.customers) || Array.isArray(payload.serviceOrders) || payload.moduleRecords)
+  ));
+}
+
 async function writeState(db: { url: string; key: string }, id: string, payload: StatePayload) {
   const response = await fetch(`${db.url}/rest/v1/proar_state?on_conflict=id`, {
     method: "POST",
@@ -92,6 +101,7 @@ export async function GET(request: NextRequest) {
         const state = await readState(db, candidate);
         if (state) states.push(state);
       }
+      if (!states.length) states.push(...await readOperationalStates(db));
       return NextResponse.json({ state: mergeStates(states), dedicatedDatabase: false, canonicalCompanyId: company, recoveredLegacyStates: states.length });
     }
     if (session.companyId || db.dedicated) {
