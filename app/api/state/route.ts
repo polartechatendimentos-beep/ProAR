@@ -82,6 +82,18 @@ export async function GET(request: NextRequest) {
     const company = companyKey(request, session); const db = await resolveTenantDb(session.companyId); if (!db.url || !db.key) throw new Error("Banco indisponível");
     const id = db.dedicated ? "main" : company;
 
+    // A empresa principal possui instalações históricas que podem ter usado
+    // `main` antes da adoção do identificador canônico. Leia ambas as chaves
+    // somente para recuperar os dados existentes; não há escrita neste fluxo.
+    if (session.companyId && company === PRIMARY_COMPANY_ID && !db.dedicated) {
+      const candidates = Array.from(new Set([company, requestedCompany(request), "main", "polartech"].filter(Boolean)));
+      const states: StatePayload[] = [];
+      for (const candidate of candidates) {
+        const state = await readState(db, candidate);
+        if (state) states.push(state);
+      }
+      return NextResponse.json({ state: mergeStates(states), dedicatedDatabase: false, canonicalCompanyId: company, recoveredLegacyStates: states.length });
+    }
     if (session.companyId || db.dedicated) {
       const state = await readState(db, id);
       return NextResponse.json({ state, dedicatedDatabase: db.dedicated, canonicalCompanyId: company });
