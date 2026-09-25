@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { authenticate, createSessionForUser, readSession } from "../../../lib/proar-auth";
 import { supabaseConfigured, supabaseRest } from "../../../lib/supabase-rest";
@@ -20,7 +20,11 @@ async function authenticateLegacyEmployee(username: string, password: string) {
     const employee = employees.find(item => item.status !== "Inativo" && String(item.employeeUsername ?? "").trim().toLocaleLowerCase("pt-BR") === normalized);
     if (!employee) continue;
     const storedHash = String(employee.employeePasswordHash ?? "");
-    if (!storedHash || !verifyPassword(password, storedHash)) continue;
+    const suppliedHash = createHash("sha256").update(password).digest("hex");
+    const passwordMatches = storedHash.startsWith("scrypt$")
+      ? verifyPassword(password, storedHash)
+      : safeEqual(suppliedHash, storedHash);
+    if (!storedHash || !passwordMatches) continue;
     const permissionsMap = (employee.employeePermissions ?? {}) as Record<string, string[]>;
     const permissions = String(employee.employeeRole || "") === "Administrador" ? ["*"] : Object.entries(permissionsMap).flatMap(([module, actions]) => actions.includes("Visualizar") ? [module, ...actions.map(action => `${module}:${action}`)] : []);
     return { username: String(employee.employeeUsername || normalized), displayName: String(employee.name || normalized), role: String(employee.employeeRole || "Utilizador"), permissions, companyId: primaryCompanyId, legacy: true };
