@@ -12,6 +12,7 @@ type ProARUser = {
   companyId?: string;
   companySlug?: string;
   trialExpiresAt?: string;
+  legacy?: boolean;
 };
 const SESSION_SECONDS = 60 * 60 * 12;
 
@@ -42,7 +43,7 @@ export function readSession(token?: string | null): Omit<ProARUser, "passwordHas
   if (!token) return null;
   if (token.startsWith("v2.")) {
     const [, data, signature] = token.split("."); if (!data || !signature || !safeEqual(signature, sign(`v2.${data}`))) return null;
-    try { const parsed = JSON.parse(Buffer.from(data, "base64url").toString("utf8")); if (!parsed.exp || parsed.exp < Date.now() / 1000) return null; if (parsed.trialExpiresAt && new Date(parsed.trialExpiresAt).getTime() < Date.now()) return null; return { username: parsed.username, displayName: parsed.displayName, role: parsed.role, permissions: parsed.permissions ?? [], companyId: parsed.companyId, companySlug: parsed.companySlug, trialExpiresAt: parsed.trialExpiresAt }; } catch { return null; }
+    try { const parsed = JSON.parse(Buffer.from(data, "base64url").toString("utf8")); if (!parsed.exp || parsed.exp < Date.now() / 1000) return null; if (parsed.trialExpiresAt && new Date(parsed.trialExpiresAt).getTime() < Date.now()) return null; return { username: parsed.username, displayName: parsed.displayName, role: parsed.role, permissions: parsed.permissions ?? [], companyId: parsed.companyId, companySlug: parsed.companySlug, trialExpiresAt: parsed.trialExpiresAt, legacy: parsed.legacy === true }; } catch { return null; }
   }
   const [encodedUsername, expiresAt, signature] = token.split("."); if (!encodedUsername || !expiresAt || !signature || Number(expiresAt) < Date.now() / 1000) return null;
   const payload = `${encodedUsername}.${expiresAt}`; if (!safeEqual(signature, sign(payload))) return null; const username = decodeURIComponent(encodedUsername); const user = users().find(item => item.username === username); if (!user) return null;
