@@ -5,6 +5,7 @@ import { workExternalAccess, works, workHousePriorities } from "@/db/schema";
 import { readSession } from "@/lib/proar-auth";
 import { readWorkExternalSession } from "@/lib/work-external-auth";
 import { assertCompanyAccess, getEffectiveCompanyId } from "@/lib/company-access";
+import { authorizationError } from "@/lib/authorization";
 
 export async function GET(request: Request) {
   try {
@@ -148,26 +149,19 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ success: false, error: "Não autorizado." }, { status: 401 });
     }
 
+    if (external) {
+      return NextResponse.json({ success: false, error: "Acesso externo pode criar apontamentos, mas não pode alterá-los nem modificar o estado operacional." }, { status: 403 });
+    }
+    const denied = authorizationError(internal!, "WORK_FINDING_REVIEW");
+    if (denied) return NextResponse.json({ success: false, error: denied.error }, { status: denied.status });
+
     if (!body.id) return NextResponse.json({ success: false, error: "id obrigatório." }, { status: 400 });
 
     const [existing] = await db.select().from(workHousePriorities).where(eq(workHousePriorities.id, Number(body.id))).limit(1);
     if (!existing) return NextResponse.json({ success: false, error: "Prioridade não encontrada." }, { status: 404 });
 
-    if (external && existing.workId !== external.workId) {
-      return NextResponse.json({ success: false, error: "Credencial não pertence a esta obra." }, { status: 403 });
-    }
-    if (external) {
-      const [access] = await db.select().from(workExternalAccess).where(eq(workExternalAccess.id, external.accessId)).limit(1);
-      if (!access || !access.enabled || access.workId !== external.workId) {
-        return NextResponse.json({ success: false, error: "Sessão externa inválida ou bloqueada." }, { status: 403 });
-      }
-      if ((access.atualizadoEm?.toISOString?.() || String(access.id)) !== external.tokenVersion) {
-        return NextResponse.json({ success: false, error: "Sessão externa expirada. Faça login novamente." }, { status: 401 });
-      }
-    }
-
-    const actor = external ? external.nome : internal!.nome;
-    const actorTipo = external ? external.tipo : "interno";
+    const actor = internal!.nome;
+    const actorTipo = "interno";
     const historicoAtual = (existing.historico as any[]) || [];
 
     const updates: any = { atualizadoEm: new Date() };

@@ -5,6 +5,7 @@ import { readSession } from "@/lib/proar-auth";
 import { assertCompanyAccess, getEffectiveCompanyId } from "@/lib/company-access";
 import { desc, eq } from "drizzle-orm";
 import crypto from "crypto";
+import { authorizationError } from "@/lib/authorization";
 
 export async function GET(request: Request) {
   try {
@@ -42,6 +43,8 @@ export async function POST(request: Request) {
     if (!session) {
       return NextResponse.json({ success: false, error: "Acesso não autorizado." }, { status: 401 });
     }
+    const denied = authorizationError(session, "WORK_CREATE");
+    if (denied) return NextResponse.json({ success: false, error: denied.error }, { status: denied.status });
 
     const body = await request.json();
     const companyId = assertCompanyAccess(session, body.companyId);
@@ -111,6 +114,8 @@ export async function PATCH(request: Request) {
     if (!session) {
       return NextResponse.json({ success: false, error: "Acesso não autorizado." }, { status: 401 });
     }
+    const denied = authorizationError(session, "WORK_UPDATE");
+    if (denied) return NextResponse.json({ success: false, error: denied.error }, { status: denied.status });
 
     const body = await request.json();
     if (!body.id) {
@@ -138,6 +143,12 @@ export async function PATCH(request: Request) {
     if (body.engenheiroResponsavel !== undefined) updateData.engenheiroResponsavel = body.engenheiroResponsavel;
     if (body.equipe !== undefined) updateData.equipe = body.equipe;
     if (body.acessoApontamentosAtivo !== undefined) updateData.acessoApontamentosAtivo = Boolean(body.acessoApontamentosAtivo);
+    if (body.status !== undefined || body.progresso !== undefined) {
+      const statusDenied = authorizationError(session, "WORK_STATUS_UPDATE");
+      if (statusDenied) return NextResponse.json({ success: false, error: statusDenied.error }, { status: statusDenied.status });
+      if (body.status !== undefined) updateData.status = String(body.status);
+      if (body.progresso !== undefined) updateData.progresso = Math.max(0, Math.min(100, Number(body.progresso)));
+    }
 
     const [updated] = await db.update(works).set(updateData).where(eq(works.id, existing.id)).returning();
 

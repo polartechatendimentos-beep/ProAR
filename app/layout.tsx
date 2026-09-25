@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./unified-shell.css";
 import { PwaRegister } from "@/components/PwaRegister";
 
 export const metadata: Metadata = {

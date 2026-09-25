@@ -5,8 +5,7 @@ import { workExternalAccess, workFindings, works } from "@/db/schema";
 import { readSession } from "@/lib/proar-auth";
 import { assertCompanyAccess, getEffectiveCompanyId } from "@/lib/company-access";
 import { readWorkExternalSession } from "@/lib/work-external-auth";
-
-const EXTERNAL_ALLOWED_ACTIONS = new Set(["aprovar", "reprovar"]);
+import { authorizationError } from "@/lib/authorization";
 
 export async function GET(request: Request) {
   try {
@@ -200,33 +199,15 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ success: false, error: "Não autorizado." }, { status: 401 });
     }
 
+    if (external) {
+      return NextResponse.json({ success: false, error: "Acesso externo pode criar apontamentos, mas não pode alterar status, respostas ou histórico." }, { status: 403 });
+    }
+    const denied = authorizationError(session!, "WORK_FINDING_REVIEW");
+    if (denied) return NextResponse.json({ success: false, error: denied.error }, { status: denied.status });
+
     const [existing] = await db.select().from(workFindings).where(eq(workFindings.id, Number(id))).limit(1);
     if (!existing) {
       return NextResponse.json({ success: false, error: "Apontamento não encontrado." }, { status: 404 });
-    }
-
-    if (external && existing.workId !== external.workId) {
-      return NextResponse.json({ success: false, error: "Credencial não pertence a esta obra." }, { status: 403 });
-    }
-    if (external) {
-      const [access] = await db.select().from(workExternalAccess).where(eq(workExternalAccess.id, external.accessId)).limit(1);
-      if (!access || !access.enabled || access.workId !== external.workId) {
-        return NextResponse.json({ success: false, error: "Sessão externa inválida ou bloqueada." }, { status: 403 });
-      }
-      if ((access.atualizadoEm?.toISOString?.() || String(access.id)) !== external.tokenVersion) {
-        return NextResponse.json({ success: false, error: "Sessão externa expirada. Faça login novamente." }, { status: 401 });
-      }
-    }
-
-    if (external && !EXTERNAL_ALLOWED_ACTIONS.has(String(action || ""))) {
-      return NextResponse.json(
-        { success: false, error: "Acesso externo só pode aprovar ou reprovar correções aguardando conferência." },
-        { status: 403 }
-      );
-    }
-
-    if (!external && !session) {
-      return NextResponse.json({ success: false, error: "Acesso interno obrigatório para esta ação." }, { status: 403 });
     }
 
     const historicoAtual = (existing.historico as any[]) || [];
@@ -258,8 +239,8 @@ export async function PATCH(request: Request) {
         ],
       };
     } else if (action === "aprovar") {
-      const aprovador = external ? external.nome : body.aprovadoPor || session?.nome || "Engenharia/Fiscalização";
-      const funcao = external ? external.funcao : "Fiscalização";
+      const aprovador = body.aprovadoPor || session!.nome;
+      const funcao = "Equipe interna";
       updatedData = {
         ...updatedData,
         situacao: "aprovada",
@@ -278,8 +259,8 @@ export async function PATCH(request: Request) {
         ],
       };
     } else if (action === "reprovar") {
-      const reprovador = external ? external.nome : body.reprovadoPor || session?.nome || "Engenharia/Fiscalização";
-      const funcao = external ? external.funcao : "Fiscalização";
+      const reprovador = body.reprovadoPor || session!.nome;
+      const funcao = "Equipe interna";
       const motivo = body.motivoReprovacao || "Necessário novo ajuste técnico.";
       updatedData = {
         ...updatedData,
