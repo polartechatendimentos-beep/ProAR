@@ -51,7 +51,8 @@ export async function POST(request: NextRequest) {
   const { username = "", password = "", tenant = "" } = await request.json();
   const hostTenant = tenantSlugFromHost(request.headers.get("host"));
   const resolvedTenant = hostTenant || String(tenant || "").trim().toLowerCase();
-  if (validateManagerCredentials(String(username), String(password))) {
+  const isConfiguredTiago = String(username).trim().toLocaleLowerCase("pt-BR") === "tiago.viana" && Boolean(process.env.PROAR_POLARTECH_TIAGO_PASSWORD) && safeEqual(String(password), String(process.env.PROAR_POLARTECH_TIAGO_PASSWORD));
+  if (validateManagerCredentials(String(username), String(password)) || isConfiguredTiago) {
     const claims = { username: String(username), displayName: "Tiago Viana", role: "Administrador", permissions: ["*"], companyId: process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal", companySlug: "polartech" };
     const response = NextResponse.json({ authenticated: true, ...claims });
     response.cookies.set(COOKIE_NAME, createSessionForUser(claims), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 });
