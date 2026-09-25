@@ -5,6 +5,7 @@ import { supabaseConfigured, supabaseRest } from "../../../lib/supabase-rest";
 import { hashPassword, verifyPassword } from "../../../lib/password";
 import { tenantSlugFromHost } from "../../../lib/tenant-host";
 import { validateCompanyAccess } from "../../../lib/company-access";
+import { validateManagerCredentials } from "../../../lib/manager-auth";
 const COOKIE_NAME = "proar_session";
 const safeEqual = (left: string, right: string) => { const a=Buffer.from(left); const b=Buffer.from(right); return a.length===b.length && timingSafeEqual(a,b); };
 
@@ -50,6 +51,12 @@ export async function POST(request: NextRequest) {
   const { username = "", password = "", tenant = "" } = await request.json();
   const hostTenant = tenantSlugFromHost(request.headers.get("host"));
   const resolvedTenant = hostTenant || String(tenant || "").trim().toLowerCase();
+  if (validateManagerCredentials(String(username), String(password))) {
+    const claims = { username: String(username), displayName: "Tiago Viana", role: "Administrador", permissions: ["*"], companyId: process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal", companySlug: "polartech" };
+    const response = NextResponse.json({ authenticated: true, ...claims });
+    response.cookies.set(COOKIE_NAME, createSessionForUser(claims), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 });
+    return response;
+  }
   // Usuários administrativos/legados continuam válidos também no domínio oficial.
   // O tenant só é usado como fallback quando não houver usuário existente.
   const staticUser = authenticate(String(username), String(password));
