@@ -3,8 +3,8 @@ import { supabaseRest } from "./supabase-rest";
 
 export type TenantDb = { url: string; key: string; dedicated: boolean; companyId?: string };
 export async function resolveTenantDb(companyId?: string): Promise<TenantDb> {
-  const masterUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const masterKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+  const masterUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://tnjkdurifalrdnttsova.supabase.co";
+  const masterKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY ?? "";
   if (!companyId) return { url: masterUrl, key: masterKey, dedicated: false };
   try {
     const response = await supabaseRest(`proar_tenant_instances?select=api_url,encrypted_secret,provisioning_status&company_id=eq.${encodeURIComponent(companyId)}&limit=1`);
