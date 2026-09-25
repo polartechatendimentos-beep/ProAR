@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { DollarSign, CheckCircle2, AlertCircle, ArrowUpRight, ArrowDownLeft, Plus, X } from "lucide-react";
+import { DollarSign, X } from "lucide-react";
 
 interface FinanceRecord {
   id: string;
@@ -59,6 +59,10 @@ export function FinanceiroPanel() {
   const [selectedRecord, setSelectedRecord] = useState<FinanceRecord | null>(null);
   const [valorBaixa, setValorBaixa] = useState<number>(0);
   const [formaPagamento, setFormaPagamento] = useState("PIX");
+  const today = new Date().toISOString().slice(0, 10);
+  const totalReceber = records.filter(record => record.tipo === "RECEBER").reduce((total, record) => total + record.valorTotal - record.valorLiquidado, 0);
+  const totalPagar = records.filter(record => record.tipo === "PAGAR").reduce((total, record) => total + record.valorTotal - record.valorLiquidado, 0);
+  const overdue = records.filter(record => record.status !== "liquidada" && record.dataVencimento < today).reduce((total, record) => total + record.valorTotal - record.valorLiquidado, 0);
 
   const handleOpenBaixa = (record: FinanceRecord) => {
     setSelectedRecord(record);
@@ -108,6 +112,12 @@ export function FinanceiroPanel() {
         </div>
       </div>
 
+      <div className="grid gap-3 border-b border-slate-100 p-6 sm:grid-cols-3">
+        <article className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs font-bold text-emerald-700">Receitas a receber</p><strong className="mt-1 block text-xl text-emerald-950">{totalReceber.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong></article>
+        <article className="rounded-xl border border-rose-200 bg-rose-50 p-4"><p className="text-xs font-bold text-rose-700">Despesas a pagar</p><strong className="mt-1 block text-xl text-rose-950">{totalPagar.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong></article>
+        <article className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-bold text-amber-700">Valores vencidos</p><strong className="mt-1 block text-xl text-amber-950">{overdue.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong></article>
+      </div>
+
       {/* Tabela de Contas */}
       <div className="p-6">
         <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
@@ -128,7 +138,7 @@ export function FinanceiroPanel() {
               {records.map((r) => {
                 const saldoRestante = r.valorTotal - r.valorLiquidado;
                 return (
-                  <tr key={r.id} className="hover:bg-slate-50/80">
+                  <tr key={r.id} className={`${r.status !== "liquidada" && r.dataVencimento < today ? "bg-rose-50/70" : r.tipo === "RECEBER" ? "bg-emerald-50/30" : ""} hover:bg-slate-50/80`}>
                     <td className="p-3">
                       <span className="font-bold text-slate-900 block">{r.descricao}</span>
                       <span className="text-[10px] text-slate-400 font-mono">{r.id} • Vencimento: {r.dataVencimento}</span>
@@ -167,7 +177,7 @@ export function FinanceiroPanel() {
                           onClick={() => handleOpenBaixa(r)}
                           className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[11px] transition shadow-sm"
                         >
-                          Dar Baixa Restante
+                          Baixa em 1 clique
                         </button>
                       ) : (
                         <span className="text-slate-400 font-bold text-[11px] italic">Liquidado</span>

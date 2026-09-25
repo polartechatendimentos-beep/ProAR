@@ -12,3 +12,17 @@ body {
   background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@media (pointer: coarse), (max-width: 768px) {
+  button,
+  [role="button"],
+  select,
+  input:not([type="checkbox"]):not([type="radio"]) {
+    min-height: 44px;
+  }
+
+  button,
+  [role="button"] {
+    min-width: 44px;
+  }
+}

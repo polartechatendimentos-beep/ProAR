@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { 
   Building2, Wrench, FileText, ShoppingCart, DollarSign, UsersRound,
-  ShieldCheck, Landmark, Search, Bell, Settings, LogOut, CheckCircle2
+  ShieldCheck, Landmark, Search
 } from "lucide-react";
 
 import { DailyWorkCenter } from "@/components/DailyWorkCenter";
@@ -15,8 +15,9 @@ import { FinanceiroPanel } from "@/components/FinanceiroPanel";
 import { PublicContractsPanel } from "@/components/PublicContractsPanel";
 import { TechnicalCompliancePanel } from "@/components/TechnicalCompliancePanel";
 import { CustomerProfileWorkspace } from "@/components/CustomerProfileWorkspace";
+import { ProductCatalogPanel } from "@/components/ProductCatalogPanel";
 
-type TabType = "dashboard" | "clientes" | "os" | "obras" | "orcamento" | "pdv" | "financeiro" | "contratos" | "pmoc";
+type TabType = "dashboard" | "clientes" | "produtos" | "os" | "obras" | "orcamento" | "pdv" | "financeiro" | "contratos" | "pmoc";
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
@@ -78,6 +79,12 @@ export default function HomePage() {
               }`}
             >
               <UsersRound className="w-3.5 h-3.5" /> Clientes
+            </button>
+            <button
+              onClick={() => setActiveTab("produtos")}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${activeTab === "produtos" ? "bg-blue-600 text-white shadow-sm" : "text-slate-400 hover:text-white hover:bg-slate-900"}`}
+            >
+              <ShoppingCart className="w-3.5 h-3.5" /> Produtos
             </button>
             <button
               onClick={() => setActiveTab("dashboard")}
@@ -176,6 +183,7 @@ export default function HomePage() {
         {/* Abas Específicas */}
         {activeTab === "os" && <ServiceOrdersSection />}
         {activeTab === "clientes" && <CustomerProfileWorkspace />}
+        {activeTab === "produtos" && <ProductCatalogPanel />}
         {activeTab === "obras" && <WorkOperationsPanel />}
         {activeTab === "orcamento" && <OrcamentoPanel />}
         {activeTab === "pdv" && <PdvBalcaoPanel />}

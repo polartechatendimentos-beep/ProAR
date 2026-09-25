@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
+import { isValidCnpj } from "@/lib/br-documents";
 
 export async function GET(request: Request, context: { params: Promise<{ cnpj: string }> }) {
   const { cnpj } = await context.params;
   const cleanCnpj = (cnpj || "").replace(/\D/g, "");
 
-  if (cleanCnpj.length !== 14) {
+  if (!isValidCnpj(cleanCnpj)) {
     return NextResponse.json(
-      { success: false, error: "CNPJ inválido. O documento deve conter exatamente 14 dígitos." },
+      { success: false, error: "CNPJ inválido. Confira os dígitos verificadores." },
       { status: 400 }
     );
   }
@@ -37,7 +38,7 @@ export async function GET(request: Request, context: { params: Promise<{ cnpj: s
           email: data.email,
         });
       }
-    } catch (e) {}
+    } catch {}
 
     try {
       const res2 = await fetch(`https://receitaws.com.br/v1/cnpj/${cleanCnpj}`);
@@ -61,13 +62,13 @@ export async function GET(request: Request, context: { params: Promise<{ cnpj: s
           });
         }
       }
-    } catch (e) {}
+    } catch {}
 
     return NextResponse.json(
       { success: false, error: "CNPJ não localizado nas bases públicas ou indisponibilidade momentânea." },
       { status: 404 }
     );
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : "Falha inesperada na consulta." }, { status: 500 });
   }
 }

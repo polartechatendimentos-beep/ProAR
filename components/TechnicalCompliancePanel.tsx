@@ -1,10 +1,31 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ShieldCheck, FileCheck, Award, AlertCircle, CheckCircle } from "lucide-react";
+import { readOfflineChecklist, saveOfflineChecklist } from "@/lib/offline-checklist";
+
+const fieldItems = [
+  "Limpeza e assepsia profunda dos filtros de ar",
+  "Higienização da serpentina evaporadora e bandeja de condensado",
+  "Desobstrução e lavagem do sistema de dreno",
+  "Aplicação de produto bactericida biodegradável registrado no MS",
+  "Revisão de fiações elétricas, capacitores e aperto de bornes",
+  "Medição de superaquecimento, sub-resfriamento e pressão de gás",
+];
 
 export function TechnicalCompliancePanel() {
   const [activeTab, setActiveTab] = useState<"pmoc" | "crea" | "anvisa">("pmoc");
+  const [checks, setChecks] = useState<Record<string, boolean>>({});
+  const [offlineSaved, setOfflineSaved] = useState(false);
+
+  useEffect(() => { readOfflineChecklist("pmoc-current").then(setChecks).catch(() => undefined); }, []);
+  const toggleCheck = (item: string) => {
+    setChecks(current => {
+      const next = { ...current, [item]: !current[item] };
+      saveOfflineChecklist("pmoc-current", next).then(() => setOfflineSaved(true)).catch(() => undefined);
+      return next;
+    });
+  };
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -84,31 +105,9 @@ export function TechnicalCompliancePanel() {
                 Checklist Operacional Padrão de Higienização e Manutenção
               </h4>
               <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-slate-700">
-                <li className="flex items-center gap-2">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  Limpeza e assepsia profunda dos filtros de ar
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  Higienização da serpentina evaporadora e bandeja de condensado
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  Desobstrução e lavagem do sistema de dreno
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  Aplicação de produto bactericida biodegradável registrado no MS
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  Revisão de fiações elétricas, capacitores e aperto de bornes
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  Medição de superaquecimento, sub-resfriamento e pressão de gás
-                </li>
+                {fieldItems.map(item => <li key={item}><label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-2 hover:bg-white"><input type="checkbox" checked={Boolean(checks[item])} onChange={()=>toggleCheck(item)} className="size-5 accent-emerald-600"/><CheckCircle className={`size-4 shrink-0 ${checks[item] ? "text-emerald-600" : "text-slate-300"}`}/>{item}</label></li>)}
               </ul>
+              <p className="mt-3 text-xs font-semibold text-slate-500">{offlineSaved ? "✓ Salvo neste dispositivo; sincronização será retomada quando houver conexão." : "Checklist disponível offline neste dispositivo."}</p>
             </div>
           </div>
         )}
