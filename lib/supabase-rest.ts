@@ -1,6 +1,14 @@
 const baseUrl = () => (process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://tnjkdurifalrdnttsova.supabase.co").replace(/\/$/, "");
 const serviceKey = () => process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY;
 
+export function supabaseHeaders(key: string) {
+  return {
+    apikey: key,
+    ...(key.startsWith("sb_secret_") ? {} : { Authorization: `Bearer ${key}` }),
+    "Content-Type": "application/json",
+  };
+}
+
 export function supabaseConfigured() {
   return Boolean(baseUrl() && serviceKey());
 }
@@ -11,9 +19,7 @@ export async function supabaseRest(path: string, init: RequestInit = {}) {
   return fetch(`${baseUrl()}/rest/v1/${path}`, {
     ...init,
     headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
+      ...supabaseHeaders(key),
       ...init.headers,
     },
     cache: "no-store",

@@ -1,8 +1,9 @@
 import { createHash, randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { supabaseHeaders } from "../../../../lib/supabase-rest";
 
-const config = () => ({ url: process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL, key: process.env.SUPABASE_SERVICE_ROLE_KEY });
-const headers = (key: string) => ({ apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" });
+const config = () => ({ url: process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL, key: process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY });
+const headers = supabaseHeaders;
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const publicView = (map: Record<string, unknown>) => ({ ...map, externalAccess: undefined });
 const normalize = (value: unknown) => String(value ?? "").trim().toLocaleLowerCase("pt-BR");

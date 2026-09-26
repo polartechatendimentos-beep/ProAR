@@ -1,5 +1,5 @@
 import { decryptTenantSecret } from "./tenant-crypto";
-import { supabaseRest } from "./supabase-rest";
+import { supabaseHeaders, supabaseRest } from "./supabase-rest";
 
 export type TenantDb = { url: string; key: string; dedicated: boolean; companyId?: string };
 export async function resolveTenantDb(companyId?: string): Promise<TenantDb> {
@@ -22,4 +22,4 @@ export async function resolveTenantDb(companyId?: string): Promise<TenantDb> {
   // Enquanto o banco dedicado não estiver pronto, o acesso operacional fica indisponível.
   return { url: "", key: "", dedicated: true, companyId };
 }
-export function tenantHeaders(key: string) { return { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" }; }
+export function tenantHeaders(key: string) { return supabaseHeaders(key); }

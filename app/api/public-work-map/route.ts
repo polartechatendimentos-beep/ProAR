@@ -1,13 +1,14 @@
 import { randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { readSession } from "../../../lib/proar-auth";
+import { supabaseHeaders } from "../../../lib/supabase-rest";
 
 const COOKIE_NAME = "proar_session";
-const config = () => ({ url: process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL, key: process.env.SUPABASE_SERVICE_ROLE_KEY });
+const config = () => ({ url: process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL, key: process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY });
 const safeCompany = (value: unknown) => String(value || "polartech-principal").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80) || "polartech-principal";
 const safeWork = (value: unknown) => String(value || "reserva-imperial").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 100) || "reserva-imperial";
 const mapId = (company: unknown, work: unknown) => { const companyId=safeCompany(company); const workId=safeWork(work); return workId === "reserva-imperial" ? `workmap-${companyId}` : `workmap-${companyId}-${workId}`; };
-const headers = (key: string) => ({ apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" });
+const headers = supabaseHeaders;
 const publicView = (map: Record<string, unknown> | null | undefined) => map ? { ...map, externalAccess: undefined, houses: Array.isArray(map.houses) ? map.houses.map(house => { const item = house as Record<string, unknown>; const { externalObservations: _externalObservations, ...safeHouse } = item; return safeHouse; }) : [] } : null;
 
 export async function GET(request: NextRequest) {

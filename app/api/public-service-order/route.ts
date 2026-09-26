@@ -1,9 +1,10 @@
 import { randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { readSession } from "../../../lib/proar-auth";
+import { supabaseHeaders } from "../../../lib/supabase-rest";
 
-const config = () => ({ url: process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL, key: process.env.SUPABASE_SERVICE_ROLE_KEY });
-const headers = (key: string) => ({ apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" });
+const config = () => ({ url: process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL, key: process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY });
+const headers = supabaseHeaders;
 const safe = (value: unknown, fallback: string) => String(value || fallback).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 120) || fallback;
 const snapshotId = (company: unknown, order: unknown) => `osmap-${safe(company,"company")}-${safe(order,"order")}`;
 

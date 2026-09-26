@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { municipalityDistances } from "./municipality-distances";
+import { supabaseHeaders } from "./supabase-rest";
 
 const PNCP_URL = "https://pncp.gov.br/api/consulta/v1/contratacoes/proposta";
 const PNCP_API_BASE = "https://pncp.gov.br/api/pncp";
@@ -168,10 +169,10 @@ async function fetchCompras(dataInicial: string, dataFinal: string, codigoModali
 
 async function readMonitorStore() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY;
   if (!url || !key) return { items: [] as PncpTender[], lastScan: null as string | null, lastError: "" };
   const response = await fetch(`${url}/rest/v1/proar_state?id=eq.licitacoes&select=payload`, {
-    headers: { apikey: key, Authorization: `Bearer ${key}` }, cache: "no-store", signal: AbortSignal.timeout(4000),
+    headers: supabaseHeaders(key), cache: "no-store", signal: AbortSignal.timeout(4000),
   });
   if (!response.ok) return { items: [] as PncpTender[], lastScan: null as string | null, lastError: "" };
   const rows = await response.json();
