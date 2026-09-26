@@ -8,9 +8,11 @@ export async function GET(request: NextRequest) {
 
   let registered: boolean | null = null;
   let status: string | null = null;
+  let databaseStatus: number | null = null;
   if (supabaseConfigured()) {
     try {
       const response = await supabaseRest(`proar_companies?select=slug,status&slug=eq.${encodeURIComponent(tenant)}&limit=1`);
+      databaseStatus = response.status;
       const rows = response.ok ? await response.json() : [];
       registered = Boolean(rows[0]);
       status = rows[0]?.status || null;
@@ -22,6 +24,7 @@ export async function GET(request: NextRequest) {
     tenant,
     registered,
     status,
+    databaseStatus,
     publicEntry: "/",
     aliases: ["/login", "/auth", "/signin"],
     checkedAt: new Date().toISOString(),
