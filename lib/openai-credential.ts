@@ -1,3 +1,4 @@
+import { databaseFetch } from "./supabase-rest";
 import { decryptTenantSecret } from "./tenant-crypto";
 import { resolveTenantDb, tenantHeaders } from "./tenant-rest";
 
@@ -9,7 +10,7 @@ export const openAiIntegrationId = (companyId: string) => `secure-integration-${
 export async function readStoredOpenAiIntegration(companyId: string): Promise<StoredIntegration | null> {
   const db = await resolveTenantDb(safeCompanyId(companyId));
   if (!db.url || !db.key) return null;
-  const response = await fetch(`${db.url}/rest/v1/proar_state?id=eq.${encodeURIComponent(openAiIntegrationId(companyId))}&select=payload`, { headers: tenantHeaders(db.key), cache: "no-store" });
+  const response = await databaseFetch(`${db.url}/rest/v1/proar_state?id=eq.${encodeURIComponent(openAiIntegrationId(companyId))}&select=payload`, { headers: tenantHeaders(db.key), cache: "no-store" });
   if (!response.ok) return null;
   const rows = await response.json() as { payload?: StoredIntegration }[];
   return rows[0]?.payload ?? null;

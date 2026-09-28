@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readSession } from "../../../lib/proar-auth";
 import { resolveTenantDb } from "../../../lib/tenant-rest";
-import { supabaseRest } from "../../../lib/supabase-rest";
+import { databaseFetch } from "../../../lib/supabase-rest";
+import { tenantHeaders } from "../../../lib/tenant-rest";
+
+function stateRest(db: { url: string; key: string }, path: string, init: RequestInit = {}) {
+  return databaseFetch(`${db.url}/rest/v1/${path}`, {
+    ...init,
+    headers: { ...tenantHeaders(db.key), ...init.headers },
+    cache: "no-store",
+  });
+}
 
 function safeCompany(value: unknown) { return String(value || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80); }
 function sessionFor(request: NextRequest) { return readSession(request.cookies.get("proar_session")?.value); }
@@ -62,14 +71,14 @@ function mergeStates(states: StatePayload[]) {
 
 async function readState(db: { url: string; key: string }, id: string) {
   if (!id) return null;
-  const response = await supabaseRest(`proar_state?id=eq.${encodeURIComponent(id)}&select=payload`);
+  const response = await stateRest(db, `proar_state?id=eq.${encodeURIComponent(id)}&select=payload`);
   if (!response.ok) return null;
   const rows = await response.json() as { payload?: StatePayload }[];
   return rows[0]?.payload ?? null;
 }
 
 async function readOperationalStates(db: { url: string; key: string }) {
-  const response = await supabaseRest("proar_state?select=payload&limit=200");
+  const response = await stateRest(db, "proar_state?select=payload&limit=200");
   if (!response.ok) return [] as StatePayload[];
   const rows = await response.json() as { payload?: StatePayload }[];
   return rows.map(row => row.payload).filter((payload): payload is StatePayload => Boolean(
@@ -78,7 +87,7 @@ async function readOperationalStates(db: { url: string; key: string }) {
 }
 
 async function writeState(db: { url: string; key: string }, id: string, payload: StatePayload) {
-  const response = await supabaseRest("proar_state?on_conflict=id", {
+  const response = await stateRest(db, "proar_state?on_conflict=id", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
     body: JSON.stringify({ id, payload, updated_at: new Date().toISOString() }),
@@ -134,7 +143,7 @@ export async function PUT(request: NextRequest) {
   try {
     const body = await request.json(); const company = companyKey(request, session); const db = await resolveTenantDb(session.companyId); if (!db.url || !db.key) throw new Error("Banco indisponível");
     const id = db.dedicated ? "main" : company;
-    const currentResponse = await supabaseRest(`proar_state?id=eq.${encodeURIComponent(id)}&select=payload`);
+    const currentResponse = await stateRest(db, `proar_state?id=eq.${encodeURIComponent(id)}&select=payload`);
     const currentRows = currentResponse.ok ? await currentResponse.json() as { payload?: StatePayload }[] : []; const current = currentRows[0]?.payload; const currentRevision = Number(current?._revision || 0); const baseRevision = Number(body._baseRevision || 0);
     if (current && !body._force && baseRevision !== currentRevision) return NextResponse.json({ error: "A base online possui uma versão mais recente.", conflict: true, state: current }, { status: 409 });
     const { _baseRevision: _ignoredBase, _force: _ignoredForce, companyId: _ignoredCompany, ...cleanBody } = body;
@@ -143,13 +152,13 @@ export async function PUT(request: NextRequest) {
     let response: Response;
     if (current) {
       const revisionFilter = current._revision === undefined ? "payload->>_revision=is.null" : `payload->>_revision=eq.${currentRevision}`;
-      response = await supabaseRest(`proar_state?id=eq.${encodeURIComponent(id)}&${revisionFilter}&select=payload`, {
+      response = await stateRest(db, `proar_state?id=eq.${encodeURIComponent(id)}&${revisionFilter}&select=payload`, {
         method: "PATCH",
         headers: { Prefer: "return=representation" },
         body: JSON.stringify({ payload, updated_at: updatedAt }),
       }) as Response;
     } else {
-      response = await supabaseRest("proar_state?on_conflict=id&select=payload", {
+      response = await stateRest(db, "proar_state?on_conflict=id&select=payload", {
         method: "POST",
         headers: { Prefer: "resolution=ignore-duplicates,return=representation" },
         body: JSON.stringify({ id, payload, updated_at: updatedAt }),

@@ -1,3 +1,4 @@
+import { databaseFetch, masterDatabaseConfig } from "../../../../lib/supabase-rest";
 import { NextRequest, NextResponse } from "next/server";
 import { searchAutomaticTenders, type PncpTender } from "../../../../lib/licitacoes-search";
 import { loadWhatsAppConfig, sendWhatsAppTemplate } from "../../../../lib/proar-whatsapp";
@@ -7,16 +8,11 @@ export const maxDuration = 120;
 
 type TenderStore = { items: (PncpTender & { discoveredAt: string; whatsappStatus?: string })[]; lastScan?: string; lastError?: string };
 
-function supabaseConfig() {
-  const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://tnjkdurifalrdnttsova.supabase.co";
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY;
-  if (!url || !key) throw new Error("Supabase não configurado");
-  return { url, key };
-}
+const supabaseConfig = masterDatabaseConfig;
 
 async function loadStore(): Promise<TenderStore> {
   const { url, key } = supabaseConfig();
-  const response = await fetch(`${url}/rest/v1/proar_state?id=eq.licitacoes&select=payload`, { headers: { apikey: key, Authorization: `Bearer ${key}` }, cache: "no-store" });
+  const response = await databaseFetch(`${url}/rest/v1/proar_state?id=eq.licitacoes&select=payload`, { headers: { apikey: key, Authorization: `Bearer ${key}` }, cache: "no-store" });
   if (!response.ok) throw new Error(await response.text());
   const rows = await response.json();
   return rows[0]?.payload ?? { items: [] };
@@ -24,7 +20,7 @@ async function loadStore(): Promise<TenderStore> {
 
 async function saveStore(store: TenderStore) {
   const { url, key } = supabaseConfig();
-  const response = await fetch(`${url}/rest/v1/proar_state?on_conflict=id`, { method: "POST", headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ id: "licitacoes", payload: store, updated_at: new Date().toISOString() }) });
+  const response = await databaseFetch(`${url}/rest/v1/proar_state?on_conflict=id`, { method: "POST", headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ id: "licitacoes", payload: store, updated_at: new Date().toISOString() }) });
   if (!response.ok) throw new Error(await response.text());
 }
 
@@ -39,7 +35,7 @@ async function notifyWhatsApp(items: PncpTender[]) {
 
 async function processCustomerReminders() {
   const { url, key } = supabaseConfig();
-  const response = await fetch(`${url}/rest/v1/proar_state?id=eq.main&select=payload`, { headers: { apikey: key, Authorization: `Bearer ${key}` }, cache: "no-store" });
+  const response = await databaseFetch(`${url}/rest/v1/proar_state?id=eq.main&select=payload`, { headers: { apikey: key, Authorization: `Bearer ${key}` }, cache: "no-store" });
   if (!response.ok) throw new Error(await response.text());
   const rows = await response.json();
   const state = rows[0]?.payload;
@@ -54,7 +50,7 @@ async function processCustomerReminders() {
     try { await sendWhatsAppTemplate(config, to, config.reminderTemplate, [String(reminder.client ?? "cliente"), String(reminder.reminderMessage ?? reminder.description ?? "Está na hora da higienização.").slice(0, 300)]); reminder.status = "Enviado"; reminder.description = `${reminder.description} • WhatsApp enviado em ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`; sent += 1; } catch (error) { console.error("Reminder WhatsApp failed", error); }
   }
   if (sent) {
-    const save = await fetch(`${url}/rest/v1/proar_state?on_conflict=id`, { method: "POST", headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ id: "main", payload: state, updated_at: new Date().toISOString() }) });
+    const save = await databaseFetch(`${url}/rest/v1/proar_state?on_conflict=id`, { method: "POST", headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ id: "main", payload: state, updated_at: new Date().toISOString() }) });
     if (!save.ok) throw new Error(await save.text());
   }
   return { sent, pending: due.length - sent };

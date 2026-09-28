@@ -1,3 +1,4 @@
+import { databaseFetch } from "../../../../lib/supabase-rest";
 import { createHmac, randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseConfigured, supabaseRest } from "../../../../lib/supabase-rest";
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest) {
       if (db.url && db.key) {
         const id = db.dedicated ? "main" : companyId;
         const demoPayload = { customers: [{ id: "CLI-DEMO", name: "Cliente Demonstração", doc: "", contact: "Responsável Demo", phone: "(17) 99999-0000", address: "Endereço de demonstração", units: 1, status: "Ativo" }], serviceOrders: [{ id: "OS-DEMO-001", client: "Cliente Demonstração", unit: "Matriz", service: "Higienização demonstrativa", tech: "Administrador", date: new Date().toISOString().slice(0,10), time: "09:00", address: "Endereço de demonstração", status: "Agendada", tone: "blue", avatar: "AD" }], moduleRecords: { Serviços: [{ id: "SRV-DEMO", name: "Higienização demonstrativa", client: "", description: "DADO DE DEMONSTRAÇÃO", createdAt: new Date().toISOString(), kind: "Serviço", status: "Ativo", value: 250 }], Produtos: [{ id: "PRD-DEMO", name: "Produto Demonstração", client: "", description: "DADO DE DEMONSTRAÇÃO", createdAt: new Date().toISOString(), kind: "Produto", status: "Ativo", value: 100 }] }, _revision: 1, _updatedAt: new Date().toISOString(), _demoData: true };
-        await fetch(`${db.url}/rest/v1/proar_state?on_conflict=id`, { method: "POST", headers: { ...tenantHeaders(db.key), Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ id, payload: demoPayload, updated_at: new Date().toISOString() }) });
+        await databaseFetch(`${db.url}/rest/v1/proar_state?on_conflict=id`, { method: "POST", headers: { ...tenantHeaders(db.key), Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ id, payload: demoPayload, updated_at: new Date().toISOString() }) });
       }
     } catch {}
   }

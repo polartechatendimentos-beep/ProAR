@@ -1,3 +1,4 @@
+import { databaseFetch } from "../../../lib/supabase-rest";
 import { NextRequest, NextResponse } from "next/server";
 import { encryptTenantSecret } from "../../../lib/tenant-crypto";
 import { getOpenAiCredential, openAiIntegrationId, readStoredOpenAiIntegration, safeCompanyId } from "../../../lib/openai-credential";
@@ -15,7 +16,7 @@ function adminContext(request: NextRequest) {
 }
 async function save(companyId: string, payload: Record<string, unknown>) {
   const db = await resolveTenantDb(companyId); if (!db.url || !db.key) return false;
-  const response = await fetch(`${db.url}/rest/v1/proar_state?on_conflict=id`, { method:"POST", headers:{...tenantHeaders(db.key), Prefer:"resolution=merge-duplicates,return=minimal"}, body:JSON.stringify({id:openAiIntegrationId(companyId),payload,updated_at:new Date().toISOString()}) });
+  const response = await databaseFetch(`${db.url}/rest/v1/proar_state?on_conflict=id`, { method:"POST", headers:{...tenantHeaders(db.key), Prefer:"resolution=merge-duplicates,return=minimal"}, body:JSON.stringify({id:openAiIntegrationId(companyId),payload,updated_at:new Date().toISOString()}) });
   return response.ok;
 }
 export async function GET(request: NextRequest) {

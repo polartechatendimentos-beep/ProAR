@@ -1,7 +1,8 @@
+import { databaseFetch, masterDatabaseConfig } from "../../../../lib/supabase-rest";
 import { createHash, randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
-const config = () => ({ url: process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL, key: process.env.SUPABASE_SERVICE_ROLE_KEY });
+const config = masterDatabaseConfig;
 const headers = (key: string) => ({ apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" });
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const publicView = (map: Record<string, unknown>) => ({ ...map, externalAccess: undefined });
@@ -15,7 +16,7 @@ export async function POST(request: NextRequest) {
   if (!token || !username || !password) return NextResponse.json({ error: "Informe o link, login e senha." }, { status: 400 });
   const { url, key } = config();
   if (!url || !key) return NextResponse.json({ error: "Base de dados indisponível." }, { status: 503 });
-  const response = await fetch(`${url}/rest/v1/proar_state?id=like.workmap-*&select=payload`, { headers: headers(key), cache: "no-store" });
+  const response = await databaseFetch(`${url}/rest/v1/proar_state?id=like.workmap-*&select=payload`, { headers: headers(key), cache: "no-store" });
   if (!response.ok) return NextResponse.json({ error: "Não foi possível consultar a obra." }, { status: 502 });
   const rows = await response.json() as { payload?: Record<string, unknown> }[];
   const current = rows.find(row => row.payload?.token === token)?.payload;
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
     const companyId = String(current.companyId ?? "polartech-principal");
     const mapId = id === "reserva-imperial" ? `workmap-${companyId}` : `workmap-${companyId}-${id}`;
     const payload = { ...current, houses: updatedHouses, revision: Number(current.revision ?? 0) + 1, updatedAt: new Date().toISOString() };
-    const save = await fetch(`${url}/rest/v1/proar_state?on_conflict=id`, { method: "POST", headers: { ...headers(key), Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ id: mapId, payload, updated_at: new Date().toISOString() }) });
+    const save = await databaseFetch(`${url}/rest/v1/proar_state?on_conflict=id`, { method: "POST", headers: { ...headers(key), Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ id: mapId, payload, updated_at: new Date().toISOString() }) });
     if (!save.ok) return NextResponse.json({ error: "Não foi possível salvar o apontamento." }, { status: 502 });
     next = payload;
   }
