@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { supabaseRest } from "../../../lib/supabase-rest";
 import { municipalityDistances } from "../../../lib/municipality-distances";
 
 const PNCP_URL = "https://pncp.gov.br/api/consulta/v1/contratacoes/proposta";
@@ -183,12 +184,8 @@ async function fetchCompras(dataInicial: string, dataFinal: string, codigoModali
 }
 
 async function readMonitorStore() {
-  const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return { items: [] as PncpTender[], lastScan: null as string | null, lastError: "" };
-  const response = await fetch(`${url}/rest/v1/proar_state?id=eq.licitacoes&select=payload`, {
-    headers: { apikey: key, Authorization: `Bearer ${key}` }, cache: "no-store", signal: AbortSignal.timeout(4000),
-  });
+  const response = await supabaseRest("proar_state?id=eq.licitacoes&select=payload", { signal: AbortSignal.timeout(4000) });
+  if (!response) return { items: [] as PncpTender[], lastScan: null as string | null, lastError: "" };
   if (!response.ok) return { items: [] as PncpTender[], lastScan: null as string | null, lastError: "" };
   const rows = await response.json();
   return rows[0]?.payload ?? { items: [], lastScan: null, lastError: "" };
