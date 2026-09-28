@@ -8,8 +8,8 @@ export const maxDuration = 120;
 type TenderStore = { items: (PncpTender & { discoveredAt: string; whatsappStatus?: string })[]; lastScan?: string; lastError?: string };
 
 function supabaseConfig() {
-  const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://tnjkdurifalrdnttsova.supabase.co";
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY;
   if (!url || !key) throw new Error("Supabase não configurado");
   return { url, key };
 }
