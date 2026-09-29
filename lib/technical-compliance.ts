@@ -1,5 +1,5 @@
 export type PmocPlan = {
-  id: string; client: string; unit?: string; sector?: string; technicalResponsible?: string;
+  id: string; client: string; name?: string; unit?: string; sector?: string; technicalResponsible?: string;
   professionalRegistration?: string; responsibilityDocument?: string; startsAt?: string;
   expiresAt?: string; periodicity: "Mensal"|"Bimestral"|"Trimestral"|"Semestral"|"Anual"|"Personalizada";
   customDays?: number; equipmentIds: string[]; notes?: string; documents?: TechnicalDocument[];
