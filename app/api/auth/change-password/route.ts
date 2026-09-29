@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { readSession } from "../../../../lib/proar-auth";
 import { supabaseRest } from "../../../../lib/supabase-rest";
 import { hashPassword } from "../../../../lib/password";
+import { tenantSlugFromHost } from "../../../../lib/tenant-host";
 
 export async function POST(request: NextRequest) {
   const session = readSession(request.cookies.get("proar_session")?.value);
   if (!session?.companyId) return NextResponse.json({ error: "Sessão de empresa inválida." }, { status: 401 });
+  const hostTenant = tenantSlugFromHost(request.headers.get("host"));
+  if (hostTenant && session.companySlug && hostTenant !== session.companySlug) return NextResponse.json({ error: "Sessão não pertence a esta empresa." }, { status: 403 });
   const { password = "" } = await request.json();
   const raw = String(password);
   if (raw.length < 10 || !/[A-Z]/.test(raw) || !/[a-z]/.test(raw) || !/\d/.test(raw)) {
