@@ -7,6 +7,7 @@ const PNCP_CONSULTA_BASE = "https://pncp.gov.br/api/consulta/v1";
 const COMPRAS_URL = "https://dadosabertos.compras.gov.br/modulo-contratacoes/1_consultarContratacoes_PNCP_14133";
 const UFS = ["SP", "MG", "MS", "PR", "GO"] as const;
 const MODALITIES = [4, 5, 6, 7, 8, 9, 12] as const;
+const TARGETED_PNCP_PAGES = 20;
 const REQUEST_TIMEOUT_MS = 6500;
 const COMPRAS_TIMEOUT_MS = 7000;
 const MAX_RETRIES = 1;
@@ -19,7 +20,7 @@ const climateTerms = /ar\s*-?\s*condicionado|condicionador(?:es)? de ar|climatiz
 const excludedTerms = /purificador(?:es)? de [aá]gua|equipamento fotodocumentador|mobili[aá]rio|geladeira dom[eé]stica|bebedouro(?!.*refrigera)/i;
 
 const cityDistances: Record<string, number> = {
-  mirassol:0,"sao jose do rio preto":15,jaci:21,"bady bassitt":22,balsamo:29,"neves paulista":32,cedral:34,"monte aprazivel":41,potirendaba:43,tanabi:45,ibira:48,catanduva:58,olimpia:62,"nova granada":67,"novo horizonte":75,votuporanga:77,"paulo de faria":92,barretos:105,bebedouro:112,fernandopolis:120,"santa fe do sul":126,aracatuba:135,jaboticabal:145,lins:152,"sao joaquim da barra":185,franca:220,"ribeirao preto":225,bauru:230,"sao carlos":265,araraquara:270,"presidente prudente":285,"mogi guacu":295,"pocos de caldas":300
+  mirassol:0,"jose bonifacio":62,"sao jose do rio preto":15,jaci:21,"bady bassitt":22,balsamo:29,"neves paulista":32,cedral:34,"monte aprazivel":41,potirendaba:43,tanabi:45,ibira:48,catanduva:58,olimpia:62,"nova granada":67,"novo horizonte":75,votuporanga:77,"paulo de faria":92,barretos:105,bebedouro:112,fernandopolis:120,"santa fe do sul":126,aracatuba:135,jaboticabal:145,lins:152,"sao joaquim da barra":185,franca:220,"ribeirao preto":225,bauru:230,"sao carlos":265,araraquara:270,"presidente prudente":285,"mogi guacu":295,"pocos de caldas":300
 };
 
 const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
@@ -213,9 +214,12 @@ async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radi
   // do PNCP e retryar somente falhas transitórias mantém resultados parciais.
   const startedAt = new Map<string, number>();
   const [pncpSettled, comprasSettled] = await Promise.all([
-    runLimited(municipality ? [] : UFS, PNCP_CONCURRENCY, async uf => {
+    runLimited(municipality ? (["SP"] as const) : UFS, PNCP_CONCURRENCY, async uf => {
       const key = `PNCP-${uf}`; startedAt.set(key, Date.now());
-      const value = await fetchPages(dataInicial, dataFinal, uf);
+      // Pesquisa por município também consulta diretamente o PNCP. Antes, quando
+      // o termo era uma cidade conhecida (ex.: José Bonifácio), o PNCP era
+      // completamente ignorado e o resultado dependia somente do Compras.gov.br.
+      const value = await fetchPages(dataInicial, dataFinal, uf, municipality ? TARGETED_PNCP_PAGES : 5);
       return { value, diagnostic: { source: key, status: "ok" as const, attempts: value.attempts, durationMs: Date.now() - (startedAt.get(key) ?? Date.now()), count: value.items.length } };
     }),
     runLimited(MODALITIES, COMPRAS_CONCURRENCY, async code => {
@@ -250,8 +254,16 @@ async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radi
     if (closing ? (closing < startTime || closing > endTime) : (!published || published < today.getTime() - 60 * 86400000)) return false;
     const municipalityName = normalize(item.unidadeOrgao?.municipioNome ?? "");
     const distance = municipalityDistances[String(item.unidadeOrgao?.codigoIbge ?? "")] ?? CITY_CODES[municipalityName]?.distance ?? cityDistances[municipalityName];
-    if (distance === undefined || distance > radius) return false;
-    item.distanciaMirassol = distance;
+    // Em pesquisa textual explícita, não descarte um resultado oficial apenas
+    // porque a tabela local de distâncias ainda não conhece o município.
+    // O raio continua obrigatório para o radar automático.
+    if (distance === undefined) {
+      if (!term) return false;
+      item.distanciaMirassol = CITY_CODES[municipalityName]?.distance ?? 0;
+    } else {
+      if (distance > radius) return false;
+      item.distanciaMirassol = distance;
+    }
     item.sourcePortal = item.sourcePortal ?? identifySource(item);
     return true;
   });
