@@ -53,7 +53,14 @@ export async function POST(request: NextRequest) {
   const resolvedTenant = hostTenant || String(tenant || "").trim().toLowerCase();
   const isConfiguredTiago = String(username).trim().toLocaleLowerCase("pt-BR") === "tiago.viana" && Boolean(process.env.PROAR_POLARTECH_TIAGO_PASSWORD) && safeEqual(String(password), String(process.env.PROAR_POLARTECH_TIAGO_PASSWORD));
   if (validateManagerCredentials(String(username), String(password)) || isConfiguredTiago) {
-    const claims = { username: String(username), displayName: "Tiago Viana", role: "Administrador", permissions: ["*"], companyId: process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal", companySlug: "polartech" };
+    let companyId = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
+    let companySlug = resolvedTenant || "polartech";
+    if (resolvedTenant && supabaseConfigured()) {
+      const tenantResponse = await supabaseRest(`proar_companies?select=id,slug,status&slug=eq.${encodeURIComponent(resolvedTenant)}&limit=1`);
+      const tenantRows = tenantResponse.ok ? await tenantResponse.json() : [];
+      if (tenantRows[0]?.status === "active") { companyId = String(tenantRows[0].id); companySlug = String(tenantRows[0].slug || resolvedTenant); }
+    }
+    const claims = { username: String(username), displayName: "Tiago Viana", role: "Administrador", permissions: ["*"], companyId, companySlug };
     const response = NextResponse.json({ authenticated: true, ...claims });
     response.cookies.set(COOKIE_NAME, createSessionForUser(claims), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 });
     return response;
@@ -87,7 +94,7 @@ export async function POST(request: NextRequest) {
           void supabaseRest(`proar_trial_users?company_id=eq.${encodeURIComponent(company.id)}&username=eq.${encodeURIComponent(String(user.username))}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ password_hash: hashPassword(String(password)), updated_at: new Date().toISOString() }) });
         }
         const isTiagoAdministrator = String(user.username).toLowerCase() === "tiago.viana" && String(user.role) === "Administrador";
-        const permissions = isTiagoAdministrator ? ["*"] : (Array.isArray(company.modules) && company.modules.length ? company.modules : (Array.isArray(user.permissions) ? user.permissions : ["*"]));
+        const permissions = String(user.role) === "Administrador" || isTiagoAdministrator ? ["*"] : (Array.isArray(user.permissions) ? user.permissions : []);
         const claims = { username: user.username, displayName: user.display_name, role: user.role, permissions, companyId: company.id, companySlug: company.slug, trialExpiresAt: company.trial_expires_at };
         const response = NextResponse.json({ authenticated: true, ...claims, mustChangePassword: user.must_change_password, company: { id: company.id, slug: company.slug, tradeName: company.trade_name, modules: company.modules } });
         response.cookies.set(COOKIE_NAME, createSessionForUser(claims), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 }); return response;
