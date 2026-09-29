@@ -121,15 +121,7 @@
   text-align: center;
   font-size: 11px !important;
 }
-.login-page::after {
-  content: "ProAR © 2026";
-  position: absolute;
-  left: 24px;
-  bottom: 14px;
-  color: #c8e2ff;
-  font-size: 12px;
-  text-shadow: 0 2px 8px #001;
-}
+.login-copyright { position:absolute;left:24px;bottom:14px;color:#c8e2ff;font-size:12px;text-shadow:0 2px 8px #001; }
 @media (max-width: 640px) {
   .login-page {
     justify-content: center !important;
@@ -140,7 +132,7 @@
   .login-panel { flex-basis: 390px !important; width: 100% !important; }
   .login-panel form { padding: 24px 20px !important; }
   .login-form-security { margin: 22px -20px -24px !important; }
-  .login-page::after { left: 50%; bottom: 14px; transform: translateX(-50%); white-space: nowrap; }
+  .login-copyright { left:50%;bottom:14px;transform:translateX(-50%);white-space:nowrap; }
 }
 @media (max-height: 560px) and (min-width: 641px) {
   .login-page { align-items: flex-start !important; }
