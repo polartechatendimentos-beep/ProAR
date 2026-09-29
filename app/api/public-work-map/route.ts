@@ -1,9 +1,8 @@
 import { databaseFetch, masterDatabaseConfig } from "../../../lib/supabase-rest";
 import { randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { readSession } from "../../../lib/proar-auth";
+import { requirePermission, sessionCompany } from "../../../lib/permissions";
 
-const COOKIE_NAME = "proar_session";
 const config = masterDatabaseConfig;
 const safeCompany = (value: unknown) => String(value || "polartech-principal").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80) || "polartech-principal";
 const safeWork = (value: unknown) => String(value || "reserva-imperial").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 100) || "reserva-imperial";
@@ -14,10 +13,13 @@ const publicView = (map: Record<string, unknown> | null | undefined) => map ? { 
 export async function GET(request: NextRequest) {
   const requestedCompany = request.nextUrl.searchParams.get("company");
   if (requestedCompany) {
-    if (!readSession(request.cookies.get(COOKIE_NAME)?.value)) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
+    const auth = requirePermission(request, "obras.visualizar");
+    if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+    const scope = sessionCompany(auth.session, requestedCompany);
+    if (!scope.ok) return NextResponse.json({ error: scope.error }, { status: scope.status });
     const { url, key } = config();
     if (!url || !key) return NextResponse.json({ error: "Base de dados indisponível." }, { status: 503 });
-    const id = mapId(requestedCompany, request.nextUrl.searchParams.get("work"));
+    const id = mapId(scope.companyId, request.nextUrl.searchParams.get("work"));
     const response = await databaseFetch(`${url}/rest/v1/proar_state?id=eq.${encodeURIComponent(id)}&select=payload`, { headers: headers(key), cache: "no-store" });
     if (!response.ok) return NextResponse.json({ error: "Não foi possível carregar o mapa compartilhado." }, { status: 502 });
     const rows = await response.json() as { payload?: Record<string, unknown> }[];
@@ -35,11 +37,14 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  if (!readSession(request.cookies.get(COOKIE_NAME)?.value)) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
+  const auth = requirePermission(request, "obras.editar");
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const { url, key } = config();
   if (!url || !key) return NextResponse.json({ error: "Base de dados indisponível." }, { status: 503 });
   const body = await request.json();
-  const companyId = safeCompany(body.companyId);
+  const scope = sessionCompany(auth.session, body.companyId);
+  if (!scope.ok) return NextResponse.json({ error: scope.error }, { status: scope.status });
+  const companyId = safeCompany(scope.companyId);
   const workId = safeWork(body.workId);
   const id = mapId(companyId, workId);
   const currentResponse = await databaseFetch(`${url}/rest/v1/proar_state?id=eq.${encodeURIComponent(id)}&select=payload`, { headers: headers(key), cache: "no-store" });
