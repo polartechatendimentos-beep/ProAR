@@ -44,21 +44,26 @@ async function ensurePolartech() {
     const rows = await insert.json(); company = rows?.[0] || record;
   }
 
-  const password = process.env.PROAR_POLARTECH_TIAGO_PASSWORD || "289936";
   const username = "tiago.viana";
-  const userRecord = {
-    company_id: company.id,
-    username,
-    display_name: "Tiago Viana",
-    password_hash: hashPassword(password),
-    role: "Administrador",
-    permissions: ["*"],
-    active: true,
-    must_change_password: false,
-    updated_at: new Date().toISOString(),
-  };
-  const userUpsert = await supabaseRest("proar_trial_users?on_conflict=company_id,username", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(userRecord) });
-  if (!userUpsert.ok) throw new Error("Falha ao atualizar o usuário Tiago.Viana.");
+  const existingUserResponse = await supabaseRest(`proar_trial_users?select=username&company_id=eq.${encodeURIComponent(company.id)}&username=eq.${encodeURIComponent(username)}&limit=1`);
+  const existingUsers = existingUserResponse.ok ? await existingUserResponse.json() : [];
+  if (!existingUsers.length) {
+    const password = process.env.PROAR_POLARTECH_TIAGO_PASSWORD?.trim();
+    if (!password) throw new Error("PROAR_POLARTECH_TIAGO_PASSWORD é obrigatório para criar o administrador inicial.");
+    const userRecord = {
+      company_id: company.id,
+      username,
+      display_name: "Tiago Viana",
+      password_hash: hashPassword(password),
+      role: "Administrador",
+      permissions: ["*"],
+      active: true,
+      must_change_password: true,
+      updated_at: new Date().toISOString(),
+    };
+    const userInsert = await supabaseRest("proar_trial_users", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(userRecord) });
+    if (!userInsert.ok) throw new Error("Falha ao criar o administrador inicial da PolarTech.");
+  }
   return company;
 }
 
