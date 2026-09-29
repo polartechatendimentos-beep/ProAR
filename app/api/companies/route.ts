@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readSession } from "../../../lib/proar-auth";
 import { supabaseConfigured, supabaseRest } from "../../../lib/supabase-rest";
+import { digitsOnly, validCnpj } from "../../../lib/document-validation";
 
 const COOKIE_NAME = "proar_session";
-const cnpjDigits = (value: unknown) => String(value ?? "").replace(/\D/g, "").slice(0, 14);
+const cnpjDigits = (value: unknown) => digitsOnly(value).slice(0, 14);
 
 function admin(request: NextRequest) {
   const user = readSession(request.cookies.get(COOKIE_NAME)?.value);
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
   if (!supabaseConfigured()) return NextResponse.json({ error: "Supabase não configurado." }, { status: 503 });
   const body = await request.json();
   const cnpj = cnpjDigits(body.cnpj);
-  if (cnpj.length !== 14) return NextResponse.json({ error: "CNPJ inválido." }, { status: 400 });
+  if (!validCnpj(cnpj)) return NextResponse.json({ error: "CNPJ inválido." }, { status: 400 });
   const now = new Date().toISOString();
   const lookup = await supabaseRest(`proar_companies?select=id,slug&cnpj=eq.${encodeURIComponent(cnpj)}&limit=1`);
   const existing = lookup.ok ? (await lookup.json())?.[0] : null;
