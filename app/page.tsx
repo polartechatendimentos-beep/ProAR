@@ -2146,7 +2146,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
 }
 
 function Modal({ title, customers, structures, catalogRecords, supplierRecords, employeeRecords, close, onSave }: { title: string; customers: Customer[]; structures: ModuleRecord[]; catalogRecords: ModuleRecord[]; supplierRecords: ModuleRecord[]; employeeRecords: ModuleRecord[]; close: () => void; onSave: (data: ModalSave) => void | Promise<void> }) {
-  const isLinkedStructure = title.startsWith("Nova unidade, filial ou setor") || title.startsWith("Novo setor") || title.startsWith("Nova sala");
+  const isLinkedStructure = title.startsWith("Nova unidade, filial ou setor") || title.startsWith("Novo setor") || title.startsWith("Nova sala") || title.startsWith("Nova sala ou ambiente");
   const isNewOrder = title === "Nova ordem de serviço";
   const isNewCustomer = title === "Novo cliente";
   const isCatalogRegistration = title.includes("Serviços") || title.includes("Produtos");
@@ -2938,7 +2938,7 @@ export default function Home() {
     setSavedMessage(`Orçamento convertido em ${target}.`); window.setTimeout(() => setSavedMessage(""),2500);
   };
   const saveRecord = async (data: ModalSave) => {
-    if (data.title.startsWith("Nova unidade, filial ou setor")) {
+    if (data.title.startsWith("Nova unidade, filial ou setor") || data.title.startsWith("Novo setor") || data.title.startsWith("Nova sala") || data.title.startsWith("Nova sala ou ambiente")) {
       const parentCustomer = data.title.split("•")[1]?.trim() || data.client;
       const structure: ModuleRecord = { id:`SET-${Date.now().toString().slice(-6)}`, name:data.name, client:parentCustomer, description:data.description || data.doc, doc:data.doc, contact:data.contact, phone:data.phone, address:data.address, category:data.category || "Setor", parentId:data.parentId || undefined, parentUnit:data.parentUnit || undefined, hierarchyLevel:data.hierarchyLevel || undefined, environmentType:data.environmentType, roomNumber:data.roomNumber, floor:data.floor, block:data.block, localResponsible:data.localResponsible, extension:data.extension, criticality:data.criticality, priorityAttendance:data.priorityAttendance, status:"Ativo", createdAt:new Date().toLocaleString("pt-BR"), legalName:data.legalName, tradeName:data.tradeName, email:data.email, zipCode:data.zipCode, street:data.street, addressNumber:data.addressNumber, complement:data.complement, neighborhood:data.neighborhood, city:data.city, state:data.state, stateRegistration:data.stateRegistration, municipalRegistration:data.municipalRegistration, cnaeMain:data.cnaeMain, taxStatus:data.taxStatus };
       const updatedModules = { ...moduleRecords, "Unidades e setores":[structure,...(moduleRecords["Unidades e setores"] ?? [])] };
