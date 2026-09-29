@@ -308,7 +308,7 @@ export async function GET(request: NextRequest) {
     const endParam = request.nextUrl.searchParams.get("dataFinal");
     const start = startParam ? new Date(`${startParam}T12:00:00-03:00`) : new Date();
     const end = endParam ? new Date(`${endParam}T23:59:59-03:00`) : new Date(Date.now() + 60 * 86400000);
-    const radius = Math.min(300, Math.max(1, Number(request.nextUrl.searchParams.get("raio") ?? 300)));
+    const radius = Math.min(500, Math.max(1, Number(request.nextUrl.searchParams.get("raio") ?? 500)));
     const term = request.nextUrl.searchParams.get("q")?.trim() ?? "";
     const result = await searchAutomaticTenders({ start, end, radius, all: !term, term });
 
@@ -329,7 +329,7 @@ export async function GET(request: NextRequest) {
     console.error("PNCP search failed", error);
     const store = await readMonitorStore();
     const term = request.nextUrl.searchParams.get("q")?.trim() ?? "";
-    const radius = Math.min(300, Math.max(1, Number(request.nextUrl.searchParams.get("raio") ?? 300)));
+    const radius = Math.min(500, Math.max(1, Number(request.nextUrl.searchParams.get("raio") ?? 500)));
     const storedMatches = filterStoredItems(store.items ?? [], term, radius);
     if (storedMatches.length) return NextResponse.json({ data: storedMatches, lastScan: store.lastScan, source: "Última busca válida filtrada", radius, warning: "Consulta oficial temporariamente indisponível; exibindo somente resultados salvos compatíveis com a pesquisa." });
     return NextResponse.json({ data: [], warning: "Os portais oficiais estão temporariamente indisponíveis. Use Atualizar para tentar novamente." });
