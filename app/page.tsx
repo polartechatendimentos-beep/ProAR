@@ -3184,6 +3184,7 @@ export default function Home() {
     localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(updatedModules));
     persistSharedState(customerRecords, serviceOrders, updatedModules);
     setSavedMessage(`${cancellation ? "Registro cancelado" : "Registro inativado"} com histórico preservado.`);
+    window.setTimeout(() => setSavedMessage(""), 3000);
   };
   const updateModuleRecord = (moduleName: string, record: ModuleRecord) => {
     const currentRecords = moduleRecords[moduleName] ?? [];
