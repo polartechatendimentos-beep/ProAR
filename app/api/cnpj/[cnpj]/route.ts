@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { validCnpj } from "../../../../lib/document-validation";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ type BrasilApiCnpj = {
 export async function GET(_: Request, context: { params: Promise<{ cnpj: string }> }) {
   const { cnpj: raw } = await context.params;
   const cnpj = raw.replace(/\D/g, "");
-  if (!/^\d{14}$/.test(cnpj)) return NextResponse.json({ error: "Informe um CNPJ válido com 14 dígitos." }, { status: 400 });
+  if (!validCnpj(cnpj)) return NextResponse.json({ error: "CNPJ inválido. Verifique os dígitos informados." }, { status: 400 });
   try {
     const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`, {
       cache: "no-store",
