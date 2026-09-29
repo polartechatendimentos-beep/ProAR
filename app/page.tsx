@@ -2932,8 +2932,11 @@ export default function Home() {
       orderForPersistence = { ...orderForPersistence, contractItems: nextContractItems };
     }
     const updatedOrders = serviceOrders.map(order => order.id === orderForPersistence.id ? orderForPersistence : order);
-    // Conclusão nunca apaga lançamentos anteriores: cria somente integrações ainda inexistentes.
-    if (/conclu[ií]da/i.test(updatedOrder.status)) {
+    // Integrações financeiras/estoque acontecem somente na transição real para
+    // Concluída. Reabrir e concluir novamente não duplica lançamentos históricos.
+    const wasCompleted = /conclu[ií]da/i.test(previousOrder?.status ?? "");
+    const isCompleted = /conclu[ií]da/i.test(updatedOrder.status);
+    if (isCompleted && !wasCompleted) {
       const receivableId = `REC-${updatedOrder.id.replace(/\D/g, "")}`;
       const stockPrefix = `OS-${updatedOrder.id.replace(/\D/g, "")}-`;
       const hasReceivable = (updatedModules.Financeiro ?? []).some(item => item.id === receivableId || item.serviceOrderId === updatedOrder.id);
@@ -2974,7 +2977,12 @@ export default function Home() {
     // observações internas, financeiro e demais dados operacionais ficam na base autenticada.
     if (orderForPersistence.trackingToken) {
       const timeline = (orderForPersistence.timeline ?? []).filter(event => event.customerVisible).map(event => ({ id:event.id, createdAt:event.createdAt, status:event.status, customerNote:event.customerNote, photos:event.photos, customerVisible:true }));
-      void fetch("/api/public-service-order", { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ companyId:activeCompany.id, orderId:orderForPersistence.id, token:orderForPersistence.trackingToken, client:orderForPersistence.client, service:orderForPersistence.service, date:orderForPersistence.date, time:orderForPersistence.time, status:orderForPersistence.status, timeline }) });
+      try {
+        const trackingResponse = await fetch("/api/public-service-order", { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ companyId:activeCompany.id, orderId:orderForPersistence.id, token:orderForPersistence.trackingToken, client:orderForPersistence.client, service:orderForPersistence.service, date:orderForPersistence.date, time:orderForPersistence.time, status:orderForPersistence.status, timeline }) });
+        if (!trackingResponse.ok) showFeedback(`OS ${orderForPersistence.id} salva, mas o acompanhamento público não foi atualizado. Tente salvar novamente.`, "warning", 6000);
+      } catch {
+        showFeedback(`OS ${orderForPersistence.id} salva, mas houve falha ao sincronizar o acompanhamento público.`, "warning", 6000);
+      }
     }
     showFeedback(orderForPersistence.status === "Concluída" && orderForPersistence.reminderEnabled ? `OS ${orderForPersistence.id} salva com sucesso • conclusão confirmada e lembrete agendado.` : `Alteração salva com sucesso • OS ${orderForPersistence.id} confirmada no banco.`, "success");
     return orderForPersistence;
