@@ -2141,6 +2141,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
         <footer className="login-form-security"><ShieldCheck size={18}/> Seus dados estão protegidos com segurança</footer>
       </form>
     </section>
+    <span className="login-copyright">ProAR © {new Date().getFullYear()}</span>
   </main>;
 }
 
