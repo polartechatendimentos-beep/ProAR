@@ -2759,6 +2759,21 @@ export default function Home() {
     };
     loadSharedState();
   }, [authenticatedUser, activeCompany.id]);
+  type FeedbackTone = "success" | "error" | "warning" | "info";
+  const [feedbackTone, setFeedbackTone] = useState<FeedbackTone>("info");
+  const feedbackTimerRef = useRef<number | null>(null);
+  const showFeedback = (message: string, tone: FeedbackTone = "info", duration = 3200) => {
+    if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
+    setFeedbackTone(tone);
+    setSavedMessage(message);
+    feedbackTimerRef.current = window.setTimeout(() => {
+      setSavedMessage("");
+      feedbackTimerRef.current = null;
+    }, duration);
+  };
+  useEffect(() => () => {
+    if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
+  }, []);
   const persistSharedState = (nextCustomers: Customer[], nextOrders: ServiceOrder[], nextModules: Record<string, ModuleRecord[]>) => {
     localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(nextCustomers));
     localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(nextOrders));
@@ -2933,8 +2948,7 @@ export default function Home() {
     setCustomerRecords(updatedCustomers);
     localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(updatedCustomers));
     persistSharedState(updatedCustomers, serviceOrders, moduleRecords);
-    setSavedMessage(`Cliente ${updatedCustomer.name} atualizado com sucesso.`);
-    window.setTimeout(() => setSavedMessage(""), 2500);
+    showFeedback(`Alteração salva com sucesso • ${updatedCustomer.name}.`, "success");
   };
   const appendAudit = (modules: Record<string, ModuleRecord[]>, action: string, reference: string, detail: string) => ({ ...modules, Auditoria: [{ id: `AUD-${Date.now()}`, name: action, client: authenticatedUser?.displayName || "Sistema", description: `${reference} • ${detail}`, createdAt: new Date().toLocaleString("pt-BR"), status: "Registrado", category: "Rastreabilidade" }, ...(modules.Auditoria ?? [])].slice(0, 1000) });
   const convertBudget = (budget: ModuleRecord, target: "Pedido" | "Ordem de serviço") => {
@@ -3229,8 +3243,7 @@ export default function Home() {
     setModuleRecords(updatedModules);
     localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(updatedModules));
     persistSharedState(customerRecords, serviceOrders, updatedModules);
-    setSavedMessage(moduleName === "Compras" && record.status === "Recebida" ? "Compra recebida: estoque e conta a pagar atualizados." : "Registro atualizado e sincronizado.");
-    window.setTimeout(() => setSavedMessage(""), 3000);
+    showFeedback(moduleName === "Compras" && record.status === "Recebida" ? "Compra recebida com sucesso • estoque e conta a pagar atualizados." : exists ? "Alteração salva com sucesso." : "Cadastro salvo com sucesso.", "success");
   };
   const createQuickCustomer = (draft: CustomerDraft): Customer | null => {
     const existing = customerRecords.find(item => normalizeRelation(item.doc) === normalizeRelation(draft.doc) && draft.doc.replace(/\D/g, "").length >= 11);
@@ -3284,7 +3297,7 @@ export default function Home() {
   };
   const saveConfirmedModuleRecord = async (moduleName: string, record: ModuleRecord, relatedRecords: { moduleName: string; record: ModuleRecord }[] = []) => {
     if (!navigator.onLine) {
-      setSavedMessage("Sem conexão: este cadastro não foi enviado ao banco.");
+      showFeedback("Falha ao salvar • sem conexão com o banco.", "error", 5000);
       return false;
     }
     const currentRecords = moduleRecords[moduleName] ?? [];
@@ -3329,7 +3342,7 @@ export default function Home() {
         localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(serverCustomers));
         localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(serverOrders));
         localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(serverModules));
-        setSavedMessage("Este registro foi alterado por outro usuário. Atualize os dados antes de continuar.");
+        showFeedback("Falha ao salvar • este registro foi alterado por outro usuário. Atualize os dados e tente novamente.", "warning", 5000);
         setSyncPhase("idle");
         return false;
       }
@@ -3349,7 +3362,7 @@ export default function Home() {
       return true;
     } catch (error) {
       console.error("Falha ao salvar registro confirmado", { moduleName, recordId: record.id, relatedModules:relatedRecords.map(item=>item.moduleName), error });
-      setSavedMessage("Não foi possível salvar a alteração. Verifique sua conexão e tente novamente.");
+      showFeedback("Falha ao salvar • verifique sua conexão e tente novamente.", "error", 5000);
       setSyncPhase("idle");
       return false;
     }
@@ -3390,7 +3403,7 @@ export default function Home() {
     <main className="main">
       <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNew={openNew} searchItems={globalSearchItems} pendingItems={pendingItems} onSearchSelect={openGlobalSearch} onPendingSelect={openPending} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onSwitchUser={logout} online={online} syncing={syncing} onPull={() => void pullFromDatabase()} onPush={() => void pushToDatabase()}/>
       {syncPhase !== "idle" && <div className={`sync-progress ${syncPhase}`} role="status" aria-label={syncPhase === "complete" ? "Dados atualizados" : "Sincronizando dados"}><i/></div>}
-      {savedMessage && <div className="save-toast" role="status"><CheckCircle2 size={16}/>{savedMessage}</div>}
+      {savedMessage && <div className={`save-toast feedback-${feedbackTone}`} role={feedbackTone === "error" ? "alert" : "status"} aria-live={feedbackTone === "error" ? "assertive" : "polite"}>{feedbackTone === "error" || feedbackTone === "warning" ? <AlertTriangle size={16}/> : <CheckCircle2 size={16}/>}<span>{savedMessage}</span></div>}
       <div className="company-context"><Building2 size={13}/><span>{activeCompany.tradeName}</span><small>{activeCompany.cnpj || "CNPJ pendente"} • {activeCompany.city}/{activeCompany.state}</small></div>
       {current === "PMOC e conformidade" ? <TechnicalCompliancePanel plans={(moduleRecords.PMOC ?? []) as any} fluids={(moduleRecords.Refrigerantes ?? []) as any} documents={(moduleRecords["Documentação / Habilitação"] ?? []) as any} onSave={(module,record)=>saveConfirmedModuleRecord(module,record)}/> : null}
       <div className="page-content">{current === "PMOC e conformidade" ? null : current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={record => updateModuleRecord("Unidades e setores",record)} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} company={activeCompany} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <><PublicContractsPanel records={(moduleRecords.Certames ?? []) as PublicContractRecord[]} customers={customerRecords} onSave={record => saveConfirmedModuleRecord("Certames", record)}/><PublicCommitmentsPanel orders={serviceOrders} contracts={(moduleRecords.Certames ?? []) as PublicContractRecord[]} commitments={(moduleRecords.Empenhos ?? []) as PublicCommitmentRecord[]} onSave={record=>saveConfirmedModuleRecord("Empenhos",record)} onReadyToInvoice={record=>saveConfirmedModuleRecord("Empenhos",{...record,status:"Pronto para faturar"},[{moduleName:"Financeiro",record:{id:`FAT-${record.id}`,name:`Faturamento • ${record.name}`,client:record.client,description:`Aguardando emissão de Nota Fiscal • ${record.empenhoProcess || "processo não informado"}`,createdAt:new Date().toLocaleString("pt-BR"),status:"Pronto para faturar",date:new Date().toISOString().slice(0,10),value:record.value??0,category:"Faturamento público",transactionType:"Receber",empenhoId:record.id}}])}/><BiddingModule onOpen={item => setModal(`Análise de edital • ${item.numeroControlePNCP || item.objetoCompra || "Licitação"}`)}/></> : current === "Orçamentos" ? <BudgetPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={record => updateModuleRecord("Orçamentos",record)} onConvert={convertBudget} onDelete={record => deleteModuleRecord("Orçamentos",record)} onCreateCustomer={createQuickCustomer} onCreateStructure={createQuickStructure}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} sales={moduleRecords.Vendas ?? []} onSave={record => updateModuleRecord("Vendas",record)}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders} company={activeCompany}/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany} isAdministrator={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*"))}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} onOpen={setModal} onUpdate={record=>{const commitment=record.status==="Recebida"?(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId):undefined;const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Recebido"}}]:[];return saveConfirmedModuleRecord("Financeiro",record,related)}} onIssueInvoice={(record,invoiceNumber)=>{const commitment=(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId);const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Faturado"}}]:[];return saveConfirmedModuleRecord("Financeiro",{...record,status:"Em aberto",transactionType:"Receber",invoiceNumber,invoiceIssuedAt:new Date().toISOString()},related)}}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} onUpdate={updateServiceOrder} serviceOrders={serviceOrders} customers={customerRecords} company={activeCompany}/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []} allModules={moduleRecords} serviceOrders={serviceOrders}/>}</div>
