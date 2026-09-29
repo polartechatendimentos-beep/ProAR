@@ -2137,7 +2137,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
         <div className="login-options"><label><input type="checkbox" defaultChecked/> <span>Lembrar de mim</span></label><a href="/trocar-senha">Esqueci minha senha</a></div>
         {error && <div className="login-error" role="alert"><AlertTriangle size={15}/>{error}</div>}
         <button className="login-submit" disabled={loading || !username || !password}>{loading ? "Verificando..." : <><LogIn size={20}/> Entrar no sistema</>}</button>
-        {tenantCompany?.daysRemaining !== undefined && <div className="login-trial"><Clock3 size={16}/>{tenantCompany.expired ? "Período de teste encerrado" : `${tenantCompany.daysRemaining} dia(s) restantes no período de teste`}</div>}
+        {tenantCompany?.daysRemaining != null && <div className="login-trial"><Clock3 size={16}/>{tenantCompany.expired ? "Período de teste encerrado" : `${tenantCompany.daysRemaining} dia(s) restantes no período de teste`}</div>}
         <footer className="login-form-security"><ShieldCheck size={18}/> Seus dados estão protegidos com segurança</footer>
       </form>
     </section>
