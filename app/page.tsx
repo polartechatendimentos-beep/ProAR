@@ -2838,6 +2838,25 @@ export default function Home() {
   }, [online, authenticatedUser, activeCompany.id, syncing]);
   const updateServiceOrder = async (updatedOrder: ServiceOrder) => {
     const previousOrder = serviceOrders.find(order => order.id === updatedOrder.id);
+    if (!previousOrder) {
+      showFeedback(`Falha ao salvar • a ordem ${updatedOrder.id || "selecionada"} não foi localizada na base atual.`, "error", 5000);
+      return null;
+    }
+    if (!updatedOrder.client?.trim()) {
+      showFeedback("Falha ao salvar • selecione o cliente da ordem de serviço.", "error", 5000);
+      return null;
+    }
+    if (!updatedOrder.service?.trim()) {
+      showFeedback("Falha ao salvar • informe o serviço da ordem de serviço.", "error", 5000);
+      return null;
+    }
+    if (updatedOrder.structureId) {
+      const structure = (moduleRecords["Unidades e setores"] ?? []).find(item => item.id === updatedOrder.structureId);
+      if (!structure || structure.client !== updatedOrder.client) {
+        showFeedback("Falha ao salvar • a unidade/setor/ambiente selecionado não pertence ao cliente desta OS.", "error", 6000);
+        return null;
+      }
+    }
     let orderForPersistence: ServiceOrder = { ...updatedOrder, contractItems: (updatedOrder.contractItems ?? []).map(item => ({ ...item })) };
     const reminderId = `LEM-${updatedOrder.id.replace(/\D/g, "")}`;
     let updatedModules = { ...moduleRecords };
@@ -2917,17 +2936,28 @@ export default function Home() {
       const stockEntries = productsUsed.filter(item => !(updatedModules.Estoque ?? []).some(stock => stock.id === `${stockPrefix}${item.id}`)).map(item => ({ id: `${stockPrefix}${item.id}`, name: `Saída por OS • ${item.name}`, client: updatedOrder.client, description: `Movimentação vinculada à ${updatedOrder.id}`, createdAt: new Date().toLocaleString("pt-BR"), status: "Concluído", category: "Saída por OS", serviceOrderId: updatedOrder.id, kind: "Produto" as const }));
       if (stockEntries.length) updatedModules = { ...updatedModules, Estoque: [...stockEntries, ...(updatedModules.Estoque ?? [])] };
     }
-    if (!navigator.onLine) throw new Error("Sem conexão com a internet.");
+    if (!navigator.onLine) {
+      showFeedback("Falha ao salvar a OS • sem conexão com o banco. Nenhuma confirmação foi registrada.", "error", 6000);
+      return null;
+    }
     const payload = { companyId: activeCompany.id, customers: customerRecords, serviceOrders: updatedOrders, moduleRecords: updatedModules, _baseRevision: stateRevision };
-    const response = await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) });
-    const result = await response.json();
+    let response: Response;
+    let result: any;
+    try {
+      response = await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) });
+      result = await response.json();
+    } catch (error) {
+      showFeedback(error instanceof Error ? `Falha ao salvar a OS • ${error.message}` : "Falha ao salvar a OS • banco indisponível.", "error", 6000);
+      return null;
+    }
     if (!response.ok) {
       if (response.status === 409 && result.state) {
         const serverCustomers=result.state.customers??[]; const serverOrders=result.state.serviceOrders??[]; const serverModules=mergeImportedServices(result.state.moduleRecords??{});
         setCustomerRecords(serverCustomers); setServiceOrders(serverOrders); setModuleRecords(serverModules); setStateRevision(Number(result.state._revision||0));
         localStorage.setItem(companyStorageKey(activeCompany.id,"customers"),JSON.stringify(serverCustomers)); localStorage.setItem(companyStorageKey(activeCompany.id,"service-orders"),JSON.stringify(serverOrders)); localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(serverModules));
       }
-      throw new Error(result.error || "Não foi possível confirmar a gravação no banco.");
+      showFeedback(response.status === 409 ? "Conflito ao salvar a OS • uma versão mais recente do banco foi preservada. Revise e tente novamente." : `Falha ao salvar a OS • ${result.error || "não foi possível confirmar a gravação no banco."}`, response.status === 409 ? "warning" : "error", 6000);
+      return null;
     }
     const confirmedCustomers=result.state?.customers??customerRecords; const confirmedOrders=result.state?.serviceOrders??updatedOrders; const confirmedModules=mergeImportedServices(result.state?.moduleRecords??updatedModules);
     setCustomerRecords(confirmedCustomers); setServiceOrders(confirmedOrders); setModuleRecords(confirmedModules); setSelectedOrder(orderForPersistence); setStateRevision(Number(result.state?._revision||stateRevision+1));
@@ -2938,8 +2968,7 @@ export default function Home() {
       const timeline = (orderForPersistence.timeline ?? []).filter(event => event.customerVisible).map(event => ({ id:event.id, createdAt:event.createdAt, status:event.status, customerNote:event.customerNote, photos:event.photos, customerVisible:true }));
       void fetch("/api/public-service-order", { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ companyId:activeCompany.id, orderId:orderForPersistence.id, token:orderForPersistence.trackingToken, client:orderForPersistence.client, service:orderForPersistence.service, date:orderForPersistence.date, time:orderForPersistence.time, status:orderForPersistence.status, timeline }) });
     }
-    setSavedMessage(orderForPersistence.status === "Concluída" && orderForPersistence.reminderEnabled ? `Ordem ${orderForPersistence.id} concluída e lembrete agendado.` : `Ordem ${orderForPersistence.id} atualizada e sincronizada.`);
-    window.setTimeout(() => setSavedMessage(""), 2500);
+    showFeedback(orderForPersistence.status === "Concluída" && orderForPersistence.reminderEnabled ? `OS ${orderForPersistence.id} salva com sucesso • conclusão confirmada e lembrete agendado.` : `Alteração salva com sucesso • OS ${orderForPersistence.id} confirmada no banco.`, "success");
     return orderForPersistence;
   };
   const hasAction = (moduleName: string, action: "Visualizar" | "Criar" | "Editar" | "Excluir") => Boolean(authenticatedUser?.permissions?.includes("*") || authenticatedUser?.role === "Administrador" || authenticatedUser?.permissions?.includes(`${moduleName}:${action}`));
