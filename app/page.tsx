@@ -3214,6 +3214,7 @@ export default function Home() {
             category: data.category || "Compra de produtos",
             paymentType: data.paymentType,
             paymentMethod: data.paymentMethod,
+            transactionType: "Pagar",
             purchaseId: record.id,
             installmentNumber: index + 1,
             installments: installmentCount,
@@ -3286,7 +3287,10 @@ export default function Home() {
       const stockId = `EST-${record.id}`;
       const hasPayable = (updatedModules["Financeiro"] ?? []).some(item => item.id === payableId || item.purchaseId === record.id);
       const hasStockEntry = (updatedModules["Estoque"] ?? []).some(item => item.id === stockId);
-      if (!hasPayable) updatedModules = { ...updatedModules, "Financeiro": [{ ...record, id: payableId, name: `Conta a pagar • ${record.name}`, status: "Em aberto", category: record.category || "Compra de produtos", purchaseId: record.id, createdAt: new Date().toLocaleString("pt-BR") }, ...(updatedModules["Financeiro"] ?? [])] };
+      // Compras a prazo já geram parcelas FIN-<compra>-NN no cadastro. Não criar
+      // um segundo título integral quando o recebimento da mercadoria for confirmado.
+      const hasInstallmentPayables = (updatedModules["Financeiro"] ?? []).some(item => item.purchaseId === record.id && Boolean(item.installmentNumber));
+      if (!hasPayable && !hasInstallmentPayables) updatedModules = { ...updatedModules, "Financeiro": [{ ...record, id: payableId, name: `Conta a pagar • ${record.name}`, status: "Em aberto", category: record.category || "Compra de produtos", transactionType:"Pagar", purchaseId: record.id, createdAt: new Date().toLocaleString("pt-BR") }, ...(updatedModules["Financeiro"] ?? [])] };
       if (!hasStockEntry) updatedModules = { ...updatedModules, "Estoque": [{ ...record, id: stockId, name: `Entrada • ${record.name}`, status: "Concluído", category: "Entrada por compra", createdAt: new Date().toLocaleString("pt-BR") }, ...(updatedModules["Estoque"] ?? [])] };
     }
     updatedModules = appendAudit(updatedModules, exists ? "Registro atualizado" : "Registro criado", `${moduleName} • ${record.name}`, exists ? "Alteração registrada pelo utilizador" : "Novo cadastro registrado pelo utilizador");
