@@ -2954,10 +2954,24 @@ export default function Home() {
     if (data.title.startsWith("Nova unidade, filial ou setor") || data.title.startsWith("Novo setor") || data.title.startsWith("Nova sala") || data.title.startsWith("Nova sala ou ambiente")) {
       const parentCustomer = data.title.split("•")[1]?.trim() || data.client;
       const structure: ModuleRecord = { id:`SET-${Date.now().toString().slice(-6)}`, name:data.name, client:parentCustomer, description:data.description || data.doc, doc:data.doc, contact:data.contact, phone:data.phone, address:data.address, category:data.category || "Setor", parentId:data.parentId || undefined, parentUnit:data.parentUnit || undefined, hierarchyLevel:data.hierarchyLevel || undefined, environmentType:data.environmentType, roomNumber:data.roomNumber, floor:data.floor, block:data.block, localResponsible:data.localResponsible, extension:data.extension, criticality:data.criticality, priorityAttendance:data.priorityAttendance, status:"Ativo", createdAt:new Date().toLocaleString("pt-BR"), legalName:data.legalName, tradeName:data.tradeName, email:data.email, zipCode:data.zipCode, street:data.street, addressNumber:data.addressNumber, complement:data.complement, neighborhood:data.neighborhood, city:data.city, state:data.state, stateRegistration:data.stateRegistration, municipalRegistration:data.municipalRegistration, cnaeMain:data.cnaeMain, taxStatus:data.taxStatus };
+      if (!parentCustomer || !customerRecords.some(customer => customer.name === parentCustomer)) {
+        setSavedMessage("Não foi possível salvar: cliente principal não identificado.");
+        return;
+      }
       const updatedModules = { ...moduleRecords, "Unidades e setores":[structure,...(moduleRecords["Unidades e setores"] ?? [])] };
-      const updatedCustomers = customerRecords.map(customer => customer.name === parentCustomer ? {...customer,units:customer.units+1} : customer);
-      setModuleRecords(updatedModules); setCustomerRecords(updatedCustomers); persistSharedState(updatedCustomers,serviceOrders,updatedModules);
-      setSavedMessage(`Unidade ou setor vinculado a ${parentCustomer}.`);
+      const updatedCustomers = customerRecords.map(customer => customer.name === parentCustomer ? {...customer,units:(Number(customer.units) || 0)+1} : customer);
+      try {
+        setModuleRecords(updatedModules);
+        setCustomerRecords(updatedCustomers);
+        persistSharedState(updatedCustomers,serviceOrders,updatedModules);
+        setSavedMessage(`${data.category || "Setor"} vinculado a ${parentCustomer} com sucesso.`);
+        window.setTimeout(() => setSavedMessage(""), 3000);
+      } catch (error) {
+        setModuleRecords(moduleRecords);
+        setCustomerRecords(customerRecords);
+        setSavedMessage(error instanceof Error ? `Falha ao salvar setor: ${error.message}` : "Falha ao salvar setor. Os dados anteriores foram preservados.");
+        return;
+      }
     } else if (data.title === "Novo cliente") {
       const newCustomer: Customer = {
         id: `CLI-${Date.now().toString().slice(-6)}`,
