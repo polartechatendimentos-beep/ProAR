@@ -115,6 +115,9 @@
   margin: 22px -28px -28px !important;
   padding: 14px 20px !important;
   box-sizing: border-box;
+  border-top: 1px solid rgba(99, 186, 255, .25) !important;
+  background: rgba(7, 27, 52, .96) !important;
+  color: #bfd7ee !important;
   text-align: center;
   font-size: 11px !important;
 }
