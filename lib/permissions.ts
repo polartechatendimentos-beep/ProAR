@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
-import { readSession, type ProarSession } from "./proar-auth";
+import { readSession } from "./proar-auth";
+
+type ProarSession = NonNullable<ReturnType<typeof readSession>>;
 
 export type Permission =
   | "obras.visualizar" | "obras.editar" | "obras.status.alterar"
