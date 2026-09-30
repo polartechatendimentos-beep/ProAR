@@ -33,3 +33,14 @@
 .finish-sale{height:46px!important}
 @media(max-width:1050px){.pdv-context{grid-template-columns:1fr 1fr!important}.pdv-top-total{grid-column:1/-1!important}.pdv-layout{grid-template-columns:1fr!important}}
 @media(max-width:650px){.pdv-context{grid-template-columns:1fr!important}.pdv-top-total{grid-column:auto!important}.pdv-shortcuts>button:first-child{display:none!important}}
+
+/* PDV operacional — atalhos permanecem no teclado/modal, sem ocupar coluna lateral */
+.pdv-operational-grid-modern{display:block!important;min-width:0!important}
+.pdv-operational-grid-modern>.pdv-layout{width:100%!important}
+.pdv-operational-grid-modern .pdv-layout{grid-template-columns:minmax(420px,1fr) minmax(420px,1fr)!important;gap:14px!important}
+.pdv-operational-grid-modern .pdv-workspace,.pdv-operational-grid-modern .pdv-cart{min-width:0!important}
+.pdv-operational-grid-modern .pdv-cart{position:sticky!important;top:12px!important;align-self:start!important}
+.pdv-context{grid-template-columns:minmax(280px,1.5fr) minmax(180px,.65fr) minmax(190px,.55fr)!important}
+.pdv-top-total{display:flex!important;flex-direction:column!important;align-items:flex-end!important;justify-content:center!important}
+@media(max-width:1100px){.pdv-operational-grid-modern .pdv-layout{grid-template-columns:1fr!important}.pdv-operational-grid-modern .pdv-cart{position:static!important}.pdv-context{grid-template-columns:1fr 1fr!important}.pdv-top-total{grid-column:1/-1!important}}
+@media(max-width:650px){.pdv-context{grid-template-columns:1fr!important}.pdv-top-total{grid-column:auto!important;align-items:flex-start!important}}
