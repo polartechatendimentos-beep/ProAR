@@ -11,3 +11,13 @@
 
 /* Cadastro principal — CNPJ primeiro e consulta em destaque */
 .customer-identification-card{grid-column:1/-1}.customer-card-title{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:16px}.customer-card-title h4{margin:4px 0 0}.customer-card-title>svg{color:#55c8f5}.document-first-field{display:grid;grid-template-columns:minmax(260px,1fr) auto;align-items:end;gap:10px;padding:14px;margin-bottom:12px;border:1px solid rgba(70,158,221,.32);border-radius:12px;background:linear-gradient(135deg,rgba(17,61,98,.7),rgba(8,25,43,.85))}.document-first-field label{display:flex;flex-direction:column;gap:6px;color:#a8c3d8;font-size:11px;font-weight:800}.document-first-field input{width:100%;box-sizing:border-box;border:1px solid #356181;background:#07192a;color:#f0f7ff;border-radius:9px;padding:12px;font-size:13px;outline:none}.document-first-field input:focus{border-color:#42b7ef;box-shadow:0 0 0 3px rgba(66,183,239,.14)}.document-search-button{height:41px;display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid #258cd1;border-radius:9px;background:#176db4;color:#fff;padding:0 15px;font-size:11px;font-weight:800;cursor:pointer}.document-lookup-banner{margin:-2px 0 14px;padding:9px 11px;border-radius:9px;font-size:11px;border:1px solid rgba(99,184,238,.25);background:rgba(20,91,140,.16);color:#a9ddff}.document-lookup-banner.success{border-color:rgba(67,202,143,.3);background:rgba(25,128,84,.14);color:#8ce6b9}.document-lookup-banner.error{border-color:rgba(241,111,111,.3);background:rgba(160,45,45,.14);color:#ffaaaa}@media(max-width:650px){.document-first-field{grid-template-columns:1fr}.document-search-button{width:100%}}
+
+/* Cliente 360 — cadastro e estrutura no mesmo fluxo */
+.customer-profile-unified-structure{margin-top:18px;padding-top:18px;border-top:1px solid #1b3854}
+.unified-section-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin:0 0 12px}
+.unified-section-heading h3{margin:5px 0 2px;color:#edf7ff;font-size:16px}
+.unified-section-heading p{margin:0;color:#829bb1;font-size:10px}
+.customer-profile-unified-structure .customer-structure-screen{border:1px solid #183650;border-radius:14px;overflow:hidden;background:#071725}
+.customer-profile-unified-structure .customer-structure-toolbar{border-top:0}
+.customer-profile-unified-structure .customer-structure-title{padding-top:14px}
+@media(max-width:850px){.unified-section-heading{align-items:flex-start;flex-direction:column}.customer-profile-unified-structure{margin-top:12px;padding-top:12px}}
