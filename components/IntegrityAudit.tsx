@@ -1,0 +1,47 @@
+"use client";
+import { useCallback, useEffect, useState } from "react";
+import { AlertTriangle, CheckCircle2, CircleAlert, Database, RefreshCw, ShieldCheck } from "lucide-react";
+import type { IntegrityResult } from "@/lib/integrity-audit";
+
+export function IntegrityAudit() {
+  const [result, setResult] = useState<IntegrityResult | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const run = useCallback(async () => {
+    setLoading(true); setError("");
+    try {
+      const response = await fetch("/api/integrity", { cache: "no-store", headers: { Accept: "application/json" } });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "O diagnóstico não pôde ser concluído.");
+      setResult(payload as IntegrityResult);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Falha ao consultar a base."); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => {
+    let active = true;
+    fetch("/api/integrity", { cache: "no-store", headers: { Accept: "application/json" } }).then(async response => {
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "O diagnóstico não pôde ser concluído.");
+      if (active) setResult(payload as IntegrityResult);
+    }).catch(cause => { if (active) setError(cause instanceof Error ? cause.message : "Falha ao consultar a base."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+  const formatTime = (value: string | null | undefined) => value ? new Date(value).toLocaleString("pt-BR") : "Sem informação";
+  return <section className="integrity-page">
+    <div className="integrity-hero"><div><span className="integrity-kicker"><ShieldCheck size={14}/> CONTROLES DA EMPRESA</span><h2>Integridade do Sistema</h2><p>Diagnóstico somente leitura para localizar divergências operacionais na base carregada.</p><small><Database size={13}/> Base examinada: {result?.source || "aguardando consulta"} {result ? `• revisão ${result.revision}` : ""}</small></div><button className="primary-btn" onClick={() => void run()} disabled={loading}><RefreshCw size={15} className={loading ? "integrity-spin" : ""}/>{loading ? "Analisando base…" : "Executar diagnóstico"}</button></div>
+    {error && <div className="integrity-error" role="alert"><AlertTriangle size={17}/><span>{error}</span></div>}
+    {loading && !result && <div className="integrity-empty" role="status">Consultando os dados persistidos no banco…</div>}
+    {result && <>
+      <div className="integrity-meta"><span>Executado em <b>{formatTime(result.checkedAt)}</b></span><span>Snapshot atualizado em <b>{formatTime(result.updatedAt)}</b></span><span>Os registros não foram alterados.</span></div>
+      <div className="integrity-kpis">
+        <article className={result.totals.critical ? "critical" : "clear"}><span>{result.totals.critical ? <CircleAlert size={17}/> : <CheckCircle2 size={17}/>} CRÍTICO</span><strong>{result.totals.critical}</strong><small>{result.totals.critical ? "Divergências que exigem conferência" : "Nenhuma divergência crítica localizada"}</small></article>
+        <article className={result.totals.attention ? "attention" : "clear"}><span>{result.totals.attention ? <AlertTriangle size={17}/> : <CheckCircle2 size={17}/>} ATENÇÃO</span><strong>{result.totals.attention}</strong><small>{result.totals.attention ? "Registros a revisar" : "Nenhum ponto de atenção localizado"}</small></article>
+        <article className="clear"><span><CheckCircle2 size={17}/> VERIFICAÇÕES OK</span><strong>{result.totals.ok}</strong><small>Sem divergências encontradas nessas regras</small></article>
+      </div>
+      <section className="integrity-panel"><header><div><h3>Regras verificadas</h3><p>Contagens calculadas sobre o snapshot operacional mais recente.</p></div><span>{result.checks.length} verificações</span></header><div className="integrity-checks">{result.checks.map(check => <article key={check.name} className={`integrity-check ${check.status.toLowerCase()}`}><div><span className="integrity-state">{check.status === "OK" ? <CheckCircle2 size={14}/> : check.status === "Crítico" ? <CircleAlert size={14}/> : <AlertTriangle size={14}/>} {check.status}</span><b>{check.name}</b><small>{check.summary}</small></div><strong>{check.count}</strong></article>)}</div></section>
+      <section className="integrity-panel"><header><div><h3>Ocorrências encontradas</h3><p>Use os identificadores para conferir cada registro nos módulos correspondentes. O diagnóstico não corrige nem exclui dados.</p></div><span>{result.findings.length} registros</span></header>{result.findings.length ? <div className="integrity-findings">{result.findings.map((finding,index) => <article className={`integrity-finding ${finding.severity === "Crítico" ? "critical" : "attention"}`} key={`${finding.check}-${finding.recordId}-${index}`}><span className="integrity-state">{finding.severity === "Crítico" ? <CircleAlert size={14}/> : <AlertTriangle size={14}/>} {finding.severity}</span><div><b>{finding.title}</b><small>{finding.check} • ID {finding.recordId}</small><p>{finding.detail}</p></div></article>)}</div> : <div className="integrity-empty"><CheckCircle2 size={18}/> Nenhuma divergência foi encontrada nas regras avaliadas.</div>}</section>
+      <p className="integrity-scope">Escopo atual: dados consolidados no snapshot operacional do ProAR. Registros independentes antigos que não estejam refletidos nesse snapshot não são inferidos por este diagnóstico.</p>
+    </>}
+  </section>;
+}

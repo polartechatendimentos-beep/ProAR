@@ -13,7 +13,8 @@ export type Permission =
   | "clientes.visualizar" | "clientes.editar"
   | "estoque.visualizar" | "estoque.editar" | "estoque.ajustar"
   | "compras.visualizar" | "compras.editar" | "compras.receber"
-  | "comercial.editar" | "catalogo.editar" | "financeiro.conciliar";
+  | "comercial.editar" | "catalogo.editar" | "financeiro.conciliar"
+  | "integridade.visualizar";
 
 const legacy: Record<string, string[]> = {
   obras: ["Obras"],
@@ -27,6 +28,7 @@ const legacy: Record<string, string[]> = {
   compras: ["Compras", "Fornecedores"],
   comercial: ["Vendas", "Orçamentos"],
   catalogo: ["Produtos", "Serviços"],
+  integridade: ["Integridade do Sistema"],
 };
 
 export function sessionFromRequest(request: NextRequest) {
