@@ -26,6 +26,13 @@ async function authenticateLegacyEmployee(username: string, password: string) {
       ? verifyPassword(password, storedHash)
       : safeEqual(suppliedHash, storedHash);
     if (!storedHash || !passwordMatches) continue;
+    if (employee.restrictLoginToWorkHours === true) {
+      const start = /^\\d{2}:\\d{2}$/.test(String(employee.workdayStart || "")) ? String(employee.workdayStart) : "07:00";
+      const end = /^\\d{2}:\\d{2}$/.test(String(employee.workdayEnd || "")) ? String(employee.workdayEnd) : "18:00";
+      const current = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
+      const inside = start <= end ? current >= start && current <= end : current >= start || current <= end;
+      if (!inside) return { denied: true as const, reason: `Login permitido somente no expediente configurado (${start}–${end}, horário de Brasília).` };
+    }
     const permissionsMap = (employee.employeePermissions ?? {}) as Record<string, string[]>;
     const permissions = String(employee.employeeRole || "") === "Administrador" ? ["*"] : Object.entries(permissionsMap).flatMap(([module, actions]) => actions.includes("Visualizar") ? [module, ...actions.map(action => `${module}:${action}`)] : []);
     return { username: String(employee.employeeUsername || normalized), displayName: String(employee.name || normalized), role: String(employee.employeeRole || "Utilizador"), permissions, companyId: primaryCompanyId, legacy: true };
@@ -75,6 +82,7 @@ export async function POST(request: NextRequest) {
 
   const legacyEmployee = await authenticateLegacyEmployee(String(username), String(password));
   if (legacyEmployee) {
+    if ("denied" in legacyEmployee) return NextResponse.json({ error: legacyEmployee.reason }, { status: 403 });
     const response = NextResponse.json({ authenticated: true, ...legacyEmployee }); response.cookies.set(COOKIE_NAME, createSessionForUser(legacyEmployee), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 }); return response;
   }
 
