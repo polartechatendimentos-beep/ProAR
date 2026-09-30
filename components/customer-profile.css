@@ -21,3 +21,44 @@
 .customer-profile-unified-structure .customer-structure-toolbar{border-top:0}
 .customer-profile-unified-structure .customer-structure-title{padding-top:14px}
 @media(max-width:850px){.unified-section-heading{align-items:flex-start;flex-direction:column}.customer-profile-unified-structure{margin-top:12px;padding-top:12px}}
+
+/* Cadastro de Cliente — master/detail conforme referência aprovada */
+.unified-master-detail{background:#07111f;border-color:#173553}
+.structure-master-detail{display:grid;grid-template-columns:minmax(300px,5fr) minmax(420px,7fr);gap:16px;padding:0 16px 16px}
+.structure-units-column,.structure-sectors-column{background:#060c18;border:1px solid #142f48;border-radius:13px;padding:13px;min-height:420px}
+.structure-units-column{display:flex;flex-direction:column;gap:10px}
+.structure-units-column>header{display:flex;align-items:center;justify-content:space-between;gap:10px;color:#9bb0c2}
+.structure-units-column>header div{display:flex;flex-direction:column;gap:2px}
+.structure-units-column>header b{font-size:10px;letter-spacing:.08em;color:#b8c8d7}
+.structure-units-column>header span,.structure-units-column>header small{font-size:9px;color:#55c7f5}
+.structure-unit-list{display:flex;flex-direction:column;gap:8px;flex:1}
+.structure-unit-card{width:100%;text-align:left;background:#0b1628;border:1px solid #17334d;border-radius:12px;padding:11px;color:#dce9f3;cursor:pointer;transition:.16s ease}
+.structure-unit-card:hover{border-color:#245c83;background:#0e1d35}
+.structure-unit-card.active{border-color:#38bdf8;background:#0d2242;box-shadow:0 0 15px rgba(56,189,248,.12)}
+.unit-card-main{display:grid;grid-template-columns:30px 1fr auto;align-items:center;gap:8px}
+.unit-card-main b{display:block;font-size:11px;color:#f4f9fc}
+.unit-card-main small{display:block;margin-top:2px;font-size:9px;color:#7993a9}
+.unit-card-facts{display:flex;justify-content:space-between;margin-top:9px;padding-top:7px;border-top:1px solid #152c42;font-size:9px;color:#8da6b9}
+.structure-add-dashed{border:1px dashed #214763;background:#081523;color:#38bdf8;border-radius:11px;padding:9px;font-size:10px;font-weight:700;cursor:pointer}
+.structure-sectors-column{display:flex;flex-direction:column;gap:11px;border-color:#1d5773}
+.selected-unit-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding-bottom:11px;border-bottom:1px solid #163149}
+.selected-unit-head h3{margin:3px 0;color:#f4f9fc;font-size:13px}
+.selected-unit-head p{margin:0;color:#7f98ad;font-size:9px}
+.structure-sector-list{display:flex;flex-direction:column;gap:9px;flex:1}
+.structure-sector-card{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px;background:#0b1628;border:1px solid #17334d;border-radius:12px}
+.structure-sector-card:hover{border-color:#246083}
+.sector-card-copy{display:flex;align-items:flex-start;gap:9px;min-width:0}
+.sector-card-title{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.sector-card-title b{font-size:11px;color:#f1f7fb}
+.sector-card-title em{font-style:normal;font-size:8px;font-weight:800;color:#67d4fa;background:#0c3044;border:1px solid #17516d;padding:2px 6px;border-radius:999px}
+.sector-card-copy p{margin:3px 0;color:#8299ac;font-size:9px}
+.sector-card-copy small{font-size:9px;color:#49c7ed}
+.sector-card-actions{display:flex;gap:5px;flex-shrink:0}
+.structure-live-summary,.structure-global-summary{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#081523;border:1px solid #17334d;border-radius:10px;padding:9px 10px;font-size:9px;color:#8da6b9}
+.structure-live-summary span{display:flex;align-items:center;gap:5px}
+.structure-live-summary b{color:#61d5f6}
+.structure-global-summary{margin:0 16px 16px;justify-content:flex-start;flex-wrap:wrap}
+.structure-global-summary span{background:#0b1628;border:1px solid #17334d;border-radius:7px;padding:5px 8px}
+.structure-global-summary span:first-child{background:transparent;border:0;color:#eef7fb;padding-left:0}
+@media(max-width:1050px){.structure-master-detail{grid-template-columns:1fr}.structure-units-column,.structure-sectors-column{min-height:auto}}
+@media(max-width:680px){.structure-master-detail{padding:0 10px 10px}.selected-unit-head{flex-direction:column}.selected-unit-head .primary-btn{width:100%;justify-content:center}.structure-sector-card{align-items:flex-start}.structure-global-summary{margin:0 10px 10px}}
