@@ -273,3 +273,31 @@ tbody tr:hover{background:var(--app-hover)!important}
 .management-toolbar .status-filter select{height:42px!important;min-width:155px!important;border:0!important;outline:0!important;background:transparent!important;color:#e7f1f8!important;box-shadow:none!important}
 .management-toolbar .status-filter select option{background:#08101e!important;color:#e2e8f0!important}
 @media(max-width:720px){.management-toolbar{flex-direction:column!important}.management-toolbar .list-search,.management-toolbar .status-filter{width:100%!important;min-width:0!important}}
+
+/* Busca/filtro ProAR definitivo — neutraliza qualquer tema legado */
+label.list-search,.list-search{
+  box-sizing:border-box!important;display:flex!important;align-items:center!important;gap:9px!important;
+  height:44px!important;min-height:44px!important;padding:0 13px!important;margin-right:0!important;
+  border:1px solid #1d4f72!important;border-radius:11px!important;background:#07192b!important;
+  color:#a9c8dd!important;box-shadow:inset 0 0 0 1px rgba(14,73,111,.12)!important;
+}
+label.list-search:focus-within,.list-search:focus-within{border-color:#2689c7!important;background:#081d32!important;box-shadow:0 0 0 3px rgba(38,137,199,.11)!important}
+label.list-search>svg,.list-search>svg{color:#a9c8dd!important;flex:0 0 auto!important}
+label.list-search input,.list-search input{
+  flex:1!important;width:100%!important;min-width:0!important;height:42px!important;padding:0!important;margin:0!important;
+  border:0!important;border-radius:0!important;outline:0!important;background:transparent!important;
+  color:#e7f1f8!important;box-shadow:none!important;font-size:10px!important;font-weight:600!important;
+}
+label.list-search input::placeholder,.list-search input::placeholder{color:#6685a0!important;opacity:1!important}
+label.status-filter,.status-filter{
+  box-sizing:border-box!important;display:flex!important;align-items:center!important;gap:8px!important;
+  height:44px!important;min-height:44px!important;padding:0 12px!important;
+  border:1px solid #1d4f72!important;border-radius:11px!important;background:#07192b!important;
+  color:#a9c8dd!important;box-shadow:inset 0 0 0 1px rgba(14,73,111,.12)!important;
+}
+label.status-filter:focus-within,.status-filter:focus-within{border-color:#2689c7!important;box-shadow:0 0 0 3px rgba(38,137,199,.11)!important}
+label.status-filter select,.status-filter select{
+  flex:1!important;height:42px!important;padding:0!important;border:0!important;border-radius:0!important;
+  outline:0!important;background:#07192b!important;color:#e7f1f8!important;box-shadow:none!important;font-size:10px!important;font-weight:600!important;
+}
+label.status-filter select option,.status-filter select option{background:#08101e!important;color:#e2e8f0!important}
