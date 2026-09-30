@@ -1,38 +1,17 @@
 "use client";
-
-import React, { useMemo, useState } from "react";
-import { CalendarDays, Clock3, MapPin, Navigation, Route, Search, ShieldCheck } from "lucide-react";
-
-export type EmployeeRouteHistoryItem = {
-  id: string;
-  date: string;
-  startedAt: string;
-  endedAt?: string;
-  distanceKm?: number;
-  osCount: number;
-  status: "active" | "completed";
-  stops: Array<{ id:string; osNumber?:string; customer?:string; address?:string; arrivedAt?:string; departedAt?:string; lat?:number; lng?:number }>;
-};
-
-export function EmployeeRoutesTab({ employeeId, employeeName, routes = [] }: { employeeId:string; employeeName:string; routes?:EmployeeRouteHistoryItem[] }) {
-  const [query,setQuery]=useState("");
-  const filtered=useMemo(()=>routes.filter(r=>(r.date+" "+r.stops.map(s=>s.customer+" "+s.osNumber+" "+s.address).join(" ")).toLowerCase().includes(query.toLowerCase())),[routes,query]);
-  return <section className="space-y-4">
-    <div className="rounded-2xl border border-slate-200 bg-white p-5">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div><div className="flex items-center gap-2"><Route className="w-5 h-5 text-blue-600"/><h2 className="font-bold text-slate-900">Rotas & Localização</h2></div><p className="text-xs text-slate-500 mt-1">Histórico operacional de {employeeName}. Rastreamento limitado às rotas/jornadas de trabalho iniciadas no ProAR Mobile.</p></div>
-        <div className="flex items-center gap-2 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-xl"><ShieldCheck className="w-4 h-4"/>Registro operacional auditável</div>
-      </div>
-    </div>
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <Metric label="Rotas registradas" value={String(routes.length)}/>
-      <Metric label="O.S. visitadas" value={String(routes.reduce((a,r)=>a+r.osCount,0))}/>
-      <Metric label="Distância registrada" value={routes.reduce((a,r)=>a+(r.distanceKm||0),0).toFixed(1)+" km"}/>
-      <Metric label="Em rota agora" value={String(routes.filter(r=>r.status==="active").length)}/>
-    </div>
-    <div className="relative"><Search className="w-4 h-4 absolute left-3 top-3 text-slate-400"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar por data, O.S., cliente ou endereço..." className="w-full rounded-xl border border-slate-200 pl-9 pr-3 py-2.5 text-xs outline-none focus:border-blue-500"/></div>
-    {filtered.length===0?<div className="rounded-2xl border border-dashed border-slate-300 bg-white py-12 text-center"><Navigation className="w-8 h-8 mx-auto text-slate-300"/><p className="font-bold text-sm text-slate-700 mt-2">Nenhuma rota registrada</p><p className="text-xs text-slate-400 mt-1">As rotas aparecerão aqui depois que o colaborador iniciar o rastreamento de trabalho pelo ProAR Mobile.</p></div>:filtered.map(r=><article key={r.id} className="rounded-2xl border border-slate-200 bg-white overflow-hidden"><div className="p-4 flex flex-wrap justify-between gap-3 bg-slate-50 border-b border-slate-100"><div className="flex items-center gap-3"><CalendarDays className="w-4 h-4 text-blue-600"/><div><b className="text-sm text-slate-900">{new Date(r.date+"T12:00:00").toLocaleDateString("pt-BR")}</b><p className="text-[11px] text-slate-500">{r.startedAt} → {r.endedAt||"em andamento"}</p></div></div><div className="flex gap-2 text-[10px]"><span className="px-2 py-1 rounded bg-blue-50 text-blue-700">{r.osCount} O.S.</span><span className="px-2 py-1 rounded bg-slate-100 text-slate-700">{(r.distanceKm||0).toFixed(1)} km</span></div></div><div className="p-4 space-y-3">{r.stops.map((s,i)=><div key={s.id} className="flex gap-3"><div className="flex flex-col items-center"><span className="w-6 h-6 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">{i+1}</span>{i<r.stops.length-1&&<span className="w-px h-full bg-slate-200"/>}</div><div className="pb-3"><div className="text-xs font-bold text-slate-800">{s.osNumber?"OS #"+s.osNumber+" • ":""}{s.customer||"Parada registrada"}</div><div className="text-[11px] text-slate-500 flex items-start gap-1 mt-1"><MapPin className="w-3 h-3 mt-0.5"/>{s.address||"Coordenadas registradas"}</div><div className="text-[10px] text-slate-400 mt-1 flex gap-3"><span>Chegada: {s.arrivedAt||"—"}</span><span>Saída: {s.departedAt||"—"}</span></div></div></div>)}</div></article>)}
-    <p className="text-[10px] text-slate-400">ID do colaborador: {employeeId}. A localização deve ser coletada somente durante o rastreamento de trabalho ativo e conforme as permissões definidas pela empresa.</p>
-  </section>
+import { useEffect, useState } from "react";
+import type { WorkRoute } from "@/lib/work-routes";
+import "./work-routes.css";
+type Summary = Omit<WorkRoute,"points"> & {pointCount:number;imprecisePoints:number;lastPoint?:WorkRoute["points"][number]};
+const date = (value?:string) => value ? new Date(value).toLocaleString("pt-BR") : "Em andamento";
+export function EmployeeRoutesTab({employeeId,employeeName}:{employeeId:string;employeeName:string}) {
+ const [clock]=useState(()=>Date.now());
+ const [from,setFrom]=useState(()=>new Date(Date.now()-30*86400000).toISOString().slice(0,10));
+ const [to,setTo]=useState(()=>new Date().toISOString().slice(0,10));
+ const [routes,setRoutes]=useState<Summary[]>([]),[detail,setDetail]=useState<WorkRoute|null>(null),[error,setError]=useState(""),[loading,setLoading]=useState(false),[page,setPage]=useState(0);
+ useEffect(()=>{const controller=new AbortController();let live=true;queueMicrotask(()=>{if(live){setLoading(true);setError("");}});fetch(`/api/work-routes?${new URLSearchParams({employeeId,from,to})}`,{cache:"no-store",signal:controller.signal}).then(async response=>{const body=await response.json();if(!response.ok)throw new Error(body.error);if(live){setRoutes(body.routes);if(body.truncated)setError("Consulta limitada. Reduza o período para ver todas as jornadas.");}}).catch(e=>{if(live&&e.name!=="AbortError")setError(e.message);}).finally(()=>{if(live)setLoading(false);});return()=>{live=false;controller.abort();};},[employeeId,from,to]);
+ async function open(route:Summary){setError("");try{const response=await fetch(`/api/work-routes?${new URLSearchParams({employeeId,from,to,routeId:route.id})}`,{cache:"no-store"});const body=await response.json();if(!response.ok)throw new Error(body.error);setDetail(body.routes[0]||null);setPage(0);}catch(e){setError(e instanceof Error?e.message:"Falha na consulta.");}}
+ const points=detail?.points||[];const reliable=points.filter(p=>p.reliable);const lats=reliable.map(p=>p.latitude),lngs=reliable.map(p=>p.longitude);const minLat=Math.min(...lats),maxLat=Math.max(...lats),minLng=Math.min(...lngs),maxLng=Math.max(...lngs);
+ const projection=reliable.map(p=>`${20+(p.longitude-minLng)/Math.max(maxLng-minLng,.00001)*560},${220-(p.latitude-minLat)/Math.max(maxLat-minLat,.00001)*200}`).join(" ");
+ return <section className="work-routes"><h3>Rotas & Localização • {employeeName}</h3><p>Histórico de trabalho, acesso restrito. Distância estimada por GPS; imprecisão e perda de sinal não comprovam conduta. Retenção: 90 dias.</p><div className="route-actions"><label>De <input type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label><label>Até <input type="date" value={to} onChange={e=>setTo(e.target.value)}/></label></div>{error&&<p role="alert">{error}</p>}{loading?<p>Consultando jornadas…</p>:routes.length===0?<p>Nenhuma rota registrada neste período.</p>:routes.map(route=><article key={route.id}><strong>{date(route.startedAt)} • {route.status==="active"?"Rota ativa":"Encerrada"}</strong><p>Fim: {date(route.endedAt)} • {route.distanceKm.toLocaleString("pt-BR")} km estimados • {route.stops.length} atendimentos • {route.pointCount} pontos</p><p>Último GPS: {date(route.lastPoint?.capturedAt)} • Precisão: {route.lastPoint?.accuracy.toFixed(0)||"—"} m</p>{route.status==="active"&&(!route.lastPoint||clock-Date.parse(route.lastPoint.capturedAt)>20*60000)&&<p>Sem atualização recente. Pode haver falta de sinal ou coleta interrompida.</p>}<button type="button" onClick={()=>void open(route)}>Ver percurso e paradas</button></article>)}{detail&&<article><div className="route-actions"><h4>Jornada de {date(detail.startedAt)}</h4><button onClick={()=>setDetail(null)}>Fechar percurso</button></div><p>Aviso confirmado: {date(detail.consentAt)} • Encerramento: {detail.closedReason||"—"}</p>{reliable.length>0&&<svg viewBox="0 0 600 240" role="img" aria-label="Traçado GPS esquemático sem mapa de ruas"><polyline points={projection} fill="none" stroke="#00a8e8" strokeWidth="3"/></svg>}<p>Traçado esquemático. Pontos com precisão superior a 100 m não compõem a distância; conexões no desenho não representam ruas.</p>{detail.stops.map(stop=><p key={stop.id}><b>{stop.osId} • {stop.customer}</b><br/>{stop.address}<br/>Chegada: {date(stop.arrivedAt)} • Saída: {date(stop.departedAt)} • Precisão: {stop.accuracy.toFixed(0)} m</p>)}<div className="route-table"><table><thead><tr><th>Horário GPS</th><th>Coordenadas</th><th>Precisão</th></tr></thead><tbody>{points.slice(page*50,(page+1)*50).map(p=><tr key={p.id}><td>{date(p.capturedAt)}</td><td>{p.latitude.toFixed(6)}, {p.longitude.toFixed(6)}</td><td>{p.accuracy.toFixed(0)} m {p.reliable?"":"• impreciso"}</td></tr>)}</tbody></table></div><div className="route-actions"><button disabled={!page} onClick={()=>setPage(page-1)}>Anterior</button><span>{page+1}/{Math.max(1,Math.ceil(points.length/50))}</span><button disabled={(page+1)*50>=points.length} onClick={()=>setPage(page+1)}>Próxima</button></div></article>}</section>;
 }
-function Metric({label,value}:{label:string;value:string}){return <div className="rounded-xl border border-slate-200 bg-white p-3"><span className="text-[10px] text-slate-500">{label}</span><div className="font-bold text-slate-900 mt-1">{value}</div></div>}

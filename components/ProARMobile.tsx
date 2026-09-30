@@ -1,5 +1,6 @@
 "use client";
 
+import { MobileRouteControls } from "./MobileRouteControls";
 import Home from "@/app/page";
 import { useEffect } from "react";
 
@@ -10,5 +11,5 @@ export function ProARMobile() {
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("proar:navigate", { detail: "Ordens de serviço" }));
   }, []);
-  return <Home />;
+  return <><MobileRouteControls /><Home /></>;
 }

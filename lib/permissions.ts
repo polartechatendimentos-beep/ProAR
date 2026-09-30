@@ -14,7 +14,7 @@ export type Permission =
   | "estoque.visualizar" | "estoque.editar" | "estoque.ajustar"
   | "compras.visualizar" | "compras.editar" | "compras.receber"
   | "comercial.editar" | "catalogo.editar" | "financeiro.conciliar"
-  | "integridade.visualizar";
+  | "integridade.visualizar" | "rotas.visualizar";
 
 const legacy: Record<string, string[]> = {
   obras: ["Obras"],
@@ -28,6 +28,7 @@ const legacy: Record<string, string[]> = {
   compras: ["Compras", "Fornecedores"],
   comercial: ["Vendas", "Orçamentos"],
   catalogo: ["Produtos", "Serviços"],
+  rotas: ["Rotas"],
   integridade: ["Integridade do Sistema"],
 };
 

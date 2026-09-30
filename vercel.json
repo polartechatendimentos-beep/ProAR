@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/manager-daily-check",
       "schedule": "15 8 * * *"
+    },
+    {
+      "path": "/api/cron/work-route-retention",
+      "schedule": "25 8 * * *"
     }
   ]
 }

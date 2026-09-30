@@ -14,7 +14,7 @@
     "validate": "npm run validate:fast && npm run build",
     "check": "npm run validate",
     "test": "node --experimental-strip-types tests/run.mjs",
-    "lint": "eslint app/api lib components/OperationalFinance.tsx components/InventoryOperations.tsx components/ServiceOrderWorkspace.tsx components/IntegrityAudit.tsx --quiet",
+    "lint": "eslint app/api lib components/OperationalFinance.tsx components/InventoryOperations.tsx components/ServiceOrderWorkspace.tsx components/IntegrityAudit.tsx --quiet components/EmployeeRoutesTab.tsx components/MobileRouteControls.tsx",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {

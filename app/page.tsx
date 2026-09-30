@@ -1,5 +1,6 @@
 "use client";
 
+import { EmployeeRoutesTab } from "@/components/EmployeeRoutesTab";
 import "./settings.css";
 import "./multiempresa.css";
 import "./obra-142.css";
@@ -1914,7 +1915,7 @@ function GenericModule({ name, onOpen, onDelete, onUpdate, onConvert, companyCnp
     catch { setNfeStatus("Consulta indisponível. Verifique o certificado A1 nas Configurações Fiscais."); }
   };
   const openDetail = (record: ModuleRecord) => { setDetailRecord(record); setDetailTab("Dados gerais"); };
-  const detailTabsFor = (moduleName: string) => moduleName === "Fornecedores"
+  const detailTabsFor = (moduleName: string) => moduleName === "Funcionários" ? ["Dados gerais", "Rotas & Localização", "Histórico"] : moduleName === "Fornecedores"
     ? ["Dados gerais", "Compras", "Produtos fornecidos", "Financeiro", "Documentos", "Histórico"]
     : moduleName === "Equipamentos"
       ? ["Dados gerais", "Dados técnicos", "Ordens de serviço", "Manutenções", "Garantias", "Histórico"]
@@ -1953,6 +1954,7 @@ function GenericModule({ name, onOpen, onDelete, onUpdate, onConvert, companyCnp
       const list = (items: {id:string; name?:string; client?:string; date?:string; createdAt?:string; status?:string; value?:number}[], empty: string) => items.length ? <div className="entity-history-list">{items.map(item => <article key={item.id}><span><b>{item.id} • {item.name || item.client || "Registro"}</b><small>{item.client || item.status || "—"}</small></span><time>{item.date || item.createdAt || "—"}</time>{item.value !== undefined && <strong>{money(item.value)}</strong>}</article>)}</div> : <div className="entity-empty"><History size={20}/><span>{empty}</span></div>;
       let content: any = null;
       if (detailTab === "Dados gerais") content = <div className="entity-fields-grid">{field("Código", detailRecord.id)}{field("Nome / fantasia", detailRecord.name)}{field("Razão social", detailRecord.legalName)}{field("CPF / CNPJ", detailRecord.doc)}{field("Responsável", detailRecord.contact || detailRecord.client)}{field("Telefone", detailRecord.phone)}{field("E-mail", detailRecord.email)}{field("Categoria", detailRecord.category)}{field("Situação", detailRecord.status || "Ativo")}{field("Endereço", detailRecord.address || [detailRecord.street,detailRecord.addressNumber,detailRecord.neighborhood,detailRecord.city,detailRecord.state].filter(Boolean).join(", "))}<div className="entity-field wide"><small>Observações</small><strong>{detailRecord.description || "Sem observações cadastradas."}</strong></div></div>;
+      else if (detailTab === "Rotas & Localização") content = <EmployeeRoutesTab employeeId={detailRecord.id} employeeName={detailRecord.name} />;
       else if (detailTab === "Compras") content = list(relatedPurchases, "Nenhuma compra vinculada a este cadastro.");
       else if (detailTab === "Produtos fornecidos") content = list(supplierProducts, "Nenhum produto vinculado a este fornecedor.");
       else if (detailTab === "Financeiro") content = list(supplierFinance, "Nenhum lançamento financeiro vinculado.");
@@ -2295,7 +2297,7 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
   const [employeeRole, setEmployeeRole] = useState("Atendimento");
   const [employeeUsername, setEmployeeUsername] = useState("");
   const [employeePassword, setEmployeePassword] = useState("");
-  const permissionModules = navGroups.flatMap(group => group.items.map(item => item.name));
+  const permissionModules = [...navGroups.flatMap(group => group.items.map(item => item.name)), "Rotas"];
   const permissionActions = ["Visualizar", "Criar", "Editar", "Excluir"] as const;
   const profilePermissions: Record<string, Record<string, (typeof permissionActions)[number][]>> = {
     Administrador: Object.fromEntries(permissionModules.map(module => [module, [...permissionActions]])),
@@ -3784,3 +3786,4 @@ export default function Home() {
     {selectedOrder && <OrderDetail order={selectedOrder} customerPhone={customerRecords.find(customer => customer.name === selectedOrder.client)?.phone} company={activeCompany} catalog={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} contracts={(moduleRecords.Certames ?? []) as PublicContractRecord[]} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} equipment={moduleRecords["Equipamentos"] ?? []} close={() => setSelectedOrder(null)} onUpdate={updateServiceOrder} canEdit={hasAction("Ordens de serviço","Editar")}/>}{/* detalhe da OS */}
   </div>;
 }
+
