@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
-import { CheckCircle2, FileText, Landmark, Plus, Trash2 } from "lucide-react";\nimport { CustomerSearchSelect } from "@/components/CustomerSearchSelect";
+import { CheckCircle2, FileText, Landmark, Plus, Trash2 } from "lucide-react";
+import { CustomerSearchSelect } from "@/components/CustomerSearchSelect";
 import {
   calculateCertameItemBalance,
   type CertameItem,
