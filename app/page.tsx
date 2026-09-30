@@ -143,6 +143,18 @@ type ServiceOrder = {
   sector?: string;
   room?: string;
   structureId?: string;
+  priority?: "Baixa" | "Normal" | "Alta" | "Urgente";
+  serviceType?: string;
+  checklist?: string;
+  tag?: string;
+  externalCode?: string;
+  checkInRequirement?: string;
+  estimatedDurationMinutes?: number;
+  pmocRepeatEnabled?: boolean;
+  npsEnabled?: boolean;
+  request?: string;
+  discount?: number;
+  photos?: Record<string, string[]>;
 };
 
 type ServiceOrderTimelineEvent = {
@@ -2063,6 +2075,23 @@ type ModalSave = {
   equipmentLabelImage?: string;
   equipmentLabelImageName?: string;
   equipmentLabelHistory?: string[];
+  priority?: ServiceOrder["priority"];
+  serviceType?: string;
+  checklist?: string;
+  tag?: string;
+  externalCode?: string;
+  checkInRequirement?: string;
+  estimatedDurationMinutes?: number;
+  pmocRepeatEnabled?: boolean;
+  npsEnabled?: boolean;
+  whatsappUpdatesEnabled?: boolean;
+  whatsappAppointmentReminderEnabled?: boolean;
+  whatsappStatusUpdatesEnabled?: boolean;
+  appointmentReminderHours?: number;
+  equipmentIds?: string[];
+  discount?: number;
+  servicesTotal?: number;
+  productsTotal?: number;
 };
 
 type AuthenticatedUser = { username: string; displayName: string; role?: string; permissions?: string[]; companyId?: string; companySlug?: string; trialExpiresAt?: string };
@@ -2132,7 +2161,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
   </main>;
 }
 
-function Modal({ title, customers, structures, catalogRecords, supplierRecords, employeeRecords, close, onSave, onCreateStructure }: { title: string; customers: Customer[]; structures: ModuleRecord[]; catalogRecords: ModuleRecord[]; supplierRecords: ModuleRecord[]; employeeRecords: ModuleRecord[]; close: () => void; onSave: (data: ModalSave) => void | Promise<void>; onCreateStructure: (draft: StructureDraft & { client: string }) => ModuleRecord | null }) {
+function Modal({ title, customers, structures, catalogRecords, supplierRecords, employeeRecords, equipmentRecords, close, onSave, onCreateStructure }: { title: string; customers: Customer[]; structures: ModuleRecord[]; catalogRecords: ModuleRecord[]; supplierRecords: ModuleRecord[]; employeeRecords: ModuleRecord[]; equipmentRecords: ModuleRecord[]; close: () => void; onSave: (data: ModalSave) => void | Promise<void>; onCreateStructure: (draft: StructureDraft & { client: string }) => ModuleRecord | null }) {
   const isLinkedStructure = title.startsWith("Nova unidade, filial ou setor") || title.startsWith("Novo setor") || title.startsWith("Nova sala") || title.startsWith("Nova sala ou ambiente");
   const isNewOrder = title === "Nova ordem de serviço";
   const isNewCustomer = title === "Novo cliente";
@@ -2225,6 +2254,23 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
   const [quickSectorOpen, setQuickSectorOpen] = useState(false);
   const [quickSectorName, setQuickSectorName] = useState("");
   const [quickSectorFeedback, setQuickSectorFeedback] = useState("");
+  const [orderTab, setOrderTab] = useState<"Geral" | "Equipamentos" | "Valores" | "Anexos">("Geral");
+  const [orderPriority, setOrderPriority] = useState<ServiceOrder["priority"]>("Normal");
+  const [orderServiceType, setOrderServiceType] = useState("Manutenção corretiva");
+  const [orderChecklist, setOrderChecklist] = useState("Diagnóstico corretivo");
+  const [orderTag, setOrderTag] = useState("");
+  const [orderExternalCode, setOrderExternalCode] = useState("");
+  const [orderCheckInRequirement, setOrderCheckInRequirement] = useState("Obrigatório por GPS no local");
+  const [orderEstimatedDuration, setOrderEstimatedDuration] = useState("02:00");
+  const [orderPmocRepeat, setOrderPmocRepeat] = useState(false);
+  const [orderNpsEnabled, setOrderNpsEnabled] = useState(true);
+  const [orderWhatsappEnabled, setOrderWhatsappEnabled] = useState(true);
+  const [orderWhatsappReminderEnabled, setOrderWhatsappReminderEnabled] = useState(true);
+  const [orderWhatsappStatusEnabled, setOrderWhatsappStatusEnabled] = useState(true);
+  const [orderReminderHours, setOrderReminderHours] = useState(24);
+  const [selectedEquipmentIds, setSelectedEquipmentIds] = useState<string[]>([]);
+  const [catalogQuantities, setCatalogQuantities] = useState<Record<string, number>>({});
+  const [orderDiscount, setOrderDiscount] = useState(0);
   const [recordKind, setRecordKind] = useState<"Serviço" | "Produto">(title.includes("Produtos") ? "Produto" : "Serviço");
   const [selectedCatalogIds, setSelectedCatalogIds] = useState<string[]>([]);
   const [servicePickerOpen, setServicePickerOpen] = useState(false);
@@ -2385,11 +2431,53 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
   const availableRooms = selectedClient ? customerStructures(selectedClient, customers, structures).filter(item => /sala|ambiente|consult|labor|farm|uti|recep|almox|audit|cozinha|cpd|quarto/i.test(`${item.name} ${item.category ?? ""} ${item.environmentType ?? ""}`)) : [];
   const selectedClientData = customers.find(customer => customer.name === selectedClient);
   const serviceRecords = catalogRecords.filter(item => (item.kind || "Serviço") === "Serviço");
+  const productRecords = catalogRecords.filter(item => item.kind === "Produto");
   const selectedServices = serviceRecords.filter(item => selectedCatalogIds.includes(item.id));
+  const selectedProducts = productRecords.filter(item => selectedCatalogIds.includes(item.id));
+  const selectedOrderItems = catalogRecords.filter(item => selectedCatalogIds.includes(item.id));
+  const orderServicesTotal = selectedServices.reduce((sum, item) => sum + (Number(item.value) || 0) * (catalogQuantities[item.id] || 1), 0);
+  const orderProductsTotal = selectedProducts.reduce((sum, item) => sum + (Number(item.value) || 0) * (catalogQuantities[item.id] || 1), 0);
+  const orderTotal = Math.max(0, orderServicesTotal + orderProductsTotal - orderDiscount);
   const visibleServiceOptions = serviceRecords.filter(item => `${item.name} ${item.description || ""} ${item.category || ""}`.toLocaleLowerCase("pt-BR").includes(serviceSearch.trim().toLocaleLowerCase("pt-BR")));
   const locations = selectedClient ? customerLocations(selectedClient, customers, structures, unit) : { units: [], sectors: [], unlinkedSectors: [] };
   const availableUnits = locations.units.map(item => ({ id:item.id, icon: Building2, name:item.name, type:item.category || "Unidade", doc:item.doc || "", responsible:item.contact || "", phone:item.phone || "", address:item.address || "", orders:0 }));
   const availableSectors = unit ? locations.sectors : locations.unlinkedSectors;
+  const orderEquipmentOptions = selectedClient ? equipmentRecords.filter(item => {
+    const sameCustomer = item.customerId && selectedClientData?.id ? item.customerId === selectedClientData.id : normalizeRelation(item.client) === normalizeRelation(selectedClient);
+    if (!sameCustomer) return false;
+    if (!unit) return true;
+    return !item.equipmentUnit || normalizeRelation(item.equipmentUnit) === normalizeRelation(unit) || normalizeRelation(item.installationLocation).includes(normalizeRelation(unit));
+  }) : [];
+  const durationMinutes = (() => {
+    const [hours, minutes] = orderEstimatedDuration.split(":").map(Number);
+    return Math.max(0, (Number.isFinite(hours) ? hours : 0) * 60 + (Number.isFinite(minutes) ? minutes : 0));
+  })();
+  const orderAddress = unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "";
+  const toggleOrderCatalogItem = (id: string) => {
+    setSelectedCatalogIds(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
+    setCatalogQuantities(current => ({ ...current, [id]: current[id] || 1 }));
+  };
+  const setOrderItemQuantity = (id: string, value: number) => setCatalogQuantities(current => ({ ...current, [id]: Math.max(0.001, value || 1) }));
+  const saveNewOrder = async (status: "Agendada" | "Rascunho") => {
+    await onSave({
+      title, name: "", client: selectedClient, doc: "", contact: selectedClientData?.contact ?? "", phone: selectedClientData?.phone ?? "",
+      address: orderAddress, unit, tech, date, time, description, status, value: orderTotal, category: orderServiceType, kind: "Serviço",
+      catalogItems: selectedOrderItems.map(item => ({ id:item.id, name:item.name, kind:item.kind || "Serviço", quantity:catalogQuantities[item.id] || 1 })),
+      purchaseItems: [], paymentType:"À vista", paymentMethod:"PIX", installments:1, firstDueDate:"", paymentInstallments:[], xmlImported:false, supplierDoc:"", supplierId:"", registerSupplier:false,
+      engineer:"", workAddress:"", blockLot:"", endDate:"", progress:0, commission:0, cost:0, sku:"", barcode:"", brand:"", model:"", supplier:"", stockCurrent:0, stockMin:0, stockMax:0, stockLocation:"", warrantyMonths:0, estimatedMinutes:0, unitOfMeasure:"serviço",
+      employeeRole:"", employeePermissions:{}, equipmentType:"", capacityBtus:0, serialNumber:"", voltage:"", refrigerant:"", installationLocation:"", installationDate:"", nextMaintenanceDate:"", equipmentUnit:"",
+      parentId:undefined, parentUnit:undefined, hierarchyLevel:undefined, environmentType:"", roomNumber:"", floor:"", block:"", localResponsible:"", extension:"", criticality:"Normal", priorityAttendance:orderPriority === "Urgente",
+      sector, room,
+      structureId: room ? availableRooms.find(item => item.name === room)?.id : sector ? availableSectors.find(item => item.name === sector)?.id : unit ? availableUnits.find(item => item.name === unit)?.id : undefined,
+      unitId: unit ? availableUnits.find(item => item.name === unit)?.id : undefined,
+      sectorId: sector ? availableSectors.find(item => item.name === sector)?.id : undefined,
+      roomId: room ? availableRooms.find(item => item.name === room)?.id : undefined,
+      priority:orderPriority, serviceType:orderServiceType, checklist:orderChecklist, tag:orderTag, externalCode:orderExternalCode, checkInRequirement:orderCheckInRequirement,
+      estimatedDurationMinutes:durationMinutes, pmocRepeatEnabled:orderPmocRepeat, npsEnabled:orderNpsEnabled,
+      whatsappUpdatesEnabled:orderWhatsappEnabled, whatsappAppointmentReminderEnabled:orderWhatsappReminderEnabled, whatsappStatusUpdatesEnabled:orderWhatsappStatusEnabled,
+      appointmentReminderHours:orderReminderHours, equipmentIds:selectedEquipmentIds, discount:orderDiscount, servicesTotal:orderServicesTotal, productsTotal:orderProductsTotal,
+    });
+  };
   const createSectorFromOrder = () => {
     const name = quickSectorName.trim();
     if (!selectedClient) { setQuickSectorFeedback("Selecione o cliente antes de cadastrar o setor."); return; }
@@ -2414,6 +2502,131 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
     if (selectedClient && !availableUnits.some(item => item.name === unit)) setUnit(availableUnits[0]?.name ?? "");
   }, [selectedClient, availableUnits, unit]);
   useEffect(() => { if (sector && !availableSectors.some(item => item.name === sector)) setSector(""); }, [unit, selectedClient, structures]);
+  if (isNewOrder) return <>
+    <div className="modal-layer os-create-layer" role="dialog" aria-modal="true" aria-label="Cadastrar nova ordem de serviço">
+      <button className="modal-backdrop" onClick={close} aria-label="Fechar janela"/>
+      <section className="modal os-create-modal">
+        <header className="os-create-header">
+          <div className="os-create-title"><span className="os-create-icon"><Wrench size={17}/></span><div><div><h2>Cadastrar Nova Ordem de Serviço</h2><em>OS • NOVA</em></div><p>Cliente, local, serviço, equipamentos, valores e equipe de campo em um único fluxo.</p></div></div>
+          <div className="os-create-head-actions"><button type="button" onClick={() => setDescription(improveTechnicalText(description))}><Sparkles size={14}/> Sugerir com IA</button><button type="button" className="icon-only" onClick={close} aria-label="Fechar"><X size={17}/></button></div>
+        </header>
+
+        <nav className="os-create-tabs" aria-label="Etapas da nova ordem">
+          <button type="button" className={orderTab === "Geral" ? "active" : ""} onClick={() => setOrderTab("Geral")}><FileText size={14}/><span>1. Geral & Agendamento</span></button>
+          <button type="button" className={orderTab === "Equipamentos" ? "active" : ""} onClick={() => setOrderTab("Equipamentos")}><Boxes size={14}/><span>2. Equipamentos ({selectedEquipmentIds.length})</span></button>
+          <button type="button" className={orderTab === "Valores" ? "active" : ""} onClick={() => setOrderTab("Valores")}><CircleDollarSign size={14}/><span>3. Peças & Valores</span></button>
+          <button type="button" className={orderTab === "Anexos" ? "active" : ""} onClick={() => setOrderTab("Anexos")}><ImagePlus size={14}/><span>4. Anexos & Fotos</span></button>
+        </nav>
+
+        <div className="os-create-body">
+          {orderTab === "Geral" && <div className="os-create-general">
+            <div className="os-create-left">
+              <article className="os-create-card">
+                <div className="os-create-card-head"><span><UserRound size={15}/> Cliente & Local do Serviço</span><em>* Obrigatório</em></div>
+                <label>Pesquisar cliente<CustomerSearchSelect customers={customers} value={selectedClient} onChange={value => { setSelectedClient(value); setUnit(""); setSector(""); setRoom(""); setSelectedEquipmentIds([]); setQuickSectorOpen(false); setQuickSectorFeedback(""); }} /></label>
+                {selectedClientData && <div className="os-client-confirm"><div><span>{selectedClientData.doc || "Documento não informado"}</span><strong className={selectedClientData.financialStatus === "Bloqueado" ? "blocked" : ""}>{selectedClientData.financialStatus || "Liberado"}</strong></div><b>{orderAddress || "Endereço principal não informado"}</b><small>{selectedClientData.contact || "Responsável não informado"} • {selectedClientData.phone || "Telefone não informado"}</small></div>}
+                <div className="os-create-location-grid">
+                  <label>Unidade / Filial<select value={unit} onChange={event => { setUnit(event.target.value); setSector(""); setRoom(""); setSelectedEquipmentIds([]); }} disabled={!selectedClient}><option value="">{selectedClient ? "Cliente principal / Endereço principal" : "Selecione primeiro o cliente"}</option>{availableUnits.map(item => <option key={item.id} value={item.name}>{item.name} • {item.type}</option>)}</select></label>
+                  <label>Setor / Local<select value={sector} onChange={event => { setSector(event.target.value); setRoom(""); }} disabled={!selectedClient || !availableSectors.length}><option value="">{selectedClient ? availableSectors.length ? "Selecione o setor" : "Nenhum setor cadastrado" : "Selecione o cliente"}</option>{availableSectors.map(item => <option key={item.id} value={item.name}>{item.name}</option>)}</select>{selectedClient && <button type="button" className="inline-create-link" onClick={() => { setQuickSectorOpen(value => !value); setQuickSectorFeedback(""); }}><Plus size={12}/> Cadastrar setor</button>}</label>
+                  <label>Sala / Ambiente<select value={room} onChange={event => setRoom(event.target.value)} disabled={!selectedClient}><option value="">{selectedClient ? availableRooms.length ? "Selecione a sala (opcional)" : "Nenhuma sala cadastrada" : "Selecione o cliente"}</option>{availableRooms.map(item => <option key={item.id} value={item.name}>{item.name} • {item.category || item.environmentType || "Ambiente"}</option>)}</select></label>
+                  <label>Endereço do atendimento<input value={orderAddress} readOnly placeholder="Carregado pelo cadastro"/></label>
+                </div>
+                {quickSectorOpen && <div className="order-sector-quick-create os-inline-sector"><div><span>CADASTRO RÁPIDO</span><b>Novo setor / local</b><small>{unit ? `Vinculado à unidade ${unit}.` : "Vinculado ao cliente principal."}</small></div><label>Nome<input autoFocus value={quickSectorName} onChange={event => setQuickSectorName(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); createSectorFromOrder(); } }} placeholder="Ex.: Secretaria de Saúde"/></label><div className="order-sector-quick-actions"><button type="button" className="outline-btn" onClick={() => setQuickSectorOpen(false)}>Cancelar</button><button type="button" className="primary-btn" onClick={createSectorFromOrder}><Plus size={13}/> Cadastrar</button></div></div>}
+                {quickSectorFeedback && <div className="field-hint order-sector-feedback"><CheckCircle2 size={13}/>{quickSectorFeedback}</div>}
+                {selectedClientData && <div className={`os-credit-strip ${selectedClientData.financialStatus === "Bloqueado" ? "blocked" : ""}`}><CircleDollarSign size={16}/><span><b>Crédito</b><small>Limite R$ {(selectedClientData.creditLimit ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})} • Lançado R$ {(selectedClientData.balancePosted ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</small></span><strong>{selectedClientData.financialStatus ?? "Liberado"}</strong></div>}
+              </article>
+
+              <article className="os-create-card">
+                <div className="os-create-card-head"><span><UsersRound size={15}/> Técnico / Equipe Responsável</span></div>
+                <div className="os-assignment-toggle"><button type="button" className="active">Colaborador</button><button type="button" disabled title="Cadastre equipes no módulo de funcionários para habilitar">Equipe de Campo</button></div>
+                <label>Técnico empenhado<select value={tech} onChange={event => setTech(event.target.value)}><option value="">Selecione o técnico</option>{employeeRecords.filter(employee => employee.status !== "Inativo" && /técnico|tecnico/i.test(`${employee.employeeRole} ${employee.category}`)).map(employee => <option key={employee.id} value={employee.name}>{employee.name}</option>)}</select></label>
+              </article>
+
+              <article className="os-create-card">
+                <div className="os-create-card-head"><span><CalendarDays size={15}/> Agendamento & Janela</span></div>
+                <div className="os-create-location-grid">
+                  <label>Data do atendimento<input type="date" value={date} onChange={event => setDate(event.target.value)}/></label>
+                  <label>Horário início<input type="time" value={time} onChange={event => setTime(event.target.value)}/></label>
+                  <label>Duração estimada<input type="time" value={orderEstimatedDuration} onChange={event => setOrderEstimatedDuration(event.target.value)}/></label>
+                  <label>Lembrete WhatsApp<select value={orderReminderHours} onChange={event => setOrderReminderHours(Number(event.target.value))}><option value={2}>2 horas antes</option><option value={6}>6 horas antes</option><option value={12}>12 horas antes</option><option value={24}>24 horas antes</option><option value={48}>48 horas antes</option></select></label>
+                </div>
+                <label className="os-switch-row"><input type="checkbox" checked={orderPmocRepeat} onChange={event => setOrderPmocRepeat(event.target.checked)}/><span><b>Repetir tarefa / revisão PMOC</b><small>Mantém o vínculo com a rotina periódica já existente na OS.</small></span></label>
+              </article>
+            </div>
+
+            <div className="os-create-right">
+              <article className="os-create-card">
+                <div className="os-create-card-head"><span><ClipboardList size={15}/> Descrição do Serviço a Ser Realizado</span><button type="button" className="os-create-ai" onClick={() => setDescription(improveTechnicalText(description))}><Sparkles size={13}/> Melhorar com IA</button></div>
+                <textarea className="os-create-description" value={description} onChange={event => setDescription(event.target.value)} placeholder="Descreva o escopo técnico, sintomas relatados, orientações e observações do atendimento..."/>
+              </article>
+
+              <article className="os-create-card">
+                <div className="os-create-card-head"><span><Tag size={15}/> Classificação do Atendimento</span></div>
+                <div className="os-classification-grid">
+                  <label>Tipo de serviço<select value={orderServiceType} onChange={event => setOrderServiceType(event.target.value)}><option>Manutenção preventiva (PMOC)</option><option>Manutenção corretiva</option><option>Instalação / infraestrutura</option><option>Higienização</option><option>Vistoria / orçamento</option><option>Atendimento técnico</option></select></label>
+                  <label>Prioridade<select value={orderPriority} onChange={event => setOrderPriority(event.target.value as ServiceOrder["priority"])}><option>Baixa</option><option>Normal</option><option>Alta</option><option>Urgente</option></select></label>
+                  <label>Checklist aplicado<select value={orderChecklist} onChange={event => setOrderChecklist(event.target.value)}><option>Diagnóstico corretivo</option><option>PMOC mensal climatização</option><option>Checklist de instalação</option><option>Higienização completa</option><option>Sem checklist inicial</option></select></label>
+                  <label>Palavra-chave / Tag<input value={orderTag} onChange={event => setOrderTag(event.target.value)} placeholder="Ex.: PMOC-MUNICIPAL"/></label>
+                  <label>Código externo / Nº empenho<input value={orderExternalCode} onChange={event => setOrderExternalCode(event.target.value)} placeholder="Pedido, contrato ou empenho"/></label>
+                  <label>Exigência de check-in<select value={orderCheckInRequirement} onChange={event => setOrderCheckInRequirement(event.target.value)}><option>Obrigatório por GPS no local</option><option>Check-in por QR Code</option><option>Padrão do colaborador</option><option>Sem exigência adicional</option></select></label>
+                </div>
+              </article>
+
+              <article className="os-create-card">
+                <div className="os-create-card-head"><span><Wrench size={15}/> Serviços da Ordem</span><button type="button" className="os-create-ai" onClick={() => { setServicePickerIds(selectedCatalogIds.filter(id => serviceRecords.some(item => item.id === id))); setServiceSearch(""); setServicePickerOpen(true); }}><Plus size={13}/> Selecionar serviços</button></div>
+                {selectedServices.length ? <div className="os-selected-chips">{selectedServices.map(item => <span key={item.id}><Wrench size={12}/>{item.name}<button type="button" onClick={() => setSelectedCatalogIds(current => current.filter(id => id !== item.id))}><X size={11}/></button></span>)}</div> : <div className="os-create-empty">Nenhum serviço selecionado. A descrição da solicitação será mantida mesmo sem item de catálogo.</div>}
+              </article>
+
+              <article className="os-create-card">
+                <div className="os-create-card-head"><span><Bell size={15}/> Automações & Notificações</span></div>
+                <div className="os-automation-grid">
+                  <label className="os-switch-row"><input type="checkbox" checked={orderWhatsappEnabled} onChange={event => setOrderWhatsappEnabled(event.target.checked)}/><span><b>Envio automático por WhatsApp</b><small>Ativa comunicação vinculada à OS.</small></span></label>
+                  <label className="os-switch-row"><input type="checkbox" checked={orderWhatsappReminderEnabled} onChange={event => setOrderWhatsappReminderEnabled(event.target.checked)}/><span><b>Lembrete do agendamento</b><small>Usa a antecedência selecionada.</small></span></label>
+                  <label className="os-switch-row"><input type="checkbox" checked={orderWhatsappStatusEnabled} onChange={event => setOrderWhatsappStatusEnabled(event.target.checked)}/><span><b>Atualizações de status</b><small>Início, andamento e conclusão.</small></span></label>
+                  <label className="os-switch-row"><input type="checkbox" checked={orderNpsEnabled} onChange={event => setOrderNpsEnabled(event.target.checked)}/><span><b>Pesquisa de satisfação NPS</b><small>Disponível após conclusão e assinatura.</small></span></label>
+                </div>
+              </article>
+            </div>
+          </div>}
+
+          {orderTab === "Equipamentos" && <div className="os-create-tab-panel">
+            <article className="os-create-card">
+              <div className="os-create-card-head"><span><Boxes size={15}/> Equipamentos do Atendimento</span><em>{selectedEquipmentIds.length} selecionado(s)</em></div>
+              <p className="os-create-helper">São exibidos os equipamentos cadastrados para o cliente e, quando possível, filtrados pela unidade selecionada.</p>
+              {orderEquipmentOptions.length ? <div className="os-equipment-picker">{orderEquipmentOptions.map(item => { const checked=selectedEquipmentIds.includes(item.id); return <label key={item.id} className={checked ? "selected" : ""}><input type="checkbox" checked={checked} onChange={() => setSelectedEquipmentIds(current => checked ? current.filter(id => id !== item.id) : [...current,item.id])}/><span className="os-equipment-picker-icon"><Wrench size={17}/></span><div><b>{item.name || item.model || "Equipamento"}</b><small>{[item.brand,item.model,item.capacityBtus ? `${item.capacityBtus} BTUs` : "",item.serialNumber ? `Série ${item.serialNumber}` : ""].filter(Boolean).join(" • ") || "Dados técnicos não informados"}</small><em>{item.installationLocation || item.equipmentUnit || unit || "Local não informado"}</em></div><CheckCircle2 size={17}/></label>})}</div> : <div className="os-create-empty"><Boxes size={22}/><b>Nenhum equipamento cadastrado para este cliente.</b><span>A OS pode ser criada normalmente e o equipamento pode ser vinculado depois na área de trabalho da ordem.</span></div>}
+            </article>
+          </div>}
+
+          {orderTab === "Valores" && <div className="os-create-tab-panel os-values-layout">
+            <article className="os-create-card">
+              <div className="os-create-card-head"><span><Package size={15}/> Peças / Produtos</span><em>{selectedProducts.length} selecionado(s)</em></div>
+              {productRecords.length ? <div className="os-catalog-value-list">{productRecords.map(item => { const checked=selectedCatalogIds.includes(item.id); return <div key={item.id} className={checked ? "selected" : ""}><label><input type="checkbox" checked={checked} onChange={() => toggleOrderCatalogItem(item.id)}/><span><b>{item.name}</b><small>{item.sku || item.category || "Produto cadastrado"}</small></span></label><input type="number" min="0.001" step="0.001" disabled={!checked} value={catalogQuantities[item.id] || 1} onChange={event => setOrderItemQuantity(item.id, Number(event.target.value))}/><strong>R$ {(Number(item.value)||0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div>})}</div> : <div className="os-create-empty">Nenhum produto cadastrado no catálogo.</div>}
+            </article>
+            <article className="os-create-card">
+              <div className="os-create-card-head"><span><CircleDollarSign size={15}/> Resumo de Valores</span></div>
+              <div className="os-value-summary"><span>Serviços <b>R$ {orderServicesTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></span><span>Produtos / materiais <b>R$ {orderProductsTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></span><label>Desconto<input type="number" min="0" step="0.01" value={orderDiscount || ""} onChange={event => setOrderDiscount(Math.max(0,Number(event.target.value)||0))}/></label><strong>Total da OS <b>R$ {orderTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></strong></div>
+              <div className="os-selected-items">{selectedOrderItems.map(item => <div key={item.id}><span><b>{item.name}</b><small>{item.kind || "Serviço"} • Qtd. {catalogQuantities[item.id] || 1}</small></span><strong>R$ {((Number(item.value)||0)*(catalogQuantities[item.id]||1)).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div>)}</div>
+            </article>
+          </div>}
+
+          {orderTab === "Anexos" && <div className="os-create-tab-panel">
+            <article className="os-create-card">
+              <div className="os-create-card-head"><span><ImagePlus size={15}/> Anexos, Fotos & Evidências</span></div>
+              <div className="os-execution-features"><div><Camera size={19}/><span><b>Fotos antes, durante e depois</b><small>Disponíveis na área de trabalho da OS após a criação, vinculadas ao atendimento.</small></span></div><div><MapPin size={19}/><span><b>Check-in / Check-out</b><small>{orderCheckInRequirement}. Os registros ficam associados à execução.</small></span></div><div><PenTool size={19}/><span><b>Assinaturas do cliente e técnico</b><small>Coleta disponível durante a execução da ordem.</small></span></div><div><FileText size={19}/><span><b>Documentos e relatório técnico</b><small>Após salvar, a OS poderá gerar o documento operacional e receber os registros complementares.</small></span></div></div>
+              <div className="execution-notice"><ShieldCheck size={18}/><div><b>Sem perda dos campos existentes</b><small>Check-in, check-out, fotos, assinaturas, NFS-e, histórico, assistência e PMOC continuam disponíveis na área de trabalho da OS depois de salvar.</small></div></div>
+            </article>
+          </div>}
+        </div>
+
+        <footer className="os-create-footer">
+          <div><button type="button" className="outline-btn" onClick={close}>Cancelar</button><button type="button" className="outline-btn" disabled={!selectedClient || selectedClientData?.financialStatus === "Bloqueado"} onClick={() => void saveNewOrder("Rascunho")}>Salvar como rascunho</button></div>
+          <div className="os-create-footer-summary"><span>{selectedOrderItems.length} item(ns) • {selectedEquipmentIds.length} equipamento(s)</span><strong>R$ {orderTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong><button type="button" className="primary-btn" disabled={!selectedClient || !tech || !date || selectedClientData?.financialStatus === "Bloqueado"} onClick={() => void saveNewOrder("Agendada")}><CheckCircle2 size={15}/> Criar e Agendar Ordem de Serviço</button></div>
+        </footer>
+      </section>
+    </div>
+    {servicePickerOpen && <div className="service-picker-layer" role="dialog" aria-modal="true" aria-label="Selecionar serviços"><button type="button" className="service-picker-backdrop" aria-label="Fechar seleção de serviços" onClick={() => setServicePickerOpen(false)}/><section className="service-picker"><header><div><span>CATÁLOGO DE SERVIÇOS</span><h3>Selecionar vários serviços</h3><p>Pesquise e marque todos os itens necessários para esta ordem.</p></div><button type="button" aria-label="Fechar" onClick={() => setServicePickerOpen(false)}><X size={17}/></button></header><label className="service-picker-search"><Search size={17}/><input autoFocus value={serviceSearch} onChange={event => setServiceSearch(event.target.value)} placeholder="Pesquisar por nome ou categoria..."/><small>{visibleServiceOptions.length} resultado(s)</small></label><div className="service-picker-grid">{visibleServiceOptions.map(item => <label key={item.id} className={servicePickerIds.includes(item.id) ? "selected" : ""}><input type="checkbox" checked={servicePickerIds.includes(item.id)} onChange={() => setServicePickerIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])}/><span><Wrench size={17}/></span><div><b>{item.name}</b><small>{item.category || item.description || "Serviço cadastrado"}</small></div><CheckCircle2 size={16}/></label>)}</div>{!visibleServiceOptions.length && <div className="catalog-empty"><Search size={18}/><span>Nenhum serviço encontrado para esta pesquisa.</span></div>}<footer><span><b>{servicePickerIds.length}</b> serviço(s) marcado(s)</span><div><button type="button" className="outline-btn" onClick={() => setServicePickerOpen(false)}>Cancelar</button><button type="button" className="primary-btn" onClick={() => { setSelectedCatalogIds(current => [...current.filter(id => !serviceRecords.some(item => item.id === id)), ...servicePickerIds]); setServicePickerIds([]); setServicePickerOpen(false); }}><CheckCircle2 size={15}/> Aplicar seleção</button></div></footer></section></div>}
+  </>;
+
   return <div className="modal-layer" role="dialog" aria-modal="true" aria-label={title}><button className="modal-backdrop" onClick={close} aria-label="Fechar janela"/><div className="modal"><div className="modal-head"><div><span>{isLinkedStructure ? "ESTRUTURA DO CLIENTE • LIMITE DE 20" : "CADASTRO PROAR"}</span><h2>{isLinkedStructure ? "Nova unidade, filial ou setor" : title}</h2>{isLinkedStructure && <p>Este registro será vinculado a <strong>{parentCustomer}</strong>.</p>}</div><button onClick={close} aria-label="Fechar"><X size={18}/></button></div><div className="form-grid">
     {isLinkedStructure ? <>
       <label>Cliente principal<input value={parentCustomer} readOnly/></label>
@@ -3062,10 +3275,30 @@ export default function Home() {
         date: data.date,
         time: data.time || "A definir",
         address: data.address,
-        status: "Agendada",
-        tone: "violet",
+        status: data.status === "Rascunho" ? "Rascunho" : "Agendada",
+        tone: data.status === "Rascunho" ? "slate" : "violet",
         avatar: data.client.split(" ").map(word => word[0]).slice(0, 2).join("").toUpperCase(),
         catalogItems: data.catalogItems,
+        equipmentIds: data.equipmentIds,
+        total: data.value,
+        servicesTotal: data.servicesTotal,
+        productsTotal: data.productsTotal,
+        discount: data.discount,
+        request: data.description,
+        priority: data.priority,
+        serviceType: data.serviceType,
+        checklist: data.checklist,
+        tag: data.tag,
+        externalCode: data.externalCode,
+        checkInRequirement: data.checkInRequirement,
+        estimatedDurationMinutes: data.estimatedDurationMinutes,
+        pmocRepeatEnabled: data.pmocRepeatEnabled,
+        npsEnabled: data.npsEnabled,
+        whatsappPhone: data.phone,
+        whatsappUpdatesEnabled: data.whatsappUpdatesEnabled,
+        whatsappAppointmentReminderEnabled: data.whatsappAppointmentReminderEnabled,
+        whatsappStatusUpdatesEnabled: data.whatsappStatusUpdatesEnabled,
+        appointmentReminderHours: data.appointmentReminderHours,
         lastMaintenanceDate: data.date,
         sector: data.sector || undefined,
         room: data.room || undefined,
@@ -3547,7 +3780,7 @@ export default function Home() {
       <div className="page-content">{current === "PMOC e conformidade" ? null : current === "Integridade do Sistema" ? <IntegrityAudit/> : current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={saveCustomerStructure} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} company={activeCompany} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <><PublicContractsPanel records={(moduleRecords.Certames ?? []) as PublicContractRecord[]} customers={customerRecords} onSave={record => saveConfirmedModuleRecord("Certames", record)}/><PublicCommitmentsPanel orders={serviceOrders} contracts={(moduleRecords.Certames ?? []) as PublicContractRecord[]} commitments={(moduleRecords.Empenhos ?? []) as PublicCommitmentRecord[]} onSave={record=>saveConfirmedModuleRecord("Empenhos",record)} onReadyToInvoice={record=>saveConfirmedModuleRecord("Empenhos",{...record,status:"Pronto para faturar"},[{moduleName:"Financeiro",record:{id:`FAT-${record.id}`,name:`Faturamento • ${record.name}`,client:record.client,description:`Aguardando emissão de Nota Fiscal • ${record.empenhoProcess || "processo não informado"}`,createdAt:new Date().toLocaleString("pt-BR"),status:"Pronto para faturar",date:new Date().toISOString().slice(0,10),value:record.value??0,category:"Faturamento público",transactionType:"Receber",empenhoId:record.id}}])}/><BiddingModule onOpen={item => setModal(`Análise de edital • ${item.numeroControlePNCP || item.objetoCompra || "Licitação"}`)}/></> : current === "Orçamentos" ? <BudgetPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={record => updateModuleRecord("Orçamentos",record)} onConvert={convertBudget} onDelete={record => deleteModuleRecord("Orçamentos",record)} onCreateCustomer={createQuickCustomer} onCreateStructure={createQuickStructure}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} sales={moduleRecords.Vendas ?? []} onSave={record => updateModuleRecord("Vendas",record)}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders} company={activeCompany}/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany} isAdministrator={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*"))}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} modules={moduleRecords} onOperation={runOperationalCommand} onOpen={setModal} onIssueInvoice={(record,invoiceNumber)=>{const commitment=(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId);const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Faturado"}}]:[];return saveConfirmedModuleRecord("Financeiro",{...record,status:"Em aberto",transactionType:"Receber",invoiceNumber,invoiceIssuedAt:new Date().toISOString()},related)}}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} onUpdate={updateServiceOrder} serviceOrders={serviceOrders} customers={customerRecords} company={activeCompany}/> : <>{(current === "Compras" || current === "Estoque") && <InventoryOperations mode={current} modules={moduleRecords} onOperation={runOperationalCommand}/>}<GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []} allModules={moduleRecords} serviceOrders={serviceOrders}/></>}</div>
       <footer><span>© {new Date().getFullYear()} ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
-    {modal && <Modal title={modal} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalogRecords={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} supplierRecords={moduleRecords["Fornecedores"] ?? []} employeeRecords={moduleRecords["Funcionários"] ?? [tiagoEmployee]} close={() => setModal("")} onSave={saveRecord} onCreateStructure={createQuickStructure}/>}
+    {modal && <Modal title={modal} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalogRecords={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} supplierRecords={moduleRecords["Fornecedores"] ?? []} employeeRecords={moduleRecords["Funcionários"] ?? [tiagoEmployee]} equipmentRecords={moduleRecords["Equipamentos"] ?? []} close={() => setModal("")} onSave={saveRecord} onCreateStructure={createQuickStructure}/>}
     {selectedOrder && <OrderDetail order={selectedOrder} customerPhone={customerRecords.find(customer => customer.name === selectedOrder.client)?.phone} company={activeCompany} catalog={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} contracts={(moduleRecords.Certames ?? []) as PublicContractRecord[]} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} equipment={moduleRecords["Equipamentos"] ?? []} close={() => setSelectedOrder(null)} onUpdate={updateServiceOrder} canEdit={hasAction("Ordens de serviço","Editar")}/>}{/* detalhe da OS */}
   </div>;
 }
