@@ -44,7 +44,7 @@ import { TechnicalCompliancePanel } from "@/components/TechnicalCompliancePanel"
 import { IntegrityAudit } from "@/components/IntegrityAudit";
 import { calculateCertameItemBalance, createCertameMovement, financialOutstandingValue, financialRealizedValue } from "@/lib/public-contracts";
 import { improveTechnicalText } from "@/lib/text-assist";
-import { WORK_STATUSES, getWorkProgress, getWorkStatusColor, normalizeWorkStatus, type WorkStatus } from "@/lib/work-status";
+import { WORK_STATUSES, getWorkProgress, getWorkStatusColor, normalizeWorkStatus, type WorkStatus } from "@/lib/work-status";\nimport { prepareCustomerStructureSave } from "@/lib/customer-structure";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type NavItem = { icon: IconType; name: string; badge?: string };
@@ -603,7 +603,7 @@ function Dashboard({ onNavigate, serviceOrders, modules }: { onNavigate: (s: str
   </>;
 }
 
-function CustomerDetail({ customerName, customers, structures, serviceOrders, modules, canEdit, onBack, onOpen, onUpdateStructure }: { customerName: string; customers: Customer[]; structures: ModuleRecord[]; serviceOrders: ServiceOrder[]; modules: Record<string, ModuleRecord[]>; canEdit: boolean; onBack: () => void; onOpen: (name: string) => void; onUpdateStructure: (record: ModuleRecord) => void }) {
+function CustomerDetail({ customerName, customers, structures, serviceOrders, modules, canEdit, onBack, onOpen, onUpdateStructure }: { customerName: string; customers: Customer[]; structures: ModuleRecord[]; serviceOrders: ServiceOrder[]; modules: Record<string, ModuleRecord[]>; canEdit: boolean; onBack: () => void; onOpen: (name: string) => void; onUpdateStructure: (record: ModuleRecord) => void | boolean | Promise<boolean> }) {
   const customer = customers.find(item => item.name === customerName);
   if (!customer) return null;
   return <CustomerProfileWorkspace
@@ -619,7 +619,7 @@ function CustomerDetail({ customerName, customers, structures, serviceOrders, mo
   />;
 }
 
-function Customers({ onOpen, onDelete, onUpdate, onUpdateStructure, canEdit, customers, structures, serviceOrders, modules }: { onOpen: (name: string) => void; onDelete: (customer: Customer) => void; onUpdate: (customer: Customer) => void; onUpdateStructure: (record: ModuleRecord) => void; canEdit: boolean; customers: Customer[]; structures: ModuleRecord[]; serviceOrders: ServiceOrder[]; modules: Record<string, ModuleRecord[]> }) {
+function Customers({ onOpen, onDelete, onUpdate, onUpdateStructure, canEdit, customers, structures, serviceOrders, modules }: { onOpen: (name: string) => void; onDelete: (customer: Customer) => void; onUpdate: (customer: Customer) => void; onUpdateStructure: (record: ModuleRecord) => void | boolean | Promise<boolean>; canEdit: boolean; customers: Customer[]; structures: ModuleRecord[]; serviceOrders: ServiceOrder[]; modules: Record<string, ModuleRecord[]> }) {
   const [query, setQuery] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState("");
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -3381,6 +3381,78 @@ export default function Home() {
       return false;
     }
   };
+  const saveCustomerStructure = async (record: ModuleRecord) => {
+    if (!navigator.onLine) {
+      showFeedback("Falha ao salvar estrutura • sem conexão com o banco.", "error", 5000);
+      return false;
+    }
+    const customer = customerRecords.find(item => item.id === record.customerId || item.name === record.client);
+    if (!customer) {
+      showFeedback("Falha ao salvar estrutura • cliente principal não encontrado.", "error", 5000);
+      return false;
+    }
+    let prepared;
+    try {
+      prepared = prepareCustomerStructureSave(customer, record, moduleRecords["Unidades e setores"] ?? []);
+    } catch (error) {
+      showFeedback(error instanceof Error ? error.message : "Vínculo estrutural inválido.", "error", 5000);
+      return false;
+    }
+    const updatedCustomers = customerRecords.map(item => item.id === customer.id ? { ...item, units: prepared.unitCount } : item);
+    const updatedModules = appendAudit(
+      { ...moduleRecords, "Unidades e setores": prepared.nextStructures as ModuleRecord[] },
+      (moduleRecords["Unidades e setores"] ?? []).some(item => item.id === record.id) ? "Estrutura atualizada" : "Estrutura criada",
+      `Clientes • ${customer.name} • ${prepared.record.name}`,
+      "Vínculo hierárquico confirmado por ID",
+    );
+    setSyncPhase("syncing");
+    try {
+      const response = await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyId: activeCompany.id,
+          customers: updatedCustomers,
+          serviceOrders,
+          moduleRecords: updatedModules,
+          _baseRevision: stateRevision,
+        }),
+      });
+      const result = await response.json();
+      if (response.status === 409 && result.state) {
+        const serverCustomers = result.state.customers ?? [];
+        const serverOrders = result.state.serviceOrders ?? [];
+        const serverModules = mergeImportedServices(result.state.moduleRecords ?? {});
+        setCustomerRecords(serverCustomers);
+        setServiceOrders(serverOrders);
+        setModuleRecords(serverModules);
+        setStateRevision(Number(result.state._revision || 0));
+        showFeedback("Conflito ao salvar estrutura • os dados mais recentes do servidor foram preservados.", "warning", 6000);
+        setSyncPhase("idle");
+        return false;
+      }
+      if (!response.ok || !result.state) throw new Error(result.error || "Falha ao confirmar o vínculo.");
+      const confirmedCustomers = result.state.customers ?? updatedCustomers;
+      const confirmedOrders = result.state.serviceOrders ?? serviceOrders;
+      const confirmedModules = mergeImportedServices(result.state.moduleRecords ?? updatedModules);
+      setCustomerRecords(confirmedCustomers);
+      setServiceOrders(confirmedOrders);
+      setModuleRecords(confirmedModules);
+      setStateRevision(Number(result.state._revision || stateRevision + 1));
+      localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(confirmedCustomers));
+      localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(confirmedOrders));
+      localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(confirmedModules));
+      setSyncPhase("complete");
+      window.setTimeout(() => setSyncPhase("idle"), 1000);
+      showFeedback(`${prepared.record.hierarchyLevel || prepared.record.category || "Estrutura"} vinculada a ${customer.name} com sucesso.`, "success");
+      return true;
+    } catch (error) {
+      console.error("Falha ao salvar estrutura do cliente", { customerId: customer.id, recordId: record.id, error });
+      showFeedback("Falha ao salvar estrutura • nenhuma confirmação foi registrada.", "error", 6000);
+      setSyncPhase("idle");
+      return false;
+    }
+  };
   const operationalRetryRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const runOperationalCommand = async (command: OperationalCommand) => {
     const fingerprint = JSON.stringify({ action: command.action, recordId: command.recordId, data: command.data });
@@ -3440,7 +3512,7 @@ export default function Home() {
       {savedMessage && <div className={`save-toast feedback-${feedbackTone}`} role={feedbackTone === "error" ? "alert" : "status"} aria-live={feedbackTone === "error" ? "assertive" : "polite"}>{feedbackTone === "error" || feedbackTone === "warning" ? <AlertTriangle size={16}/> : <CheckCircle2 size={16}/>}<span>{savedMessage}</span></div>}
       <div className="company-context"><Building2 size={13}/><span>{activeCompany.tradeName}</span><small>{activeCompany.cnpj || "CNPJ pendente"} • {activeCompany.city}/{activeCompany.state}</small></div>
       {current === "PMOC e conformidade" ? <TechnicalCompliancePanel plans={(moduleRecords.PMOC ?? []) as any} fluids={(moduleRecords.Refrigerantes ?? []) as any} documents={(moduleRecords["Documentação / Habilitação"] ?? []) as any} onSave={(module,record)=>saveConfirmedModuleRecord(module,record)}/> : null}
-      <div className="page-content">{current === "PMOC e conformidade" ? null : current === "Integridade do Sistema" ? <IntegrityAudit/> : current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={record => updateModuleRecord("Unidades e setores",record)} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} company={activeCompany} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <><PublicContractsPanel records={(moduleRecords.Certames ?? []) as PublicContractRecord[]} customers={customerRecords} onSave={record => saveConfirmedModuleRecord("Certames", record)}/><PublicCommitmentsPanel orders={serviceOrders} contracts={(moduleRecords.Certames ?? []) as PublicContractRecord[]} commitments={(moduleRecords.Empenhos ?? []) as PublicCommitmentRecord[]} onSave={record=>saveConfirmedModuleRecord("Empenhos",record)} onReadyToInvoice={record=>saveConfirmedModuleRecord("Empenhos",{...record,status:"Pronto para faturar"},[{moduleName:"Financeiro",record:{id:`FAT-${record.id}`,name:`Faturamento • ${record.name}`,client:record.client,description:`Aguardando emissão de Nota Fiscal • ${record.empenhoProcess || "processo não informado"}`,createdAt:new Date().toLocaleString("pt-BR"),status:"Pronto para faturar",date:new Date().toISOString().slice(0,10),value:record.value??0,category:"Faturamento público",transactionType:"Receber",empenhoId:record.id}}])}/><BiddingModule onOpen={item => setModal(`Análise de edital • ${item.numeroControlePNCP || item.objetoCompra || "Licitação"}`)}/></> : current === "Orçamentos" ? <BudgetPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={record => updateModuleRecord("Orçamentos",record)} onConvert={convertBudget} onDelete={record => deleteModuleRecord("Orçamentos",record)} onCreateCustomer={createQuickCustomer} onCreateStructure={createQuickStructure}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} sales={moduleRecords.Vendas ?? []} onSave={record => updateModuleRecord("Vendas",record)}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders} company={activeCompany}/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany} isAdministrator={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*"))}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} modules={moduleRecords} onOperation={runOperationalCommand} onOpen={setModal} onIssueInvoice={(record,invoiceNumber)=>{const commitment=(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId);const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Faturado"}}]:[];return saveConfirmedModuleRecord("Financeiro",{...record,status:"Em aberto",transactionType:"Receber",invoiceNumber,invoiceIssuedAt:new Date().toISOString()},related)}}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} onUpdate={updateServiceOrder} serviceOrders={serviceOrders} customers={customerRecords} company={activeCompany}/> : <>{(current === "Compras" || current === "Estoque") && <InventoryOperations mode={current} modules={moduleRecords} onOperation={runOperationalCommand}/>}<GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []} allModules={moduleRecords} serviceOrders={serviceOrders}/></>}</div>
+      <div className="page-content">{current === "PMOC e conformidade" ? null : current === "Integridade do Sistema" ? <IntegrityAudit/> : current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={saveCustomerStructure} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} company={activeCompany} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <><PublicContractsPanel records={(moduleRecords.Certames ?? []) as PublicContractRecord[]} customers={customerRecords} onSave={record => saveConfirmedModuleRecord("Certames", record)}/><PublicCommitmentsPanel orders={serviceOrders} contracts={(moduleRecords.Certames ?? []) as PublicContractRecord[]} commitments={(moduleRecords.Empenhos ?? []) as PublicCommitmentRecord[]} onSave={record=>saveConfirmedModuleRecord("Empenhos",record)} onReadyToInvoice={record=>saveConfirmedModuleRecord("Empenhos",{...record,status:"Pronto para faturar"},[{moduleName:"Financeiro",record:{id:`FAT-${record.id}`,name:`Faturamento • ${record.name}`,client:record.client,description:`Aguardando emissão de Nota Fiscal • ${record.empenhoProcess || "processo não informado"}`,createdAt:new Date().toLocaleString("pt-BR"),status:"Pronto para faturar",date:new Date().toISOString().slice(0,10),value:record.value??0,category:"Faturamento público",transactionType:"Receber",empenhoId:record.id}}])}/><BiddingModule onOpen={item => setModal(`Análise de edital • ${item.numeroControlePNCP || item.objetoCompra || "Licitação"}`)}/></> : current === "Orçamentos" ? <BudgetPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={record => updateModuleRecord("Orçamentos",record)} onConvert={convertBudget} onDelete={record => deleteModuleRecord("Orçamentos",record)} onCreateCustomer={createQuickCustomer} onCreateStructure={createQuickStructure}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} sales={moduleRecords.Vendas ?? []} onSave={record => updateModuleRecord("Vendas",record)}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders} company={activeCompany}/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany} isAdministrator={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*"))}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} modules={moduleRecords} onOperation={runOperationalCommand} onOpen={setModal} onIssueInvoice={(record,invoiceNumber)=>{const commitment=(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId);const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Faturado"}}]:[];return saveConfirmedModuleRecord("Financeiro",{...record,status:"Em aberto",transactionType:"Receber",invoiceNumber,invoiceIssuedAt:new Date().toISOString()},related)}}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} onUpdate={updateServiceOrder} serviceOrders={serviceOrders} customers={customerRecords} company={activeCompany}/> : <>{(current === "Compras" || current === "Estoque") && <InventoryOperations mode={current} modules={moduleRecords} onOperation={runOperationalCommand}/>}<GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []} allModules={moduleRecords} serviceOrders={serviceOrders}/></>}</div>
       <footer><span>© {new Date().getFullYear()} ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
     {modal && <Modal title={modal} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalogRecords={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} supplierRecords={moduleRecords["Fornecedores"] ?? []} employeeRecords={moduleRecords["Funcionários"] ?? [tiagoEmployee]} close={() => setModal("")} onSave={saveRecord}/>}
