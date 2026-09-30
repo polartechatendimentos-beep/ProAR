@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { Camera, Check, ChevronRight, Clock3, FileText, History, ImagePlus, MapPin, Plus, Save, Sparkles, Wrench, X } from "lucide-react";
-import { improveTechnicalText } from "@/lib/text-assist";\nimport { CustomerSearchSelect } from "@/components/CustomerSearchSelect";
+import { improveTechnicalText } from "@/lib/text-assist";
+import { CustomerSearchSelect } from "@/components/CustomerSearchSelect";
 import "./service-order-workspace.css";
 
 type WorkspaceOrder = {
