@@ -27,8 +27,8 @@ async function authenticateLegacyEmployee(username: string, password: string) {
       : safeEqual(suppliedHash, storedHash);
     if (!storedHash || !passwordMatches) continue;
     if (employee.restrictLoginToWorkHours === true) {
-      const start = /^\\d{2}:\\d{2}$/.test(String(employee.workdayStart || "")) ? String(employee.workdayStart) : "07:00";
-      const end = /^\\d{2}:\\d{2}$/.test(String(employee.workdayEnd || "")) ? String(employee.workdayEnd) : "18:00";
+      const start = /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(employee.workdayStart || "")) ? String(employee.workdayStart) : "07:00";
+      const end = /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(employee.workdayEnd || "")) ? String(employee.workdayEnd) : "18:00";
       const current = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
       const inside = start <= end ? current >= start && current <= end : current >= start || current <= end;
       if (!inside) return { denied: true as const, reason: `Login permitido somente no expediente configurado (${start}–${end}, horário de Brasília).` };
