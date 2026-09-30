@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readSession } from "../../../lib/proar-auth";
 import { resolveTenantDb } from "../../../lib/tenant-rest";
-import { databaseFetch } from "../../../lib/supabase-rest";
+import { databaseFetch, commitNeonOperationalState, PRIMARY_DATABASE_URL } from "../../../lib/supabase-rest";
 import { tenantHeaders } from "../../../lib/tenant-rest";
+
+import { hasPermission, type Permission } from "../../../lib/permissions";
+import { prepareOperationalState, independentOperationalRows, OperationError } from "../../../lib/operational-ledger";
 
 function stateRest(db: { url: string; key: string }, path: string, init: RequestInit = {}) {
   return databaseFetch(`${db.url}/rest/v1/${path}`, {
@@ -144,12 +147,19 @@ export async function PUT(request: NextRequest) {
     const body = await request.json(); const company = companyKey(request, session); const db = await resolveTenantDb(session.companyId); if (!db.url || !db.key) throw new Error("Banco indisponível");
     const id = db.dedicated ? "main" : company;
     const currentResponse = await stateRest(db, `proar_state?id=eq.${encodeURIComponent(id)}&select=payload`);
+    if (!currentResponse.ok) throw new Error("Falha ao ler a versão vigente");
     const currentRows = currentResponse.ok ? await currentResponse.json() as { payload?: StatePayload }[] : []; const current = currentRows[0]?.payload; const currentRevision = Number(current?._revision || 0); const baseRevision = Number(body._baseRevision || 0);
-    if (current && !body._force && baseRevision !== currentRevision) return NextResponse.json({ error: "A base online possui uma versão mais recente.", conflict: true, state: current }, { status: 409 });
+    if (current && baseRevision !== currentRevision) return NextResponse.json({ error: "A base online possui uma versão mais recente.", conflict: true, state: current }, { status: 409 });
     const { _baseRevision: _ignoredBase, _force: _ignoredForce, companyId: _ignoredCompany, ...cleanBody } = body;
-    const payload = { ...cleanBody, _revision: currentRevision + 1, _updatedAt: new Date().toISOString(), _companyId: company };
+    const validated = prepareOperationalState(current || null, cleanBody, { username: session.username, displayName: session.displayName, can: permission => hasPermission(session, permission as Permission) });
+    const payload = { ...validated, _revision: currentRevision + 1, _updatedAt: new Date().toISOString(), _companyId: company };
     const updatedAt = new Date().toISOString();
     let response: Response;
+    if (db.url === PRIMARY_DATABASE_URL) {
+      const confirmed = await commitNeonOperationalState(id, current ? currentRevision : null, payload, independentOperationalRows(company, payload, current));
+      if (!confirmed) return NextResponse.json({ error: "A base online foi alterada durante esta gravação.", conflict: true, state: await readState(db, id) }, { status: 409 });
+      return NextResponse.json({ saved: true, state: confirmed, dedicatedDatabase: db.dedicated, canonicalCompanyId: company, transactionalRecords: true });
+    }
     if (current) {
       const revisionFilter = current._revision === undefined ? "payload->>_revision=is.null" : `payload->>_revision=eq.${currentRevision}`;
       response = await stateRest(db, `proar_state?id=eq.${encodeURIComponent(id)}&${revisionFilter}&select=payload`, {
@@ -172,5 +182,8 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "A base online foi alterada durante esta gravação.", conflict: true, state: latest }, { status: 409 });
     }
     return NextResponse.json({ saved: true, state: confirmed, dedicatedDatabase: db.dedicated, canonicalCompanyId: company });
-  } catch { return NextResponse.json({ error: "Não foi possível sincronizar os dados." }, { status: 503 }); }
+  } catch (error) {
+    if (error instanceof OperationError) return NextResponse.json({ error: error.message }, { status: error.status });
+    return NextResponse.json({ error: "Não foi possível sincronizar os dados." }, { status: 503 });
+  }
 }

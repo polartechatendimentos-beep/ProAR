@@ -3,7 +3,7 @@ import { supabaseConfigured, supabaseRest } from "./supabase-rest";
 export type CompanyAccessResult = {
   ok: boolean;
   reason?: string;
-  company?: Record<string, any>;
+  company?: Record<string, unknown>;
 };
 
 export async function validateCompanyAccess(companyId?: string | null): Promise<CompanyAccessResult> {
@@ -15,7 +15,7 @@ export async function validateCompanyAccess(companyId?: string | null): Promise<
   const company = rows?.[0];
   if (!company) return { ok: false, reason: "Empresa não cadastrada no ProAR Manager." };
   if (company.status !== "active") return { ok: false, reason: "Empresa suspensa ou bloqueada no ProAR Manager.", company };
-  if (company.trial_expires_at && new Date(company.trial_expires_at).getTime() < Date.now()) {
+  if (company.trial_expires_at && new Date(String(company.trial_expires_at)).getTime() < Date.now()) {
     return { ok: false, reason: "O período de teste desta empresa terminou.", company };
   }
   return { ok: true, company };

@@ -35,6 +35,9 @@ import { PublicContractsPanel, type PublicContractRecord } from "@/components/Pu
 import { PublicCommitmentsPanel, type PublicCommitmentRecord } from "@/components/PublicCommitmentsPanel";
 import { BudgetQuickCreateDrawer, type CustomerDraft, type StructureDraft } from "@/components/BudgetQuickCreateDrawer";
 import { BiddingOperationsWorkspace } from "@/components/BiddingOperationsWorkspace";
+import { OperationalFinance } from "@/components/OperationalFinance";
+import { InventoryOperations } from "@/components/InventoryOperations";
+import type { OperationalCommand } from "@/lib/operational-ledger";
 import { ServiceOrderWorkspace } from "@/components/ServiceOrderWorkspace";
 import { CustomerProfileWorkspace } from "@/components/CustomerProfileWorkspace";
 import { TechnicalCompliancePanel } from "@/components/TechnicalCompliancePanel";
@@ -79,12 +82,18 @@ const navGroups: { label: string; items: NavItem[] }[] = [
 ];
 
 type ServiceOrder = {
+  changeReason?: string;
   id: string; client: string; unit: string; service: string; tech: string;
   customerId?: string;
   unitId?: string;
   sectorId?: string;
   roomId?: string;
   sourceBudgetId?: string;
+  equipmentIds?: string[];
+  equipmentId?: string;
+  total?: number;
+  servicesTotal?: number;
+  productsTotal?: number;
   date: string; time: string; address: string; status: string; tone: string; avatar: string;
   checkInAt?: string;
   checkOutAt?: string;
@@ -92,7 +101,7 @@ type ServiceOrder = {
   photoAfter?: string;
   clientSignature?: string;
   technicianSignature?: string;
-  catalogItems?: { id: string; name: string; kind: "Serviço" | "Produto" }[];
+  catalogItems?: { id: string; name: string; kind: "Serviço" | "Produto"; quantity?: number }[];
   reminderEnabled?: boolean;
   reminderAmount?: number;
   reminderUnit?: "Dias" | "Meses";
@@ -199,6 +208,7 @@ type PmocExecution = {
 };
 
 type Customer = {
+  changeReason?: string;
   id: string; name: string; doc: string; contact: string; phone: string;
   address: string; units: number; status: string;
   personType?: "PF" | "PJ";
@@ -359,6 +369,9 @@ type ModuleRecord = {
   settlementAccount?: string;
   interestValue?: number;
   discountValue?: number;
+  changeReason?: string;
+  stockAdjustmentReason?: string;
+  receiptHistory?: { id: string; createdAt: string; items: { itemId: string; productId: string; quantity: number }[] }[];
   settlementHistory?: { id: string; value: number; interest: number; discount: number; method: string; account: string; createdAt: string }[];
   empenhoId?: string;
   invoiceNumber?: string;
@@ -1402,63 +1415,8 @@ function Reports({ modules, customers, serviceOrders, company }: { modules: Reco
   </section>;
 }
 
-function FinancialModule({ records, onOpen, onUpdate, onIssueInvoice }: { records: ModuleRecord[]; onOpen: (name: string) => void; onUpdate: (record: ModuleRecord) => Promise<boolean>; onIssueInvoice: (record: ModuleRecord, invoiceNumber: string) => Promise<boolean> }) {
-  const [view, setView] = useState<"Títulos" | "Fluxo de caixa">("Títulos");
-  const [titleFilter, setTitleFilter] = useState<"Todos" | "Recebimentos" | "Pagamentos">("Todos");
-  const [settling, setSettling] = useState<ModuleRecord | null>(null);
-  const [amount, setAmount] = useState(0);
-  const [interest, setInterest] = useState(0);
-  const [discount, setDiscount] = useState(0);
-  const [method, setMethod] = useState("Pix");
-  const [account, setAccount] = useState("Conta bancária");
-  const [invoicing, setInvoicing] = useState<ModuleRecord | null>(null);
-  const [invoiceNumber, setInvoiceNumber] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
-  const outstanding = (record: ModuleRecord) => Math.max(0, (record.value ?? 0) - (record.settledValue ?? 0));
-  const isFullySettled = (record: ModuleRecord) => /Cancelada/i.test(record.status || "") || outstanding(record) <= 0.009;
-  const open = records.filter(record => !isFullySettled(record));
-  const realized = records.filter(record => (record.settledValue ?? 0) > 0 || /^(Paga|Recebida)$/i.test(record.status || ""));
-  const payable = (record: ModuleRecord) => record.transactionType === "Pagar" || /pagar|compra|fornecedor/i.test(`${record.name} ${record.category}`);
-  const visibleRecords = records.filter(record => titleFilter === "Todos" || (titleFilter === "Pagamentos" ? payable(record) : !payable(record)));
-  const totalOpen = (items: ModuleRecord[]) => items.reduce((sum, record) => sum + financialOutstandingValue(record), 0);
-  const totalRealized = (items: ModuleRecord[]) => items.reduce((sum, record) => sum + financialRealizedValue(record), 0);
-  const incoming = realized.filter(record => !payable(record));
-  const outgoing = realized.filter(payable);
-  const maxChart = Math.max(1, totalRealized(incoming), totalRealized(outgoing), totalOpen(open.filter(record => !payable(record))), totalOpen(open.filter(payable)));
-  const startSettlement = (record: ModuleRecord) => { setSettling(record); setAmount(Math.max(0, (record.value ?? 0) - (record.settledValue ?? 0))); setInterest(0); setDiscount(0); };
-  const settle = async () => {
-    if (!settling) return;
-    const finalValue = Math.max(0, amount + interest - discount);
-    if (finalValue <= 0) { setMessage("Informe um valor de baixa maior que zero."); return; }
-    const accumulated = (settling.settledValue ?? 0) + finalValue;
-    const nominalValue = Math.max(0, settling.value ?? 0);
-    const isPaid = accumulated >= nominalValue;
-    setSaving(true); setMessage("Salvando...");
-    const createdAt = new Date().toISOString();
-    const saved = await onUpdate({ ...settling, transactionType: payable(settling) ? "Pagar" : "Receber", settledValue: Math.min(nominalValue, accumulated), settlementDate: createdAt.slice(0, 10), settlementMethod: method, settlementAccount: account, interestValue: (settling.interestValue ?? 0) + interest, discountValue: (settling.discountValue ?? 0) + discount, settlementHistory: [...(settling.settlementHistory ?? []), { id:`BAIXA-${Date.now()}`, value:finalValue, interest, discount, method, account, createdAt }], status: isPaid ? (payable(settling) ? "Paga" : "Recebida") : (payable(settling) ? "Paga parcialmente" : "Recebida parcialmente") });
-    setSaving(false);
-    if (!saved) { setMessage("Não foi possível salvar a alteração."); return; }
-    setSettling(null); setMessage("✓ Alteração efetuada");
-  };
-  const issueInvoice = async () => {
-    if (!invoicing || !invoiceNumber.trim() || saving) { setMessage("Informe o número da Nota Fiscal."); return; }
-    setSaving(true); setMessage("Salvando...");
-    const saved = await onIssueInvoice(invoicing, invoiceNumber.trim());
-    setSaving(false);
-    if (!saved) { setMessage("Não foi possível salvar a alteração."); return; }
-    setInvoicing(null); setInvoiceNumber(""); setMessage("✓ Alteração efetuada");
-  };
-  return <section className="module-page financial-module">
-    <div className="management-hero"><div><span className="section-kicker"><WalletCards size={12}/> CONTROLE FINANCEIRO</span><h2>Financeiro e fluxo de caixa</h2><p>Separe compromissos previstos da movimentação efetivamente liquidada.</p></div><div className="management-actions"><button className="outline-btn" onClick={() => window.print()}><FileText size={14}/> Relatório</button><button className="primary-btn" onClick={() => onOpen("Novo registro • Financeiro")}><Plus size={15}/> Novo lançamento</button></div></div>
-    {message && <div className="public-contract-message"><CheckCircle2 size={15}/>{message}</div>}
-    <div className="finance-kpis"><article><small>A RECEBER</small><strong>R$ {totalOpen(open.filter(record => !payable(record))).toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong><span>Saldo pendente</span></article><article><small>A PAGAR</small><strong>R$ {totalOpen(open.filter(payable)).toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong><span>Saldo pendente</span></article><article><small>ENTRADAS REALIZADAS</small><strong>R$ {totalRealized(incoming).toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong><span>Liquidado</span></article><article><small>SALDO REALIZADO</small><strong>R$ {(totalRealized(incoming)-totalRealized(outgoing)).toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong><span>Caixa e bancos</span></article></div>
-    <nav className="management-tabs"><button className={view === "Títulos" ? "active" : ""} onClick={() => setView("Títulos")}>Contas a pagar e receber</button><button className={view === "Fluxo de caixa" ? "active" : ""} onClick={() => setView("Fluxo de caixa")}>Fluxo de caixa</button></nav>
-    {view === "Títulos" && <nav className="management-tabs finance-title-filters" aria-label="Filtrar títulos"><button className={titleFilter === "Todos" ? "active" : ""} onClick={() => setTitleFilter("Todos")}>Todos</button><button className={titleFilter === "Recebimentos" ? "active" : ""} onClick={() => setTitleFilter("Recebimentos")}>Recebimentos</button><button className={titleFilter === "Pagamentos" ? "active" : ""} onClick={() => setTitleFilter("Pagamentos")}>Pagamentos</button></nav>}
-    {view === "Fluxo de caixa" ? <div className="cashflow-panel panel"><div className="panel-head"><div><span className="section-kicker"><ChartNoAxesCombined size={12}/> PREVISTO × REALIZADO</span><h2>Movimentação consolidada</h2><p>Comparativo dos títulos cadastrados e efetivamente baixados.</p></div></div><div className="cashflow-chart">{[{label:"Receitas previstas",value:totalOpen(open.filter(record => !payable(record))),tone:"blue"},{label:"Receitas realizadas",value:totalRealized(incoming),tone:"green"},{label:"Despesas previstas",value:totalOpen(open.filter(payable)),tone:"orange"},{label:"Despesas realizadas",value:totalRealized(outgoing),tone:"red"}].map(item => <div key={item.label}><span><b>{item.label}</b><strong>R$ {item.value.toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong></span><i><b className={item.tone} style={{width:`${Math.max(2,item.value/maxChart*100)}%`}}/></i></div>)}</div><div className="cashflow-balance"><span>Saldo acumulado realizado</span><strong>R$ {(totalRealized(incoming)-totalRealized(outgoing)).toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong></div></div> : <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><ReceiptText size={12}/> TÍTULOS</span><h2>Liquidação de contas</h2><p>{visibleRecords.filter(record => !isFullySettled(record)).length} título(s) aguardando baixa</p></div></div><div className="table-wrap"><table><thead><tr><th>DESCRIÇÃO</th><th>TIPO</th><th>VENCIMENTO</th><th>VALOR</th><th>LIQUIDADO / RESTANTE</th><th>SITUAÇÃO</th><th>AÇÃO</th></tr></thead><tbody>{visibleRecords.map(record => <tr key={record.id}><td><strong>{record.name}</strong><small className="table-description">{record.invoiceNumber ? `NF ${record.invoiceNumber} • ` : ""}{record.client || record.category}</small></td><td>{payable(record) ? "A pagar" : "A receber"}</td><td>{record.date ? new Date(`${record.date}T12:00:00`).toLocaleDateString("pt-BR") : "—"}</td><td><b>R$ {(record.value ?? 0).toLocaleString("pt-BR", {minimumFractionDigits:2})}</b></td><td><b>R$ {(record.settledValue ?? 0).toLocaleString("pt-BR", {minimumFractionDigits:2})}</b><small className="table-description">Restante: R$ {outstanding(record).toLocaleString("pt-BR", {minimumFractionDigits:2})}</small></td><td><span className={`workflow-status ${isFullySettled(record) ? "done" : ""}`}>{record.status || "Em aberto"}</span></td><td>{record.status === "Pronto para faturar" ? <button className="settle-button" onClick={()=>{setInvoicing(record);setInvoiceNumber("")}}><ReceiptText size={14}/> Emitir NF</button> : outstanding(record) > 0.009 && !/Cancelada/i.test(record.status || "") ? <button className="settle-button" onClick={() => startSettlement(record)}><HandCoins size={14}/> Dar baixa</button> : <span className="settled-label"><CheckCircle2 size={13}/> Liquidado</span>}</td></tr>)}</tbody></table></div>{!visibleRecords.length && <div className="linked-empty"><WalletCards size={22}/><h4>Nenhum lançamento financeiro</h4><p>Não há títulos para este filtro.</p></div>}</div>}
-    {settling && <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Baixar título"><button className="modal-backdrop" onClick={() => !saving && setSettling(null)} aria-label="Fechar"/><div className="modal settlement-modal"><div className="modal-head"><div><span>BAIXA FINANCEIRA</span><h2>{settling.name}</h2><p>Liquidação parcial ou total com rastreabilidade.</p></div><button disabled={saving} onClick={() => setSettling(null)}><X size={18}/></button></div><div className="settlement-form"><label>Valor da baixa<input type="number" min="0" step="0.01" value={amount} onChange={event => setAmount(Number(event.target.value)||0)}/></label><label>Juros / multa<input type="number" min="0" step="0.01" value={interest} onChange={event => setInterest(Number(event.target.value)||0)}/></label><label>Desconto<input type="number" min="0" step="0.01" value={discount} onChange={event => setDiscount(Number(event.target.value)||0)}/></label><label>Forma de pagamento<select value={method} onChange={event => setMethod(event.target.value)}><option>Pix</option><option>Boleto</option><option>Cartão de crédito</option><option>Cartão de débito</option><option>Dinheiro</option><option>Transferência</option></select></label><label>Conta / caixa de destino<select value={account} onChange={event => setAccount(event.target.value)}><option>Conta bancária</option><option>Caixa</option><option>Conta digital</option><option>Cartão</option></select></label><div className="settlement-total"><span>VALOR EFETIVO</span><strong>R$ {Math.max(0,amount+interest-discount).toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong></div></div><div className="modal-actions"><button className="outline-btn" disabled={saving} onClick={() => setSettling(null)}>Cancelar</button><button className="primary-btn" disabled={saving} onClick={settle}><CheckCircle2 size={15}/> {saving ? "Salvando..." : "Confirmar baixa"}</button></div></div></div>}
-    {invoicing && <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Emitir Nota Fiscal"><button className="modal-backdrop" onClick={() => !saving && setInvoicing(null)} aria-label="Fechar"/><div className="modal settlement-modal"><div className="modal-head"><div><span>FATURAMENTO PÚBLICO</span><h2>{invoicing.name}</h2><p>Informe a Nota Fiscal para criar a conta a receber.</p></div><button disabled={saving} onClick={() => setInvoicing(null)}><X size={18}/></button></div><div className="settlement-form"><label>Número da Nota Fiscal<input autoFocus value={invoiceNumber} onChange={event=>setInvoiceNumber(event.target.value)} placeholder="Ex.: 12345"/></label><div className="settlement-total"><span>VALOR A RECEBER</span><strong>R$ {(invoicing.value ?? 0).toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong></div></div><div className="modal-actions"><button className="outline-btn" disabled={saving} onClick={()=>setInvoicing(null)}>Cancelar</button><button className="primary-btn" disabled={saving || !invoiceNumber.trim()} onClick={issueInvoice}><CheckCircle2 size={15}/> {saving ? "Salvando..." : "Emitir NF e criar conta"}</button></div></div></div>}
-  </section>;
+function FinancialModule({ records, modules, onOpen, onOperation, onIssueInvoice }: { records: ModuleRecord[]; modules: Record<string, ModuleRecord[]>; onOpen: (name: string) => void; onOperation: (command: OperationalCommand) => Promise<void>; onIssueInvoice: (record: ModuleRecord, invoiceNumber: string) => Promise<boolean> }) {
+  return <OperationalFinance records={records} modules={modules} onOpen={onOpen} onOperation={onOperation} onIssueInvoice={(record, number) => onIssueInvoice(record as ModuleRecord, number)}/>;
 }
 
 function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectCompany, isAdministrator }: { companies: TenantCompany[]; activeCompany: TenantCompany; onCompaniesChange: (companies: TenantCompany[]) => void; onSelectCompany: (company: TenantCompany) => void; isAdministrator: boolean }) {
@@ -1930,7 +1888,7 @@ function GenericModule({ name, onOpen, onDelete, onUpdate, onConvert, companyCnp
     const currentIndex = statuses.indexOf(record.status || statuses[0]);
     onUpdate(name, { ...record, status: statuses[Math.min(currentIndex + 1, statuses.length - 1)] });
   };
-  const duplicate = (record: ModuleRecord) => onUpdate(name, { ...record, id: `${name.slice(0,3).toUpperCase()}-${Date.now().toString().slice(-6)}`, name: `${record.name} (cópia)`, status: statuses[0], createdAt: new Date().toLocaleString("pt-BR") });
+  const duplicate = (record: ModuleRecord) => onUpdate(name, { ...record, receiptHistory: undefined, settlementHistory: undefined, purchaseId: undefined, invoiceNumber: undefined, id: `${name.slice(0,3).toUpperCase()}-${Date.now().toString().slice(-6)}`, name: `${record.name} (cópia)`, status: statuses[0], createdAt: new Date().toLocaleString("pt-BR") });
   const searchDestinedNfe = async () => {
     setNfeStatus("Consultando o Ambiente Nacional da NF-e...");
     try { const response = await fetch("/api/nfe/distribution",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({cnpj:companyCnpj})}); const result = await response.json(); setNfeStatus(response.ok ? `${result.count ?? 0} nota(s) nova(s) localizada(s).` : result.error || "Não foi possível consultar as notas."); }
@@ -1997,6 +1955,7 @@ function GenericModule({ name, onOpen, onDelete, onUpdate, onConvert, companyCnp
 }
 
 type ModalSave = {
+  structureId?: string; unitId?: string; sectorId?: string; roomId?: string;
   title: string;
   name: string;
   client: string;
@@ -2032,7 +1991,7 @@ type ModalSave = {
   value: number;
   category: string;
   kind: "Serviço" | "Produto";
-  catalogItems: { id: string; name: string; kind: "Serviço" | "Produto" }[];
+  catalogItems: { id: string; name: string; kind: "Serviço" | "Produto"; quantity?: number }[];
   purchaseItems: PurchaseItem[];
   paymentType: "À vista" | "A prazo";
   paymentMethod: string;
@@ -2799,9 +2758,9 @@ export default function Home() {
     }).then(async response => {
       const result=await response.json();
       if (response.status===409 && result.state) { const serverCustomers=result.state.customers??[]; const serverOrders=result.state.serviceOrders??[]; const serverModules=mergeImportedServices(result.state.moduleRecords??{}); setCustomerRecords(serverCustomers);setServiceOrders(serverOrders);setModuleRecords(serverModules);setStateRevision(Number(result.state._revision||0));localStorage.setItem(companyStorageKey(activeCompany.id,"customers"),JSON.stringify(serverCustomers));localStorage.setItem(companyStorageKey(activeCompany.id,"service-orders"),JSON.stringify(serverOrders));localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(serverModules));setSavedMessage("Conflito detectado: a versão mais recente do banco online foi preservada. Refaça apenas a alteração pendente.");return; }
-      if (!response.ok) throw new Error();setStateRevision(Number(result.state?._revision||stateRevision+1));
-    }).catch(() => {
-      setSavedMessage("Falha no banco online. A cópia local não substituirá a versão principal.");
+      if (!response.ok) throw new Error(result.error || "Falha ao confirmar a gravação"); const confirmedModules = mergeImportedServices(result.state?.moduleRecords ?? nextModules); setModuleRecords(confirmedModules); localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(confirmedModules)); setStateRevision(Number(result.state?._revision||stateRevision+1));
+    }).catch((error) => {
+      setSavedMessage(error instanceof Error ? error.message : "Falha no banco online. A cópia local não substituirá a versão principal.");
     });
   };
   const pullFromDatabase = async () => {
@@ -2932,21 +2891,8 @@ export default function Home() {
       orderForPersistence = { ...orderForPersistence, contractItems: nextContractItems };
     }
     const updatedOrders = serviceOrders.map(order => order.id === orderForPersistence.id ? orderForPersistence : order);
-    // Integrações financeiras/estoque acontecem somente na transição real para
-    // Concluída. Reabrir e concluir novamente não duplica lançamentos históricos.
-    const wasCompleted = /conclu[ií]da/i.test(previousOrder?.status ?? "");
-    const isCompleted = /conclu[ií]da/i.test(updatedOrder.status);
-    if (isCompleted && !wasCompleted) {
-      const receivableId = `REC-${updatedOrder.id.replace(/\D/g, "")}`;
-      const stockPrefix = `OS-${updatedOrder.id.replace(/\D/g, "")}-`;
-      const hasReceivable = (updatedModules.Financeiro ?? []).some(item => item.id === receivableId || item.serviceOrderId === updatedOrder.id);
-      const productsUsed = (updatedOrder.catalogItems ?? []).filter(item => item.kind === "Produto");
-      // OS vinculada a Certame segue o fluxo público: execução → fechamento → Empenho → faturamento.
-      // A conclusão técnica não cria Conta a Receber antecipada e não altera lançamentos históricos.
-      if (!updatedOrder.certameId && !hasReceivable) updatedModules = { ...updatedModules, Financeiro: [{ id: receivableId, name: `Conta a receber • ${updatedOrder.id}`, client: updatedOrder.client, description: `Gerada pela conclusão da OS ${updatedOrder.id}`, createdAt: new Date().toLocaleString("pt-BR"), status: "Em aberto", date: new Date().toISOString().slice(0,10), value: 0, transactionType: "Receber", serviceOrderId: updatedOrder.id }, ...(updatedModules.Financeiro ?? [])] };
-      const stockEntries = productsUsed.filter(item => !(updatedModules.Estoque ?? []).some(stock => stock.id === `${stockPrefix}${item.id}`)).map(item => ({ id: `${stockPrefix}${item.id}`, name: `Saída por OS • ${item.name}`, client: updatedOrder.client, description: `Movimentação vinculada à ${updatedOrder.id}`, createdAt: new Date().toLocaleString("pt-BR"), status: "Concluído", category: "Saída por OS", serviceOrderId: updatedOrder.id, kind: "Produto" as const }));
-      if (stockEntries.length) updatedModules = { ...updatedModules, Estoque: [...stockEntries, ...(updatedModules.Estoque ?? [])] };
-    }
+    // O servidor deriva faturamento e consumo de produtos com IDs estáveis,
+    // confirmados na mesma transação da OS.
     if (!navigator.onLine) {
       showFeedback("Falha ao salvar a OS • sem conexão com o banco. Nenhuma confirmação foi registrada.", "error", 6000);
       return null;
@@ -3252,16 +3198,18 @@ export default function Home() {
     setAuthenticatedUser(null);
   };
   const deleteCustomer = (customer: Customer) => {
+    const reason = window.prompt("Motivo da inativação do cliente:"); if (!reason?.trim()) return;
     if (!window.confirm(`Inativar o cliente “${customer.name}”? O cadastro, seus vínculos e histórico serão preservados.`)) return;
-    const updatedCustomers = customerRecords.map(item => item.id === customer.id ? { ...item, status: "Inativo" } : item);
+    const updatedCustomers = customerRecords.map(item => item.id === customer.id ? { ...item, status: "Inativo", changeReason: reason.trim() } : item);
     setCustomerRecords(updatedCustomers);
     localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(updatedCustomers));
     persistSharedState(updatedCustomers, serviceOrders, moduleRecords);
     setSavedMessage("Cliente inativado com sucesso. O histórico foi preservado.");
   };
   const deleteOrder = (order: ServiceOrder) => {
+    const reason = window.prompt("Motivo do cancelamento da OS:"); if (!reason?.trim()) return;
     if (!window.confirm(`Cancelar a ordem ${order.id}? A ordem continuará disponível no histórico.`)) return;
-    const updatedOrders = serviceOrders.map(item => item.id === order.id ? { ...item, status: "Cancelada", tone: "red" } : item);
+    const updatedOrders = serviceOrders.map(item => item.id === order.id ? { ...item, status: "Cancelada", tone: "red", changeReason: reason.trim() } : item);
     setServiceOrders(updatedOrders);
     localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(updatedOrders));
     persistSharedState(customerRecords, updatedOrders, moduleRecords);
@@ -3269,9 +3217,12 @@ export default function Home() {
     setSavedMessage(`Ordem ${order.id} cancelada. O histórico foi preservado.`);
   };
   const deleteModuleRecord = (moduleName: string, record: ModuleRecord) => {
+    const reason = window.prompt("Informe o motivo do cancelamento ou inativação:");
+    if (!reason?.trim()) return;
+    record = { ...record, changeReason: reason.trim() };
     const cancellation = /Vendas|Orçamentos|Compras|Financeiro/.test(moduleName);
     if (!window.confirm(`${cancellation ? "Cancelar" : "Inativar"} o registro “${record.name}”? O histórico será mantido.`)) return;
-    const updatedModules = { ...moduleRecords, [moduleName]: (moduleRecords[moduleName] ?? []).map(item => item.id === record.id ? { ...item, status: cancellation ? "Cancelado" : "Inativo" } : item) };
+    const updatedModules = { ...moduleRecords, [moduleName]: (moduleRecords[moduleName] ?? []).map(item => item.id === record.id ? { ...item, changeReason: reason.trim(), status: cancellation ? "Cancelado" : "Inativo" } : item) };
     setModuleRecords(updatedModules);
     localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(updatedModules));
     persistSharedState(customerRecords, serviceOrders, updatedModules);
@@ -3279,19 +3230,26 @@ export default function Home() {
     window.setTimeout(() => setSavedMessage(""), 3000);
   };
   const updateModuleRecord = (moduleName: string, record: ModuleRecord) => {
+    const oldRecord = (moduleRecords[moduleName] ?? []).find(item => item.id === record.id);
+    if (moduleName === "Produtos" && oldRecord && Number(record.stockCurrent || 0) !== Number(oldRecord.stockCurrent || 0)) {
+      const reason = window.prompt("Motivo do ajuste de estoque:"); if (!reason?.trim()) return;
+      record = { ...record, stockAdjustmentReason: reason.trim() };
+    }
+    if (oldRecord && !/cancelad|inativ/i.test(oldRecord.status || "") && /cancelad|inativ/i.test(record.status || "")) {
+      const reason = window.prompt("Motivo do cancelamento ou inativação:"); if (!reason?.trim()) return;
+      record = { ...record, changeReason: reason.trim() };
+    }
     const currentRecords = moduleRecords[moduleName] ?? [];
     const exists = currentRecords.some(item => item.id === record.id);
     let updatedModules = { ...moduleRecords, [moduleName]: exists ? currentRecords.map(item => item.id === record.id ? record : item) : [record, ...currentRecords] };
     if (moduleName === "Compras" && record.status === "Recebida") {
       const payableId = `FIN-${record.id}`;
-      const stockId = `EST-${record.id}`;
       const hasPayable = (updatedModules["Financeiro"] ?? []).some(item => item.id === payableId || item.purchaseId === record.id);
-      const hasStockEntry = (updatedModules["Estoque"] ?? []).some(item => item.id === stockId);
       // Compras a prazo já geram parcelas FIN-<compra>-NN no cadastro. Não criar
       // um segundo título integral quando o recebimento da mercadoria for confirmado.
       const hasInstallmentPayables = (updatedModules["Financeiro"] ?? []).some(item => item.purchaseId === record.id && Boolean(item.installmentNumber));
       if (!hasPayable && !hasInstallmentPayables) updatedModules = { ...updatedModules, "Financeiro": [{ ...record, id: payableId, name: `Conta a pagar • ${record.name}`, status: "Em aberto", category: record.category || "Compra de produtos", transactionType:"Pagar", purchaseId: record.id, createdAt: new Date().toLocaleString("pt-BR") }, ...(updatedModules["Financeiro"] ?? [])] };
-      if (!hasStockEntry) updatedModules = { ...updatedModules, "Estoque": [{ ...record, id: stockId, name: `Entrada • ${record.name}`, status: "Concluído", category: "Entrada por compra", createdAt: new Date().toLocaleString("pt-BR") }, ...(updatedModules["Estoque"] ?? [])] };
+      // Recebimentos por item são registrados pelo servidor no livro de estoque.
     }
     updatedModules = appendAudit(updatedModules, exists ? "Registro atualizado" : "Registro criado", `${moduleName} • ${record.name}`, exists ? "Alteração registrada pelo utilizador" : "Novo cadastro registrado pelo utilizador");
     setModuleRecords(updatedModules);
@@ -3421,6 +3379,26 @@ export default function Home() {
       return false;
     }
   };
+  const operationalRetryRef = useRef<{ fingerprint: string; key: string } | null>(null);
+  const runOperationalCommand = async (command: OperationalCommand) => {
+    const fingerprint = JSON.stringify({ action: command.action, recordId: command.recordId, data: command.data });
+    if (operationalRetryRef.current?.fingerprint === fingerprint) command = { ...command, idempotencyKey: operationalRetryRef.current.key };
+    else operationalRetryRef.current = { fingerprint, key: command.idempotencyKey };
+    if (!navigator.onLine) throw new Error("Esta operação precisa de conexão com o banco online.");
+    const response = await fetch("/api/operations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(command) });
+    const result = await response.json();
+    if (!response.ok || !result.state) throw new Error(result.error || "Operação não confirmada.");
+    operationalRetryRef.current = null;
+    const confirmedCustomers = result.state.customers ?? customerRecords;
+    const confirmedOrders = result.state.serviceOrders ?? serviceOrders;
+    const confirmedModules = mergeImportedServices(result.state.moduleRecords ?? moduleRecords);
+    setCustomerRecords(confirmedCustomers); setServiceOrders(confirmedOrders); setModuleRecords(confirmedModules);
+    setStateRevision(Number(result.state._revision || 0));
+    localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(confirmedCustomers));
+    localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(confirmedOrders));
+    localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(confirmedModules));
+    setSavedMessage("Operação confirmada no banco e registrada na auditoria.");
+  };
   const globalSearchItems = useMemo<GlobalSearchItem[]>(() => {
     const customerItems = customerRecords.map(customer => ({ id: customer.id, title: customer.name, detail: [customer.doc, customer.phone, customer.city || customer.address].filter(Boolean).join(" • "), module: "Clientes", kind: "Cliente" as const }));
     const orderItems = serviceOrders.map(order => ({ id: order.id, title: order.id, detail: [order.client, order.service, order.tech].filter(Boolean).join(" • "), module: "Ordens de serviço", kind: "OS" as const }));
@@ -3460,7 +3438,7 @@ export default function Home() {
       {savedMessage && <div className={`save-toast feedback-${feedbackTone}`} role={feedbackTone === "error" ? "alert" : "status"} aria-live={feedbackTone === "error" ? "assertive" : "polite"}>{feedbackTone === "error" || feedbackTone === "warning" ? <AlertTriangle size={16}/> : <CheckCircle2 size={16}/>}<span>{savedMessage}</span></div>}
       <div className="company-context"><Building2 size={13}/><span>{activeCompany.tradeName}</span><small>{activeCompany.cnpj || "CNPJ pendente"} • {activeCompany.city}/{activeCompany.state}</small></div>
       {current === "PMOC e conformidade" ? <TechnicalCompliancePanel plans={(moduleRecords.PMOC ?? []) as any} fluids={(moduleRecords.Refrigerantes ?? []) as any} documents={(moduleRecords["Documentação / Habilitação"] ?? []) as any} onSave={(module,record)=>saveConfirmedModuleRecord(module,record)}/> : null}
-      <div className="page-content">{current === "PMOC e conformidade" ? null : current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={record => updateModuleRecord("Unidades e setores",record)} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} company={activeCompany} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <><PublicContractsPanel records={(moduleRecords.Certames ?? []) as PublicContractRecord[]} customers={customerRecords} onSave={record => saveConfirmedModuleRecord("Certames", record)}/><PublicCommitmentsPanel orders={serviceOrders} contracts={(moduleRecords.Certames ?? []) as PublicContractRecord[]} commitments={(moduleRecords.Empenhos ?? []) as PublicCommitmentRecord[]} onSave={record=>saveConfirmedModuleRecord("Empenhos",record)} onReadyToInvoice={record=>saveConfirmedModuleRecord("Empenhos",{...record,status:"Pronto para faturar"},[{moduleName:"Financeiro",record:{id:`FAT-${record.id}`,name:`Faturamento • ${record.name}`,client:record.client,description:`Aguardando emissão de Nota Fiscal • ${record.empenhoProcess || "processo não informado"}`,createdAt:new Date().toLocaleString("pt-BR"),status:"Pronto para faturar",date:new Date().toISOString().slice(0,10),value:record.value??0,category:"Faturamento público",transactionType:"Receber",empenhoId:record.id}}])}/><BiddingModule onOpen={item => setModal(`Análise de edital • ${item.numeroControlePNCP || item.objetoCompra || "Licitação"}`)}/></> : current === "Orçamentos" ? <BudgetPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={record => updateModuleRecord("Orçamentos",record)} onConvert={convertBudget} onDelete={record => deleteModuleRecord("Orçamentos",record)} onCreateCustomer={createQuickCustomer} onCreateStructure={createQuickStructure}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} sales={moduleRecords.Vendas ?? []} onSave={record => updateModuleRecord("Vendas",record)}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders} company={activeCompany}/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany} isAdministrator={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*"))}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} onOpen={setModal} onUpdate={record=>{const commitment=record.status==="Recebida"?(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId):undefined;const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Recebido"}}]:[];return saveConfirmedModuleRecord("Financeiro",record,related)}} onIssueInvoice={(record,invoiceNumber)=>{const commitment=(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId);const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Faturado"}}]:[];return saveConfirmedModuleRecord("Financeiro",{...record,status:"Em aberto",transactionType:"Receber",invoiceNumber,invoiceIssuedAt:new Date().toISOString()},related)}}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} onUpdate={updateServiceOrder} serviceOrders={serviceOrders} customers={customerRecords} company={activeCompany}/> : <GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []} allModules={moduleRecords} serviceOrders={serviceOrders}/>}</div>
+      <div className="page-content">{current === "PMOC e conformidade" ? null : current === "Painel inicial" ? <Dashboard onNavigate={setCurrent} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Clientes" ? <Customers onOpen={setModal} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={record => updateModuleRecord("Unidades e setores",record)} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} company={activeCompany} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <><PublicContractsPanel records={(moduleRecords.Certames ?? []) as PublicContractRecord[]} customers={customerRecords} onSave={record => saveConfirmedModuleRecord("Certames", record)}/><PublicCommitmentsPanel orders={serviceOrders} contracts={(moduleRecords.Certames ?? []) as PublicContractRecord[]} commitments={(moduleRecords.Empenhos ?? []) as PublicCommitmentRecord[]} onSave={record=>saveConfirmedModuleRecord("Empenhos",record)} onReadyToInvoice={record=>saveConfirmedModuleRecord("Empenhos",{...record,status:"Pronto para faturar"},[{moduleName:"Financeiro",record:{id:`FAT-${record.id}`,name:`Faturamento • ${record.name}`,client:record.client,description:`Aguardando emissão de Nota Fiscal • ${record.empenhoProcess || "processo não informado"}`,createdAt:new Date().toLocaleString("pt-BR"),status:"Pronto para faturar",date:new Date().toISOString().slice(0,10),value:record.value??0,category:"Faturamento público",transactionType:"Receber",empenhoId:record.id}}])}/><BiddingModule onOpen={item => setModal(`Análise de edital • ${item.numeroControlePNCP || item.objetoCompra || "Licitação"}`)}/></> : current === "Orçamentos" ? <BudgetPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={record => updateModuleRecord("Orçamentos",record)} onConvert={convertBudget} onDelete={record => deleteModuleRecord("Orçamentos",record)} onCreateCustomer={createQuickCustomer} onCreateStructure={createQuickStructure}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} sales={moduleRecords.Vendas ?? []} onSave={record => updateModuleRecord("Vendas",record)}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders} company={activeCompany}/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany} isAdministrator={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*"))}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} modules={moduleRecords} onOperation={runOperationalCommand} onOpen={setModal} onIssueInvoice={(record,invoiceNumber)=>{const commitment=(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId);const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Faturado"}}]:[];return saveConfirmedModuleRecord("Financeiro",{...record,status:"Em aberto",transactionType:"Receber",invoiceNumber,invoiceIssuedAt:new Date().toISOString()},related)}}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} onUpdate={updateServiceOrder} serviceOrders={serviceOrders} customers={customerRecords} company={activeCompany}/> : <>{(current === "Compras" || current === "Estoque") && <InventoryOperations mode={current} modules={moduleRecords} onOperation={runOperationalCommand}/>}<GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []} allModules={moduleRecords} serviceOrders={serviceOrders}/></>}</div>
       <footer><span>© {new Date().getFullYear()} ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
     {modal && <Modal title={modal} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalogRecords={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} supplierRecords={moduleRecords["Fornecedores"] ?? []} employeeRecords={moduleRecords["Funcionários"] ?? [tiagoEmployee]} close={() => setModal("")} onSave={saveRecord}/>}

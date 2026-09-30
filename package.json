@@ -13,8 +13,8 @@
     "validate:fast": "npm run typecheck && npm run lint && npm test",
     "validate": "npm run validate:fast && npm run build",
     "check": "npm run validate",
-    "test": "node --test",
-    "lint": "eslint app/api/licitacoes/route.ts",
+    "test": "node --experimental-strip-types tests/run.mjs",
+    "lint": "eslint app/api lib components/OperationalFinance.tsx components/InventoryOperations.tsx components/ServiceOrderWorkspace.tsx --quiet",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {

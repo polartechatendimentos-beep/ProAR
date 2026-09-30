@@ -1,5 +1,37 @@
 import { neon } from "@neondatabase/serverless";
 
+/** Conditional write and normalized ERP records in one PostgreSQL statement.
+ * Uses the existing proar_state schema; no destructive migration is necessary.
+ */
+export async function commitNeonOperationalState(stateId: string, expectedRevision: number | null, payload: Record<string, unknown>, rows: { id: string; payload: Record<string, unknown> }[]) {
+  const connectionString = neonDatabaseUrl();
+  if (!connectionString) throw new Error("Neon não configurado");
+  const sql = neon(connectionString);
+  const now = new Date().toISOString();
+  const query = expectedRevision === null
+    ? `WITH committed AS (
+        INSERT INTO proar_state (id,payload,updated_at) VALUES ($1,$2::jsonb,$3::timestamptz)
+        ON CONFLICT (id) DO NOTHING RETURNING payload
+      ), entities AS (
+        INSERT INTO proar_state (id,payload,updated_at)
+        SELECT item->>'id',item->'payload',$3::timestamptz
+        FROM jsonb_array_elements($4::jsonb) item WHERE EXISTS (SELECT 1 FROM committed)
+        ON CONFLICT (id) DO UPDATE SET payload=EXCLUDED.payload,updated_at=EXCLUDED.updated_at RETURNING id
+      ) SELECT payload FROM committed`
+    : `WITH committed AS (
+        UPDATE proar_state SET payload=$2::jsonb,updated_at=$3::timestamptz
+        WHERE id=$1 AND COALESCE((payload->>'_revision')::bigint,0)=$5::bigint RETURNING payload
+      ), entities AS (
+        INSERT INTO proar_state (id,payload,updated_at)
+        SELECT item->>'id',item->'payload',$3::timestamptz
+        FROM jsonb_array_elements($4::jsonb) item WHERE EXISTS (SELECT 1 FROM committed)
+        ON CONFLICT (id) DO UPDATE SET payload=EXCLUDED.payload,updated_at=EXCLUDED.updated_at RETURNING id
+      ) SELECT payload FROM committed`;
+  const params = [stateId, JSON.stringify(payload), now, JSON.stringify(rows), ...(expectedRevision === null ? [] : [expectedRevision])];
+  const result = await sql.query(query, params) as { payload: Record<string, unknown> }[];
+  return result[0]?.payload || null;
+}
+
 const supabaseBaseUrl = () =>
   (process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://tnjkdurifalrdnttsova.supabase.co").replace(/\/$/, "");
 const supabaseServiceKey = () => process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY;

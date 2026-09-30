@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
     if (file.size > 2 * 1024 * 1024) return NextResponse.json({ error: "O certificado deve ter no máximo 2 MB." }, { status: 400 });
 
     const bytes = Buffer.from(await file.arrayBuffer());
-    let cert: any;
+    let cert: ReturnType<typeof forge.pki.certificateFromAsn1>;
     try {
       const asn1 = forge.asn1.fromDer(bytes.toString("binary"));
       const p12 = forge.pkcs12.pkcs12FromAsn1(asn1, false, password);
