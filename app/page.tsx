@@ -2413,7 +2413,7 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
   useEffect(() => {
     if (selectedClient && !availableUnits.some(item => item.name === unit)) setUnit(availableUnits[0]?.name ?? "");
   }, [selectedClient, availableUnits, unit]);
-  useEffect(() => { if (!locations.sectors.some(item => item.name === sector)) setSector(""); }, [unit, selectedClient]);
+  useEffect(() => { if (sector && !availableSectors.some(item => item.name === sector)) setSector(""); }, [unit, selectedClient, structures]);
   return <div className="modal-layer" role="dialog" aria-modal="true" aria-label={title}><button className="modal-backdrop" onClick={close} aria-label="Fechar janela"/><div className="modal"><div className="modal-head"><div><span>{isLinkedStructure ? "ESTRUTURA DO CLIENTE • LIMITE DE 20" : "CADASTRO PROAR"}</span><h2>{isLinkedStructure ? "Nova unidade, filial ou setor" : title}</h2>{isLinkedStructure && <p>Este registro será vinculado a <strong>{parentCustomer}</strong>.</p>}</div><button onClick={close} aria-label="Fechar"><X size={18}/></button></div><div className="form-grid">
     {isLinkedStructure ? <>
       <label>Cliente principal<input value={parentCustomer} readOnly/></label>
@@ -3333,7 +3333,7 @@ export default function Home() {
       createdAt: new Date().toLocaleString("pt-BR"),
     };
     const updatedModules = { ...moduleRecords, "Unidades e setores": [created, ...(moduleRecords["Unidades e setores"] ?? [])] };
-    const updatedCustomers = customerRecords.map(item => item.name === draft.client ? { ...item, units: item.units + 1 } : item);
+    const updatedCustomers = customerRecords.map(item => item.name === draft.client ? { ...item, units: draft.kind === "Unidade" ? item.units + 1 : item.units } : item);
     setModuleRecords(updatedModules);
     setCustomerRecords(updatedCustomers);
     localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(updatedModules));
