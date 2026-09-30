@@ -14,10 +14,10 @@ export async function routeContext(session: Session) {
   const rows = await response.json();
   const state = rows[0]?.payload;
   if (!state) throw new RouteError("Base operacional da empresa não encontrada.", 409);
-  const employees = (state.moduleRecords?.Funcionários || []) as Array<{ id: string; name: string; employeeUsername?: string; status?: string }>;
+  const employees = (state.moduleRecords?.Funcionários || []) as Array<{ id: string; name: string; employeeUsername?: string; status?: string; mobileAccessEnabled?: boolean; requireGpsForOs?: boolean }>;
   const employee = employees.find(item => item.employeeUsername?.trim().toLocaleLowerCase("pt-BR") === session.username.trim().toLocaleLowerCase("pt-BR") && item.status !== "Inativo");
   const actor: RouteActor | null = employee ? { employeeId: String(employee.id), employeeName: employee.name, username: session.username } : null;
-  return { db, company, state, employees, actor };
+  return { db, company, state, employees, employee, actor };
 }
 export function routeRest(db: TenantDb, path: string, init: RequestInit = {}) { return databaseFetch(`${db.url}/rest/v1/${path}`, { ...init, headers: { ...tenantHeaders(db.key), ...init.headers }, cache: "no-store" }); }
 export async function loadRouteDay(db: TenantDb, company: string, employee: string, date: string) {
