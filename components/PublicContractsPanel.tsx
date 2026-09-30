@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
-import { CheckCircle2, FileText, Landmark, Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, FileText, Landmark, Plus, Trash2 } from "lucide-react";\nimport { CustomerSearchSelect } from "@/components/CustomerSearchSelect";
 import {
   calculateCertameItemBalance,
   type CertameItem,
@@ -213,7 +213,7 @@ export function PublicContractsPanel({
 
     {creating && <form className="public-contract-form panel" onSubmit={save}>
       <div className="public-contract-fields">
-        <label>Cliente público<select value={customerId} onChange={event => setCustomerId(event.target.value)} required><option value="">Selecionar cliente</option>{customers.map(customer => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></label>
+        <label>Cliente público<CustomerSearchSelect customers={customers} value={customerId} valueMode="id" onChange={value => setCustomerId(value)} placeholder="Pesquisar órgão, Prefeitura ou CNPJ..." /></label>
         <label>Processo administrativo<input value={process} onChange={event => setProcess(event.target.value)} /></label>
         <label>Modalidade<input value={modality} onChange={event => setModality(event.target.value)} placeholder="Pregão eletrônico, concorrência..." /></label>
         <label>Número da licitação<input value={biddingNumber} onChange={event => setBiddingNumber(event.target.value)} /></label>
