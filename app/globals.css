@@ -164,3 +164,72 @@ button,.primary-btn,.outline-btn,.filter-btn,.icon-btn{transition:transform .16s
 :where(.wide-search,.structure-search,.pdv-search,.search-field,.search-box,.search-input,.table-search,.module-search,.toolbar-search,.filters-search,.customer-search,.os-search) kbd{flex:0 0 auto!important;border:1px solid #244762!important;border-radius:6px!important;background:#0b2236!important;color:#7fa2ba!important;padding:3px 6px!important;font-size:8px!important}
 input[type="search"].proar-search,input[data-search="true"]{width:100%;min-height:44px;box-sizing:border-box;border:1px solid #1d4f72;border-radius:11px;background:#07192b;color:#e7f1f8;padding:0 12px;outline:none}
 input[type="search"].proar-search:focus,input[data-search="true"]:focus{border-color:#2689c7;box-shadow:0 0 0 3px rgba(38,137,199,.11)}
+
+/* ============================================================
+   ProAR Design System 2026 — padrão visual global
+   Base: referência PDV Express aprovada em 30/09/2026
+   ============================================================ */
+:root{
+  --app-bg:#040811;
+  --app-surface:#08101e;
+  --app-card:#0c1626;
+  --app-border:#14233a;
+  --app-hover:#122036;
+  --app-primary:#1d6bf3;
+  --app-primary-hover:#1657c7;
+  --app-cyan:#38bdf8;
+  --app-text:#e2e8f0;
+  --app-muted:#94a3b8;
+  --navy:#08101e;--navy2:#0c1626;--blue:#1d6bf3;--cyan:#38bdf8;
+  --ink:#e2e8f0;--muted:#94a3b8;--line:#14233a;--bg:#040811;--white:#0c1626;
+  --shadow:0 10px 28px rgba(0,0,0,.28);
+}
+html,body{background:var(--app-bg)!important;color:var(--app-text)!important;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body{font-size:12px}
+*{scrollbar-width:thin;scrollbar-color:var(--app-border) var(--app-bg)}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--app-bg)}
+::-webkit-scrollbar-thumb{background:var(--app-border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--app-primary)}
+.main,.page-content,.app-shell{background:var(--app-bg)!important}
+.page-content{color:var(--app-text)}
+.topbar{background:rgba(8,16,30,.96)!important;border-bottom:1px solid var(--app-border)!important;box-shadow:0 7px 24px rgba(0,0,0,.18)}
+.headline h1,.topbar h1{color:#fff!important}
+.headline p,.eyebrow{color:var(--app-muted)!important}
+.eyebrow span{background:var(--app-cyan)!important;box-shadow:0 0 0 4px rgba(56,189,248,.10)!important}
+.profile{border-left-color:var(--app-border)!important;color:var(--app-muted)!important}
+.profile strong{color:#fff!important}.profile small{color:var(--app-muted)!important}
+.profile-avatar{background:rgba(29,107,243,.18)!important;color:#60a5fa!important;box-shadow:inset 0 0 0 1px rgba(96,165,250,.28)!important}
+.profile-avatar span{border-color:var(--app-surface)!important}
+.sidebar{background:linear-gradient(165deg,#08101e 0%,#050b15 55%,#040811 100%)!important;border-right:1px solid var(--app-border)}
+.nav-group button{color:#94a3b8!important}
+.nav-group button:hover{background:var(--app-hover)!important;color:#fff!important}
+.nav-group button.active{background:var(--app-primary)!important;color:#fff!important;box-shadow:0 8px 22px rgba(29,107,243,.24)!important}
+:where(.card,.panel,.content-card,.module-card,.stat-card,.summary-card,.table-card,.form-card,.workspace-card){background:var(--app-card)!important;border-color:var(--app-border)!important;color:var(--app-text)!important;box-shadow:var(--shadow)}
+:where(.card,.panel,.content-card,.module-card,.stat-card,.summary-card,.table-card,.form-card,.workspace-card) :where(h1,h2,h3,h4,strong,b){color:#f8fafc}
+:where(.card,.panel,.content-card,.module-card,.stat-card,.summary-card,.table-card,.form-card,.workspace-card) :where(p,small,label){color:var(--app-muted)}
+input:not([type="checkbox"]):not([type="radio"]),select,textarea{border-color:var(--app-border);background:#060c18;color:#f1f5f9;border-radius:8px;outline:none}
+input:not([type="checkbox"]):not([type="radio"]):focus,select:focus,textarea:focus{border-color:var(--app-primary)!important;box-shadow:0 0 0 3px rgba(29,107,243,.10)!important}
+input::placeholder,textarea::placeholder{color:#64748b}
+select option{background:#08101e;color:#e2e8f0}
+table{color:var(--app-text)}
+thead{background:#08101e;color:#94a3b8}
+th{border-color:var(--app-border)!important;font-size:9px;letter-spacing:.04em;text-transform:uppercase}
+td{border-color:var(--app-border)!important}
+tbody tr:hover{background:var(--app-hover)!important}
+.primary-btn{background:var(--app-primary)!important;border-color:var(--app-primary)!important;color:#fff!important;box-shadow:0 7px 18px rgba(29,107,243,.22)!important}
+.primary-btn:hover{background:var(--app-primary-hover)!important}
+.outline-btn,.secondary-btn{background:var(--app-card)!important;border-color:var(--app-border)!important;color:#cbd5e1!important}
+.outline-btn:hover,.secondary-btn:hover{background:var(--app-hover)!important;border-color:#294766!important;color:#fff!important}
+.icon-btn{background:var(--app-card)!important;border-color:var(--app-border)!important;color:#94a3b8!important}
+.icon-btn:hover{background:var(--app-hover)!important;border-color:#294766!important;color:var(--app-cyan)!important}
+.modal-backdrop{background:rgba(0,0,0,.78)!important;backdrop-filter:blur(5px)}
+:where(.modal,.modal-card,.dialog,.dialog-card){background:var(--app-card)!important;border-color:var(--app-border)!important;color:var(--app-text)!important;box-shadow:0 25px 70px rgba(0,0,0,.55)!important}
+.tabs,.tab-bar{border-color:var(--app-border)!important}
+.tabs button,.tab-bar button{color:#94a3b8}
+.tabs button.active,.tab-bar button.active{color:#fff!important;border-color:var(--app-primary)!important}
+.badge,.status-badge{border-color:var(--app-border)}
+.section-kicker{color:var(--app-cyan)!important}
+.empty-state{color:#64748b}
+.empty-state b{color:#cbd5e1}
+@media(max-width:900px){.page-content{padding:14px!important}.topbar{padding-left:16px!important;padding-right:16px!important}}
