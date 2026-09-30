@@ -33,7 +33,8 @@ import {
 } from "lucide-react";
 import { PublicContractsPanel, type PublicContractRecord } from "@/components/PublicContractsPanel";
 import { PublicCommitmentsPanel, type PublicCommitmentRecord } from "@/components/PublicCommitmentsPanel";
-import { BudgetQuickCreateDrawer, type CustomerDraft, type StructureDraft } from "@/components/BudgetQuickCreateDrawer";\nimport { CustomerSearchSelect } from "@/components/CustomerSearchSelect";
+import { BudgetQuickCreateDrawer, type CustomerDraft, type StructureDraft } from "@/components/BudgetQuickCreateDrawer";
+import { CustomerSearchSelect } from "@/components/CustomerSearchSelect";
 import { BiddingOperationsWorkspace } from "@/components/BiddingOperationsWorkspace";
 import { OperationalFinance } from "@/components/OperationalFinance";
 import { InventoryOperations } from "@/components/InventoryOperations";
