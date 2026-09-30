@@ -1292,7 +1292,7 @@ function SalesPDV({ customers, structures, records, sales, onSave }: { customers
       <button className={activeTab === "pagamento" ? "active" : ""} onClick={() => setActiveTab("pagamento")}><CreditCard size={15}/><span>Pagamento</span><kbd>F4</kbd></button>
       <button className={activeTab === "opcoes" ? "active" : ""} onClick={() => setActiveTab("opcoes")}><MoreHorizontal size={15}/><span>Mais opções</span><kbd>F8</kbd></button>
     </nav>
-    <div className="pdv-operational-grid"><aside className="pdv-function-keys" aria-label="Atalhos do PDV">{[["F1","Cliente"],["F2","Menu"],["F3","Operações"],["F4","Pagamento"],["F5","Recuperar venda"],["F6","Pesquisar"],["F7","Finalizar"],["F8","Cancelar item"],["F9","Cancelar venda"],["F10","Desconto"],["F11","Vendedor"],["F12","Sair"]].map(([key,label])=><button key={key} onClick={()=>key==="F4"||key==="F7"?setActiveTab("pagamento"):key==="F1"?setActiveTab("cliente"):key==="F5"?setSalesView("historico"):key==="F6"?searchRef.current?.focus():key==="F10"?setActiveTab("opcoes"):key==="F8"&&selectedItemId?setCart(current=>current.filter(item=>item.id!==selectedItemId)):undefined}><kbd>{key}</kbd><span>{label}</span></button>)}</aside><div className="pdv-layout">
+    <div className="pdv-operational-grid pdv-operational-grid-modern"><div className="pdv-layout">
       <div className="pdv-workspace panel">
         {activeTab === "itens" && <>
           <label className="pdv-search"><Search size={19}/><input ref={searchRef} autoFocus value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event=>{if(event.key==="Enter"){event.preventDefault();launchCommand();}}} placeholder="Código, produto ou 10xCÓDIGO"/><kbd>F6</kbd></label>
