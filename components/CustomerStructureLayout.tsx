@@ -12,7 +12,7 @@ type Props = {
   roomQuery: string;
   setRoomQuery: (value: string) => void;
   onOpen: (name: string) => void;
-  onUpdateStructure: (record: RecordItem) => void;
+  onUpdateStructure: (record: RecordItem) => void | boolean | Promise<boolean>;
 };
 
 const text = (item: RecordItem | undefined, ...keys: string[]) => {
@@ -33,13 +33,14 @@ export function CustomerStructureLayout({ customer, structures, serviceOrders, e
   const [detailTab, setDetailTab] = useState("Ambiente");
   const [structureForm, setStructureForm] = useState<null | { id?: string; name: string; hierarchyLevel: string; parentId: string; responsible: string; phone: string; email: string; description: string }>(null);
   const openStructureForm = (level = "Secretaria", parentId = "") => setStructureForm({ name: "", hierarchyLevel: level, parentId, responsible: "", phone: "", email: "", description: "" });
-  const saveStructureForm = () => {
+  const saveStructureForm = async () => {
     if (!structureForm?.name.trim()) return;
     const parent = structures.find(item => String(item.id) === structureForm.parentId);
-    onUpdateStructure({
+    const saved = await onUpdateStructure({
       id: structureForm.id || `EST-${Date.now().toString().slice(-8)}`,
       name: structureForm.name.trim(),
       client: customer.name,
+      customerId: customer.id,
       category: structureForm.hierarchyLevel,
       hierarchyLevel: structureForm.hierarchyLevel,
       parentId: structureForm.parentId || undefined,
@@ -52,7 +53,7 @@ export function CustomerStructureLayout({ customer, structures, serviceOrders, e
       status: "Ativo",
       createdAt: new Date().toLocaleString("pt-BR"),
     });
-    setStructureForm(null);
+    if (saved !== false) setStructureForm(null);
   };
   const selected = structures.find(item => String(item.id) === selectedId) ?? structures[0];
   const nodes = useMemo(() => {
