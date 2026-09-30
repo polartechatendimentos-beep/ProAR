@@ -333,6 +333,7 @@ type ModuleRecord = {
   id: string;
   name: string;
   client: string;
+  customerId?: string;
   description: string;
   createdAt: string;
   kind?: "Serviço" | "Produto";
@@ -431,7 +432,7 @@ type ModuleRecord = {
   equipmentLabelHistory?: string[];
   parentUnit?: string;
   parentId?: string;
-  hierarchyLevel?: "Cliente" | "Secretaria" | "Unidade" | "Setor" | "Sala" | "Ambiente";
+  hierarchyLevel?: "Cliente" | "Diretoria" | "Secretaria" | "Órgão" | "Unidade" | "Setor" | "Sala" | "Ambiente";
   environmentType?: string;
   roomNumber?: string;
   floor?: string;
