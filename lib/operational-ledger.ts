@@ -123,6 +123,9 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
   for (const purchase of list(modules.Compras)) {
     const before = list(oldModules.Compras).find(item => item.id === purchase.id);
     const receiving = list(purchase.receiptHistory).length > list(before?.receiptHistory).length || (purchase.status === "Recebida" && before?.status !== "Recebida");
+    // Compras parceladas podem já ter títulos FIN-<compra>-NN criados no cadastro.
+    // Qualquer título com purchaseId desta compra significa que a obrigação financeira
+    // já foi materializada; o recebimento físico não pode criar outro título integral.
     if (receiving && !financial.some(item => item.purchaseId === purchase.id)) financial.push({ id: `FIN-${purchase.id}`, name: `Conta a pagar • ${purchase.name}`, client: purchase.client, purchaseId: purchase.id, transactionType: "Pagar", status: "Em aberto", value: Number(purchase.value || 0), date: purchase.firstDueDate || now.slice(0, 10), createdAt: now });
   }
   for (const order of list(next.serviceOrders)) {
