@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { readSession } from "../../../lib/proar-auth";
 import { hasPermission } from "../../../lib/permissions";
 import { routeContext, routeRest, loadRouteDay, commitRouteDay } from "../../../lib/work-route-store";
-import { RouteError, applyRouteCommand, routeDate, workDate, routeCompanyPrefix, routeSummary, type RouteDay, type RouteCommand } from "../../../lib/work-routes";
+import { RouteError, applyRouteCommand, routeDate, workDate, routeCompanyPrefix, routeSummary, validatePoint, type RouteDay, type RouteCommand } from "../../../lib/work-routes";
 
 export const runtime = "nodejs";
 const reply = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { "Cache-Control": "no-store, private" } });
@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
   try {
     const context = await routeContext(session);
     const manager = hasPermission(session, "rotas.visualizar");
+    if (context.actor && context.employee?.mobileAccessEnabled === false && !manager) throw new RouteError("Acesso ao App Mobile desativado para este funcionário.", 403);
     const requested = request.nextUrl.searchParams.get("employeeId") || context.actor?.employeeId || "";
     const team = request.nextUrl.searchParams.get("team") === "1";
     if ((team || requested !== context.actor?.employeeId) && !manager) throw new RouteError("Histórico restrito a gestores com permissão de rotas.", 403);
@@ -57,7 +58,14 @@ export async function POST(request: NextRequest) {
     if (!["start", "points", "checkin", "checkout", "finish"].includes(command.action)) throw new RouteError("Operação de rota inválida.");
     const context = await routeContext(session);
     if (!context.actor) throw new RouteError("Vincule este usuário a um funcionário ativo antes de iniciar rotas.", 403);
+    if (context.employee?.mobileAccessEnabled === false) throw new RouteError("Acesso ao App Mobile desativado para este funcionário.", 403);
     const actor = context.actor, now = new Date().toISOString();
+    if (context.employee?.requireGpsForOs === true && (command.action === "checkin" || command.action === "checkout")) {
+      if (!command.points?.length) throw new RouteError("GPS obrigatório para abrir ou fechar a OS.", 403);
+      const point = validatePoint(command.points[0], now);
+      if (!point.reliable) throw new RouteError("Sinal GPS impreciso. Aguarde uma posição com precisão de até 100 m.", 422);
+      if (Date.parse(now) - Date.parse(point.capturedAt) > 2 * 60000) throw new RouteError("Posição GPS desatualizada. Atualize a localização e tente novamente.", 422);
+    }
     const date = command.action === "start" ? workDate(now) : routeDate(command.routeId || "");
     if (Date.parse(date) < Date.parse(workDate(now)) - 2 * 86400000) throw new RouteError("Jornada antiga não aceita novas operações.", 409);
     if (command.action === "start") {
