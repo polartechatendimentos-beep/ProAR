@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Camera, Check, ChevronRight, Clock3, FileText, History, ImagePlus, MapPin, Plus, Save, Sparkles, Wrench, X } from "lucide-react";
-import { improveTechnicalText } from "@/lib/text-assist";
+import { improveTechnicalText } from "@/lib/text-assist";\nimport { CustomerSearchSelect } from "@/components/CustomerSearchSelect";
 import "./service-order-workspace.css";
 
 type WorkspaceOrder = {
@@ -56,6 +56,15 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
   const [newService, setNewService] = useState("");
   const [servicePrice, setServicePrice] = useState("0");
 
+  const customerOptions = customers.map(item => ({
+    id: text(item, "id", "customerId", "name"),
+    name: text(item, "name", "legalName", "tradeName"),
+    legalName: text(item, "legalName"),
+    tradeName: text(item, "tradeName"),
+    doc: text(item, "doc", "cnpj", "cpf"),
+    phone: text(item, "phone", "whatsapp"),
+    contact: text(item, "contact", "responsible"),
+  })).filter(item => item.id && item.name);
   const customer = customers.find(item => text(item, "name", "client") === draft.client) || customers.find(item => text(item, "legalName", "tradeName") === draft.client);
   const customerStructures = structures.filter(item => text(item, "client", "customer", "customerName") === draft.client);
   const selectedStructure = customerStructures.find(item => text(item, "name", "unit") === String(draft.room || "")) || customerStructures.find(item => text(item, "name", "unit") === draft.unit) || structures.find(item => text(item, "name", "unit") === draft.unit);
@@ -123,7 +132,7 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
     </header>
 
     <div className="os-location-bar">
-      <label>Cliente<select value={draft.client} onChange={event => setField("client", event.target.value)}><option>{draft.client}</option>{customers.filter(item => text(item, "name", "legalName", "tradeName")).map(item => <option key={text(item, "id", "name")} value={text(item, "name", "legalName", "tradeName")}>{text(item, "name", "legalName", "tradeName")}</option>)}</select></label>
+      <label>Cliente<CustomerSearchSelect customers={customerOptions} value={draft.client} onChange={(value, selected) => setDraft(current => ({ ...current, client:value, customerId:selected?.id || undefined, unit:"", unitId:undefined, sector:"", sectorId:undefined, room:"", roomId:undefined, structureId:undefined }))} /></label>
       <ChevronRight size={15}/><label>Unidade / setor<select value={draft.unit} onChange={event => setField("unit", event.target.value)}><option>{draft.unit || "Selecionar"}</option>{customerStructures.map(item => <option key={text(item, "id", "name")} value={text(item, "name", "unit")}>{text(item, "name", "unit")}</option>)}</select></label>
       <ChevronRight size={15}/><label>Sala / ambiente<input value={selectedRoom} onChange={event => setField("environment", event.target.value)} placeholder="Sala ou ambiente"/></label>
       <div className="os-location-summary"><MapPin size={15}/><span>{draft.unit || "Local não informado"} <b>›</b> {selectedRoom}</span></div>
