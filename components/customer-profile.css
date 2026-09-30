@@ -76,3 +76,50 @@
 .structure-tab-pane .customer-profile-unified-structure{margin-top:0!important;padding-top:0!important;border-top:0!important}.structure-tab-pane .unified-section-heading{margin-bottom:8px!important}.structure-tab-pane .unified-section-heading p{display:none!important}.structure-master-detail{grid-template-columns:minmax(230px,30%) minmax(0,70%)!important;gap:10px!important;padding:0 10px 10px!important}.structure-units-column,.structure-sectors-column{min-height:360px!important;padding:10px!important}.structure-unit-card{min-height:44px!important}.structure-search{min-height:38px!important}.embedded-profile-section{margin-top:4px!important;padding-top:12px!important;border-top:1px solid #14253e!important}.embedded-profile-section .profile-pane-head p{display:none!important}.equipment-filter-grid{padding:10px!important;gap:8px!important}
 @media(max-width:900px){.address-smart-grid,.finance-smart-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.address-smart-grid>[class*=field-],.finance-smart-grid>[class*=field-]{grid-column:auto!important;max-width:none!important}.address-smart-grid .field-reference,.finance-smart-grid .field-note{grid-column:1/-1!important}.structure-master-detail{grid-template-columns:1fr!important}}
 @media(max-width:650px){.customer-sticky-header{position:static!important}.customer-profile-tabs{position:static!important}.address-smart-grid,.finance-smart-grid{grid-template-columns:1fr}.address-smart-grid .field-reference,.finance-smart-grid .field-note{grid-column:auto!important}}
+
+
+/* Desktop Clientes — perfil ocupa a área principal, sem aparência de modal sobre a lista */
+@media(min-width:1025px){
+  .customer-profile-workspace{
+    width:100%!important;
+    max-width:none!important;
+    min-height:calc(100vh - 96px)!important;
+    margin:0!important;
+    padding:0 18px 28px!important;
+    background:#050a14!important;
+  }
+  .customer-sticky-header{
+    top:0!important;
+    width:100%!important;
+    box-sizing:border-box!important;
+    margin:0!important;
+    border-radius:0 0 13px 13px!important;
+    box-shadow:0 8px 24px rgba(0,0,0,.18)!important;
+  }
+  .customer-profile-tabs{
+    top:62px!important;
+    width:100%!important;
+    box-sizing:border-box!important;
+    margin:0!important;
+    border-radius:0 0 11px 11px!important;
+  }
+  .customer-profile-workspace>.profile-pane{
+    width:100%!important;
+    min-width:0!important;
+    padding-top:2px!important;
+  }
+  .structure-tab-pane{
+    min-height:calc(100vh - 190px)!important;
+  }
+  .structure-tab-pane .customer-profile-unified-structure,
+  .structure-tab-pane .customer-structure-screen,
+  .structure-tab-pane .unified-master-detail{
+    width:100%!important;
+    min-width:0!important;
+  }
+  .structure-master-detail{
+    grid-template-columns:minmax(280px,30%) minmax(0,70%)!important;
+    min-height:430px!important;
+  }
+  .structure-units-column,.structure-sectors-column{min-height:430px!important}
+}
