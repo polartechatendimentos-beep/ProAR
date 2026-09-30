@@ -432,7 +432,7 @@ type ModuleRecord = {
   equipmentLabelHistory?: string[];
   parentUnit?: string;
   parentId?: string;
-  hierarchyLevel?: "Cliente" | "Diretoria" | "Secretaria" | "Órgão" | "Unidade" | "Setor" | "Sala" | "Ambiente";
+  hierarchyLevel?: "Cliente" | "Diretoria" | "Secretaria" | "Departamento" | "Órgão" | "Unidade" | "Setor" | "Sala" | "Ambiente";
   environmentType?: string;
   roomNumber?: string;
   floor?: string;
