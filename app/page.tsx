@@ -44,7 +44,8 @@ import { TechnicalCompliancePanel } from "@/components/TechnicalCompliancePanel"
 import { IntegrityAudit } from "@/components/IntegrityAudit";
 import { calculateCertameItemBalance, createCertameMovement, financialOutstandingValue, financialRealizedValue } from "@/lib/public-contracts";
 import { improveTechnicalText } from "@/lib/text-assist";
-import { WORK_STATUSES, getWorkProgress, getWorkStatusColor, normalizeWorkStatus, type WorkStatus } from "@/lib/work-status";\nimport { prepareCustomerStructureSave } from "@/lib/customer-structure";
+import { WORK_STATUSES, getWorkProgress, getWorkStatusColor, normalizeWorkStatus, type WorkStatus } from "@/lib/work-status";
+import { prepareCustomerStructureSave } from "@/lib/customer-structure";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type NavItem = { icon: IconType; name: string; badge?: string };
