@@ -308,9 +308,21 @@ export async function GET(request: NextRequest) {
     const endParam = request.nextUrl.searchParams.get("dataFinal");
     const start = startParam ? new Date(`${startParam}T12:00:00-03:00`) : new Date();
     const end = endParam ? new Date(`${endParam}T23:59:59-03:00`) : new Date(Date.now() + 60 * 86400000);
-    const radius = Math.min(500, Math.max(1, Number(request.nextUrl.searchParams.get("raio") ?? 500)));
-    const term = request.nextUrl.searchParams.get("q")?.trim() ?? "";
+    const radius = Math.min(1000, Math.max(1, Number(request.nextUrl.searchParams.get("raio_km") ?? request.nextUrl.searchParams.get("raio") ?? 400)));
+    const term = (request.nextUrl.searchParams.get("termo") ?? request.nextUrl.searchParams.get("q") ?? "").trim();
+    const requestedPortals = (request.nextUrl.searchParams.get("portais") ?? "").split(",").map(value => value.trim()).filter(Boolean);
+    const orderBy = request.nextUrl.searchParams.get("ordenar_por") === "valor" ? "valor" : "distancia";
     const result = await searchAutomaticTenders({ start, end, radius, all: !term, term });
+    const portalAliases: Record<string, string> = {
+      pncp: "PNCP", "compras.gov.br": "Compras.gov.br", comprasgov: "Compras.gov.br", bec: "BEC-SP", "bec-sp": "BEC-SP",
+      compraspublicas: "Portal de Compras Públicas", "portal de compras públicas": "Portal de Compras Públicas",
+      bll: "BLL Compras", "bll compras": "BLL Compras", licitacoese: "Licitações-e", "licitações-e": "Licitações-e",
+    };
+    const normalizedPortals = requestedPortals.map(value => portalAliases[normalize(value)] ?? value);
+    if (normalizedPortals.length) result.data = result.data.filter(item => normalizedPortals.includes(item.sourcePortal ?? "PNCP"));
+    result.data.sort((a, b) => orderBy === "valor"
+      ? (b.valorTotalEstimado ?? 0) - (a.valorTotalEstimado ?? 0)
+      : (a.distanciaMirassol ?? Number.MAX_SAFE_INTEGER) - (b.distanciaMirassol ?? Number.MAX_SAFE_INTEGER));
 
     if (!result.data.length && result.failedSources.length >= UFS.length) {
       const store = await readMonitorStore();
@@ -322,7 +334,7 @@ export async function GET(request: NextRequest) {
       const portal = item.sourcePortal ?? "PNCP"; acc[portal] = (acc[portal] ?? 0) + 1; return acc;
     }, {});
     return NextResponse.json({
-      data: result.data, source: "PNCP e portais de origem", radius, portalCounts, partial: result.failedSources.length > 0, sourceDiagnostics: result.diagnostics,
+      data: result.data, resultados: result.data, source: "PNCP e portais de origem", radius, raio_km: radius, portalCounts, partial: result.failedSources.length > 0, sourceDiagnostics: result.diagnostics, kpis: { total_editais: result.data.length, valor_total_estimado: result.data.reduce((sum,item)=>sum+(item.valorTotalEstimado??0),0), portais_ativos: Object.keys(portalCounts).length },
       warning: result.failedSources.length ? `Consulta parcial: ${result.failedSources.join(", ")} não respondeu. Os demais resultados foram carregados.` : "",
     });
   } catch (error) {
