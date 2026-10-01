@@ -319,7 +319,8 @@ export async function GET(request: NextRequest) {
       bll: "BLL Compras", "bll compras": "BLL Compras", licitacoese: "Licitações-e", "licitações-e": "Licitações-e",
     };
     const normalizedPortals = requestedPortals.map(value => portalAliases[normalize(value)] ?? value);
-    const connectedPortals = new Set(["PNCP", "Compras.gov.br", "BLL Compras", "Licitações-e"]);
+    // Portais de origem em registros PNCP não comprovam um conector direto validado.
+    const connectedPortals = new Set(["PNCP", "Compras.gov.br"]);
     const unavailablePortals = normalizedPortals.filter(portal => !connectedPortals.has(portal));
     if (normalizedPortals.length) result.data = result.data.filter(item => normalizedPortals.includes(item.sourcePortal ?? "PNCP"));
     result.data.sort((a, b) => orderBy === "valor"
