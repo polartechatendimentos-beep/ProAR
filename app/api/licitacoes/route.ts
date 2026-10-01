@@ -342,8 +342,8 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("PNCP search failed", error);
     const store = await readMonitorStore();
-    const term = request.nextUrl.searchParams.get("q")?.trim() ?? "";
-    const radius = Math.min(500, Math.max(1, Number(request.nextUrl.searchParams.get("raio") ?? 500)));
+    const term = (request.nextUrl.searchParams.get("termo") ?? request.nextUrl.searchParams.get("q") ?? "").trim();
+    const radius = Math.min(1000, Math.max(1, Number(request.nextUrl.searchParams.get("raio_km") ?? request.nextUrl.searchParams.get("raio") ?? 400)));
     const storedMatches = filterStoredItems(store.items ?? [], term, radius);
     if (storedMatches.length) return NextResponse.json({ data: storedMatches, lastScan: store.lastScan, source: "Última busca válida filtrada", radius, warning: "Consulta oficial temporariamente indisponível; exibindo somente resultados salvos compatíveis com a pesquisa." });
     return NextResponse.json({ data: [], warning: "Os portais oficiais estão temporariamente indisponíveis. Use Atualizar para tentar novamente." });
