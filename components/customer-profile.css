@@ -123,3 +123,12 @@
   }
   .structure-units-column,.structure-sectors-column{min-height:430px!important}
 }
+
+/* Cliente — workspace cadastral e operacional consolidado */
+.customer-data-pane,.structure-tab-pane,.history-pane{width:100%;min-width:0}
+.customer-structure-context{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 12px;border:1px solid #173553;border-radius:12px;background:#081523}
+.customer-structure-context h3{margin:3px 0 2px;color:#f0f7ff;font-size:15px}.customer-structure-context p{margin:0;color:#7892a9;font-size:9px}
+.structure-context-counts{display:flex;gap:7px}.structure-context-counts span{min-width:86px;padding:7px 9px;border:1px solid #17334d;border-radius:8px;background:#0b1628;color:#7892a9;font-size:8px;text-align:center}.structure-context-counts b{display:block;color:#eef7ff;font-size:14px}
+.structure-tab-pane>.customer-structure-screen{margin-top:0}
+@media(min-width:1025px){.customer-profile-workspace{min-height:calc(100vh - 90px)!important}.customer-data-pane .profile-section-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.customer-identification-card,.address-card,.finance-card{grid-column:1/-1!important}.structure-tab-pane{min-height:calc(100vh - 185px)!important}.structure-tab-pane .customer-structure-screen{min-height:calc(100vh - 245px)!important}}
+@media(max-width:720px){.customer-structure-context{align-items:flex-start;flex-direction:column}.structure-context-counts{width:100%}.structure-context-counts span{flex:1}}
