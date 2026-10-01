@@ -5,6 +5,10 @@ import { municipalityDistances } from "../../../lib/municipality-distances";
 const PNCP_URL = "https://pncp.gov.br/api/consulta/v1/contratacoes/proposta";
 const PNCP_CONSULTA_BASE = "https://pncp.gov.br/api/consulta/v1";
 const COMPRAS_URL = "https://dadosabertos.compras.gov.br/modulo-contratacoes/1_consultarContratacoes_PNCP_14133";
+const MUNICIPAL_SOURCES = [
+  { city:"Mirassol", uf:"SP", distance:0, url:"https://www.mirassol.sp.gov.br/portal/editais/1" },
+  { city:"Catanduva", uf:"SP", distance:58, url:"https://www.catanduva.sp.gov.br/portal/editais/1" },
+] as const;
 const UFS = ["SP", "MG", "MS", "PR", "GO"] as const;
 const MODALITIES = [4, 5, 6, 7, 8, 9, 12] as const;
 const TARGETED_PNCP_PAGES = 20;
@@ -30,7 +34,7 @@ export type PncpTender = {
   dataEncerramentoProposta?: string; valorTotalEstimado?: number; linkSistemaOrigem?: string;
   dataPublicacaoPncp?: string;
   anoCompra?: number; sequencialCompra?: number; usuarioNome?: string;
-  sourcePortal?: "PNCP" | "Compras.gov.br" | "BLL Compras" | "Licitações-e";
+  sourcePortal?: "PNCP" | "Compras.gov.br" | "BLL Compras" | "Licitações-e" | "Portal Municipal";
   orgaoEntidade?: { razaoSocial?: string; cnpj?: string };
   unidadeOrgao?: { municipioNome?: string; ufSigla?: string; nomeUnidade?: string; codigoIbge?: string };
   distanciaMirassol?: number;\n  validationStatus?: "active_confirmed" | "history" | "incomplete";\n  validationReason?: string;\n  canonicalKey?: string;\n};
@@ -206,6 +210,40 @@ async function fetchCompras(dataInicial: string, dataFinal: string, codigoModali
   return { items: result.value, attempts: result.attempts };
 }
 
+async function fetchMunicipalSource(source: typeof MUNICIPAL_SOURCES[number]) {
+  const started=Date.now();
+  try {
+    const response=await fetch(source.url,{headers:{Accept:"text/html","User-Agent":"ProAR-Licitacoes/1.0 (+https://polartech.proar.online)"},cache:"no-store",signal:AbortSignal.timeout(REQUEST_TIMEOUT_MS)});
+    if(!response.ok) throw new Error(`respondeu ${response.status}`);
+    const html=await response.text();
+    const text=html.replace(/<script[\s\S]*?<\/script>/gi," ").replace(/<style[\s\S]*?<\/style>/gi," ").replace(/<[^>]+>/g," ").replace(/&nbsp;|&#160;/gi," ").replace(/&amp;/gi,"&").replace(/\s+/g," ");
+    const blocks=text.split(/(?=Preg[aã]o Eletr[oô]nico\s*(?:n[º°o.]*)?\s*\d+\/\d{4})/i);
+    const items:PncpTender[]=[];
+    for(const block of blocks){
+      if(!climateTerms.test(block) || excludedTerms.test(block)) continue;
+      const number=block.match(/Preg[aã]o Eletr[oô]nico\s*(?:n[º°o.]*)?\s*(\d+)\/(\d{4})/i);
+      const process=block.match(/N[º°o.]?\s*Processo\s*:?\s*(\d+)\/(\d{4})/i);
+      const date=block.match(/(?:Realiza[cç][aã]o|Encerramento)\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})(?:\s*[aà]s\s*(\d{2}):(\d{2}))?/i);
+      const value=block.match(/Valor\s*Estimado\s*:?\s*R\$\s*([\d.]+,\d{2})/i);
+      const status=block.match(/Situa[cç][aã]o\s*:?\s*([A-Za-zÀ-ÿ ]{3,30})/i);
+      if(!number) continue;
+      const closing=date?new Date(`${date[3]}-${date[2]}-${date[1]}T${date[4]??"23"}:${date[5]??"59"}:00-03:00`).toISOString():undefined;
+      items.push(validateTender({
+        numeroControlePNCP:`MUNICIPAL-${normalize(source.city)}-${number[1]}-${number[2]}`,
+        anoCompra:Number(number[2]), sequencialCompra:Number(number[1]),
+        objetoCompra:block.slice(0,700), modalidadeNome:`Pregão Eletrônico • ${status?.[1]?.trim()??"Situação não informada"}`,
+        dataEncerramentoProposta:closing, valorTotalEstimado:value?Number(value[1].replace(/\./g,"").replace(",",".")):undefined,
+        linkSistemaOrigem:source.url, usuarioNome:"Portal Municipal", sourcePortal:"Portal Municipal",
+        orgaoEntidade:{razaoSocial:`Prefeitura do Município de ${source.city}`},
+        unidadeOrgao:{municipioNome:source.city,ufSigla:source.uf}, distanciaMirassol:source.distance,
+      }));
+    }
+    return {items,diagnostic:{source:`Portal Municipal - ${source.city}`,status:"ok" as const,attempts:1,durationMs:Date.now()-started,count:items.length}};
+  } catch(error) {
+    return {items:[] as PncpTender[],diagnostic:{source:`Portal Municipal - ${source.city}`,status:"error" as const,attempts:1,durationMs:Date.now()-started,count:0,error:error instanceof Error?error.message:String(error)}};
+  }
+}
+
 async function readMonitorStore() {
   const response = await supabaseRest("proar_state?id=eq.licitacoes&select=payload", { signal: AbortSignal.timeout(4000) });
   if (!response) return { items: [] as PncpTender[], lastScan: null as string | null, lastError: "" };
@@ -235,7 +273,7 @@ async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radi
   // Cada UF/modalidade é independente: limitar concorrência evita sobrecarga
   // do PNCP e retryar somente falhas transitórias mantém resultados parciais.
   const startedAt = new Map<string, number>();
-  const [pncpSettled, comprasSettled] = await Promise.all([
+  const [pncpSettled, comprasSettled, municipalSettled] = await Promise.all([
     runLimited(municipality ? (["SP"] as const) : UFS, PNCP_CONCURRENCY, async uf => {
       const key = `PNCP-${uf}`; startedAt.set(key, Date.now());
       // Pesquisa por município também consulta diretamente o PNCP. Antes, quando
@@ -248,16 +286,12 @@ async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radi
       const key = `Compras.gov.br-${code}`; startedAt.set(key, Date.now());
       const value = await fetchCompras(publicationStart, publicationEnd, code, municipality?.ibge);
       return { value, diagnostic: { source: key, status: "ok" as const, attempts: value.attempts, durationMs: Date.now() - (startedAt.get(key) ?? Date.now()), count: value.items.length } };
-    }),
-  ]);
-  const raw = [
+    }),\n    Promise.all(MUNICIPAL_SOURCES.filter(source=>source.distance <= (options?.radius??300)).map(fetchMunicipalSource)),\n  ]);\n  const raw = [
     ...pncpSettled.flatMap(result => result.status === "fulfilled" ? result.value.value.items : []),
-    ...comprasSettled.flatMap(result => result.status === "fulfilled" ? result.value.value.items : []),
-  ];
+    ...comprasSettled.flatMap(result => result.status === "fulfilled" ? result.value.value.items : []),\n    ...municipalSettled.flatMap(result=>result.items),\n  ];
   const diagnostics: SourceDiagnostic[] = [
     ...pncpSettled.map((result, index) => result.status === "fulfilled" ? result.value.diagnostic : { source: `PNCP-${UFS[index]}`, status: "error" as const, attempts: MAX_RETRIES + 1, durationMs: Date.now() - (startedAt.get(`PNCP-${UFS[index]}`) ?? Date.now()), count: 0, error: result.reason instanceof Error ? result.reason.message : String(result.reason) }),
-    ...comprasSettled.map((result, index) => result.status === "fulfilled" ? result.value.diagnostic : { source: `Compras.gov.br-${MODALITIES[index]}`, status: "error" as const, attempts: MAX_RETRIES + 1, durationMs: Date.now() - (startedAt.get(`Compras.gov.br-${MODALITIES[index]}`) ?? Date.now()), count: 0, error: result.reason instanceof Error ? result.reason.message : String(result.reason) }),
-  ];
+    ...comprasSettled.map((result, index) => result.status === "fulfilled" ? result.value.diagnostic : { source: `Compras.gov.br-${MODALITIES[index]}`, status: "error" as const, attempts: MAX_RETRIES + 1, durationMs: Date.now() - (startedAt.get(`Compras.gov.br-${MODALITIES[index]}`) ?? Date.now()), count: 0, error: result.reason instanceof Error ? result.reason.message : String(result.reason) }),\n    ...municipalSettled.map(result=>result.diagnostic),\n  ];
   const failedSources = diagnostics.filter(item => item.status === "error").map(item => item.source);
   for (const item of diagnostics.filter(item => item.status === "error")) console.warn("PNCP source unavailable", item);
 
