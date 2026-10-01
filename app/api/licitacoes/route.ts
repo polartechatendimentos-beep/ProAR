@@ -16,7 +16,7 @@ const COMPRAS_CONCURRENCY = 2;
 const CITY_CODES: Record<string, { ibge: string; distance: number }> = {
   "jose bonifacio": { ibge: "3525706", distance: 62 },
 };
-const climateTerms = /ar\s*-?\s*condicionado|condicionador(?:es)? de ar|climatiza|refrigera|pmoc|hvac|split|multi\s*split|cassete|piso\s*teto|evaporador|condensador|chiller|vrf|fluido refrigerante|g[aá]s refrigerante|compressor frigor[ií]fico/i;
+const climateTerms = /ar\\s*-?\\s*condicionado|condicionador(?:es)? de ar|climatiza|refrigera|pmoc|hvac|split|multi\\s*split|cassete|piso\\s*teto|evaporador|condensador|chiller|vrf|fluido refrigerante|g[aá]s refrigerante|compressor frigor[ií]fico|manuten[cç][aã]o.*(?:climatiza|refrigera|condicion)|instala[cç][aã]o.*(?:ar|split|climatiza)|exaust[aã]o|ventila[cç][aã]o mec[aâ]nica/i;
 const excludedTerms = /purificador(?:es)? de [aá]gua|equipamento fotodocumentador|mobili[aá]rio|geladeira dom[eé]stica|bebedouro(?!.*refrigera)/i;
 
 const cityDistances: Record<string, number> = {
@@ -196,7 +196,7 @@ function filterStoredItems(items: PncpTender[], term: string, radius: number) {
   const normalizedTerm = normalize(term);
   return items.filter(item => {
     const searchable = normalize(`${item.objetoCompra ?? ""} ${item.orgaoEntidade?.razaoSocial ?? ""} ${item.unidadeOrgao?.municipioNome ?? ""} ${item.unidadeOrgao?.nomeUnidade ?? ""}`);
-    return (!normalizedTerm || searchable.includes(normalizedTerm)) && (item.distanciaMirassol ?? 0) <= radius;
+    return (!normalizedTerm || searchable.includes(normalizedTerm)) && item.distanciaMirassol !== undefined && item.distanciaMirassol <= radius;
   });
 }
 
@@ -258,8 +258,11 @@ async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radi
     // porque a tabela local de distâncias ainda não conhece o município.
     // O raio continua obrigatório para o radar automático.
     if (distance === undefined) {
+      // Nunca classificar município desconhecido como 0 km de Mirassol.
+      // Em busca textual o registro oficial pode permanecer, mas sem distância,
+      // deixando a UI informar que o cálculo ainda não está disponível.
       if (!term) return false;
-      item.distanciaMirassol = CITY_CODES[municipalityName]?.distance ?? 0;
+      delete item.distanciaMirassol;
     } else {
       if (distance > radius) return false;
       item.distanciaMirassol = distance;
