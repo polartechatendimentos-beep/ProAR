@@ -7,7 +7,9 @@ type BiddingTender = {
   numeroControlePNCP?: string; objetoCompra?: string; modalidadeNome?: string; dataEncerramentoProposta?: string;
   dataPublicacaoPncp?: string; valorTotalEstimado?: number; sourcePortal?: string; linkSistemaOrigem?: string;
   anoCompra?: number; sequencialCompra?: number; orgaoEntidade?: { razaoSocial?: string; cnpj?: string };
-  unidadeOrgao?: { municipioNome?: string; ufSigla?: string; nomeUnidade?: string };\n  distanciaMirassol?: number;\n};
+  unidadeOrgao?: { municipioNome?: string; ufSigla?: string; nomeUnidade?: string };
+  distanciaMirassol?: number;
+};
 type InboxStatus = "Novas" | "Para analisar" | "Interessantes" | "Participaremos" | "Descartadas" | "Aguardando abertura" | "Em disputa" | "Habilitação" | "Homologadas";
 type VaultDocument = { id: string; name: string; category: string; validUntil: string; issuer: string; status: "Válido" | "Vence em breve" | "Vencido" };
 type ChecklistItem = { id: string; label: string; status: "ok" | "warning" | "missing"; detail: string };
