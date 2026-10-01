@@ -108,13 +108,12 @@ export async function GET(request: NextRequest) {
     // `main` antes da adoção do identificador canônico. Leia ambas as chaves
     // somente para recuperar os dados existentes; não há escrita neste fluxo.
     if (session.companyId && company === PRIMARY_COMPANY_ID && !db.dedicated) {
-      const candidates = Array.from(new Set([company, requestedCompany(request), "main", "polartech"].filter(Boolean)));
+      const candidates = Array.from(new Set([company, "main", "polartech"].filter(Boolean)));
       const states: StatePayload[] = [];
       for (const candidate of candidates) {
         const state = await readState(db, candidate);
         if (state) states.push(state);
       }
-      if (!states.length) states.push(...await readOperationalStates(db));
       return NextResponse.json({ state: mergeStates(states), dedicatedDatabase: false, canonicalCompanyId: company, recoveredLegacyStates: states.length });
     }
     if (session.companyId || db.dedicated) {
