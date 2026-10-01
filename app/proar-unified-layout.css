@@ -27,3 +27,24 @@ table{color:#c9d6e5!important}thead{background:#060c18!important}th{border-color
 .report-filter-bar{color:#9bb0c7!important}.report-active-filter{background:#0b2b50!important;color:#69b7ff!important}
 footer{border-color:var(--ux-border)!important;color:#60758c!important}
 @media(max-width:900px){.page-content{padding:12px!important}:where(.module-toolbar,.management-toolbar,.commercial-manager-toolbar,.houses-toolbar,.report-filter-bar,.bidding-filters){align-items:stretch!important;flex-direction:column!important}.settings-layout{grid-template-columns:1fr!important}.os-summary-grid{grid-template-columns:1fr!important}}
+
+/* Desktop — largura padrão única para workspaces dos módulos */
+@media(min-width:1025px){
+  .page-content{width:100%!important;max-width:none!important;box-sizing:border-box!important;margin:0!important;padding:16px 20px 32px!important}
+  .page-content>.module-page,
+  .page-content>.management-module,
+  .page-content>.employees-workspace,
+  .page-content>.financial-module,
+  .page-content>.reports-page,
+  .page-content>.settings-page,
+  .page-content>.bidding-restored,
+  .page-content>.bidding-operations-workspace{
+    width:100%!important;
+    max-width:none!important;
+    min-width:0!important;
+    margin-left:0!important;
+    margin-right:0!important;
+    box-sizing:border-box!important;
+  }
+  .page-content>.module-page.management-module{max-width:none!important}
+}
