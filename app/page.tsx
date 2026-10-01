@@ -2844,6 +2844,9 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
 export default function Home() {
   const [authenticatedUser, setAuthenticatedUser] = useState<AuthenticatedUser | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [bootError, setBootError] = useState("");
+  const [bootRunId, setBootRunId] = useState("");
+  const [bootAttempt, setBootAttempt] = useState(0);
   const [current, setCurrent] = useState("Painel inicial");
   const [menuOpen, setMenuOpen] = useState(false);
   const [modal, setModal] = useState("");
@@ -2915,15 +2918,21 @@ export default function Home() {
     const onOnline = () => setOnline(true);
     const onOffline = () => setOnline(false);
     window.addEventListener("online", onOnline); window.addEventListener("offline", onOffline);
-    fetch("/api/auth").then(async response => response.ok ? response.json() : null).then(result => {
+    const runId = `BOOT-${new Date().toISOString().replace(/\\D/g,"").slice(0,14)}-${Math.random().toString(36).slice(2,7).toUpperCase()}`;
+    setBootRunId(runId); setBootError(""); setCheckingSession(true);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 12000);
+    fetch("/api/auth", { cache: "no-store", signal: controller.signal }).then(async response => response.ok ? response.json() : null).then(result => {
       if (result?.authenticated) handleLogin({ username: result.username, displayName: result.displayName, role: result.role, permissions: result.permissions, companyId: result.companyId, companySlug: result.companySlug, trialExpiresAt: result.trialExpiresAt });
-    }).catch(() => {
+    }).catch(error => {
       if (!navigator.onLine) {
-        try { const cached = JSON.parse(localStorage.getItem("proar-offline-session") || "null"); if (cached?.user && cached.expiresAt > Date.now()) setAuthenticatedUser(cached.user); } catch {}
+        try { const cached = JSON.parse(localStorage.getItem("proar-offline-session") || "null"); if (cached?.user && cached.expiresAt > Date.now()) { setAuthenticatedUser(cached.user); return; } } catch {}
       }
-    }).finally(() => setCheckingSession(false));
-    return () => { window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); };
-  }, []);
+      if (error instanceof DOMException && error.name === "AbortError") setBootError("A verificação da sessão excedeu 12 segundos.");
+      else setBootError("Não foi possível validar a sessão do ProAR.");
+    }).finally(() => { window.clearTimeout(timeout); setCheckingSession(false); });
+    return () => { window.clearTimeout(timeout); controller.abort(); window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); };
+  }, [bootAttempt]);
   useEffect(() => {
     if (!authenticatedUser) return;
     const verifyManagerAccess = async () => {
@@ -3800,10 +3809,11 @@ export default function Home() {
     setCurrent(item.module);
     setSavedMessage(`Pendência selecionada: ${item.title}.`);
   };
-  if (checkingSession) return <div className="session-loading"><div className="brand-mark brand-logo"><img src="/icon.png" alt="ProAR"/></div><p>A carregar o ProAR...</p></div>;
-  if (!authenticatedUser) return <LoginScreen onLogin={handleLogin}/>;
+  if (checkingSession) return <div className="session-loading" data-testid="proar-boot-loading"><div className="brand-mark brand-logo"><img src="/icon.png" alt="ProAR"/></div><p>A carregar o ProAR...</p><small>{bootRunId}</small></div>;
+  if (bootError && !authenticatedUser) return <main className="session-boot-error" data-testid="proar-boot-error"><section><AlertTriangle size={28}/><h2>Não foi possível carregar a sessão</h2><p>{bootError}</p><small>Código de execução: {bootRunId}</small><div><button type="button" className="primary-btn" onClick={()=>setBootAttempt(value=>value+1)}>Tentar novamente</button><button type="button" className="outline-btn" onClick={()=>{localStorage.removeItem("proar-offline-session");setBootError("");}}>Entrar novamente</button><button type="button" className="outline-btn" onClick={()=>window.location.reload()}>Recarregar aplicação</button></div></section></main>;
+  if (!authenticatedUser) return <div data-testid="proar-login-screen"><LoginScreen onLogin={handleLogin}/></div>;
   return <div className="app-shell">
-    <Sidebar current={current} setCurrent={setCurrent} open={menuOpen} close={() => setMenuOpen(false)} permissions={authenticatedUser.permissions} role={authenticatedUser.role}/>
+    <div data-testid="proar-sidebar"><Sidebar current={current} setCurrent={setCurrent} open={menuOpen} close={() => setMenuOpen(false)} permissions={authenticatedUser.permissions} role={authenticatedUser.role}/></div>
     <main className="main">
       <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNew={openNew} searchItems={globalSearchItems} pendingItems={pendingItems} onSearchSelect={openGlobalSearch} onPendingSelect={openPending} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onSwitchUser={logout} online={online} syncing={syncing} onPull={() => void pullFromDatabase()} onPush={() => void pushToDatabase()}/>
       {syncPhase !== "idle" && <div className={`sync-progress ${syncPhase}`} role="status" aria-label={syncPhase === "complete" ? "Dados atualizados" : "Sincronizando dados"}><i/></div>}
