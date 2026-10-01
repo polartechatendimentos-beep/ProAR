@@ -319,6 +319,8 @@ export async function GET(request: NextRequest) {
       bll: "BLL Compras", "bll compras": "BLL Compras", licitacoese: "Licitações-e", "licitações-e": "Licitações-e",
     };
     const normalizedPortals = requestedPortals.map(value => portalAliases[normalize(value)] ?? value);
+    const connectedPortals = new Set(["PNCP", "Compras.gov.br", "BLL Compras", "Licitações-e"]);
+    const unavailablePortals = normalizedPortals.filter(portal => !connectedPortals.has(portal));
     if (normalizedPortals.length) result.data = result.data.filter(item => normalizedPortals.includes(item.sourcePortal ?? "PNCP"));
     result.data.sort((a, b) => orderBy === "valor"
       ? (b.valorTotalEstimado ?? 0) - (a.valorTotalEstimado ?? 0)
@@ -335,7 +337,7 @@ export async function GET(request: NextRequest) {
     }, {});
     return NextResponse.json({
       data: result.data, resultados: result.data, source: "PNCP e portais de origem", radius, raio_km: radius, portalCounts, partial: result.failedSources.length > 0, sourceDiagnostics: result.diagnostics, kpis: { total_editais: result.data.length, valor_total_estimado: result.data.reduce((sum,item)=>sum+(item.valorTotalEstimado??0),0), portais_ativos: Object.keys(portalCounts).length },
-      warning: result.failedSources.length ? `Consulta parcial: ${result.failedSources.join(", ")} não respondeu. Os demais resultados foram carregados.` : "",
+      warning: unavailablePortals.length ? `Fonte ainda sem conector real validado no ProAR: ${unavailablePortals.join(", ")}. Nenhum resultado fictício foi gerado.` : result.failedSources.length ? `Consulta parcial: ${result.failedSources.join(", ")} não respondeu. Os demais resultados foram carregados.` : "",
     });
   } catch (error) {
     console.error("PNCP search failed", error);
