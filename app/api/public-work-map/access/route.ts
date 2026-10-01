@@ -1,5 +1,5 @@
 import { databaseFetch, masterDatabaseConfig } from "../../../../lib/supabase-rest";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 const config = masterDatabaseConfig;
@@ -7,13 +7,20 @@ const headers = (key: string) => ({ apikey: key, Authorization: `Bearer ${key}`,
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const publicView = (map: Record<string, unknown>) => ({ ...map, externalAccess: undefined });
 const normalize = (value: unknown) => String(value ?? "").trim().toLocaleLowerCase("pt-BR");
+const attempts = new Map<string, { count: number; resetAt: number }>();
+const WINDOW_MS = 15 * 60 * 1000, MAX_ATTEMPTS = 8;
+const origin = (r: NextRequest) => (r.headers.get("x-forwarded-for")?.split(",")[0] || r.headers.get("x-real-ip") || "unknown").trim().slice(0,80);
+const attemptKey = (r: NextRequest,t:string,u:string) => hash(`${origin(r)}:${t}:${u}`);
+function limited(k:string){const n=Date.now(),e=attempts.get(k);if(!e||e.resetAt<=n){attempts.set(k,{count:0,resetAt:n+WINDOW_MS});return false}return e.count>=MAX_ATTEMPTS}
+function fail(k:string){const n=Date.now(),e=attempts.get(k);attempts.set(k,e&&e.resetAt>n?{...e,count:e.count+1}:{count:1,resetAt:n+WINDOW_MS})}
+function equalHash(a:string,b:string){try{const x=Buffer.from(a,"hex"),y=Buffer.from(b,"hex");return x.length===y.length&&timingSafeEqual(x,y)}catch{return false}}
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const token = String(body.token ?? "").trim();
   const username = normalize(body.username);
   const password = String(body.password ?? "");
-  if (!token || !username || !password) return NextResponse.json({ error: "Informe o link, login e senha." }, { status: 400 });
+  if (!token || !username || !password) return NextResponse.json({ error: "Informe o link, login e senha." }, { status: 400 });\n  const rateKey=attemptKey(request,token,username);\n  if(limited(rateKey)) return NextResponse.json({ error: "Muitas tentativas. Aguarde alguns minutos e tente novamente." }, { status: 429, headers: { "Retry-After": "900" } });
   const { url, key } = config();
   if (!url || !key) return NextResponse.json({ error: "Base de dados indisponível." }, { status: 503 });
   const response = await databaseFetch(`${url}/rest/v1/proar_state?id=like.workmap-*&select=payload`, { headers: headers(key), cache: "no-store" });
@@ -22,8 +29,8 @@ export async function POST(request: NextRequest) {
   const current = rows.find(row => row.payload?.token === token)?.payload;
   if (!current) return NextResponse.json({ error: "Link da obra não localizado." }, { status: 404 });
   const accesses = Array.isArray(current.externalAccess) ? current.externalAccess as Record<string, unknown>[] : [];
-  const access = accesses.find(item => normalize(item.username) === username && item.active === true && item.passwordHash === hash(password));
-  if (!access) return NextResponse.json({ error: "Login inválido ou acesso inativo." }, { status: 401 });
+  const access = accesses.find(item => normalize(item.username) === username && item.active === true && equalHash(String(item.passwordHash ?? ""), hash(password)));
+  if (!access) { fail(rateKey); return NextResponse.json({ error: "Login inválido ou acesso inativo." }, { status: 401 }); }\n  attempts.delete(rateKey);
   const houses = Array.isArray(current.houses) ? current.houses as Record<string, unknown>[] : [];
   const houseId = String(body.houseId ?? "").trim();
   const description = String(body.description ?? "").trim();
