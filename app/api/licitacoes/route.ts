@@ -16,7 +16,7 @@ const COMPRAS_CONCURRENCY = 2;
 const CITY_CODES: Record<string, { ibge: string; distance: number }> = {
   "jose bonifacio": { ibge: "3525706", distance: 62 },
 };
-const climateTerms = /ar\\s*-?\\s*condicionado|condicionador(?:es)? de ar|climatiza|refrigera|pmoc|hvac|split|multi\\s*split|cassete|piso\\s*teto|evaporador|condensador|chiller|vrf|fluido refrigerante|g[aá]s refrigerante|compressor frigor[ií]fico|manuten[cç][aã]o.*(?:climatiza|refrigera|condicion)|instala[cç][aã]o.*(?:ar|split|climatiza)|exaust[aã]o|ventila[cç][aã]o mec[aâ]nica/i;
+const climateTerms = /ar\s*-?\s*condicionado|condicionador(?:es)? de ar|climatiza|refrigera|pmoc|hvac|split|multi\s*split|cassete|piso\s*teto|evaporador|condensador|chiller|vrf|fluido refrigerante|g[aá]s refrigerante|compressor frigor[ií]fico|manuten[cç][aã]o.*(?:climatiza|refrigera|condicion)|instala[cç][aã]o.*(?:ar|split|climatiza)|exaust[aã]o|ventila[cç][aã]o mec[aâ]nica/i;
 const excludedTerms = /purificador(?:es)? de [aá]gua|equipamento fotodocumentador|mobili[aá]rio|geladeira dom[eé]stica|bebedouro(?!.*refrigera)/i;
 
 const cityDistances: Record<string, number> = {
