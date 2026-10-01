@@ -33,9 +33,31 @@ export type PncpTender = {
   sourcePortal?: "PNCP" | "Compras.gov.br" | "BLL Compras" | "Licitações-e";
   orgaoEntidade?: { razaoSocial?: string; cnpj?: string };
   unidadeOrgao?: { municipioNome?: string; ufSigla?: string; nomeUnidade?: string; codigoIbge?: string };
-  distanciaMirassol?: number;
-};
+  distanciaMirassol?: number;\n  validationStatus?: "active_confirmed" | "history" | "incomplete";\n  validationReason?: string;\n  canonicalKey?: string;\n};
 
+
+function canonicalTenderKey(item: PncpTender) {
+  const cnpj=(item.orgaoEntidade?.cnpj??"").replace(/\D/g,"");
+  const year=String(item.anoCompra ?? (item.dataPublicacaoPncp ? new Date(item.dataPublicacaoPncp).getFullYear() : ""));
+  const number=String(item.sequencialCompra ?? item.numeroControlePNCP ?? "").replace(/\D/g,"");
+  return [cnpj,number,year].filter(Boolean).join(":") || normalize(`${item.orgaoEntidade?.razaoSocial??""}:${item.objetoCompra??""}:${year}`);
+}
+
+function validateTender(item: PncpTender, now = Date.now()) {
+  const closing=item.dataEncerramentoProposta ? new Date(item.dataEncerramentoProposta).getTime() : 0;
+  const text=normalize(`${item.modalidadeNome??""} ${item.objetoCompra??""}`);
+  item.canonicalKey=canonicalTenderKey(item);
+  if (closing && closing <= now) { item.validationStatus="history"; item.validationReason="Prazo de propostas/sessão já encerrado."; return item; }
+  if (/homologad|revogad|anulad|encerrad|fracassad|desert/.test(text)) { item.validationStatus="history"; item.validationReason="Processo identificado como encerrado/histórico."; return item; }
+  if (!closing || !item.unidadeOrgao?.municipioNome) { item.validationStatus="incomplete"; item.validationReason="Data de sessão ou município não confirmado na origem."; return item; }
+  item.validationStatus="active_confirmed"; item.validationReason="Prazo futuro e identificação oficial confirmados na fonte consultada.";
+  return item;
+}
+
+function preferValidatedTender(a: PncpTender, b: PncpTender) {
+  const score=(item:PncpTender)=>(item.validationStatus==="active_confirmed"?8:item.validationStatus==="incomplete"?4:1)+(item.valorTotalEstimado?2:0)+(item.distanciaMirassol!==undefined?1:0)+(item.sourcePortal==="PNCP"?2:0);
+  return score(b)>score(a)?b:a;
+}
 type SourceDiagnostic = {
   source: string;
   status: "ok" | "error";
@@ -270,8 +292,7 @@ async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radi
     item.sourcePortal = item.sourcePortal ?? identifySource(item);
     return true;
   });
-  const unique = Array.from(new Map(filtered.map(item => [item.numeroControlePNCP || `${item.orgaoEntidade?.cnpj}-${item.anoCompra}-${item.sequencialCompra}`, item])).values());
-  unique.sort((a, b) => new Date(a.dataEncerramentoProposta ?? 0).getTime() - new Date(b.dataEncerramentoProposta ?? 0).getTime());
+  const validated = filtered.map(item => validateTender(item));\n  const deduped = new Map<string, PncpTender>();\n  for (const item of validated) { const key=item.canonicalKey ?? canonicalTenderKey(item); const current=deduped.get(key); deduped.set(key,current?preferValidatedTender(current,item):item); }\n  const unique = Array.from(deduped.values());\n  unique.sort((a, b) => new Date(a.dataEncerramentoProposta ?? 0).getTime() - new Date(b.dataEncerramentoProposta ?? 0).getTime());
   return { data: unique.slice(0, 500), failedSources, diagnostics };
 }
 
@@ -340,7 +361,7 @@ export async function GET(request: NextRequest) {
       const portal = item.sourcePortal ?? "PNCP"; acc[portal] = (acc[portal] ?? 0) + 1; return acc;
     }, {});
     return NextResponse.json({
-      data: result.data, resultados: result.data, source: "PNCP e portais de origem", radius, raio_km: radius, portalCounts, partial: result.failedSources.length > 0, sourceDiagnostics: result.diagnostics, kpis: { total_editais: result.data.length, valor_total_estimado: result.data.reduce((sum,item)=>sum+(item.valorTotalEstimado??0),0), portais_ativos: Object.keys(portalCounts).length },
+      data: result.data, resultados: result.data, source: "PNCP e portais de origem", radius, raio_km: radius, portalCounts, partial: result.failedSources.length > 0, sourceDiagnostics: result.diagnostics, kpis: { total_editais: result.data.filter(item=>item.validationStatus==="active_confirmed").length, valor_total_estimado: result.data.filter(item=>item.validationStatus==="active_confirmed").reduce((sum,item)=>sum+(item.valorTotalEstimado??0),0), homologadas_historico: result.data.filter(item=>item.validationStatus==="history").length, dados_incompletos: result.data.filter(item=>item.validationStatus==="incomplete").length, portais_ativos: Object.keys(portalCounts).length },
       warning: unavailablePortals.length ? `Fonte ainda sem conector real validado no ProAR: ${unavailablePortals.join(", ")}. Nenhum resultado fictício foi gerado.` : result.failedSources.length ? `Consulta parcial: ${result.failedSources.join(", ")} não respondeu. Os demais resultados foram carregados.` : "",
     });
   } catch (error) {
