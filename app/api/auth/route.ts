@@ -4,7 +4,7 @@ import { authenticate, createSessionForUser, readSession } from "../../../lib/pr
 import { supabaseConfigured, supabaseRest } from "../../../lib/supabase-rest";
 import { hashPassword, verifyPassword } from "../../../lib/password";
 import { tenantSlugFromHost } from "../../../lib/tenant-host";
-import { validateCompanyAccess } from "../../../lib/company-access";
+import { validateCompanyAccess, validateCompanyAccessBySlug } from "../../../lib/company-access";
 import { validateManagerCredentials } from "../../../lib/manager-auth";
 const COOKIE_NAME = "proar_session";
 const PRIMARY_COMPANY_ID = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
   if (user.companyId && !user.legacy) {
     const access = await validateCompanyAccess(user.companyId);
     if (!access.ok) {
-      const response = NextResponse.json({ authenticated: false, error: access.reason }, { status: 403 });
+      const response = NextResponse.json({ authenticated: false, code: access.code, error: access.reason }, { status: 403 });
       response.cookies.set(COOKIE_NAME, "", { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 0 });
       return response;
     }
@@ -60,6 +60,12 @@ export async function POST(request: NextRequest) {
   const { username = "", password = "", tenant = "" } = await request.json();
   const hostTenant = tenantSlugFromHost(request.headers.get("host"));
   const resolvedTenant = hostTenant || String(tenant || "").trim().toLowerCase();
+  if (resolvedTenant && supabaseConfigured()) {
+    const access = await validateCompanyAccessBySlug(resolvedTenant);
+    if (!access.ok) {
+      return NextResponse.json({ code:access.code, error:access.reason, blocked:access.code==="SYSTEM_BLOCKED" }, { status:403 });
+    }
+  }
   const isConfiguredTiago = String(username).trim().toLocaleLowerCase("pt-BR") === "tiago.viana" && Boolean(process.env.PROAR_POLARTECH_TIAGO_PASSWORD) && safeEqual(String(password), String(process.env.PROAR_POLARTECH_TIAGO_PASSWORD));
   if (validateManagerCredentials(String(username), String(password)) || isConfiguredTiago) {
     let companyId = PRIMARY_COMPANY_ID;
@@ -95,8 +101,8 @@ export async function POST(request: NextRequest) {
       const instanceResponse = await supabaseRest(`proar_tenant_instances?select=provisioning_status&company_id=eq.${encodeURIComponent(company.id)}&limit=1`);
       const instances = instanceResponse.ok ? await instanceResponse.json() : [];
       if (instances[0]?.provisioning_status !== "ready") return NextResponse.json({ error: "Seu ambiente exclusivo ainda está sendo preparado. Tente novamente em alguns instantes ou contate o suporte." }, { status: 503 });
-      if (company.status !== "active") return NextResponse.json({ error: "Empresa suspensa ou bloqueada no ProAR Manager." }, { status: 403 });
-      if (company.trial_expires_at && new Date(company.trial_expires_at).getTime() < Date.now()) return NextResponse.json({ error: "O período de teste desta empresa terminou." }, { status: 403 });
+      if (company.status !== "active") return NextResponse.json({ code:"SYSTEM_BLOCKED", blocked:true, error:"Sistema bloqueado pelo ProAR Manager." }, { status: 403 });
+      if (company.trial_expires_at && new Date(company.trial_expires_at).getTime() < Date.now()) return NextResponse.json({ code:"TRIAL_EXPIRED", error:"O período de teste desta empresa terminou." }, { status: 403 });
       const userResponse = await supabaseRest(`proar_trial_users?select=username,display_name,password_hash,role,permissions,active,must_change_password&company_id=eq.${encodeURIComponent(company.id)}&username=eq.${encodeURIComponent(String(username).toLowerCase())}&limit=1`);
       const rows = userResponse.ok ? await userResponse.json() : []; const user = rows[0];
       if (user?.active && verifyPassword(String(password), String(user.password_hash || ""))) {
