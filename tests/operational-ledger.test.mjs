@@ -162,3 +162,57 @@ test("transferência interna preserva saldo global e registra origem e destino",
   assert.equal(movement.destinationType,"Veículo");
   assert.equal(next.moduleRecords.Produtos[0].stockCurrent,before);
 });
+
+
+test("compra acima da alçada gera aprovação e bloqueia recebimento",()=>{
+  const state=base();
+  const draft=structuredClone(state);
+  draft.moduleRecords.Compras[0].value=6000;
+  const prepared=prepareOperationalState(state,draft,admin,"2026-10-02T10:00:00Z");
+  const approval=prepared.moduleRecords["Aprovações"].find(item=>item.sourceId==="C1");
+  assert.ok(approval);
+  assert.equal(prepared.moduleRecords.Compras[0].approvalStatus,"Pendente");
+  assert.throws(()=>run(prepared,command("receive",{items:[{itemId:"I1",productId:"P1",quantity:1}]},"C1")),/depende de aprovação/);
+});
+
+test("aprovação por alçada libera recebimento da compra",()=>{
+  const state=base();
+  const draft=structuredClone(state);
+  draft.moduleRecords.Compras[0].value=6000;
+  const prepared=prepareOperationalState(state,draft,admin,"2026-10-02T10:00:00Z");
+  const approval=prepared.moduleRecords["Aprovações"][0];
+  const approved=run(prepared,command("approval-decide",{decision:"Aprovado",reason:"Compra necessária para obra"},approval.id));
+  assert.equal(approved.moduleRecords.Compras[0].approvalStatus,"Aprovado");
+  const received=run(approved,command("receive",{items:[{itemId:"I1",productId:"P1",quantity:1}]},"C1"));
+  assert.equal(received.moduleRecords.Produtos[0].stockCurrent,11);
+});
+
+test("alteração do valor após aprovação exige nova alçada",()=>{
+  const state=base();
+  const draft=structuredClone(state);
+  draft.moduleRecords.Compras[0].value=6000;
+  const prepared=prepareOperationalState(state,draft,admin,"2026-10-02T10:00:00Z");
+  const approval=prepared.moduleRecords["Aprovações"][0];
+  const approved=run(prepared,command("approval-decide",{decision:"Aprovado",reason:"Aprovada"},approval.id));
+  const changed=structuredClone(approved);
+  changed.moduleRecords.Compras[0].value=7000;
+  const next=prepareOperationalState(approved,changed,admin,"2026-10-02T11:00:00Z");
+  assert.equal(next.moduleRecords.Compras[0].approvalStatus,"Pendente");
+  assert.ok(next.moduleRecords["Aprovações"].filter(item=>item.sourceId==="C1").length>=2);
+});
+
+test("conclusão de OS prepara fiscal e lembrete sem emitir automaticamente",()=>{
+  const state=base();
+  state.serviceOrders=[{id:"OS-AUTO",client:"Cliente",status:"Aberta",total:500,reminderDate:"2027-01-10",reminderMessage:"Revisar equipamento"}];
+  const draft=structuredClone(state);
+  draft.serviceOrders[0].status="Concluída";
+  const next=prepareOperationalState(state,draft,admin,"2026-10-02T10:00:00Z");
+  assert.ok(next.moduleRecords["Central Fiscal"].some(item=>item.serviceOrderId==="OS-AUTO"&&item.status==="Pendente"));
+  assert.ok(next.moduleRecords.Lembretes.some(item=>item.serviceOrderId==="OS-AUTO"&&item.date==="2027-01-10"));
+});
+
+test("transferência não permite retirar mais que o saldo da localização",()=>{
+  const initial=base();
+  const moved=run(initial,command("stock-transfer",{productId:"P1",quantity:3,sourceType:"Estoque central",destinationType:"Veículo",destinationId:"V1",destinationName:"V1"},undefined));
+  assert.throws(()=>run(moved,command("stock-transfer",{productId:"P1",quantity:4,sourceType:"Veículo",sourceId:"V1",sourceName:"V1",destinationType:"OS",destinationId:"OS-1",destinationName:"OS-1"},undefined)),/Saldo insuficiente na origem/);
+});
