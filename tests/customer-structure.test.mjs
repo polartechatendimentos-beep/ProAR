@@ -2,62 +2,84 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { prepareCustomerStructureSave } from "../lib/customer-structure.ts";
 
-test("cadastro teste: Prefeitura de Bálsamo mantém Diretoria de Saúde, UBS Centro e Recepção vinculados por ID", () => {
-  const prefeitura = { id: "CLI-PREF-BALSAMO-TESTE", name: "Prefeitura Municipal de Bálsamo" };
+test("Prefeitura mantém hierarquia Prefeitura → Secretaria → Unidade → Sala", () => {
+  const prefeitura = { id: "CLI-PREF-BALSAMO-TESTE", name: "Prefeitura Municipal de Bálsamo", organizationType:"Prefeitura" };
   let structures = [];
 
-  const diretoria = prepareCustomerStructureSave(prefeitura, {
+  const secretaria = prepareCustomerStructureSave(prefeitura, {
     id: "EST-SAUDE-TESTE",
-    name: "Diretoria de Saúde",
-    category: "Diretoria",
-    hierarchyLevel: "Diretoria",
+    name: "Secretaria de Saúde",
+    category: "Secretaria",
+    hierarchyLevel: "Secretaria",
   }, structures);
-  structures = diretoria.nextStructures;
+  structures = secretaria.nextStructures;
 
   const ubs = prepareCustomerStructureSave(prefeitura, {
     id: "EST-UBS-CENTRO-TESTE",
-    name: "UBS Centro",
+    name: "UBS Central",
     category: "Unidade",
     hierarchyLevel: "Unidade",
-    parentId: diretoria.record.id,
+    parentId: secretaria.record.id,
   }, structures);
   structures = ubs.nextStructures;
 
-  const setor = prepareCustomerStructureSave(prefeitura, {
+  const sala = prepareCustomerStructureSave(prefeitura, {
     id: "EST-RECEPCAO-TESTE",
     name: "Recepção",
-    category: "Setor",
-    hierarchyLevel: "Setor",
+    category: "Sala",
+    hierarchyLevel: "Sala",
     parentId: ubs.record.id,
   }, structures);
 
-  assert.equal(diretoria.record.customerId, prefeitura.id);
-  assert.equal(ubs.record.customerId, prefeitura.id);
-  assert.equal(ubs.record.parentId, diretoria.record.id);
-  assert.equal(ubs.record.parentUnit, "Diretoria de Saúde");
-  assert.equal(setor.record.customerId, prefeitura.id);
-  assert.equal(setor.record.parentId, ubs.record.id);
-  assert.equal(setor.record.parentUnit, "UBS Centro");
-  assert.equal(setor.unitCount, 3);
+  assert.equal(secretaria.record.customerId, prefeitura.id);
+  assert.equal(secretaria.record.parentId, undefined);
+  assert.equal(ubs.record.parentId, secretaria.record.id);
+  assert.equal(ubs.record.parentUnit, "Secretaria de Saúde");
+  assert.equal(sala.record.parentId, ubs.record.id);
+  assert.equal(sala.record.parentUnit, "UBS Central");
+  assert.equal(sala.unitCount, 3);
+});
+
+test("Prefeitura bloqueia Unidade sem Secretaria", () => {
+  const prefeitura = { id: "CLI-PREF-A", name: "Prefeitura A", organizationType:"Prefeitura" };
+  assert.throws(() => prepareCustomerStructureSave(prefeitura, {
+    id: "EST-UBS",
+    name: "UBS Central",
+    category: "Unidade",
+    hierarchyLevel: "Unidade",
+  }, []), /Secretaria/);
+});
+
+test("Prefeitura bloqueia Sala vinculada diretamente à Secretaria", () => {
+  const prefeitura = { id: "CLI-PREF-A", name: "Prefeitura A", organizationType:"Prefeitura" };
+  const secretaria = { id:"SEC-1", name:"Secretaria de Saúde", customerId:prefeitura.id, client:prefeitura.name, category:"Secretaria", hierarchyLevel:"Secretaria" };
+  assert.throws(() => prepareCustomerStructureSave(prefeitura, {
+    id: "SALA-1",
+    name: "Recepção",
+    category: "Sala",
+    hierarchyLevel: "Sala",
+    parentId: secretaria.id,
+  }, [secretaria]), /Unidade/);
 });
 
 test("estrutura de uma Prefeitura não pode ser vinculada a outra Prefeitura", () => {
-  const prefeitura = { id: "CLI-PREF-A", name: "Prefeitura A" };
-  const foreign = [{ id: "EST-OUTRA", name: "UBS de outra Prefeitura", client: "Prefeitura B", customerId: "CLI-PREF-B" }];
+  const prefeitura = { id: "CLI-PREF-A", name: "Prefeitura A", organizationType:"Prefeitura" };
+  const foreign = [{ id: "EST-OUTRA", name: "Secretaria de outra Prefeitura", client: "Prefeitura B", customerId: "CLI-PREF-B", category:"Secretaria", hierarchyLevel:"Secretaria" }];
   assert.throws(() => prepareCustomerStructureSave(prefeitura, {
-    id: "EST-SETOR-A",
-    name: "Recepção",
+    id: "EST-UNIDADE-A",
+    name: "UBS",
     parentId: "EST-OUTRA",
-    category: "Setor",
+    category: "Unidade",
+    hierarchyLevel:"Unidade",
   }, foreign), /outro cliente/);
 });
 
 test("hierarquia bloqueia auto vínculo e ciclos", () => {
-  const prefeitura = { id: "CLI-PREF-A", name: "Prefeitura A" };
+  const cliente = { id: "CLI-A", name: "Cliente A" };
   const structures = [
-    { id: "A", name: "Saúde", customerId: prefeitura.id, client: prefeitura.name },
-    { id: "B", name: "UBS", customerId: prefeitura.id, client: prefeitura.name, parentId: "A" },
+    { id: "A", name: "Unidade", customerId: cliente.id, client: cliente.name },
+    { id: "B", name: "Sala", customerId: cliente.id, client: cliente.name, parentId: "A" },
   ];
-  assert.throws(() => prepareCustomerStructureSave(prefeitura, { ...structures[0], parentId: "A" }, structures), /ela mesma/);
-  assert.throws(() => prepareCustomerStructureSave(prefeitura, { ...structures[0], parentId: "B" }, structures), /ciclo/);
+  assert.throws(() => prepareCustomerStructureSave(cliente, { ...structures[0], parentId: "A" }, structures), /ela mesma/);
+  assert.throws(() => prepareCustomerStructureSave(cliente, { ...structures[0], parentId: "B" }, structures), /ciclo/);
 });
