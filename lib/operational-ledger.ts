@@ -143,12 +143,41 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
   };
   for(const purchase of list(modules.Compras)){
     const before=list(oldModules.Compras).find(item=>item.id===purchase.id);
-    if(!same(before,purchase) && Number(purchase.value||0)>=5000) ensureApproval("Compras",purchase,"Compra acima da alçada automática de R$ 5.000,00.",Number(purchase.value||0),`purchase-value:${Number(purchase.value||0).toFixed(2)}`);
+    const value=Number(purchase.value||0);
+    if(!same(before,purchase) && value>=5000) {
+      ensureApproval("Compras",purchase,"Compra acima da alçada automática de R$ 5.000,00.",value,`purchase-value:${value.toFixed(2)}`);
+    } else if(value<5000 && purchase.approvalRequired) {
+      purchase.approvalRequired=false;
+      purchase.approvalStatus="Dispensado";
+      purchase.approvalDecidedAt=now;
+      purchase.approvalDecidedBy="sistema";
+      purchase.approvalDecisionReason="Valor atualizado abaixo da alçada automática de R$ 5.000,00.";
+      for(const approval of approvals.filter(item=>item.sourceModule==="Compras" && item.sourceId===purchase.id && item.status==="Pendente")){
+        approval.status="Cancelado";
+        approval.decidedAt=now;
+        approval.decidedBy="sistema";
+        approval.decisionReason="Solicitação cancelada automaticamente: valor atualizado abaixo da alçada.";
+      }
+    }
   }
   for(const budget of list(modules.Orçamentos)){
     const before=list(oldModules.Orçamentos).find(item=>item.id===budget.id);
     const discountPercent=Number(budget.discountPercent||0);
-    if(!same(before,budget) && discountPercent>10) ensureApproval("Orçamentos",budget,`Desconto comercial de ${discountPercent.toFixed(1)}% acima da alçada de 10%.`,Number(budget.value||0),`budget-discount:${discountPercent.toFixed(4)}:value:${Number(budget.value||0).toFixed(2)}`);
+    if(!same(before,budget) && discountPercent>10) {
+      ensureApproval("Orçamentos",budget,`Desconto comercial de ${discountPercent.toFixed(1)}% acima da alçada de 10%.`,Number(budget.value||0),`budget-discount:${discountPercent.toFixed(4)}:value:${Number(budget.value||0).toFixed(2)}`);
+    } else if(discountPercent<=10 && budget.approvalRequired) {
+      budget.approvalRequired=false;
+      budget.approvalStatus="Dispensado";
+      budget.approvalDecidedAt=now;
+      budget.approvalDecidedBy="sistema";
+      budget.approvalDecisionReason="Desconto atualizado dentro da alçada automática de 10%.";
+      for(const approval of approvals.filter(item=>item.sourceModule==="Orçamentos" && item.sourceId===budget.id && item.status==="Pendente")){
+        approval.status="Cancelado";
+        approval.decidedAt=now;
+        approval.decidedBy="sistema";
+        approval.decisionReason="Solicitação cancelada automaticamente: desconto atualizado dentro da alçada.";
+      }
+    }
   }
   // Derived titles use stable origin IDs. They are created once, even after reopening
   // an OS or receiving a second delivery of the same purchase.
