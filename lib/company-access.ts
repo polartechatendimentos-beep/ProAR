@@ -15,7 +15,7 @@ export async function validateCompanyAccess(companyId?: string | null): Promise<
   const rows = await response.json();
   const company = rows?.[0];
   if (!company) return { ok: false, code:"COMPANY_NOT_FOUND", reason: "Empresa não cadastrada no ProAR Manager." };
-  if (company.status !== "active") return { ok: false, code:"SYSTEM_BLOCKED", reason: "Sistema bloqueado pelo ProAR Manager.", company };
+  if (company.status !== "active") return { ok: false, code:"SYSTEM_BLOCKED", reason: "Sistema bloqueado. Entre em contato com a equipe da ProAR.", company };
   if (company.trial_expires_at && new Date(String(company.trial_expires_at)).getTime() < Date.now()) {
     return { ok: false, code:"TRIAL_EXPIRED", reason: "O período de teste desta empresa terminou.", company };
   }
@@ -30,7 +30,7 @@ export async function validateCompanyAccessBySlug(slug?: string | null): Promise
   if (!response.ok) return { ok:false, code:"MANAGER_UNAVAILABLE", reason:"Não foi possível validar a empresa no ProAR Manager." };
   const rows=await response.json(); const company=rows?.[0];
   if (!company) return { ok:false, code:"COMPANY_NOT_FOUND", reason:"Empresa não cadastrada no ProAR Manager." };
-  if (company.status !== "active") return { ok:false, code:"SYSTEM_BLOCKED", reason:"Sistema bloqueado pelo ProAR Manager.", company };
+  if (company.status !== "active") return { ok:false, code:"SYSTEM_BLOCKED", reason:"Sistema bloqueado. Entre em contato com a equipe da ProAR.", company };
   if (company.trial_expires_at && new Date(String(company.trial_expires_at)).getTime() < Date.now()) return { ok:false, code:"TRIAL_EXPIRED", reason:"O período de teste desta empresa terminou.", company };
   return { ok:true, company };
 }
