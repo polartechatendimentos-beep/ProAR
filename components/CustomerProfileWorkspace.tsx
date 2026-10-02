@@ -85,7 +85,7 @@ export function CustomerProfileWorkspace({ customer, structures, serviceOrders, 
   const equipmentList = equipment.filter(item => Object.entries(equipmentFilters).every(([key, filter]) => filter === "Todos" || value(item, key === "area" ? "secretary" : key, key === "brand" ? "manufacturer" : key).toLowerCase() === filter.toLowerCase()));
   const options = (key: string) => ["Todos", ...Array.from(new Set(equipment.map(item => value(item, key)).filter(item => item !== "—")))];
   const isPublic = /Prefeitura|Órgão Público|Autarquia|Fundação|Entidade Pública/i.test(customer.organizationType ?? "");
-  const tabLabel = isPublic ? "Prefeitura → Secretaria → Unidade → Setor → Sala" : "Unidades, áreas e ambientes vinculados ao cliente";
+  const tabLabel = isPublic ? "Prefeitura → Secretaria → Unidade → Sala/Ambiente" : "Unidades, áreas e ambientes vinculados ao cliente";
 
   return <section className="customer-profile-workspace">
     <header className="customer-profile-header customer-sticky-header"><button className="customer-back" onClick={onBack}><ChevronRight size={16} className="rotate-180"/> Clientes</button><div className="customer-profile-identity"><span>{customer.name.split(" ").map(part => part[0]).slice(0, 2).join("")}</span><div><h2>{customer.name}</h2><p>{value(customer, "doc")} <b className="customer-status-dot">•</b> {value(customer, "status")}</p></div></div><div className="customer-profile-actions"><button className="outline-btn" onClick={() => { setDraft(customer); setDocumentLookup({ loading: false, message: "", kind: "idle" }); }}><X size={14}/> Descartar</button><button className="primary-btn" onClick={saveCustomer} disabled={!canEdit}><Save size={14}/> Salvar</button></div></header>
@@ -99,7 +99,7 @@ export function CustomerProfileWorkspace({ customer, structures, serviceOrders, 
     </div></div>}
 
     {tab === "Unidades & Ambientes" && <div className="profile-pane structure-tab-pane">
-      <div className="customer-structure-context"><div><span className="section-kicker"><Building2 size={12}/> ESTRUTURA OPERACIONAL</span><h3>{isPublic ? "Secretarias, unidades, setores e ambientes" : "Unidades, setores e ambientes"}</h3><p>{isPublic ? "Cliente → Secretaria → Unidade → Setor → Sala/Ambiente → Equipamento" : "Cliente → Unidade → Setor → Sala/Ambiente → Equipamento"}</p></div><div className="structure-context-counts"><span><b>{customerStructures.length}</b> estruturas</span><span><b>{equipment.length}</b> equipamentos</span></div></div>
+      <div className="customer-structure-context"><div><span className="section-kicker"><Building2 size={12}/> ESTRUTURA OPERACIONAL</span><h3>{isPublic ? "Secretarias, unidades e salas/ambientes" : "Unidades, setores e ambientes"}</h3><p>{isPublic ? "Prefeitura → Secretaria → Unidade → Sala/Ambiente → Equipamento" : "Cliente → Unidade → Setor → Sala/Ambiente → Equipamento"}</p></div><div className="structure-context-counts"><span><b>{customerStructures.length}</b> estruturas</span><span><b>{equipment.length}</b> equipamentos</span></div></div>
       <CustomerStructureLayout customer={customer} structures={customerStructures} serviceOrders={serviceOrders} equipment={equipment} roomQuery={roomQuery} setRoomQuery={setRoomQuery} onOpen={onOpen} onUpdateStructure={onUpdateStructure} />
     </div>}
 
