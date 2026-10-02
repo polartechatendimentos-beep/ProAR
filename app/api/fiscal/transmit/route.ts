@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "../../../../lib/permissions";
 import { validateFiscalPayload, type FiscalValidationPayload } from "../../../../lib/fiscal-validation";
 import { resolveFiscalRoute } from "../../../../lib/fiscal-routing";
+import { callFiscalBridge } from "../../../../lib/fiscal-bridge";
+import { calculateFiscalTotals } from "../../../../lib/fiscal-domain";
 
 export const runtime = "nodejs";
 
@@ -19,19 +21,13 @@ type FiscalBridgeResponse = {
   code?: string;
 };
 
-function bridgeConfiguration() {
-  const baseUrl = String(process.env.PROAR_FISCAL_BRIDGE_URL || "").replace(/\/$/, "");
-  const token = String(process.env.PROAR_FISCAL_BRIDGE_TOKEN || "");
-  return { baseUrl, token, configured: Boolean(baseUrl && token) };
-}
-
 export async function POST(request: NextRequest) {
   const access = requirePermission(request, "fiscal.emitir");
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
   try {
     const body = await request.json() as { documentId?: string; payload?: FiscalValidationPayload };
-    if (!body.payload) return NextResponse.json({ error: "Payload fiscal não informado." }, { status: 400 });
+    if (!body.documentId || !body.payload) return NextResponse.json({ error: "Documento e payload fiscal são obrigatórios." }, { status: 400 });
 
     const preflight = validateFiscalPayload(body.payload);
     if (!preflight.valid) {
@@ -53,30 +49,39 @@ export async function POST(request: NextRequest) {
       throw error;
     }
 
-    const bridge = bridgeConfiguration();
-    if (!bridge.configured) {
+    const totals = calculateFiscalTotals({
+      items: (body.payload.items || []).map(item => ({ ...item, kind: "Produto" })),
+      retentions: body.payload.retentions,
+      payments: body.payload.payments,
+      change: body.payload.change,
+    });
+    if (body.payload.kind === "NFSE" && body.payload.service?.value) {
+      totals.services = Number(body.payload.service.value);
+      totals.gross = Number(body.payload.service.value);
+      totals.net = Math.round((totals.gross - totals.withheld) * 100) / 100;
+    }
+
+    const bridgePayload = { documentId: body.documentId, payload: body.payload, routing, totals };
+    const result = await callFiscalBridge({
+      companyId: String(access.session.companyId || ""),
+      action: "authorize",
+      documentId: body.documentId,
+      path: "/v1/documents/authorize",
+      body: bridgePayload,
+    });
+
+    if (!result.configured) {
       return NextResponse.json({
-        status: "integration_required",
-        error: "A ponte fiscal real ainda não está configurada no servidor. Configure PROAR_FISCAL_BRIDGE_URL e PROAR_FISCAL_BRIDGE_TOKEN para transmitir à SEFAZ/NFS-e por um adaptador homologado.",
+        ...result.data,
         preflight,
         routing,
+        totals,
+        error: "A ponte fiscal real ainda não está configurada. Configure PROAR_FISCAL_BRIDGE_URL e PROAR_FISCAL_BRIDGE_TOKEN para transmitir ao autorizador homologado.",
       }, { status: 503 });
     }
 
-    const response = await fetch(`${bridge.baseUrl}/v1/documents/authorize`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${bridge.token}`,
-        "X-ProAR-Company": String(access.session.companyId || ""),
-      },
-      body: JSON.stringify({ documentId: body.documentId, payload: body.payload, routing }),
-      signal: AbortSignal.timeout(45_000),
-      cache: "no-store",
-    });
-
-    const provider = await response.json().catch(() => ({})) as FiscalBridgeResponse;
-    if (!response.ok || provider.status === "rejected") {
+    const provider = result.data as FiscalBridgeResponse;
+    if (!result.response.ok || provider.status === "rejected") {
       return NextResponse.json({
         status: "rejected",
         code: provider.code || "FISCAL_PROVIDER_REJECTION",
@@ -84,11 +89,13 @@ export async function POST(request: NextRequest) {
         provider,
         preflight,
         routing,
+        totals,
+        idempotencyKey: result.idempotencyKey,
       }, { status: 422 });
     }
 
     if (provider.status === "processing") {
-      return NextResponse.json({ status: "processing", provider, preflight, routing }, { status: 202 });
+      return NextResponse.json({ status: "processing", provider, preflight, routing, totals, idempotencyKey: result.idempotencyKey }, { status: 202 });
     }
 
     const fiscalIdentifier = provider.accessKey || provider.verificationCode;
@@ -97,6 +104,7 @@ export async function POST(request: NextRequest) {
         status: "invalid_authorization_response",
         error: "O autorizador não devolveu número, protocolo e chave/código de verificação. O ProAR não marcará o documento como autorizado.",
         provider,
+        idempotencyKey: result.idempotencyKey,
       }, { status: 502 });
     }
 
@@ -112,6 +120,8 @@ export async function POST(request: NextRequest) {
       danfeUrl: provider.danfeUrl,
       preflight,
       routing,
+      totals,
+      idempotencyKey: result.idempotencyKey,
     });
   } catch (error) {
     console.error("Fiscal transmission error", error);
