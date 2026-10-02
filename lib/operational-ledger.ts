@@ -143,12 +143,12 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
   };
   for(const purchase of list(modules.Compras)){
     const before=list(oldModules.Compras).find(item=>item.id===purchase.id);
-    if(!same(before,purchase) && Number(purchase.value||0)>=5000 && !/Aprovado/i.test(purchase.approvalStatus||"")) ensureApproval("Compras",purchase,"Compra acima da alçada automática de R$ 5.000,00.",Number(purchase.value||0));
+    if(!same(before,purchase) && Number(purchase.value||0)>=5000) ensureApproval("Compras",purchase,"Compra acima da alçada automática de R$ 5.000,00.",Number(purchase.value||0));
   }
   for(const budget of list(modules.Orçamentos)){
     const before=list(oldModules.Orçamentos).find(item=>item.id===budget.id);
     const discountPercent=Number(budget.discountPercent||0);
-    if(!same(before,budget) && discountPercent>10 && !/Aprovado/i.test(budget.approvalStatus||"")) ensureApproval("Orçamentos",budget,`Desconto comercial de ${discountPercent.toFixed(1)}% acima da alçada de 10%.`,Number(budget.value||0));
+    if(!same(before,budget) && discountPercent>10) ensureApproval("Orçamentos",budget,`Desconto comercial de ${discountPercent.toFixed(1)}% acima da alçada de 10%.`,Number(budget.value||0));
   }
   // Derived titles use stable origin IDs. They are created once, even after reopening
   // an OS or receiving a second delivery of the same purchase.
