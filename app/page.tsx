@@ -116,7 +116,7 @@ type ServiceOrder = {
   lastMaintenanceDate?: string;
   reviewPeriodMonths?: 3 | 6 | 12;
   notifyDaysBefore?: number;
-  nfseStatus?: "Não emitida" | "Processando" | "Emitida" | "Erro" | "Cancelada";
+  nfseStatus?: "Não emitida" | "Pendente" | "Validando" | "Transmitindo" | "Processando" | "Autorizada" | "Emitida" | "Rejeitada" | "Erro" | "Cancelada" | "Contingência";
   nfseNumber?: string;
   nfseVerificationCode?: string;
   nfseIssuedAt?: string;
@@ -711,12 +711,17 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders, cu
     onUpdate({ ...order, nfseStatus:"Processando", nfseValue:value });
     try {
       const response = await fetch("/api/nfse/issue", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ serviceOrderId:order.id, customer:{ name:order.client, document:customer.doc, unit:order.unit, address:order.address }, service:{ description:order.service, value } }) });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Falha na emissão");
-      const provider = result.result || {};
-      onUpdate({ ...order, nfseStatus:"Emitida", nfseValue:value, nfseNumber:String(provider.number || provider.numero || provider.nfseNumber || ""), nfseVerificationCode:String(provider.verificationCode || provider.codigoVerificacao || ""), nfseIssuedAt:new Date().toISOString() });
-      window.alert(`NFS-e emitida com sucesso${provider.number || provider.numero ? `: ${provider.number || provider.numero}` : "."}`);
-    } catch (error) { onUpdate({ ...order, nfseStatus:"Erro", nfseValue:value }); window.alert(error instanceof Error ? error.message : "Não foi possível emitir a NFS-e."); }
+      const result = await response.json().catch(()=>({}));
+      if (response.status === 202 || result.status === "Processando") {
+        onUpdate({ ...order, nfseStatus:"Processando", nfseValue:value });
+        window.alert("A NFS-e foi recebida para processamento, mas ainda não está autorizada. Consulte novamente antes de enviar ao cliente.");
+        return;
+      }
+      if (!response.ok || result.issued !== true || result.status !== "Autorizada") throw new Error(result.error || "A emissão não foi autorizada pela Prefeitura/provedor.");
+      const provider = result.result?.result || result.result?.data || result.result || {};
+      onUpdate({ ...order, nfseStatus:"Autorizada", nfseValue:value, nfseNumber:String(provider.number || provider.numero || provider.nfseNumber || ""), nfseVerificationCode:String(provider.verificationCode || provider.codigoVerificacao || provider.chave || provider.key || ""), nfseIssuedAt:new Date().toISOString() });
+      window.alert(`NFS-e autorizada${provider.number || provider.numero ? `: ${provider.number || provider.numero}` : "."}`);
+    } catch (error) { onUpdate({ ...order, nfseStatus:"Rejeitada", nfseValue:value }); window.alert(error instanceof Error ? error.message : "Não foi possível autorizar a NFS-e."); }
   };
   return <section className="module-page service-orders">
     <div className="module-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Pesquisar por cliente, OS, CPF/CNPJ, telefone ou unidade..."/></label><label className="status-filter"><Filter size={14}/><select aria-label="Exibir ordens" value={visibility} onChange={event=>setVisibility(event.target.value)}><option>Em aberto</option><option>Todas</option><option>Concluídas</option><option>Canceladas</option><option>Hoje</option></select></label><ContextReports title="Ordens de Serviço" rows={serviceOrders.map(order=>[order.id,order.client,order.status])} options={["Imprimir Ordem de Serviço","Relatório técnico","Certificado de higienização","Relatório fotográfico","Relatório da assistência técnica","Comprovante de entrega","Histórico completo da OS"]}/><button className="primary-btn" onClick={() => onOpen("Nova ordem de serviço")}><Plus size={16}/> Nova ordem de serviço</button></div>
