@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePermission, sessionCompany } from "../../../lib/permissions";
 import { resolveTenantDb, tenantHeaders } from "../../../lib/tenant-rest";
 import { databaseFetch } from "../../../lib/supabase-rest";
+import { proarError } from "../../../lib/system-errors";
 
 export const runtime = "nodejs";
 
@@ -13,24 +14,24 @@ export async function GET(request: NextRequest) {
   const scope = sessionCompany(access.session);
   if (!scope.ok) return NextResponse.json({ error: scope.error }, { status: scope.status });
 
-  let database: { state: HealthState; message: string } = { state:"error", message:"Banco não verificado." };
+  let database: { state: HealthState; message: string; code?: string } = { state:"error", message:"Banco não verificado.", code:proarError("PROAR-DB-001").code };
   try {
     const db = await resolveTenantDb(scope.companyId);
-    if (!db.url || !db.key) database = { state:"error", message:"Credenciais do banco indisponíveis." };
+    if (!db.url || !db.key) database = { state:"error", message:"Credenciais do banco indisponíveis.", code:proarError("PROAR-DB-001").code };
     else {
       const response = await databaseFetch(`${db.url}/rest/v1/proar_state?select=id&limit=1`, { headers:tenantHeaders(db.key), cache:"no-store", signal:AbortSignal.timeout(5000) });
-      database = response.ok ? { state:"ok", message:db.dedicated ? "Banco dedicado acessível." : "Banco compartilhado acessível e segregado por empresa." } : { state:"error", message:`Banco respondeu HTTP ${response.status}.` };
+      database = response.ok ? { state:"ok", message:db.dedicated ? "Banco dedicado acessível." : "Banco compartilhado acessível e segregado por empresa." } : { state:"error", message:"O banco respondeu com falha.", code:proarError("PROAR-DB-001").code };
     }
   } catch {
-    database = { state:"error", message:"Banco indisponível ou excedeu o tempo de resposta." };
+    database = { state:"error", message:"Banco indisponível ou excedeu o tempo de resposta.", code:proarError("PROAR-DB-002").code };
   }
 
   const configured = (name:string) => Boolean(String(process.env[name] || "").trim());
   const fiscalVault = configured("BLOB_READ_WRITE_TOKEN") && configured("PROAR_FISCAL_ENCRYPTION_KEY");
   const services = [
     { id:"database", label:"Banco de dados", ...database },
-    { id:"fiscal-vault", label:"Cofre fiscal", state:(fiscalVault ? "ok" : "warning") as HealthState, message:fiscalVault ? "Armazenamento criptografado configurado." : "Cofre fiscal incompleto no ambiente." },
-    { id:"nfe", label:"NF-e / SEFAZ-SP", state:(configured("SEFAZ_SP_NFE_API_URL") && configured("SEFAZ_SP_NFE_API_TOKEN") ? "ok" : "warning") as HealthState, message:configured("SEFAZ_SP_NFE_API_URL") && configured("SEFAZ_SP_NFE_API_TOKEN") ? "Adaptador configurado." : "Adaptador de emissão ainda não configurado." },
+    { id:"fiscal-vault", label:"Cofre fiscal", state:(fiscalVault ? "ok" : "warning") as HealthState, code:fiscalVault?undefined:proarError("PROAR-FISCAL-001").code, message:fiscalVault ? "Armazenamento criptografado configurado." : "Cofre fiscal incompleto no ambiente." },
+    { id:"nfe", label:"NF-e / SEFAZ-SP", state:(configured("SEFAZ_SP_NFE_API_URL") && configured("SEFAZ_SP_NFE_API_TOKEN") ? "ok" : "warning") as HealthState, code:configured("SEFAZ_SP_NFE_API_URL") && configured("SEFAZ_SP_NFE_API_TOKEN")?undefined:proarError("PROAR-FISCAL-001").code, message:configured("SEFAZ_SP_NFE_API_URL") && configured("SEFAZ_SP_NFE_API_TOKEN") ? "Adaptador configurado." : "Adaptador de emissão ainda não configurado." },
     { id:"nfce", label:"NFC-e / SEFAZ-SP", state:(configured("SEFAZ_SP_NFCE_API_URL") && configured("SEFAZ_SP_NFCE_API_TOKEN") ? "ok" : "warning") as HealthState, message:configured("SEFAZ_SP_NFCE_API_URL") && configured("SEFAZ_SP_NFCE_API_TOKEN") ? "Adaptador configurado." : "Adaptador/CSC ainda precisa de configuração." },
     { id:"nfse", label:"NFS-e Mirassol", state:(configured("MIRASSOL_NFSE_API_URL") && configured("MIRASSOL_NFSE_API_TOKEN") ? "ok" : "warning") as HealthState, message:configured("MIRASSOL_NFSE_API_URL") && configured("MIRASSOL_NFSE_API_TOKEN") ? "Adaptador configurado." : "Integração municipal ainda não configurada." },
     { id:"dfe", label:"Distribuição DF-e", state:(configured("NFE_DISTRIBUTION_API_URL") && configured("NFE_DISTRIBUTION_API_TOKEN") ? "ok" : "warning") as HealthState, message:configured("NFE_DISTRIBUTION_API_URL") && configured("NFE_DISTRIBUTION_API_TOKEN") ? "Consulta de documentos destinados configurada." : "Consulta DF-e ainda não configurada." },
