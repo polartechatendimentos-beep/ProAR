@@ -78,13 +78,23 @@ async function saveRecord(companyId: string, record: FiscalRecord) {
   });
 }
 
+function publicFiscalSection(section: Record<string, string | boolean> = {}) {
+  const result: Record<string, string | boolean> = {};
+  for (const [key,value] of Object.entries(section)) {
+    if (/password|senha|token|secret/i.test(key) || /^csc$/i.test(key)) continue;
+    result[key] = value;
+  }
+  if (typeof section.csc === "string") result.cscConfigured = Boolean(section.csc.trim());
+  return result;
+}
+
 function publicRecord(record: FiscalRecord) {
   const certificate = record.certificate;
   return {
-    company: record.company ?? {},
-    nfe: record.nfe ?? {},
-    nfce: record.nfce ?? {},
-    nfse: record.nfse ?? {},
+    company: publicFiscalSection(record.company ?? {}),
+    nfe: publicFiscalSection(record.nfe ?? {}),
+    nfce: publicFiscalSection(record.nfce ?? {}),
+    nfse: publicFiscalSection(record.nfse ?? {}),
     updatedAt: record.updatedAt,
     updatedBy: record.updatedBy,
     certificate: certificate ? {
