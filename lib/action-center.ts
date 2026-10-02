@@ -60,6 +60,33 @@ export function deriveOperationalActions(
 
   for (const order of serviceOrders || []) {
     const status = String(order.status || "");
+    const quoteHandoff = order.diagnosticQuoteHandoff && typeof order.diagnosticQuoteHandoff === "object" ? order.diagnosticQuoteHandoff as GenericRecord : null;
+    const purchaseHandoff = order.diagnosticPurchaseHandoff && typeof order.diagnosticPurchaseHandoff === "object" ? order.diagnosticPurchaseHandoff as GenericRecord : null;
+    if (quoteHandoff && !/conclu[ií]d|convertid|cancelad/i.test(String(quoteHandoff.status || ""))) {
+      actions.push({
+        id:`diagnostic-quote-${order.id}`,
+        title:`Preparar orçamento do diagnóstico • ${order.id}`,
+        detail:[order.client, order.service, quoteHandoff.status || "Pendente de revisão"].filter(Boolean).join(" • "),
+        module:"Orçamentos",
+        tone:"amber",
+        priority:2,
+        category:"Comercial",
+        recordId:String(order.id || ""),
+      });
+    }
+    if (purchaseHandoff && !/conclu[ií]d|solicitad|convertid|cancelad/i.test(String(purchaseHandoff.status || ""))) {
+      const items = Array.isArray(purchaseHandoff.items) ? purchaseHandoff.items.length : 0;
+      actions.push({
+        id:`diagnostic-purchase-${order.id}`,
+        title:`Material sugerido pelo diagnóstico • ${order.id}`,
+        detail:[order.client, items ? `${items} item(ns) para revisar` : "Revisar material sugerido"].filter(Boolean).join(" • "),
+        module:"Compras",
+        tone:"amber",
+        priority:2,
+        category:"Compras",
+        recordId:String(order.id || ""),
+      });
+    }
     if (/conclu[ií]d|cancelad/i.test(status)) continue;
     const orderDate = dateOnly(order.date);
     if (orderDate && orderDate < today) {
