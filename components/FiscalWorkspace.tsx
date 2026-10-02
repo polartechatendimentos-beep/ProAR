@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, FileCheck2, FileClock, FileText, Landmark, ReceiptText, RefreshCw, Settings, ShieldCheck } from "lucide-react";
-import { notifyError, notifyInfo, notifySuccess } from "@/lib/ui-feedback";
+import { notifyError, notifySuccess } from "@/lib/ui-feedback";
 
 type FiscalRecord = Record<string, any>;
 type FiscalConfig = {
