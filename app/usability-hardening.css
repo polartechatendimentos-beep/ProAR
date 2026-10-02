@@ -33,3 +33,6 @@
 .role-shortcuts button:hover{border-color:#2a70c5;background:#0a1f37}
 @media(max-width:900px){.role-shortcuts{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:520px){.role-shortcuts{grid-template-columns:1fr}}
+
+.finance-management-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:12px}
+@media(max-width:900px){.finance-management-grid{grid-template-columns:1fr}}
