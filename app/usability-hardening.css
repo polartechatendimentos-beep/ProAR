@@ -26,3 +26,10 @@
 @media(max-width:1180px){.app-shell .global-search{display:flex!important}.app-shell .global-search input{width:130px!important}}
 @media(max-width:900px){.app-shell .headline h1{font-size:20px!important}.dashboard-filters{display:grid;grid-template-columns:1fr 1fr}.app-shell .table-wrap table{min-width:780px}}
 @media(max-width:640px){.dashboard-filters{grid-template-columns:1fr}.dashboard-filters label{min-width:0}.app-shell .headline h1{font-size:18px!important}.app-shell .nav-group button{font-size:14px!important}.app-shell input,.app-shell select,.app-shell textarea{font-size:16px!important}.app-shell .table-wrap{overflow-x:auto}.app-shell .management-hero,.app-shell .panel-head{gap:10px}}
+
+.role-shortcuts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 12px}
+.role-shortcuts button{display:flex;align-items:center;gap:9px;min-height:44px;padding:0 12px;border:1px solid #17304d;border-radius:10px;background:#071628;color:#dbe7f7;text-align:left}
+.role-shortcuts button span{flex:1;font-weight:700}
+.role-shortcuts button:hover{border-color:#2a70c5;background:#0a1f37}
+@media(max-width:900px){.role-shortcuts{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.role-shortcuts{grid-template-columns:1fr}}
