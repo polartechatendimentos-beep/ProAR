@@ -42,6 +42,16 @@ export type FiscalDocumentRecord = AnyRecord & {
   fiscalIssuedAt?: string;
   fiscalOperationNature?: string;
   fiscalPurpose?: string;
+  fiscalOperationDirection?: "0" | "1";
+  fiscalDestinationIndicator?: "1" | "2" | "3";
+  fiscalFinalConsumer?: boolean;
+  fiscalReferencedAccessKey?: string;
+  fiscalDebitNoteType?: string;
+  fiscalCreditNoteType?: string;
+  fiscalNfsePurpose?: "0" | "1" | "2";
+  fiscalNfseFinalConsumer?: boolean;
+  fiscalNfseOperationIndicator?: string;
+  fiscalNfsePeopleIndicator?: "0" | "1" | "2" | "3" | "4";
   fiscalPresenceIndicator?: string;
   fiscalFreightMode?: string;
   fiscalPaymentMethod?: string;
@@ -161,6 +171,16 @@ export function FiscalDocumentsPanel({
       issueDate: draft.date || today(),
       operationNature: draft.fiscalOperationNature || (documentType === "NFS-e" ? "Prestação de serviços" : "Venda de mercadoria"),
       purpose: draft.fiscalPurpose || "1",
+      operationDirection: draft.fiscalOperationDirection || "1",
+      destinationIndicator: draft.fiscalDestinationIndicator || "1",
+      finalConsumer: documentType === "NFC-e" ? true : Boolean(draft.fiscalFinalConsumer),
+      referencedDocuments: draft.fiscalReferencedAccessKey ? [{ type: "NFE", accessKey: draft.fiscalReferencedAccessKey }] : [],
+      debitNoteType: draft.fiscalDebitNoteType,
+      creditNoteType: draft.fiscalCreditNoteType,
+      nfsePurpose: draft.fiscalNfsePurpose || "0",
+      nfseFinalConsumer: Boolean(draft.fiscalNfseFinalConsumer),
+      nfseOperationIndicator: draft.fiscalNfseOperationIndicator,
+      nfsePeopleIndicator: draft.fiscalNfsePeopleIndicator || "0",
       presenceIndicator: draft.fiscalPresenceIndicator || (documentType === "NFC-e" ? "1" : "9"),
       freightMode: draft.fiscalFreightMode || (documentType === "NF-e" ? "9" : undefined),
       paymentMethod: draft.fiscalPaymentMethod || (documentType === "NFC-e" ? "01" : undefined),
@@ -518,6 +538,16 @@ function FiscalCreateDialog({ customers, products, services, sales, serviceOrder
   const [quantity, setQuantity] = useState(1);
   const [operationNature, setOperationNature] = useState("Venda de mercadoria");
   const [purpose, setPurpose] = useState("1");
+  const [operationDirection, setOperationDirection] = useState<"0"|"1">("1");
+  const [destinationIndicator, setDestinationIndicator] = useState<"1"|"2"|"3">("1");
+  const [finalConsumer, setFinalConsumer] = useState(false);
+  const [referencedAccessKey, setReferencedAccessKey] = useState("");
+  const [debitNoteType, setDebitNoteType] = useState("");
+  const [creditNoteType, setCreditNoteType] = useState("");
+  const [nfsePurpose, setNfsePurpose] = useState<"0"|"1"|"2">("0");
+  const [nfseFinalConsumer, setNfseFinalConsumer] = useState(false);
+  const [nfseOperationIndicator, setNfseOperationIndicator] = useState("");
+  const [nfsePeopleIndicator, setNfsePeopleIndicator] = useState<"0"|"1"|"2"|"3"|"4">("0");
   const [presenceIndicator, setPresenceIndicator] = useState("1");
   const [freightMode, setFreightMode] = useState("9");
   const [paymentMethod, setPaymentMethod] = useState("01");
@@ -588,6 +618,16 @@ function FiscalCreateDialog({ customers, products, services, sales, serviceOrder
     fiscalEnvironment: config?.company?.environment || "Homologação",
     fiscalOperationNature: operationNature,
     fiscalPurpose: purpose,
+    fiscalOperationDirection: documentType === "NFC-e" ? "1" : operationDirection,
+    fiscalDestinationIndicator: documentType === "NFC-e" ? "1" : destinationIndicator,
+    fiscalFinalConsumer: documentType === "NFC-e" ? true : finalConsumer,
+    fiscalReferencedAccessKey: referencedAccessKey || undefined,
+    fiscalDebitNoteType: debitNoteType || undefined,
+    fiscalCreditNoteType: creditNoteType || undefined,
+    fiscalNfsePurpose: nfsePurpose,
+    fiscalNfseFinalConsumer: nfseFinalConsumer,
+    fiscalNfseOperationIndicator: nfseOperationIndicator || undefined,
+    fiscalNfsePeopleIndicator: nfsePeopleIndicator,
     fiscalPresenceIndicator: presenceIndicator,
     fiscalFreightMode: freightMode,
     fiscalPaymentMethod: paymentMethod,
@@ -616,11 +656,17 @@ function FiscalCreateDialog({ customers, products, services, sales, serviceOrder
         {sourceType !== "Manual" && <label className="text-xs font-semibold text-slate-600 md:col-span-2">Registro de origem<select className="mt-1 w-full rounded-xl border p-3 text-sm" value={sourceId} onChange={event=>setSourceId(event.target.value)}><option value="">Selecione...</option>{sourceRecords.map(item=><option key={item.id} value={item.id}>{item.id} • {item.name || item.client || item.description}</option>)}</select></label>}
         <label className="text-xs font-semibold text-slate-600 md:col-span-2">Cliente / destinatário<select className="mt-1 w-full rounded-xl border p-3 text-sm" value={customerId} onChange={event=>setCustomerId(event.target.value)}><option value="">Selecione...</option>{customers.map(item=><option key={item.id} value={item.id}>{item.name} • {item.doc || "sem documento"}</option>)}</select></label>
         <label className="text-xs font-semibold text-slate-600">Natureza da operação<input className="mt-1 w-full rounded-xl border p-3 text-sm" value={operationNature} onChange={event=>setOperationNature(event.target.value)} placeholder={documentType === "NFS-e" ? "Prestação de serviços" : "Venda de mercadoria"}/></label>
-        {documentType === "NF-e" && <label className="text-xs font-semibold text-slate-600">Finalidade<select className="mt-1 w-full rounded-xl border p-3 text-sm" value={purpose} onChange={event=>setPurpose(event.target.value)}><option value="1">Normal</option><option value="2">Complementar</option><option value="3">Ajuste</option><option value="4">Devolução/retorno</option></select></label>}
+        {documentType === "NF-e" && <label className="text-xs font-semibold text-slate-600">Finalidade<select className="mt-1 w-full rounded-xl border p-3 text-sm" value={purpose} onChange={event=>setPurpose(event.target.value)}><option value="1">Normal</option><option value="2">Complementar</option><option value="3">Ajuste</option><option value="4">Devolução/retorno</option><option value="5">Nota de crédito</option><option value="6">Nota de débito</option></select></label>}
+        {documentType === "NF-e" && <label className="text-xs font-semibold text-slate-600">Tipo da operação<select className="mt-1 w-full rounded-xl border p-3 text-sm" value={operationDirection} onChange={event=>setOperationDirection(event.target.value as "0"|"1")}><option value="1">Saída</option><option value="0">Entrada</option></select></label>}
+        {documentType === "NF-e" && <label className="text-xs font-semibold text-slate-600">Destino da operação<select className="mt-1 w-full rounded-xl border p-3 text-sm" value={destinationIndicator} onChange={event=>setDestinationIndicator(event.target.value as "1"|"2"|"3")}><option value="1">Interna</option><option value="2">Interestadual</option><option value="3">Exterior</option></select></label>}
+        {documentType !== "NFS-e" && <label className="flex items-center gap-2 rounded-xl border p-3 text-xs font-semibold text-slate-700"><input type="checkbox" checked={documentType === "NFC-e" ? true : finalConsumer} disabled={documentType === "NFC-e"} onChange={event=>setFinalConsumer(event.target.checked)}/> Consumidor final</label>}
+        {documentType === "NF-e" && ["2","3","4","5","6"].includes(purpose) && <label className="text-xs font-semibold text-slate-600 md:col-span-2">Chave da NF-e/NFC-e referenciada<input className="mt-1 w-full rounded-xl border p-3 text-sm" value={referencedAccessKey} onChange={event=>setReferencedAccessKey(event.target.value.replace(/\D/g,"").slice(0,44))} placeholder="44 dígitos do documento de origem"/></label>}
+        {documentType === "NF-e" && purpose === "6" && <label className="text-xs font-semibold text-slate-600">Tipo da nota de débito<input className="mt-1 w-full rounded-xl border p-3 text-sm" value={debitNoteType} onChange={event=>setDebitNoteType(event.target.value)} placeholder="Código/motivo conforme operação"/></label>}
+        {documentType === "NF-e" && purpose === "5" && <label className="text-xs font-semibold text-slate-600">Tipo da nota de crédito<input className="mt-1 w-full rounded-xl border p-3 text-sm" value={creditNoteType} onChange={event=>setCreditNoteType(event.target.value)} placeholder="Código/motivo conforme operação"/></label>}
         {documentType !== "NFS-e" && <label className="text-xs font-semibold text-slate-600">Indicador de presença<select className="mt-1 w-full rounded-xl border p-3 text-sm" value={presenceIndicator} onChange={event=>setPresenceIndicator(event.target.value)}><option value="1">Operação presencial</option><option value="2">Internet</option><option value="3">Teleatendimento</option><option value="5">Fora do estabelecimento</option><option value="9">Outros</option></select></label>}
         {documentType === "NF-e" && <label className="text-xs font-semibold text-slate-600">Modalidade do frete<select className="mt-1 w-full rounded-xl border p-3 text-sm" value={freightMode} onChange={event=>setFreightMode(event.target.value)}><option value="9">Sem frete</option><option value="0">Por conta do remetente</option><option value="1">Por conta do destinatário</option><option value="2">Por conta de terceiros</option></select></label>}
         {documentType === "NFC-e" && <label className="text-xs font-semibold text-slate-600">Forma de pagamento<select className="mt-1 w-full rounded-xl border p-3 text-sm" value={paymentMethod} onChange={event=>setPaymentMethod(event.target.value)}><option value="01">Dinheiro</option><option value="03">Cartão de crédito</option><option value="04">Cartão de débito</option><option value="17">PIX</option><option value="90">Sem pagamento</option><option value="99">Outros</option></select></label>}
-        {documentType === "NFS-e" && <><label className="text-xs font-semibold text-slate-600">Código IBGE do município da prestação<input className="mt-1 w-full rounded-xl border p-3 text-sm" value={serviceMunicipalityCode} onChange={event=>setServiceMunicipalityCode(event.target.value.replace(/\D/g,"").slice(0,7))} placeholder="Ex.: 3530300"/></label><label className="text-xs font-semibold text-slate-600">Local de incidência<input className="mt-1 w-full rounded-xl border p-3 text-sm" value={serviceTaxationLocation} onChange={event=>setServiceTaxationLocation(event.target.value)} placeholder="Município da prestação"/></label></>}
+        {documentType === "NFS-e" && <><label className="text-xs font-semibold text-slate-600">Finalidade da NFS-e<select className="mt-1 w-full rounded-xl border p-3 text-sm" value={nfsePurpose} onChange={event=>setNfsePurpose(event.target.value as "0"|"1"|"2")}><option value="0">Regular</option><option value="1">Crédito</option><option value="2">Débito</option></select></label><label className="flex items-center gap-2 rounded-xl border p-3 text-xs font-semibold text-slate-700"><input type="checkbox" checked={nfseFinalConsumer} onChange={event=>setNfseFinalConsumer(event.target.checked)}/> Uso ou consumo pessoal (indFinal)</label><label className="text-xs font-semibold text-slate-600">Indicador da operação IBS/CBS (cIndOp)<input className="mt-1 w-full rounded-xl border p-3 text-sm" value={nfseOperationIndicator} onChange={event=>setNfseOperationIndicator(event.target.value.replace(/\D/g,"").slice(0,6))} placeholder="6 dígitos conforme tabela nacional"/></label><label className="text-xs font-semibold text-slate-600">Relação entre as pessoas (indPessoas)<select className="mt-1 w-full rounded-xl border p-3 text-sm" value={nfsePeopleIndicator} onChange={event=>setNfsePeopleIndicator(event.target.value as any)}><option value="0">Tomador = adquirente = destinatário</option><option value="1">Tomador = adquirente; destinatário diferente</option><option value="2">Adquirente = destinatário; tomador diferente</option><option value="3">Tomador = destinatário; adquirente diferente</option><option value="4">Todos distintos</option></select></label><label className="text-xs font-semibold text-slate-600">Código IBGE do município da prestação<input className="mt-1 w-full rounded-xl border p-3 text-sm" value={serviceMunicipalityCode} onChange={event=>setServiceMunicipalityCode(event.target.value.replace(/\D/g,"").slice(0,7))} placeholder="Ex.: 3530300"/></label><label className="text-xs font-semibold text-slate-600">Local de incidência<input className="mt-1 w-full rounded-xl border p-3 text-sm" value={serviceTaxationLocation} onChange={event=>setServiceTaxationLocation(event.target.value)} placeholder="Município da prestação"/></label></>}
 
         <div className="md:col-span-2 rounded-xl border bg-slate-50 p-4">
           <div className="flex items-center gap-2"><Package size={16}/><b className="text-sm">{documentType === "NFS-e" ? "Serviços da nota" : "Produtos da nota"}</b></div>
