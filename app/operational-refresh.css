@@ -173,3 +173,28 @@
   .external-access-modal .external-access-submit,.external-access-notice{grid-column:1}
   .external-access-modal .external-access-submit{width:100%!important}
 }
+
+
+/* Histórico de versões */
+.secure .version-button{margin-left:auto;border:1px solid #245a8b;border-radius:7px;background:#0e3760;color:#7bc7ff;padding:4px 7px;font-size:8px;font-weight:850;letter-spacing:.04em}
+.secure .version-button:hover{background:#164b7d;color:#fff}
+.version-modal-layer{position:fixed;z-index:12000;inset:0;display:grid;place-items:center;padding:18px}
+.version-modal-backdrop{position:absolute;inset:0;border:0;background:rgba(2,8,18,.76);backdrop-filter:blur(7px)}
+.version-modal{position:relative;width:min(900px,96vw);max-height:min(760px,92vh);display:flex;flex-direction:column;border:1px solid #204a70;border-radius:18px;background:#071525;color:#dce9f7;box-shadow:0 32px 90px rgba(0,0,0,.55);overflow:hidden}
+.version-modal>header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:22px 24px;border-bottom:1px solid #183653;background:linear-gradient(135deg,#0b2138,#0d3153)}
+.version-modal>header>div>span{display:flex;align-items:center;gap:7px;color:#52bdff;font-size:9px;font-weight:850;letter-spacing:.12em}
+.version-modal>header h2{margin:6px 0 3px;color:#fff;font-size:25px}.version-modal>header p{margin:0;color:#89a2ba;font-size:10px}
+.version-modal>header>button{display:grid;place-items:center;width:36px;height:36px;border:1px solid #285276;border-radius:10px;background:#0d2944;color:#9cb7ce}
+.version-modal-body{display:grid;grid-template-columns:185px minmax(0,1fr);min-height:0;overflow:hidden}
+.version-modal-body>aside{padding:14px;border-right:1px solid #183653;background:#06111e;overflow:auto}
+.version-modal-body>aside button{position:relative;width:100%;display:grid;gap:3px;margin-bottom:7px;padding:11px;border:1px solid transparent;border-radius:10px;background:transparent;color:#8299af;text-align:left}
+.version-modal-body>aside button.active{border-color:#275f91;background:#0d2b48;color:#fff}.version-modal-body>aside b{font-size:11px}.version-modal-body>aside small{font-size:8px}.version-modal-body>aside em{position:absolute;right:8px;top:9px;padding:3px 5px;border-radius:999px;background:#123f31;color:#66deb0;font-size:7px;font-style:normal;font-weight:800}
+.version-modal-body>main{min-width:0;padding:18px;overflow:auto}
+.version-summary{display:flex;align-items:flex-start;gap:13px;padding:14px;border:1px solid #183653;border-radius:12px;background:#0a1c2f}.version-summary>span{padding:6px 8px;border-radius:8px;background:#123d67;color:#77c9ff;font-size:9px;font-weight:850}.version-summary h3{margin:0;color:#fff;font-size:14px}.version-summary p{margin:4px 0 0;color:#829ab1;font-size:9px;line-height:1.5}
+.version-notes{display:grid;gap:9px;margin-top:12px}.version-notes article{--release:#4ea1ff;display:grid;grid-template-columns:36px minmax(0,1fr);gap:10px;padding:12px;border:1px solid #17334f;border-left:3px solid var(--release);border-radius:11px;background:#081828}
+.version-notes article.release-novidade{--release:#59b8ff}.version-notes article.release-melhoria{--release:#8b83ff}.version-notes article.release-correcao{--release:#46d69d}.version-notes article.release-seguranca{--release:#f2b84b}
+.version-notes article>span{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:color-mix(in srgb,var(--release) 14%,transparent);color:var(--release)}
+.version-notes article header{display:flex;align-items:center;justify-content:space-between;gap:10px}.version-notes article b{color:#eaf4ff;font-size:11px}.version-notes article header em{padding:3px 6px;border-radius:999px;background:#102b45;color:var(--release);font-size:7px;font-style:normal;font-weight:850}
+.version-notes article small{display:block;margin-top:2px;color:#5480a4;font-size:8px;font-weight:750}.version-notes article p{margin:5px 0 0;color:#8ca3b8;font-size:9px;line-height:1.5}
+.version-modal>footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 18px;border-top:1px solid #183653;background:#06111e}.version-modal>footer>span{color:#6f879d;font-size:8px}
+@media(max-width:700px){.version-modal-body{grid-template-columns:1fr}.version-modal-body>aside{display:flex;gap:7px;border-right:0;border-bottom:1px solid #183653}.version-modal-body>aside button{min-width:120px;margin:0}.version-modal{max-height:94vh}}
