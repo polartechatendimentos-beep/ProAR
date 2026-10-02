@@ -26,7 +26,7 @@ const permissionFor: Record<string, string> = {
   Produtos: "estoque.editar", Estoque: "estoque.editar", Compras: "compras.editar",
   Equipamentos: "equipamentos.editar", "Unidades e setores": "clientes.editar",
   Funcionários: "configuracoes.editar", Certames: "licitacoes.editar", Empenhos: "licitacoes.editar",
-  Obras: "obras.editar", Orçamentos: "comercial.editar", Vendas: "comercial.editar", Serviços: "catalogo.editar", Fornecedores: "compras.editar", "Conciliações": "financeiro.conciliar", Lembretes: "os.editar",
+  Obras: "obras.editar", Orçamentos: "comercial.editar", Vendas: "comercial.editar", Serviços: "catalogo.editar", Fornecedores: "compras.editar", "Conciliações": "financeiro.conciliar", Lembretes: "os.editar", Aprovações: "aprovacoes.aprovar",
 };
 export const defaultFinancialAccounts = () => [
   { id: "BANK", name: "Conta bancária", type: "Banco", openingBalance: 0, status: "Ativo" },
@@ -106,7 +106,7 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
   for (const [module, records] of Object.entries(modules)) if (!Array.isArray(records)) throw new OperationError(`Lista inválida: ${module}.`);
   validateRecords(list(old.customers), list(next.customers), "Clientes", { ...actor, can: permission => actor.can(permission === "configuracoes.editar" ? "clientes.editar" : permission) });
   validateRecords(list(old.serviceOrders), list(next.serviceOrders), "OS", { ...actor, can: permission => actor.can(permission === "configuracoes.editar" ? "os.editar" : permission) });
-  const managed = new Set(["Razão financeiro", "Livro de estoque", "Auditoria operacional", "Aprovações"]);
+  const managed = new Set(["Razão financeiro", "Livro de estoque", "Auditoria operacional"]);
   for (const module of new Set([...Object.keys(oldModules), ...Object.keys(modules)])) {
     if (managed.has(module) || module === "Auditoria") continue;
     validateRecords(list(oldModules[module]), list(modules[module]), module, actor);
@@ -403,7 +403,7 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
       records.push({ id: operationId, name: "Transferência de estoque", productId: data.productId, quantity: data.quantity, movementType: "Transferência", sourceType: data.sourceType, sourceId: data.sourceId || "", sourceName: data.sourceName || "", destinationType: data.destinationType, destinationId: data.destinationId || "", destinationName: data.destinationName || "", changeReason: data.reason || "Transferência interna", description: data.reason || "Transferência interna", createdAt: now });
       break;
     case "approval-decide": {
-      requireAction(actor, "configuracoes.editar");
+      requireAction(actor, "aprovacoes.aprovar");
       const decision = data.decision === "Aprovado" ? "Aprovado" : data.decision === "Rejeitado" ? "Rejeitado" : "";
       if (!decision || !String(data.reason || "").trim()) throw new OperationError("Aprovação exige decisão e justificativa.");
       record!.status=decision; record!.decidedAt=now; record!.decidedBy=actor.username; record!.decisionReason=String(data.reason).trim();
