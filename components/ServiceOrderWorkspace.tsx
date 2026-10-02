@@ -43,9 +43,13 @@ type Tab = typeof tabs[number];
 function text(record: RecordItem | undefined, ...keys: string[]) {
   for (const key of keys) {
     const value = record?.[key];
-    if (typeof value === "string" && value.trim()) return value;
+    if ((typeof value === "string" || typeof value === "number") && String(value).trim()) return String(value).trim();
   }
   return "";
+}
+
+function normalizeCustomerKey(value: unknown) {
+  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
 }
 
 function money(value: number) {
@@ -62,16 +66,26 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
   const [servicePrice, setServicePrice] = useState("0");
 
   const customerOptions = customers.map(item => ({
-    id: text(item, "id", "customerId", "name"),
-    name: text(item, "name", "legalName", "tradeName"),
-    legalName: text(item, "legalName"),
-    tradeName: text(item, "tradeName"),
+    id: text(item, "id", "customerId", "uuid", "name"),
+    name: text(item, "name", "legalName", "tradeName", "client"),
+    legalName: text(item, "legalName", "razaoSocial"),
+    tradeName: text(item, "tradeName", "nomeFantasia"),
     doc: text(item, "doc", "cnpj", "cpf"),
     phone: text(item, "phone", "whatsapp"),
     contact: text(item, "contact", "responsible"),
   })).filter(item => item.id && item.name);
-  const customer = customers.find(item => text(item, "name", "client") === draft.client) || customers.find(item => text(item, "legalName", "tradeName") === draft.client);
-  const customerStructures = structures.filter(item => text(item, "client", "customer", "customerName") === draft.client);
+  const customerById = draft.customerId ? customers.find(item => text(item, "id", "customerId", "uuid") === String(draft.customerId)) : undefined;
+  const draftClientKey = normalizeCustomerKey(draft.client);
+  const customerByName = customers.find(item => [text(item, "name"), text(item, "legalName", "razaoSocial"), text(item, "tradeName", "nomeFantasia")].some(value => normalizeCustomerKey(value) === draftClientKey));
+  const customer = customerById || customerByName;
+  const selectedCustomerId = text(customer, "id", "customerId", "uuid") || String(draft.customerId || "");
+  const selectedCustomerName = text(customer, "name", "legalName", "tradeName", "client") || draft.client;
+  const customerStructures = structures.filter(item => {
+    const structureCustomerId = text(item, "customerId", "clientId");
+    if (selectedCustomerId && structureCustomerId) return structureCustomerId === selectedCustomerId;
+    const structureCustomerName = text(item, "client", "customer", "customerName");
+    return normalizeCustomerKey(structureCustomerName) === normalizeCustomerKey(selectedCustomerName);
+  });
   const selectedStructure = customerStructures.find(item => text(item, "name", "unit") === String(draft.room || "")) || customerStructures.find(item => text(item, "name", "unit") === draft.unit) || structures.find(item => text(item, "name", "unit") === draft.unit);
   const selectedRoom = text(selectedStructure, "room", "environment", "ambiente", "name") || String(draft.environment || draft.room || "Sala/Ambiente não informado");
   const selectedEquipmentIds = Array.isArray(draft.equipmentIds) ? draft.equipmentIds as string[] : typeof draft.equipmentId === "string" ? [draft.equipmentId] : [];
@@ -154,12 +168,12 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
 
   return <section className="os-workspace" aria-label={`Área de trabalho da ${draft.id}`}>
     <header className="os-workspace-header">
-      <div className="os-title-block"><button className="os-icon-button" onClick={() => onClose?.()} aria-label="Voltar"><X size={17}/></button><div><span className="os-kicker">ORDEM DE SERVIÇO</span><h2>{draft.id}</h2><p>{draft.client || "Cliente não informado"}</p></div></div>
+      <div className="os-title-block"><button className="os-icon-button" onClick={() => onClose?.()} aria-label="Voltar"><X size={17}/></button><div><span className="os-kicker">ORDEM DE SERVIÇO</span><h2>{draft.id}</h2><p>{selectedCustomerName || "Cliente não informado"}</p></div></div>
       <div className="os-header-actions"><span className={`os-status ${draft.tone || "blue"}`}><i/> {draft.status}</span><button className="os-primary-button" disabled={!canEdit || saving} onClick={() => void save()}><Save size={15}/> {saving ? "Salvando..." : "Salvar"}</button></div>
     </header>
 
     <div className="os-location-bar">
-      <label>Cliente<CustomerSearchSelect customers={customerOptions} value={draft.client} onChange={(value, selected) => setDraft(current => ({ ...current, client:value, customerId:selected?.id || undefined, unit:"", unitId:undefined, sector:"", sectorId:undefined, room:"", roomId:undefined, structureId:undefined }))} /></label>
+      <label>Cliente<CustomerSearchSelect customers={customerOptions} value={selectedCustomerId} valueMode="id" onChange={(value, selected) => setDraft(current => ({ ...current, client:selected?.name || "", customerId:value || undefined, unit:"", unitId:undefined, sector:"", sectorId:undefined, room:"", roomId:undefined, structureId:undefined }))} /></label>
       <ChevronRight size={15}/><label>Unidade / setor<select value={draft.unit} onChange={event => setField("unit", event.target.value)}><option>{draft.unit || "Selecionar"}</option>{customerStructures.map(item => <option key={text(item, "id", "name")} value={text(item, "name", "unit")}>{text(item, "name", "unit")}</option>)}</select></label>
       <ChevronRight size={15}/><label>Sala / ambiente<input value={selectedRoom} onChange={event => setField("environment", event.target.value)} placeholder="Sala ou ambiente"/></label>
       <div className="os-location-summary"><MapPin size={15}/><span>{draft.unit || "Local não informado"} <b>›</b> {selectedRoom}</span></div>
