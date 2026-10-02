@@ -1538,6 +1538,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
   const [fiscalServiceCode, setFiscalServiceCode] = useState("");
   const [fiscalIssRate, setFiscalIssRate] = useState("");
   const [fiscalRpsSeries, setFiscalRpsSeries] = useState("");
+  const [fiscalNfeSeries, setFiscalNfeSeries] = useState("1");
   const [fiscalNfceSeries, setFiscalNfceSeries] = useState("1");
   const [fiscalCscId, setFiscalCscId] = useState("");
   const [fiscalCsc, setFiscalCsc] = useState("");
@@ -1572,6 +1573,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
       setFiscalServiceCode(String(data.nfse?.serviceCode || ""));
       setFiscalIssRate(String(data.nfse?.issRate || ""));
       setFiscalRpsSeries(String(data.nfse?.rpsSeries || ""));
+      setFiscalNfeSeries(String(data.nfe?.series || "1"));
       setFiscalNfceSeries(String(data.nfce?.series || "1"));
       setFiscalCscId(String(data.nfce?.cscId || ""));
       setFiscalCscConfigured(Boolean(data.nfce?.cscConfigured));
@@ -1600,6 +1602,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
     try {
       const response=await fetch("/api/fiscal-config",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({
         company:{environment:fiscalEnvironment,taxRegime:fiscalTaxRegime,stateRegistration:fiscalIe,municipalRegistration:fiscalIm},
+        nfe:{series:fiscalNfeSeries},
         nfse:{serviceCode:fiscalServiceCode,issRate:fiscalIssRate,rpsSeries:fiscalRpsSeries},
         nfce:{series:fiscalNfceSeries,cscId:fiscalCscId,...(fiscalCsc.trim()?{csc:fiscalCsc.trim()}:{})},
       })});
@@ -1675,7 +1678,8 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
           <label>Código de serviço NFS-e<input value={fiscalServiceCode} onChange={event=>setFiscalServiceCode(event.target.value)} placeholder="Código municipal/nacional"/></label>
           <label>ISS padrão (%)<input type="number" min="0" step="0.01" value={fiscalIssRate} onChange={event=>setFiscalIssRate(event.target.value)} placeholder="0,00"/></label>
           <label>Série RPS / DPS<input value={fiscalRpsSeries} onChange={event=>setFiscalRpsSeries(event.target.value)} placeholder="Série configurada"/></label>
-          <label>Série NFC-e<input value={fiscalNfceSeries} onChange={event=>setFiscalNfceSeries(event.target.value)} placeholder="1"/></label>
+          <label>Série NF-e<input value={fiscalNfeSeries} onChange={event=>setFiscalNfeSeries(event.target.value.replace(/\D/g,"").slice(0,3))} placeholder="1"/></label>
+          <label>Série NFC-e<input value={fiscalNfceSeries} onChange={event=>setFiscalNfceSeries(event.target.value.replace(/\D/g,"").slice(0,3))} placeholder="1"/></label>
           <label>ID CSC<input value={fiscalCscId} onChange={event=>setFiscalCscId(event.target.value)} placeholder="Identificador do CSC"/></label>
           <label>CSC<input type="password" autoComplete="new-password" value={fiscalCsc} onChange={event=>setFiscalCsc(event.target.value)} placeholder="Preencha somente para cadastrar/trocar"/><small>O valor não é exibido novamente.</small></label>
           <div className="wide fiscal-certificate-card"><div><LockKeyhole size={18}/><span><b>Certificado digital A1</b><small>{fiscalCertificateInfo ? `${fiscalCertificateInfo.fileName || "Certificado"} • ${fiscalCertificateInfo.status || "Status indisponível"}${typeof fiscalCertificateInfo.daysToExpiry === "number" ? ` • ${fiscalCertificateInfo.daysToExpiry} dia(s)` : ""}` : "Nenhum certificado disponível para esta empresa."}</small></span></div><div className="fiscal-certificate-inputs"><label>Arquivo<input type="file" accept=".pfx,.p12" onChange={event=>setFiscalCertificate(event.target.files?.[0] || null)}/></label><label>Senha<input type="password" autoComplete="new-password" value={fiscalCertificatePassword} onChange={event=>setFiscalCertificatePassword(event.target.value)} placeholder="Senha do A1"/></label><button type="button" className="outline-btn" disabled={fiscalBusy||!fiscalCertificate||!fiscalCertificatePassword} onClick={()=>void uploadFiscalCertificate()}><LockKeyhole size={14}/> Importar certificado</button></div></div>
