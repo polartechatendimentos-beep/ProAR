@@ -54,6 +54,7 @@ import { deriveOperationalActions } from "@/lib/action-center";
 import { OperationsActionCenter } from "@/components/OperationsActionCenter";
 import { DashboardWorkspace } from "@/components/DashboardWorkspace";
 import { ApprovalCenter } from "@/components/ApprovalCenter";
+import { inferFeedbackTone, notifyFeedback, type FeedbackTone } from "@/lib/ui-feedback";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type NavItem = { icon: IconType; name: string; badge?: string };
@@ -1538,6 +1539,10 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
   const [businessPhone, setBusinessPhone] = useState("+55 17 2122-2806");
   const [token, setToken] = useState("");
   const [saved, setSaved] = useState("");
+  useEffect(() => {
+    if (!saved) return;
+    notifyFeedback({ message: saved, tone: inferFeedbackTone(saved), title: "Configurações" });
+  }, [saved]);
   const [aiKey, setAiKey] = useState("");
   const [aiStatus, setAiStatus] = useState<{configured:boolean;last4:string|null;source:string}>({configured:false,last4:null,source:"none"});
   const [aiBusy, setAiBusy] = useState(false);
@@ -1758,6 +1763,10 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
   const [historyHouse, setHistoryHouse] = useState<HouseWorkItem | null>(null);
   const [historyUpdate, setHistoryUpdate] = useState<HouseWorkUpdate | null>(null);
   const [reportNotice, setReportNotice] = useState("");
+  useEffect(() => {
+    if (!reportNotice) return;
+    notifyFeedback({ message: reportNotice, tone: inferFeedbackTone(reportNotice), title: "Obras" });
+  }, [reportNotice]);
   const [shareToken, setShareToken] = useState("");
   const [serverRevision, setServerRevision] = useState(0);
   const [mapOnline, setMapOnline] = useState(true);
@@ -3332,21 +3341,18 @@ export default function Home() {
     };
     loadSharedState();
   }, [authenticatedUser, activeCompany.id]);
-  type FeedbackTone = "success" | "error" | "warning" | "info";
   const [feedbackTone, setFeedbackTone] = useState<FeedbackTone>("info");
-  const feedbackTimerRef = useRef<number | null>(null);
   const showFeedback = (message: string, tone: FeedbackTone = "info", duration = 3200) => {
-    if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
     setFeedbackTone(tone);
-    setSavedMessage(message);
-    feedbackTimerRef.current = window.setTimeout(() => {
-      setSavedMessage("");
-      feedbackTimerRef.current = null;
-    }, duration);
+    notifyFeedback({ message, tone, duration });
   };
-  useEffect(() => () => {
-    if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
-  }, []);
+  useEffect(() => {
+    if (!savedMessage) return;
+    const tone=inferFeedbackTone(savedMessage);
+    setFeedbackTone(tone);
+    notifyFeedback({ message:savedMessage, tone });
+    setSavedMessage("");
+  }, [savedMessage]);
   const persistSharedState = (nextCustomers: Customer[], nextOrders: ServiceOrder[], nextModules: Record<string, ModuleRecord[]>) => {
     localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(nextCustomers));
     localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(nextOrders));
@@ -4134,7 +4140,7 @@ export default function Home() {
     <main className="main">
       <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNew={openNew} searchItems={globalSearchItems} pendingItems={pendingItems} onSearchSelect={openGlobalSearch} onPendingSelect={openPending} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onSwitchUser={logout} online={online} syncing={syncing} onPull={() => void pullFromDatabase()} onPush={() => void pushToDatabase()}/>
       {syncPhase !== "idle" && <div className={`sync-progress ${syncPhase}`} role="status" aria-label={syncPhase === "complete" ? "Dados atualizados" : "Sincronizando dados"}><i/></div>}
-      {savedMessage && <div className={`save-toast feedback-${feedbackTone}`} role={feedbackTone === "error" ? "alert" : "status"} aria-live={feedbackTone === "error" ? "assertive" : "polite"}>{feedbackTone === "error" || feedbackTone === "warning" ? <AlertTriangle size={16}/> : <CheckCircle2 size={16}/>}<span>{savedMessage}</span></div>}
+      
       <div className="company-context"><Building2 size={13}/><span>{activeCompany.tradeName}</span><small>{activeCompany.cnpj || "CNPJ pendente"} • {activeCompany.city}/{activeCompany.state}</small></div>
       {current === "PMOC e conformidade" ? <TechnicalCompliancePanel plans={(moduleRecords.PMOC ?? []) as any} fluids={(moduleRecords.Refrigerantes ?? []) as any} documents={(moduleRecords["Documentação / Habilitação"] ?? []) as any} onSave={(module,record)=>saveConfirmedModuleRecord(module,record)}/> : null}
       <div className="page-content">{current === "PMOC e conformidade" ? null : current === "Integridade do Sistema" ? <IntegrityAudit/> : current === "Painel inicial" ? <DashboardWorkspace onNavigate={setCurrent} serviceOrders={serviceOrders} modules={moduleRecords} role={authenticatedUser.role}/> : current === "Central de pendências" ? <OperationsActionCenter serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} modules={moduleRecords as unknown as Record<string,Record<string,unknown>[]>} onNavigate={setCurrent}/> : current === "Clientes" ? <Customers onOpen={name => { setModal(""); window.setTimeout(() => setModal(name), 0); }} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={saveCustomerStructure} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} company={activeCompany} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <LicitacoesWorkspace modules={moduleRecords} customers={customerRecords} orders={serviceOrders} onSaveRecord={(moduleName,record)=>saveConfirmedModuleRecord(moduleName,record)} onReadyToInvoice={record=>saveConfirmedModuleRecord("Empenhos",{...record,status:"Pronto para faturar"},[{moduleName:"Financeiro",record:{id:`FAT-${record.id}`,name:`Faturamento • ${record.name}`,client:record.client,description:`Aguardando emissão de Nota Fiscal • ${record.empenhoProcess || "processo não informado"}`,createdAt:new Date().toLocaleString("pt-BR"),status:"Pronto para faturar",date:new Date().toISOString().slice(0,10),value:record.value??0,category:"Faturamento público",transactionType:"Receber",empenhoId:record.id}}])} onOpenTender={item=>setModal(`Análise de edital • ${item.numeroControlePNCP || item.objetoCompra || "Licitação"}`)}/> : current === "Orçamentos" ? <BudgetPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={record => updateModuleRecord("Orçamentos",record)} onConvert={convertBudget} onDelete={record => deleteModuleRecord("Orçamentos",record)} onCreateCustomer={createQuickCustomer} onCreateStructure={createQuickStructure}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} sales={moduleRecords.Vendas ?? []} onSave={record => updateModuleRecord("Vendas",record)}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders} company={activeCompany}/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany} isAdministrator={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*"))}/> : current === "Aprovações" ? <ApprovalCenter records={moduleRecords["Aprovações"] ?? []} canApprove={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*") || authenticatedUser.permissions?.includes("aprovacoes.aprovar") || authenticatedUser.permissions?.includes("Aprovações"))} onOperation={runOperationalCommand}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} modules={moduleRecords} onOperation={runOperationalCommand} onOpen={setModal} onIssueInvoice={(record,invoiceNumber)=>{const commitment=(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId);const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Faturado"}}]:[];return saveConfirmedModuleRecord("Financeiro",{...record,status:"Em aberto",transactionType:"Receber",invoiceNumber,invoiceIssuedAt:new Date().toISOString()},related)}}/> : current === "Funcionários" ? <EmployeesWorkspace records={moduleRecords["Funcionários"] ?? []} serviceOrders={serviceOrders} onOpen={setModal} onUpdate={updateModuleRecord} onDelete={deleteModuleRecord} canEdit={hasAction("Funcionários","Editar")}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} onUpdate={updateServiceOrder} serviceOrders={serviceOrders} customers={customerRecords} company={activeCompany} role={authenticatedUser.role}/> : <>{(current === "Compras" || current === "Estoque") && <InventoryOperations mode={current} modules={moduleRecords} onOperation={runOperationalCommand}/>}<GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []} allModules={moduleRecords} serviceOrders={serviceOrders}/></>}</div>
