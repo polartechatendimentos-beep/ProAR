@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { readSession } from "./proar-auth";
 
 type ProarSession = NonNullable<ReturnType<typeof readSession>>;
