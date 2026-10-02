@@ -28,12 +28,7 @@ const officialPortals = [
 ] as const;
 
 const inboxStatuses: InboxStatus[] = ["Novas", "Para analisar", "Interessantes", "Participaremos", "Descartadas", "Aguardando abertura", "Em disputa", "Habilitação", "Homologadas"];
-const baseVault: VaultDocument[] = [
-  { id: "vault-cnpj", name: "Cartão CNPJ.pdf", category: "CNPJ", validUntil: "Documento permanente", issuer: "Receita Federal", status: "Válido" },
-  { id: "vault-social", name: "Contrato Social.pdf", category: "Contrato social", validUntil: "31/12/2026", issuer: "Junta Comercial", status: "Válido" },
-  { id: "vault-federal", name: "Certidão Federal.pdf", category: "Certidão", validUntil: "18/09/2026", issuer: "Receita Federal", status: "Vencido" },
-  { id: "vault-fgts", name: "CRF FGTS.pdf", category: "Certidão", validUntil: "04/10/2026", issuer: "Caixa Econômica", status: "Vence em breve" },
-];
+const baseVault: VaultDocument[] = [];
 const tenderKey = (tender: BiddingTender, index: number) => tender.numeroControlePNCP || `${tender.orgaoEntidade?.razaoSocial || "certame"}-${index}`;
 const money = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const classifyReason = (tender: BiddingTender) => {
