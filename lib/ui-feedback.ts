@@ -1,3 +1,4 @@
+import { friendlyErrorMessage } from "./error-messages";
 export type FeedbackTone = "success" | "error" | "warning" | "info";
 
 export type FeedbackMessage = {
@@ -29,10 +30,14 @@ export function inferFeedbackTone(message: string): FeedbackTone {
 export function notifyFeedback(input: FeedbackMessage | string) {
   if (typeof window === "undefined") return;
   const payload: FeedbackMessage = typeof input === "string" ? { message: input } : input;
-  const tone=payload.tone ?? inferFeedbackTone(payload.message);
+  const safeMessage = payload.tone === "error" || inferFeedbackTone(payload.message) === "error" ? friendlyErrorMessage(payload.message) : payload.message;
+  const safeDetail = payload.detail ? friendlyErrorMessage(payload.detail, { fallback:"Detalhes técnicos registrados para suporte." }) : payload.detail;
+  const tone=payload.tone ?? inferFeedbackTone(safeMessage);
   window.dispatchEvent(new CustomEvent<FeedbackMessage>(feedbackEventName,{
     detail:{
       ...payload,
+      message:safeMessage,
+      detail:safeDetail,
       id:payload.id ?? `feedback-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
       tone,
       title:payload.title ?? defaultTitle[tone],
