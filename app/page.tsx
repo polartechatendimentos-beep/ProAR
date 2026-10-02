@@ -529,7 +529,11 @@ const tiagoEmployee: ModuleRecord = { id: "FUN-000001", name: "Tiago Viana", cli
 const linkedUnits: Record<string, { icon: IconType; name: string; type: string; doc: string; responsible: string; phone: string; address: string; orders: number }[]> = {};
 const linkedSectors: Record<string, { icon: IconType; name: string; type: string; doc: string; responsible: string; phone: string; address: string; orders: number }[]> = {};
 
-function Header({ title, subtitle, onMenu, userName, userRole, onSwitchUser }: { title: string; subtitle: string; onMenu: () => void; onNew: (option: string) => void; searchItems: GlobalSearchItem[]; pendingItems: PendingItem[]; onSearchSelect: (item: GlobalSearchItem) => void; onPendingSelect: (item: PendingItem) => void; userName: string; userRole: string; onSwitchUser: () => void; online: boolean; syncing: boolean; onPull: () => void; onPush: () => void }) {
+function Header({ title, subtitle, onMenu, searchItems, pendingItems, onSearchSelect, onPendingSelect, userName, userRole, onSwitchUser, online, syncing, onPull }: { title: string; subtitle: string; onMenu: () => void; onNew: (option: string) => void; searchItems: GlobalSearchItem[]; pendingItems: PendingItem[]; onSearchSelect: (item: GlobalSearchItem) => void; onPendingSelect: (item: PendingItem) => void; userName: string; userRole: string; onSwitchUser: () => void; online: boolean; syncing: boolean; onPull: () => void; onPush: () => void }) {
+  const [searchOpen,setSearchOpen]=useState(false);
+  const [pendingOpen,setPendingOpen]=useState(false);
+  const [query,setQuery]=useState("");
+  const matches=query.trim().length<2?[]:searchItems.filter(item=>`${item.title} ${item.detail} ${item.module}`.toLowerCase().includes(query.trim().toLowerCase())).slice(0,10);
   return <header className="topbar topbar-user-only">
     <div className="headline">
       <button className="menu-toggle" aria-label="Abrir menu" onClick={onMenu}><Menu size={20}/></button>
@@ -537,6 +541,15 @@ function Header({ title, subtitle, onMenu, userName, userRole, onSwitchUser }: {
       <div className="headline-copy"><div className="eyebrow"><span>PROAR</span><ChevronRight size={10}/><b>Central de operações</b><i>BY TAV's</i></div><h1>{title}</h1><p>{subtitle}</p></div>
     </div>
     <div className="top-actions top-actions-user-only">
+      <div className="header-global-search">
+        <button className="header-tool-button" aria-label="Busca global" title="Busca global" onClick={()=>{setSearchOpen(value=>!value);setPendingOpen(false)}}><Search size={16}/></button>
+        {searchOpen&&<div className="header-popover search-popover"><label><Search size={14}/><input autoFocus value={query} onChange={event=>setQuery(event.target.value)} placeholder="Cliente, CNPJ, OS, série, NF..."/></label>{query.trim().length<2?<small>Digite pelo menos 2 caracteres.</small>:matches.length?<div className="header-result-list">{matches.map(item=><button key={`${item.module}-${item.id}`} onClick={()=>{onSearchSelect(item);setSearchOpen(false);setQuery("")}}><b>{item.title}</b><span>{item.detail||item.module}</span><em>{item.module}</em></button>)}</div>:<small>Nenhum registro encontrado nos dados carregados.</small>}</div>}
+      </div>
+      <div className="header-pending">
+        <button className="header-tool-button" aria-label="Próximas ações" title="Próximas ações" onClick={()=>{setPendingOpen(value=>!value);setSearchOpen(false)}}><Bell size={16}/>{pendingItems.length>0&&<i>{Math.min(pendingItems.length,99)}</i>}</button>
+        {pendingOpen&&<div className="header-popover pending-popover"><div className="header-popover-title"><b>Próximas ações</b><span>{pendingItems.length}</span></div>{pendingItems.length?<div className="header-result-list">{pendingItems.slice(0,10).map(item=><button key={item.id} className={item.tone} onClick={()=>{onPendingSelect(item);setPendingOpen(false)}}><b>{item.title}</b><span>{item.detail}</span><em>{item.module}</em></button>)}</div>:<small>Nenhuma pendência identificada.</small>}</div>}
+      </div>
+      <button className={`header-tool-button sync-state ${online?"online":"offline"}`} aria-label={online?"Atualizar dados":"Sem conexão"} title={online?"Atualizar dados do banco":"Sem conexão"} disabled={!online||syncing} onClick={onPull}><RefreshCw size={16} className={syncing?"spin":""}/></button>
       <div className="profile"><div className="profile-avatar">{userName.split(" ").map(word => word[0]).slice(0,2).join("").toUpperCase()}<span /></div><div><strong>{userName}</strong><small>{userRole}</small></div></div>
       <button className="switch-user-btn" aria-label="Trocar utilizador" title="Trocar utilizador" onClick={onSwitchUser}><UserRound size={15}/><span>Trocar</span><LogOut size={14}/></button>
     </div>
