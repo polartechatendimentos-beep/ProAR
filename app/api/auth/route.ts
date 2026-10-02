@@ -45,10 +45,14 @@ async function authenticateLegacyEmployee(username: string, password: string) {
 export async function GET(request: NextRequest) {
   const user = readSession(request.cookies.get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.json({ authenticated: false }, { status: 401 });
-  if (user.companyId && !user.legacy) {
-    const access = await validateCompanyAccess(user.companyId);
+  if (user.companyId) {
+    const access = user.companySlug
+      ? await validateCompanyAccessBySlug(user.companySlug)
+      : user.companyId === PRIMARY_COMPANY_ID
+        ? await validateCompanyAccessBySlug(PRIMARY_COMPANY_SLUG)
+        : await validateCompanyAccess(user.companyId);
     if (!access.ok) {
-      const response = NextResponse.json({ authenticated: false, code: access.code, error: access.reason }, { status: 403 });
+      const response = NextResponse.json({ authenticated: false, code: access.code, blocked:access.code==="SYSTEM_BLOCKED", error: access.reason }, { status: 403 });
       response.cookies.set(COOKIE_NAME, "", { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 0 });
       return response;
     }
