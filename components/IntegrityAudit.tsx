@@ -1,12 +1,13 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, CircleAlert, Database, RefreshCw, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleAlert, Database, RefreshCw, ShieldCheck, ServerCog } from "lucide-react";
 import type { IntegrityResult } from "@/lib/integrity-audit";
 
 export function IntegrityAudit() {
   const [result, setResult] = useState<IntegrityResult | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [health, setHealth] = useState<{checkedAt:string;services:{id:string;label:string;state:"ok"|"warning"|"error";message:string}[];totals:{ok:number;warning:number;error:number}} | null>(null);
   const run = useCallback(async () => {
     setLoading(true); setError("");
     try {
@@ -14,16 +15,25 @@ export function IntegrityAudit() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "O diagnóstico não pôde ser concluído.");
       setResult(payload as IntegrityResult);
+      const healthResponse = await fetch("/api/system-health", { cache:"no-store", headers:{ Accept:"application/json" } });
+      if (healthResponse.ok) setHealth(await healthResponse.json());
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Falha ao consultar a base."); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => {
     let active = true;
-    fetch("/api/integrity", { cache: "no-store", headers: { Accept: "application/json" } }).then(async response => {
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "O diagnóstico não pôde ser concluído.");
-      if (active) setResult(payload as IntegrityResult);
-    }).catch(cause => { if (active) setError(cause instanceof Error ? cause.message : "Falha ao consultar a base."); })
+    Promise.all([
+      fetch("/api/integrity", { cache: "no-store", headers: { Accept: "application/json" } }).then(async response => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "O diagnóstico não pôde ser concluído.");
+        if (active) setResult(payload as IntegrityResult);
+      }),
+      fetch("/api/system-health", { cache:"no-store", headers:{ Accept:"application/json" } }).then(async response => {
+        if (!response.ok) return;
+        const payload = await response.json();
+        if (active) setHealth(payload);
+      }),
+    ]).catch(cause => { if (active) setError(cause instanceof Error ? cause.message : "Falha ao consultar a base."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
@@ -41,6 +51,7 @@ export function IntegrityAudit() {
       </div>
       <section className="integrity-panel"><header><div><h3>Regras verificadas</h3><p>Contagens calculadas sobre o snapshot operacional mais recente.</p></div><span>{result.checks.length} verificações</span></header><div className="integrity-checks">{result.checks.map(check => <article key={check.name} className={`integrity-check ${check.status.toLowerCase()}`}><div><span className="integrity-state">{check.status === "OK" ? <CheckCircle2 size={14}/> : check.status === "Crítico" ? <CircleAlert size={14}/> : <AlertTriangle size={14}/>} {check.status}</span><b>{check.name}</b><small>{check.summary}</small></div><strong>{check.count}</strong></article>)}</div></section>
       <section className="integrity-panel"><header><div><h3>Ocorrências encontradas</h3><p>Use os identificadores para conferir cada registro nos módulos correspondentes. O diagnóstico não corrige nem exclui dados.</p></div><span>{result.findings.length} registros</span></header>{result.findings.length ? <div className="integrity-findings">{result.findings.map((finding,index) => <article className={`integrity-finding ${finding.severity === "Crítico" ? "critical" : "attention"}`} key={`${finding.check}-${finding.recordId}-${index}`}><span className="integrity-state">{finding.severity === "Crítico" ? <CircleAlert size={14}/> : <AlertTriangle size={14}/>} {finding.severity}</span><div><b>{finding.title}</b><small>{finding.check} • ID {finding.recordId}</small><p>{finding.detail}</p></div></article>)}</div> : <div className="integrity-empty"><CheckCircle2 size={18}/> Nenhuma divergência foi encontrada nas regras avaliadas.</div>}</section>
+      {health && <section className="integrity-panel"><header><div><h3>Saúde das integrações</h3><p>Banco, fiscal e serviços essenciais verificados sem expor credenciais.</p></div><span>{health.totals.ok} OK • {health.totals.warning} atenção • {health.totals.error} erro</span></header><div className="integrity-checks">{health.services.map(service=><article key={service.id} className={`integrity-check ${service.state === "ok" ? "ok" : service.state === "error" ? "crítico" : "atenção"}`}><div><span className="integrity-state">{service.state==="ok"?<CheckCircle2 size={14}/>:service.state==="error"?<CircleAlert size={14}/>:<AlertTriangle size={14}/>} {service.state==="ok"?"OK":service.state==="error"?"Erro":"Atenção"}</span><b><ServerCog size={13}/> {service.label}</b><small>{service.message}</small></div></article>)}</div></section>}
       <p className="integrity-scope">Escopo atual: dados consolidados no snapshot operacional do ProAR. Registros independentes antigos que não estejam refletidos nesse snapshot não são inferidos por este diagnóstico.</p>
     </>}
   </section>;
