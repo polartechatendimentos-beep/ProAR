@@ -388,6 +388,7 @@ type ModuleRecord = {
   status?: string;
   date?: string;
   value?: number;
+  total?: number;
   category?: string;
   purchaseItems?: PurchaseItem[];
   paymentType?: "À vista" | "A prazo";
