@@ -92,7 +92,6 @@ export function auditOperationalIntegrity(state: StateData, checkedAt = new Date
 
   const customerIds = new Set(customers.map(item => text(item.id)).filter(Boolean));
   const customerNames = new Set(customers.flatMap(item => [normalized(item.name), normalized(item.legalName), normalized(item.tradeName)]).filter(Boolean));
-  const customerById = new Map(customers.map(item => [text(item.id), item]).filter(([id]) => Boolean(id)));
   const structureIds = new Set(structures.map(item => text(item.id)).filter(Boolean));
   const structureById = new Map(structures.map(item => [text(item.id), item]));
   const equipmentIds = new Set(equipment.map(item => text(item.id)).filter(Boolean));
