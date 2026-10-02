@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { requiredSecret } from "./security-env";
 import { verifyPassword } from "./password";
 
