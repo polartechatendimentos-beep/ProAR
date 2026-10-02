@@ -1,6 +1,6 @@
 "use client";
 
-import { EmployeeRoutesTab } from "@/components/EmployeeRoutesTab";
+import dynamic from "next/dynamic";
 import "./settings.css";
 import "./multiempresa.css";
 import "./obra-142.css";
@@ -20,7 +20,7 @@ import "./public-contracts.css";
 import "./login-minimal.css";
 import "./operational-refresh.css";
 
-import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
   Activity, AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight,
   Bell, Boxes, BriefcaseBusiness, Building2, CalendarDays, ChartNoAxesCombined,
@@ -32,19 +32,11 @@ import {
   MessageCircle, PenTool, Tag, Trash2, Database, LockKeyhole, UnlockKeyhole, ImagePlus,
   UsersRound, WalletCards, Warehouse, Wrench, X, Zap, House, History, ImageIcon, RefreshCw, Sparkles
 } from "lucide-react";
-import { PublicContractsPanel, type PublicContractRecord } from "@/components/PublicContractsPanel";
-import { PublicCommitmentsPanel, type PublicCommitmentRecord } from "@/components/PublicCommitmentsPanel";
+import type { PublicContractRecord } from "@/components/PublicContractsPanel";
+import type { PublicCommitmentRecord } from "@/components/PublicCommitmentsPanel";
 import { BudgetQuickCreateDrawer, type CustomerDraft, type StructureDraft } from "@/components/BudgetQuickCreateDrawer";
 import { CustomerSearchSelect } from "@/components/CustomerSearchSelect";
-import { BiddingOperationsWorkspace } from "@/components/BiddingOperationsWorkspace";
-import { OperationalFinance } from "@/components/OperationalFinance";
-import { InventoryOperations } from "@/components/InventoryOperations";
 import type { OperationalCommand } from "@/lib/operational-ledger";
-import { ServiceOrderWorkspace } from "@/components/ServiceOrderWorkspace";
-import { CustomerProfileWorkspace } from "@/components/CustomerProfileWorkspace";
-import { TechnicalCompliancePanel } from "@/components/TechnicalCompliancePanel";
-import { IntegrityAudit } from "@/components/IntegrityAudit";
-import { FiscalDocumentsPanel } from "@/components/FiscalDocumentsPanel";
 import { calculateCertameItemBalance, createCertameMovement, financialOutstandingValue, financialRealizedValue } from "@/lib/public-contracts";
 import { improveTechnicalText } from "@/lib/text-assist";
 import { WORK_STATUSES, getWorkProgress, getWorkStatusColor, normalizeWorkStatus, type WorkStatus } from "@/lib/work-status";
@@ -54,6 +46,22 @@ type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?:
 type NavItem = { icon: IconType; name: string; badge?: string };
 type GlobalSearchItem = { id: string; title: string; detail: string; module: string; kind: "Cliente" | "OS" | "Cadastro" };
 type PendingItem = { id: string; title: string; detail: string; module: string; tone: "blue" | "amber" | "red" };
+
+function ModuleLoading() {
+  return <section className="module-page"><div className="panel" style={{minHeight:220,display:"grid",placeItems:"center"}}><div style={{textAlign:"center"}}><RefreshCw size={22} className="spin"/><b style={{display:"block",marginTop:10}}>Carregando módulo...</b><small>O ProAR carrega apenas o necessário para esta tela.</small></div></div></section>;
+}
+
+const EmployeeRoutesTab = dynamic(() => import("@/components/EmployeeRoutesTab").then(module => module.EmployeeRoutesTab), { loading: ModuleLoading });
+const PublicContractsPanel = dynamic(() => import("@/components/PublicContractsPanel").then(module => module.PublicContractsPanel), { loading: ModuleLoading });
+const PublicCommitmentsPanel = dynamic(() => import("@/components/PublicCommitmentsPanel").then(module => module.PublicCommitmentsPanel), { loading: ModuleLoading });
+const BiddingOperationsWorkspace = dynamic(() => import("@/components/BiddingOperationsWorkspace").then(module => module.BiddingOperationsWorkspace), { loading: ModuleLoading });
+const OperationalFinance = dynamic(() => import("@/components/OperationalFinance").then(module => module.OperationalFinance), { loading: ModuleLoading });
+const InventoryOperations = dynamic(() => import("@/components/InventoryOperations").then(module => module.InventoryOperations), { loading: ModuleLoading });
+const ServiceOrderWorkspace = dynamic(() => import("@/components/ServiceOrderWorkspace").then(module => module.ServiceOrderWorkspace), { loading: ModuleLoading });
+const CustomerProfileWorkspace = dynamic(() => import("@/components/CustomerProfileWorkspace").then(module => module.CustomerProfileWorkspace), { loading: ModuleLoading });
+const TechnicalCompliancePanel = dynamic(() => import("@/components/TechnicalCompliancePanel").then(module => module.TechnicalCompliancePanel), { loading: ModuleLoading });
+const IntegrityAudit = dynamic(() => import("@/components/IntegrityAudit").then(module => module.IntegrityAudit), { loading: ModuleLoading });
+const FiscalDocumentsPanel = dynamic(() => import("@/components/FiscalDocumentsPanel").then(module => module.FiscalDocumentsPanel), { loading: ModuleLoading });
 
 const navGroups: { label: string; items: NavItem[] }[] = [
   { label: "VISÃO GERAL", items: [
