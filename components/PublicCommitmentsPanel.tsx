@@ -77,7 +77,7 @@ export function PublicCommitmentsPanel({ orders, contracts, commitments, onSave,
   const [editingId,setEditingId]=useState("");
 
   const eligible = useMemo(() => {
-    const allocations = commitments.filter(record=>!/cancelad/i.test(record.status??"")).flatMap(record => record.empenhoAllocations ?? []);
+    const allocations = commitments.filter(record=>record.id!==editingId&&!/cancelad/i.test(record.status??"")).flatMap(record => record.empenhoAllocations ?? []);
     return orders.flatMap(order => {
       if (!order.certameId || !/conclu[ií]da/i.test(order.status)) return [];
       const executedItems = (order.contractItems ?? []).filter(item => item.executionMovementId);
@@ -100,7 +100,7 @@ export function PublicCommitmentsPanel({ orders, contracts, commitments, onSave,
         return { key:`${order.id}::${item.certameItemId}`, order, item, executedValue:item.executedValue, allocated:allocated + legacyShare, available };
       }).filter(entry => entry.available > 0);
     });
-  }, [orders, commitments]);
+  }, [orders, commitments, editingId]);
 
   const selectedTotal = Object.values(selected).reduce((sum, raw) => sum + (Number(raw) || 0), 0);
   const reset = () => { setEditingId("");setNumber("");setDate(new Date().toISOString().slice(0,10));setValue("");setFicha("");setPurchaseOrder("");setAuthorization("");setSelected({}); };
