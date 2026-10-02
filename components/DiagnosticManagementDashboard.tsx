@@ -19,7 +19,8 @@ export function DiagnosticManagementDashboard({serviceOrders,equipment}:Props){
     return list.map(entry=>({...entry,equipmentId:item.id,equipmentName:item.name||item.model}));
   });
   const unique=new Map<string,RecordItem>();
-  for(const item of [...histories,...equipmentHistories])unique.set(text(item.id)||JSON.stringify(item),item);
+  const combined:RecordItem[]=[...(histories as RecordItem[]),...(equipmentHistories as RecordItem[])];
+  for(const item of combined)unique.set(text(item.id)||JSON.stringify(item),item);
   const rows=[...unique.values()].sort((a,b)=>new Date(text(b.createdAt)||0).getTime()-new Date(text(a.createdAt)||0).getTime());
   const last30=rows.filter(item=>Date.now()-new Date(text(item.createdAt)||0).getTime()<=30*86400000);
   const critical=rows.filter(item=>/cr[ií]tica|alta/i.test(text((item.result as RecordItem|undefined)?.severity)));
