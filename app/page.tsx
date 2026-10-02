@@ -63,6 +63,24 @@ const TechnicalCompliancePanel = dynamic(() => import("@/components/TechnicalCom
 const IntegrityAudit = dynamic(() => import("@/components/IntegrityAudit").then(module => module.IntegrityAudit), { loading: ModuleLoading });
 const FiscalDocumentsPanel = dynamic(() => import("@/components/FiscalDocumentsPanel").then(module => module.FiscalDocumentsPanel), { loading: ModuleLoading });
 
+const prefetchModule = (name: string) => {
+  switch (name) {
+    case "Financeiro": void import("@/components/OperationalFinance"); break;
+    case "Estoque":
+    case "Compras": void import("@/components/InventoryOperations"); break;
+    case "Ordens de serviço": void import("@/components/ServiceOrderWorkspace"); break;
+    case "Clientes": void import("@/components/CustomerProfileWorkspace"); break;
+    case "PMOC e conformidade": void import("@/components/TechnicalCompliancePanel"); break;
+    case "Integridade do Sistema": void import("@/components/IntegrityAudit"); break;
+    case "Nota Fiscal Eletrônica": void import("@/components/FiscalDocumentsPanel"); break;
+    case "Licitações":
+      void import("@/components/PublicContractsPanel");
+      void import("@/components/BiddingOperationsWorkspace");
+      break;
+    case "Funcionários": void import("@/components/EmployeeRoutesTab"); break;
+  }
+};
+
 const navGroups: { label: string; items: NavItem[] }[] = [
   { label: "VISÃO GERAL", items: [
     { icon: LayoutDashboard, name: "Painel inicial" },
@@ -625,9 +643,9 @@ function Sidebar({ current, setCurrent, open, close, permissions, role }: { curr
     {open && <button className="backdrop" aria-label="Fechar menu" onClick={close} />}
     <aside className={`sidebar ${open ? "open" : ""}`}>
       <div className="brand"><div className="brand-mark brand-logo"><img src="/icon.png" alt="Ícone ProAR"/></div><div className="brand-copy"><strong>ProAR</strong><small>GESTÃO DE SERVIÇOS</small><em>BY TAV's</em></div></div>
-      <nav>{recentItems.length>0&&<div className="nav-group"><p>RECENTES</p>{recentItems.map(({icon:Icon,name})=><button key={`recent-${name}`} className={current===name?"active":""} onClick={()=>{setCurrent(name);close();}}><span className="nav-icon"><Icon size={17} strokeWidth={1.9}/></span><span>{name}</span></button>)}</div>}{navGroups.map(group => { const visibleItems = group.items.filter(item => allowed(item.name)); return visibleItems.length ? <div className="nav-group" key={group.label}>
+      <nav>{recentItems.length>0&&<div className="nav-group"><p>RECENTES</p>{recentItems.map(({icon:Icon,name})=><button key={`recent-${name}`} className={current===name?"active":""} onMouseEnter={()=>prefetchModule(name)} onFocus={()=>prefetchModule(name)} onClick={()=>{setCurrent(name);close();}}><span className="nav-icon"><Icon size={17} strokeWidth={1.9}/></span><span>{name}</span></button>)}</div>}{navGroups.map(group => { const visibleItems = group.items.filter(item => allowed(item.name)); return visibleItems.length ? <div className="nav-group" key={group.label}>
         <p>{group.label}</p>
-        {visibleItems.map(({icon: Icon, name, badge}) => <button key={name} className={current === name ? "active" : ""} onClick={() => { setCurrent(name); close(); }}>
+        {visibleItems.map(({icon: Icon, name, badge}) => <button key={name} className={current === name ? "active" : ""} onMouseEnter={()=>prefetchModule(name)} onFocus={()=>prefetchModule(name)} onClick={() => { setCurrent(name); close(); }}>
           <span className="nav-icon"><Icon size={17} strokeWidth={1.9}/></span><span>{name}</span>{badge && <em>{badge}</em>}
         </button>)}
       </div> : null; })}</nav>
