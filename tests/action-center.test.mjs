@@ -47,3 +47,13 @@ assert.ok(summary.critical > 0);
 assert.ok(summary.byCategory.Estoque >= 2);
 
 console.log("action-center.test.mjs: ok");
+
+
+test("aprovação pendente aparece como prioridade crítica",()=>{
+  const actions=deriveOperationalActions([],{Aprovações:[{id:"APR1",name:"Aprovação • Compra 1",sourceModule:"Compras",status:"Pendente",reason:"Alçada",value:6000}]},new Date("2026-10-02T12:00:00Z"));
+  const item=actions.find(action=>action.recordId==="APR1");
+  assert.ok(item);
+  assert.equal(item.category,"Aprovação");
+  assert.equal(item.priority,1);
+  assert.equal(item.module,"Aprovações");
+});
