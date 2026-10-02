@@ -1523,6 +1523,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
   const [fiscalNfceSeries, setFiscalNfceSeries] = useState("1");
   const [fiscalCscId, setFiscalCscId] = useState("");
   const [fiscalCsc, setFiscalCsc] = useState("");
+  const [fiscalCscConfigured, setFiscalCscConfigured] = useState(false);
   const [fiscalCertificate, setFiscalCertificate] = useState<File | null>(null);
   const [fiscalCertificatePassword, setFiscalCertificatePassword] = useState("");
   const [fiscalCertificateInfo, setFiscalCertificateInfo] = useState<{fileName?:string;validTo?:string;status?:string;daysToExpiry?:number;expiryLevel?:string}|null>(null);
@@ -1554,6 +1555,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
       setFiscalRpsSeries(String(data.nfse?.rpsSeries || ""));
       setFiscalNfceSeries(String(data.nfce?.series || "1"));
       setFiscalCscId(String(data.nfce?.cscId || ""));
+      setFiscalCscConfigured(Boolean(data.nfce?.cscConfigured));
       setFiscalCsc("");
       setFiscalCertificateInfo(data.certificate || null);
     }).catch(error=>setSaved(error instanceof Error?error.message:"Não foi possível consultar a configuração fiscal.")).finally(()=>setFiscalBusy(false));
@@ -1583,7 +1585,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
         nfce:{series:fiscalNfceSeries,cscId:fiscalCscId,...(fiscalCsc.trim()?{csc:fiscalCsc.trim()}:{})},
       })});
       const data=await response.json(); if(!response.ok)throw new Error(data.error || "Não foi possível salvar a configuração fiscal.");
-      setFiscalCsc(""); setFiscalCertificateInfo(data.certificate || fiscalCertificateInfo); setSaved("✓ Configuração fiscal salva no cofre da empresa.");
+      if (fiscalCsc.trim()) setFiscalCscConfigured(true); setFiscalCsc(""); setFiscalCertificateInfo(data.certificate || fiscalCertificateInfo); setSaved("✓ Configuração fiscal salva no cofre da empresa.");
     } catch(error){setSaved(error instanceof Error?error.message:"Não foi possível salvar a configuração fiscal.");} finally{setFiscalBusy(false);}
   };
   const uploadFiscalCertificate = async () => {
@@ -1658,7 +1660,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
           <label>ID CSC<input value={fiscalCscId} onChange={event=>setFiscalCscId(event.target.value)} placeholder="Identificador do CSC"/></label>
           <label>CSC<input type="password" autoComplete="new-password" value={fiscalCsc} onChange={event=>setFiscalCsc(event.target.value)} placeholder="Preencha somente para cadastrar/trocar"/><small>O valor não é exibido novamente.</small></label>
           <div className="wide fiscal-certificate-card"><div><LockKeyhole size={18}/><span><b>Certificado digital A1</b><small>{fiscalCertificateInfo ? `${fiscalCertificateInfo.fileName || "Certificado"} • ${fiscalCertificateInfo.status || "Status indisponível"}${typeof fiscalCertificateInfo.daysToExpiry === "number" ? ` • ${fiscalCertificateInfo.daysToExpiry} dia(s)` : ""}` : "Nenhum certificado disponível para esta empresa."}</small></span></div><div className="fiscal-certificate-inputs"><label>Arquivo<input type="file" accept=".pfx,.p12" onChange={event=>setFiscalCertificate(event.target.files?.[0] || null)}/></label><label>Senha<input type="password" autoComplete="new-password" value={fiscalCertificatePassword} onChange={event=>setFiscalCertificatePassword(event.target.value)} placeholder="Senha do A1"/></label><button type="button" className="outline-btn" disabled={fiscalBusy||!fiscalCertificate||!fiscalCertificatePassword} onClick={()=>void uploadFiscalCertificate()}><LockKeyhole size={14}/> Importar certificado</button></div></div>
-          <div className="wide fiscal-diagnostics"><span><CheckCircle2 size={14}/> Empresa identificada</span><span className={fiscalCertificateInfo?.status === "Válido" ? "ok" : "pending"}>{fiscalCertificateInfo?.status === "Válido" ? "✓" : "!"} Certificado A1</span><span className={fiscalServiceCode ? "ok" : "pending"}>{fiscalServiceCode ? "✓" : "!"} NFS-e</span><span className={fiscalCscId ? "ok" : "pending"}>{fiscalCscId ? "✓" : "!"} CSC NFC-e</span><span className={fiscalEnvironment === "Produção" ? "production" : "homologation"}>{fiscalEnvironment}</span></div>
+          <div className="wide fiscal-diagnostics"><span><CheckCircle2 size={14}/> Empresa identificada</span><span className={fiscalCertificateInfo?.status === "Válido" ? "ok" : "pending"}>{fiscalCertificateInfo?.status === "Válido" ? "✓" : "!"} Certificado A1</span><span className={fiscalServiceCode ? "ok" : "pending"}>{fiscalServiceCode ? "✓" : "!"} NFS-e</span><span className={fiscalCscId && fiscalCscConfigured ? "ok" : "pending"}>{fiscalCscId && fiscalCscConfigured ? "✓" : "!"} CSC NFC-e</span><span className={fiscalEnvironment === "Produção" ? "production" : "homologation"}>{fiscalEnvironment}</span></div>
         </div>}
         {tab === "Inteligência Artificial" && isAdministrator && <div className="settings-form"><div className="wide settings-security-note"><ShieldCheck size={17}/><span><b>A chave nunca volta ao navegador</b><small>O servidor armazena a credencial criptografada e informa apenas os quatro últimos caracteres.</small></span></div><label className="wide">{aiStatus.configured ? "Trocar chave da OpenAI" : "Chave da OpenAI"}<input type="password" autoComplete="new-password" value={aiKey} onChange={event=>setAiKey(event.target.value)} placeholder={aiStatus.configured?`Configurada • final ${aiStatus.last4}`:"sk-proj-..."}/></label><div className="wide settings-footer-actions"><button className="primary-btn" disabled={aiBusy||!aiKey.trim()} onClick={()=>void saveAiCredential()}><LockKeyhole size={14}/>{aiStatus.configured?"Trocar chave":"Salvar chave"}</button><button className="outline-btn" disabled={aiBusy||(!aiStatus.configured&&aiStatus.source==="none")} onClick={()=>void testAiCredential()}><Zap size={14}/> Testar conexão</button>{aiStatus.configured&&<button className="outline-btn" disabled={aiBusy} onClick={()=>void removeAiCredential()}><Trash2 size={14}/> Remover chave</button>}</div></div>}
         {tab === "Segurança" && <div className="settings-form"><label className="wide settings-switch"><span><b>Exigir autenticação individual</b><small>Somente funcionários ativos podem entrar.</small></span><input type="checkbox" defaultChecked/></label><label className="wide settings-switch"><span><b>Encerrar sessão por inatividade</b><small>Protege o sistema em computadores compartilhados.</small></span><input type="checkbox" defaultChecked/></label></div>}
