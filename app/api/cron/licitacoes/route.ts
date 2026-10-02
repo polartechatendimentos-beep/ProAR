@@ -6,7 +6,20 @@ import { loadWhatsAppConfig, sendWhatsAppTemplate } from "../../../../lib/proar-
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-type TenderStore = { items: (PncpTender & { discoveredAt: string; whatsappStatus?: string })[]; lastScan?: string; lastError?: string };
+type TenderStore = { items: (PncpTender & { discoveredAt: string; whatsappStatus?: string; canonicalKey?: string })[]; lastScan?: string; lastError?: string };
+
+const canonicalTenderKey = (item: PncpTender) => {
+  const cnpj = String(item.orgaoEntidade?.cnpj || "").replace(/\D/g, "");
+  const year = String(item.anoCompra || "");
+  const control = String(item.numeroControlePNCP || "").trim();
+  return control || [cnpj, year, String(item.sequencialCompra || "")].filter(Boolean).join(":");
+};
+
+const isAlertableTender = (item: PncpTender, now = Date.now()) => {
+  if (!item.numeroControlePNCP || !item.dataEncerramentoProposta) return false;
+  const closing = new Date(item.dataEncerramentoProposta).getTime();
+  return Number.isFinite(closing) && closing > now;
+};
 
 const supabaseConfig = masterDatabaseConfig;
 
@@ -58,17 +71,20 @@ async function processCustomerReminders() {
 
 async function runTenderMonitor() {
   const store = await loadStore();
-  const result = await searchAutomaticTenders({ radius: 300 });
-  const known = new Set(store.items.map(item => item.numeroControlePNCP));
-  const newItems = result.data.filter(item => item.numeroControlePNCP && !known.has(item.numeroControlePNCP));
+  const result = await searchAutomaticTenders({ radius: 100 });
+  const known = new Set(store.items.map(canonicalTenderKey).filter(Boolean));
+  const newItems = result.data.filter(item => {
+    const key = canonicalTenderKey(item);
+    return Boolean(key) && isAlertableTender(item) && !known.has(key);
+  });
   let whatsappStatus = "Nenhuma nova oportunidade";
   if (newItems.length) {
     try { whatsappStatus = await notifyWhatsApp(newItems); }
     catch (error) { whatsappStatus = error instanceof Error ? error.message : "Falha no WhatsApp"; }
   }
   const discoveredAt = new Date().toISOString();
-  const items = [...newItems.map(item => ({ ...item, discoveredAt, whatsappStatus })), ...store.items]
-    .filter((item, index, list) => list.findIndex(candidate => candidate.numeroControlePNCP === item.numeroControlePNCP) === index)
+  const items = [...newItems.map(item => ({ ...item, discoveredAt, whatsappStatus, canonicalKey: canonicalTenderKey(item) })), ...store.items]
+    .filter((item, index, list) => list.findIndex(candidate => canonicalTenderKey(candidate) === canonicalTenderKey(item)) === index)
     .slice(0, 500);
   const failedCount = result.failedSources.length;
   const updated: TenderStore = { items, lastScan: discoveredAt, lastError: failedCount ? `${failedCount} consulta(s) parcial(is)` : "" };
