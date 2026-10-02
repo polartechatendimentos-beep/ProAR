@@ -125,9 +125,9 @@ function storageError(error: unknown) {
 
 export async function GET(request: NextRequest) {
   const access = requirePermission(request, "fiscal.consultar");
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   const companyContext = sessionCompany(access.session);
   if (!companyContext.ok) return NextResponse.json({ error: "Sessão de empresa inválida." }, { status: companyContext.status });
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   try {
     return NextResponse.json(publicRecord(await loadRecord(companyContext.companyId)));
   } catch (error) {
@@ -137,9 +137,9 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   const access = requirePermission(request, "fiscal.configurar");
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   const companyContext = sessionCompany(access.session);
   if (!companyContext.ok) return NextResponse.json({ error: "Sessão de empresa inválida." }, { status: companyContext.status });
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   const user = access.session;
   try {
     const body = await request.json() as Partial<FiscalRecord>;
@@ -162,9 +162,9 @@ export async function PUT(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const access = requirePermission(request, "fiscal.configurar");
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   const companyContext = sessionCompany(access.session);
   if (!companyContext.ok) return NextResponse.json({ error: "Sessão de empresa inválida." }, { status: companyContext.status });
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   const user = access.session;
   try {
     const form = await request.formData();
@@ -214,9 +214,9 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   const access = requirePermission(request, "fiscal.configurar");
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   const companyContext = sessionCompany(access.session);
   if (!companyContext.ok) return NextResponse.json({ error: "Sessão de empresa inválida." }, { status: companyContext.status });
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   const user = access.session;
   try {
     const record = await loadRecord(companyContext.companyId);
