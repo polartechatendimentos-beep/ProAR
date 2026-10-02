@@ -517,6 +517,13 @@ type ModuleRecord = {
   equipmentLabelImage?: string;
   equipmentLabelImageName?: string;
   equipmentLabelHistory?: string[];
+  diagnosticHistory?: Record<string,unknown>[];
+  lastDiagnosticAt?: string;
+  sourceUrl?: string;
+  verified?: boolean;
+  equipmentTypes?: string[];
+  models?: string[];
+  capacitiesBtus?: number[];
   catalogImage?: string;
   catalogImageName?: string;
   catalogImageUpdatedAt?: string;
