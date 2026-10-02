@@ -128,7 +128,7 @@ export function HvacDiagnosticWorkspace({order,linkedEquipment=[],errorCodes=[],
           <section><b>Testes de verificação</b><ol>{(result.verificationTests||[]).map((item,index)=><li key={index}><strong>{item.test}</strong><span>{item.expected}</span><small>{(item.tools||[]).join(" • ")}</small></li>)}</ol></section>
           <section><b>Soluções condicionais</b><ol>{(result.solutions||[]).map((item,index)=><li key={index}><strong>{item.action}</strong><span>{item.condition}</span></li>)}</ol></section>
           {(result.safetyWarnings||[]).length>0&&<section className="safety-box"><AlertTriangle size={18}/><div><b>Segurança</b>{(result.safetyWarnings||[]).map((item,index)=><p key={index}>{item}</p>)}</div></section>}
-          {(result.sourceUrls||[]).length>0&&<section><b>Fontes consultadas</b><div className="source-links">{result.sourceUrls.map((url,index)=><a key={index} href={url} target="_blank" rel="noreferrer">Fonte {index+1}</a>)}</div></section>}
+          {(result.sourceUrls||[]).length>0&&<section><b>Fontes consultadas</b><div className="source-links">{(result.sourceUrls||[]).map((url,index)=><a key={index} href={url} target="_blank" rel="noreferrer">Fonte {index+1}</a>)}</div></section>}
           <button className="diagnostic-primary" disabled={!canEdit} onClick={applyResult}><CheckCircle2 size={15}/> Aplicar ao diagnóstico da OS</button>
         </div>:<div className="diagnostic-empty"><Sparkles size={26}/><b>Preencha os dados ao lado.</b><span>A análise combina sintomas, código/piscadas, equipamento vinculado e referências técnicas encontradas.</span></div>}
       </article>
