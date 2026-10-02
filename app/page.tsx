@@ -63,6 +63,7 @@ const CustomerProfileWorkspace = dynamic(() => import("@/components/CustomerProf
 const TechnicalCompliancePanel = dynamic(() => import("@/components/TechnicalCompliancePanel").then(module => module.TechnicalCompliancePanel), { loading: ModuleLoading });
 const IntegrityAudit = dynamic(() => import("@/components/IntegrityAudit").then(module => module.IntegrityAudit), { loading: ModuleLoading });
 const FiscalDocumentsPanel = dynamic(() => import("@/components/FiscalDocumentsPanel").then(module => module.FiscalDocumentsPanel), { loading: ModuleLoading });
+const ManagementInsights = dynamic(() => import("@/components/ManagementInsights").then(module => module.ManagementInsights), { loading: ModuleLoading });
 
 const prefetchModule = (name: string) => {
   switch (name) {
@@ -79,6 +80,7 @@ const prefetchModule = (name: string) => {
       void import("@/components/BiddingOperationsWorkspace");
       break;
     case "Funcionários": void import("@/components/EmployeeRoutesTab"); break;
+    case "Painel inicial": void import("@/components/ManagementInsights"); break;
   }
 };
 
@@ -680,6 +682,7 @@ function Dashboard({ onNavigate, serviceOrders, modules }: { onNavigate: (s: str
       <div className="stat-value"><strong>{s.value}</strong><span>{s.label}</span></div><small>{s.note}</small>
       <button aria-label={`Detalhes de ${s.label}`}><ChevronRight size={15}/></button>
     </article>)}</section>
+    <ManagementInsights modules={modules} serviceOrders={serviceOrders} onNavigate={onNavigate}/>
     <section className="content-grid">
       <div className="panel orders-panel">
         <div className="panel-head"><div><span className="section-kicker"><Zap size={12}/> OPERAÇÃO DE HOJE</span><h2>Ordens de serviço</h2><p>{new Date().toLocaleDateString("pt-BR")}</p></div><button onClick={() => onNavigate("Agenda")}>Ver agenda completa <ArrowRight size={13}/></button></div>
