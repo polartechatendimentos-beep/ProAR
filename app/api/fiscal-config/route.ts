@@ -26,6 +26,7 @@ type CertificateRecord = {
 type FiscalRecord = {
   company: Record<string, string | boolean>;
   nfe: Record<string, string | boolean>;
+  nfce?: Record<string, string | boolean>;
   nfse: Record<string, string | boolean>;
   certificate?: CertificateRecord;
   updatedAt?: string;
@@ -60,7 +61,7 @@ async function loadRecord(companyId: string): Promise<FiscalRecord> {
   if (!result && process.env.PROAR_LEGACY_FISCAL_COMPANY_ID === companyId) {
     result = await get(LEGACY_STORAGE_PATH, { access: "private", token: process.env.BLOB_READ_WRITE_TOKEN });
   }
-  if (!result) return { company: {}, nfe: {}, nfse: {} };
+  if (!result) return { company: {}, nfe: {}, nfce: {}, nfse: {} };
   if (result.statusCode !== 200 || !result.stream) throw new Error("STORAGE_READ_FAILED");
   return decrypt(await new Response(result.stream).text());
 }
@@ -82,6 +83,7 @@ function publicRecord(record: FiscalRecord) {
   return {
     company: record.company ?? {},
     nfe: record.nfe ?? {},
+    nfce: record.nfce ?? {},
     nfse: record.nfse ?? {},
     updatedAt: record.updatedAt,
     updatedBy: record.updatedBy,
@@ -96,6 +98,8 @@ function publicRecord(record: FiscalRecord) {
       fingerprint: certificate.fingerprint,
       importedAt: certificate.importedAt,
       status: new Date(certificate.validTo).getTime() > Date.now() ? "Válido" : "Vencido",
+      daysToExpiry: Math.ceil((new Date(certificate.validTo).getTime() - Date.now()) / 86400000),
+      expiryLevel: new Date(certificate.validTo).getTime() <= Date.now() ? "expired" : (new Date(certificate.validTo).getTime() - Date.now()) / 86400000 <= 7 ? "critical" : (new Date(certificate.validTo).getTime() - Date.now()) / 86400000 <= 30 ? "warning" : (new Date(certificate.validTo).getTime() - Date.now()) / 86400000 <= 60 ? "attention" : "ok",
     } : null,
   };
 }
@@ -130,6 +134,7 @@ export async function PUT(request: NextRequest) {
       ...current,
       company: body.company ?? current.company,
       nfe: body.nfe ?? current.nfe,
+      nfce: body.nfce ?? current.nfce ?? {},
       nfse: body.nfse ?? current.nfse,
       updatedAt: new Date().toISOString(),
       updatedBy: user.displayName,
