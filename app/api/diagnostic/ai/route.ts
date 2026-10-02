@@ -70,6 +70,8 @@ Analise o contexto JSON abaixo. Use pesquisa na web quando houver marca/modelo/c
 REGRAS:
 - Nunca invente o significado de código de erro, sequência de LEDs, pressão, temperatura, carga de refrigerante ou procedimento específico do fabricante.
 - Respeite manufacturerValidation. Se status="needs-extraction", NÃO interprete o valor informado como código final: explique como obter o código correto para aquele modelo/controlador e mantenha referenceConfidence="nao_confirmada".
+- Como fonte complementar, você pode consultar https://www.webarcondicionado.com.br/codigos-de-erro e os PDFs/manuais por marca apontados nessa página, mas prefira documentação oficial do fabricante quando disponível.
+- Ao pesquisar, inclua marca, modelo/família, tipo (Split/Cassete/Piso Teto/VRF), capacidade e se o sinal aparece na evaporadora ou condensadora. Não transfira uma tabela de uma família para outra.
 - Se status="needs-model", deixe explícito que o significado depende da família/modelo e não confirme a falha até localizar documentação correspondente.
 - Para Daikin, não assuma que todos os códigos são letra+número: manuais também usam combinações como UA, EA, AF e CJ. Número isolado diferente de 00 deve ser tratado como leitura incompleta/pista, não como código final.
 - Se a documentação localizada não confirmar a associação marca+modelo+código/piscadas, marque referenceConfidence="nao_confirmada".
