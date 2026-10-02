@@ -2360,19 +2360,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
       if (result.mustChangePassword && tenant) { window.location.href = `/trocar-senha`; return; }
       onLogin({ username: result.username, displayName: result.displayName, role: result.role, permissions: result.permissions, companyId: result.companyId, companySlug: result.companySlug, trialExpiresAt: result.trialExpiresAt });
     } catch (loginError) {
-      const moduleKeys = Object.keys(localStorage).filter(key => key === "proar-v3-module-records" || key.endsWith(":module-records"));
-      const modules = moduleKeys.reduce<Record<string, ModuleRecord[]>>((merged, key) => {
-        try {
-          const stored = JSON.parse(localStorage.getItem(key) || "{}") as Record<string, ModuleRecord[]>;
-          return { ...merged, Funcionários: [...(merged.Funcionários ?? []), ...(stored.Funcionários ?? [])] };
-        } catch { return merged; }
-      }, {});
-      const normalized = username.trim().toLocaleLowerCase("pt-BR");
-      const employee = (modules.Funcionários ?? []).find(item => item.status !== "Inativo" && item.employeeUsername?.toLocaleLowerCase("pt-BR") === normalized);
-      if (employee?.employeePasswordHash && employee.employeePasswordHash === await passwordHash(password)) {
-        const permissions = Object.entries(employee.employeePermissions ?? {}).flatMap(([module, actions]) => actions.includes("Visualizar") ? [module, ...actions.map(action => `${module}:${action}`)] : []);
-        onLogin({ username: employee.employeeUsername || normalized, displayName: employee.name, role: employee.employeeRole || "Utilizador", permissions });
-      } else setError(loginError instanceof Error ? loginError.message : "Não foi possível entrar.");
+      setError(loginError instanceof Error ? loginError.message : "Não foi possível entrar. Verifique sua conexão e tente novamente.");
     } finally {
       setLoading(false);
     }
