@@ -555,9 +555,10 @@ const tiagoEmployee: ModuleRecord = { id: "FUN-000001", name: "Tiago Viana", cli
 const linkedUnits: Record<string, { icon: IconType; name: string; type: string; doc: string; responsible: string; phone: string; address: string; orders: number }[]> = {};
 const linkedSectors: Record<string, { icon: IconType; name: string; type: string; doc: string; responsible: string; phone: string; address: string; orders: number }[]> = {};
 
-function Header({ title, subtitle, onMenu, searchItems, pendingItems, onSearchSelect, onPendingSelect, userName, userRole, onSwitchUser, online, syncing, onPull }: { title: string; subtitle: string; onMenu: () => void; onNew: (option: string) => void; searchItems: GlobalSearchItem[]; pendingItems: PendingItem[]; onSearchSelect: (item: GlobalSearchItem) => void; onPendingSelect: (item: PendingItem) => void; userName: string; userRole: string; onSwitchUser: () => void; online: boolean; syncing: boolean; onPull: () => void; onPush: () => void }) {
+function Header({ title, subtitle, onMenu, onNew, searchItems, pendingItems, onSearchSelect, onPendingSelect, userName, userRole, onSwitchUser, online, syncing, onPull }: { title: string; subtitle: string; onMenu: () => void; onNew: (option: string) => void; searchItems: GlobalSearchItem[]; pendingItems: PendingItem[]; onSearchSelect: (item: GlobalSearchItem) => void; onPendingSelect: (item: PendingItem) => void; userName: string; userRole: string; onSwitchUser: () => void; online: boolean; syncing: boolean; onPull: () => void; onPush: () => void }) {
   const [searchOpen,setSearchOpen]=useState(false);
   const [pendingOpen,setPendingOpen]=useState(false);
+  const [quickOpen,setQuickOpen]=useState(false);
   const [query,setQuery]=useState("");
   const deferredQuery=useDeferredValue(query);
   const normalizedQuery=deferredQuery.trim().toLowerCase();
@@ -568,10 +569,12 @@ function Header({ title, subtitle, onMenu, searchItems, pendingItems, onSearchSe
         event.preventDefault();
         setSearchOpen(true);
         setPendingOpen(false);
+        setQuickOpen(false);
       }
       if(event.key==="Escape"){
         setSearchOpen(false);
         setPendingOpen(false);
+        setQuickOpen(false);
       }
     };
     window.addEventListener("keydown",onKeyDown);
@@ -585,11 +588,15 @@ function Header({ title, subtitle, onMenu, searchItems, pendingItems, onSearchSe
     </div>
     <div className="top-actions top-actions-user-only">
       <div className="header-global-search">
-        <button className="header-tool-button" aria-label="Busca global" title="Busca global (Ctrl/Cmd + K)" onClick={()=>{setSearchOpen(value=>!value);setPendingOpen(false)}}><Search size={16}/></button>
+        <button className="header-tool-button" aria-label="Ações rápidas" title="Ações rápidas" onClick={()=>{setQuickOpen(value=>!value);setSearchOpen(false);setPendingOpen(false)}}><Plus size={16}/></button>
+        {quickOpen&&<div className="header-popover pending-popover"><div className="header-popover-title"><b>Ações rápidas</b><span>Atalhos</span></div><div className="header-result-list">{["Cliente","Orçamento","Venda","Ordem de Serviço","Compra","Produto","Conta a receber"].map(option=><button key={option} onClick={()=>{onNew(option);setQuickOpen(false)}}><b>{option}</b><span>Criar sem procurar o módulo no menu</span></button>)}</div></div>}
+      </div>
+      <div className="header-global-search">
+        <button className="header-tool-button" aria-label="Busca global" title="Busca global (Ctrl/Cmd + K)" onClick={()=>{setSearchOpen(value=>!value);setPendingOpen(false);setQuickOpen(false)}}><Search size={16}/></button>
         {searchOpen&&<div className="header-popover search-popover"><label><Search size={14}/><input autoFocus value={query} onChange={event=>setQuery(event.target.value)} placeholder="Cliente, CNPJ, OS, série, NF..."/></label>{query.trim().length<2?<small>Digite pelo menos 2 caracteres.</small>:matches.length?<div className="header-result-list">{matches.map(item=><button key={`${item.module}-${item.id}`} onClick={()=>{onSearchSelect(item);setSearchOpen(false);setQuery("")}}><b>{item.title}</b><span>{item.detail||item.module}</span><em>{item.module}</em></button>)}</div>:<small>Nenhum registro encontrado nos dados carregados.</small>}</div>}
       </div>
       <div className="header-pending">
-        <button className="header-tool-button" aria-label="Próximas ações" title="Próximas ações" onClick={()=>{setPendingOpen(value=>!value);setSearchOpen(false)}}><Bell size={16}/>{pendingItems.length>0&&<i>{Math.min(pendingItems.length,99)}</i>}</button>
+        <button className="header-tool-button" aria-label="Próximas ações" title="Próximas ações" onClick={()=>{setPendingOpen(value=>!value);setSearchOpen(false);setQuickOpen(false)}}><Bell size={16}/>{pendingItems.length>0&&<i>{Math.min(pendingItems.length,99)}</i>}</button>
         {pendingOpen&&<div className="header-popover pending-popover"><div className="header-popover-title"><b>Próximas ações</b><span>{pendingItems.length}</span></div>{pendingItems.length?<div className="header-result-list">{pendingItems.slice(0,10).map(item=><button key={item.id} className={item.tone} onClick={()=>{onPendingSelect(item);setPendingOpen(false)}}><b>{item.title}</b><span>{item.detail}</span><em>{item.module}</em></button>)}</div>:<small>Nenhuma pendência identificada.</small>}</div>}
       </div>
       <button className={`header-tool-button sync-state ${online?"online":"offline"}`} aria-label={online?"Atualizar dados":"Sem conexão"} title={online?"Atualizar dados do banco":"Sem conexão"} disabled={!online||syncing} onClick={onPull}><RefreshCw size={16} className={syncing?"spin":""}/></button>
@@ -601,11 +608,24 @@ function Header({ title, subtitle, onMenu, searchItems, pendingItems, onSearchSe
 
 function Sidebar({ current, setCurrent, open, close, permissions, role }: { current: string; setCurrent: (s: string) => void; open: boolean; close: () => void; permissions?: string[]; role?: string }) {
   const allowed = (name: string) => Boolean(role === "Administrador" || permissions?.includes("*") || permissions?.includes(name) || (name === "Integridade do Sistema" && permissions?.includes("integridade.visualizar")));
+  const [recent,setRecent]=useState<string[]>([]);
+  useEffect(()=>{
+    try { setRecent(JSON.parse(localStorage.getItem("proar-recent-modules") || "[]")); } catch { setRecent([]); }
+  },[]);
+  useEffect(()=>{
+    if(!current || current==="Painel inicial") return;
+    setRecent(previous=>{
+      const next=[current,...previous.filter(name=>name!==current)].slice(0,5);
+      try { localStorage.setItem("proar-recent-modules",JSON.stringify(next)); } catch {}
+      return next;
+    });
+  },[current]);
+  const recentItems=recent.map(name=>navGroups.flatMap(group=>group.items).find(item=>item.name===name)).filter((item): item is NavItem => Boolean(item&&allowed(item.name)));
   return <>
     {open && <button className="backdrop" aria-label="Fechar menu" onClick={close} />}
     <aside className={`sidebar ${open ? "open" : ""}`}>
       <div className="brand"><div className="brand-mark brand-logo"><img src="/icon.png" alt="Ícone ProAR"/></div><div className="brand-copy"><strong>ProAR</strong><small>GESTÃO DE SERVIÇOS</small><em>BY TAV's</em></div></div>
-      <nav>{navGroups.map(group => { const visibleItems = group.items.filter(item => allowed(item.name)); return visibleItems.length ? <div className="nav-group" key={group.label}>
+      <nav>{recentItems.length>0&&<div className="nav-group"><p>RECENTES</p>{recentItems.map(({icon:Icon,name})=><button key={`recent-${name}`} className={current===name?"active":""} onClick={()=>{setCurrent(name);close();}}><span className="nav-icon"><Icon size={17} strokeWidth={1.9}/></span><span>{name}</span></button>)}</div>}{navGroups.map(group => { const visibleItems = group.items.filter(item => allowed(item.name)); return visibleItems.length ? <div className="nav-group" key={group.label}>
         <p>{group.label}</p>
         {visibleItems.map(({icon: Icon, name, badge}) => <button key={name} className={current === name ? "active" : ""} onClick={() => { setCurrent(name); close(); }}>
           <span className="nav-icon"><Icon size={17} strokeWidth={1.9}/></span><span>{name}</span>{badge && <em>{badge}</em>}
