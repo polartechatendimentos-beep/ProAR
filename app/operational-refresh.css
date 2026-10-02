@@ -305,3 +305,68 @@
 @media(max-width:850px){
   .finance-settlement-values{grid-template-columns:1fr;min-width:110px}
 }
+
+
+/* Catálogo — foto própria de Produtos e Serviços */
+.catalog-image-editor{
+  display:grid!important;
+  grid-template-columns:128px minmax(0,1fr)!important;
+  gap:14px!important;
+  align-items:center!important;
+  padding:12px!important;
+  border:1px solid #1b3b59!important;
+  border-radius:12px!important;
+  background:#081828!important;
+}
+.catalog-image-preview{
+  display:grid;
+  place-items:center;
+  width:128px;
+  height:92px;
+  overflow:hidden;
+  border:1px dashed #2a5274;
+  border-radius:11px;
+  background:#0b2136;
+  color:#5d8fb6;
+}
+.catalog-image-preview.has-image{border-style:solid}
+.catalog-image-preview img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+.catalog-image-editor>div:last-child>b{display:block;color:#e7f2fc;font-size:10px}
+.catalog-image-editor>div:last-child>small{display:block;margin-top:4px;color:#7590a8;font-size:8px;line-height:1.45}
+.catalog-image-editor>div:last-child>em{display:block;margin-top:6px;color:#ff9b9b;font-size:8px;font-style:normal}
+.catalog-image-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:9px}
+.catalog-image-actions label{display:inline-flex!important;align-items:center!important;gap:6px!important;width:auto!important;cursor:pointer}
+.catalog-image-actions input[type="file"]{display:none!important}
+.catalog-image-actions .danger{color:#ff8a96!important;border-color:#713645!important}
+
+.budget-catalog-thumb,
+.pdv-catalog-thumb{
+  display:grid!important;
+  place-items:center!important;
+  flex:0 0 auto!important;
+  width:56px!important;
+  height:50px!important;
+  overflow:hidden!important;
+  border-radius:10px!important;
+  background:#0e2b48!important;
+}
+.budget-catalog-thumb img,
+.pdv-catalog-thumb img{
+  width:100%!important;
+  height:100%!important;
+  object-fit:cover!important;
+  display:block!important;
+}
+.budget-catalog-grid>button:has(.budget-catalog-thumb img),
+.pdv-catalog>button:has(.pdv-catalog-thumb img){
+  align-items:center;
+}
+@media(max-width:700px){
+  .catalog-image-editor{grid-template-columns:1fr!important}
+  .catalog-image-preview{width:100%;height:150px}
+}
