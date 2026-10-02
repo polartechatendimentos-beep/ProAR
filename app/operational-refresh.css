@@ -217,3 +217,49 @@
 .unsaved-indicator{margin-right:auto;display:inline-flex;align-items:center;gap:6px;padding:7px 9px;border:1px solid #6d5424;border-radius:8px;background:#2c230f;color:#f0c66b;font-size:8px;font-weight:800}
 @media(max-width:850px){.activity-stats{grid-template-columns:repeat(2,1fr)}.activity-toolbar{align-items:stretch;flex-direction:column}.activity-toolbar>label{width:100%}}
 @media(max-width:560px){.activity-stats{grid-template-columns:1fr}.activity-main header{flex-direction:column}.activity-hero{align-items:flex-start;flex-direction:column}}
+
+
+/* Cabeçalho — busca e alertas não podem alterar ou recortar o layout da tela */
+.app-shell .topbar,
+.topbar.topbar-user-only{
+  overflow:visible!important;
+  isolation:isolate;
+  z-index:500!important;
+}
+.top-actions-user-only{position:relative;z-index:510}
+.header-global-search,.header-pending{position:relative;flex:0 0 auto}
+.header-popover{
+  position:fixed!important;
+  top:74px!important;
+  right:18px!important;
+  left:auto!important;
+  width:min(410px,calc(100vw - 36px))!important;
+  max-width:410px!important;
+  max-height:min(520px,calc(100vh - 92px))!important;
+  overflow:hidden!important;
+  z-index:12000!important;
+  margin:0!important;
+  transform:none!important;
+  contain:layout paint;
+}
+.header-popover .header-result-list{
+  max-height:min(390px,calc(100vh - 175px))!important;
+  overflow:auto!important;
+  overscroll-behavior:contain;
+}
+.header-popover.search-popover{right:62px!important}
+.header-popover.pending-popover{right:18px!important}
+.header-popover-title{position:sticky;top:0;z-index:1;background:inherit}
+@media(max-width:760px){
+  .header-popover,
+  .header-popover.search-popover,
+  .header-popover.pending-popover{
+    top:68px!important;
+    right:10px!important;
+    left:10px!important;
+    width:auto!important;
+    max-width:none!important;
+    max-height:calc(100vh - 80px)!important;
+  }
+  .header-popover .header-result-list{max-height:calc(100vh - 165px)!important}
+}
