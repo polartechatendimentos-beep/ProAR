@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${bridge.token}`,
-        "X-ProAR-Company": access.session.companyId,
+        "X-ProAR-Company": String(access.session.companyId || ""),
       },
       body: JSON.stringify({ documentId: body.documentId, payload: body.payload }),
       signal: AbortSignal.timeout(45_000),
