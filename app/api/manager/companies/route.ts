@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { readManagerSession } from "../../../../lib/manager-auth";
 import { supabaseConfigured, supabaseRest } from "../../../../lib/supabase-rest";
 import { resumeTenantProvisioning } from "../../../../lib/tenant-provisioning";
+import { tenantIdentity } from "../../../../lib/tenant-identity";
 const isAdmin = (request: NextRequest) => readManagerSession(request);
 
 export async function GET(request: NextRequest) {
@@ -10,7 +11,21 @@ export async function GET(request: NextRequest) {
   const companies = await supabaseRest("proar_companies?select=*&order=created_at.desc");
   const instances = await supabaseRest("proar_tenant_instances?select=*&order=created_at.desc");
   if (!companies.ok) return NextResponse.json({ error: "Falha ao consultar empresas." }, { status: 502 });
-  return NextResponse.json({ companies: await companies.json(), instances: instances.ok ? await instances.json() : [] });
+  const companyRows = await companies.json();
+  const instanceRows = instances.ok ? await instances.json() : [];
+  const primaryCompanyId = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
+  const primarySlug = process.env.PROAR_PRIMARY_COMPANY_SLUG || "polartech";
+  const enrichedCompanies = companyRows.map((company: Record<string,unknown>) => ({
+    ...company,
+    tenant: tenantIdentity({
+      companyId:String(company.id||""),
+      slug:String(company.slug||""),
+      tradeName:String(company.trade_name||company.legal_name||""),
+      primaryCompanyId,
+      primarySlug,
+    }),
+  }));
+  return NextResponse.json({ companies: enrichedCompanies, instances: instanceRows });
 }
 
 export async function PATCH(request: NextRequest) {
