@@ -121,13 +121,16 @@ export function parseDiagnosticSearch(value:string):DiagnosticQuery{
   const capacityMatch=raw.match(/(\d{1,3})(?:\s*[.]?\s*000|\s*mil)\s*(?:btu|btus|btu\/h)?/);
   const directBtu=raw.match(/\b(\d{4,6})\s*(?:btu|btus|btu\/h)\b/);
   const capacityBtus=capacityMatch?Number(capacityMatch[1])*1000:directBtu?Number(directBtu[1]):0;
-  const codeMatch=raw.match(/\b(?:erro|codigo|código)\s*([a-z]{1,3}\d{0,3}|\d{1,3})\b/i);
+  const codeMatch=raw.match(/\b(?:erro|codigo|código)\s*[:#-]?\s*([a-z]{1,3}\d{1,3}|\d{1,3}|[a-z]{1,2})\b/i);
+  const codeCandidate=(codeMatch?.[1]||"").toLowerCase();
+  const ignoredCodeWords=new Set(["na","no","da","do","de","em","um","uma","ao"]);
+  const parsedCode=ignoredCodeWords.has(codeCandidate)?"":codeCandidate.toUpperCase();
   return {
     brand,
     equipmentType,
     unit,
     capacityBtus:capacityBtus||undefined,
-    code:codeMatch?.[1]?.toUpperCase()||"",
+    code:parsedCode,
     blinkPattern:blinkCount?`${blinkCount} piscadas`:"",
     symptoms:value,
   };
