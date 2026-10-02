@@ -41,6 +41,7 @@ import { calculateCertameItemBalance, createCertameMovement, financialOutstandin
 import { improveTechnicalText } from "@/lib/text-assist";
 import { WORK_STATUSES, getWorkProgress, getWorkStatusColor, normalizeWorkStatus, type WorkStatus } from "@/lib/work-status";
 import { prepareCustomerStructureSave } from "@/lib/customer-structure";
+import { deriveProarActions } from "@/lib/proar-insights";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type NavItem = { icon: IconType; name: string; badge?: string };
@@ -661,11 +662,7 @@ function Dashboard({ onNavigate, serviceOrders, modules }: { onNavigate: (s: str
   const today = new Date().toISOString().slice(0, 10);
   const todayOrders = serviceOrders.filter(order => order.date === today);
   const overdueOrders = serviceOrders.filter(order => order.date && order.date < today && !/conclu[ií]d|cancelad/i.test(order.status));
-  const workItems = [
-    ...overdueOrders.map(order => ({ id:`os-${order.id}`, title:`OS atrasada • ${order.id}`, detail:`${order.client} • ${order.service}`, module:"Ordens de serviço", tone:"red" })),
-    ...todayOrders.filter(order=>!/conclu[ií]d|cancelad/i.test(order.status)).map(order => ({ id:`today-${order.id}`, title:`Atendimento de hoje • ${order.id}`, detail:`${order.time || "Horário a definir"} • ${order.client}`, module:"Agenda", tone:"blue" })),
-    ...Object.entries(modules).flatMap(([module, records]) => records.filter(record => /aguardando|pendente|venc|atras|baixo estoque|sem estoque/i.test(`${record.status || ""} ${record.description || ""}`)).map(record => ({ id:`${module}-${record.id}`, title:record.name, detail:`${module} • ${record.status || "Próxima ação necessária"}`, module, tone:/venc|atras|sem estoque/i.test(`${record.status} ${record.description}`)?"red":"amber" })))
-  ].slice(0, 8);
+  const workItems = deriveProarActions(serviceOrders, modules, today).slice(0,8);
   const dashboardStats = [
     { icon: ClipboardList, value: String(serviceOrders.filter(order => order.status !== "Concluída").length).padStart(2, "0"), label: "OS em aberto", note: `${todayOrders.length} programada(s) para hoje`, tone: "blue", trend: "Atual" },
     { icon: Activity, value: String(serviceOrders.filter(order => order.status === "Em andamento").length).padStart(2, "0"), label: "Em andamento", note: "Atendimentos ativos", tone: "cyan", trend: "Agora" },
@@ -4037,12 +4034,9 @@ export default function Home() {
     const moduleItems = Object.entries(moduleRecords).flatMap(([module, records]) => records.map(record => ({ id: record.id, title: record.name, detail: [record.id, record.client, record.sku, record.barcode, record.ncm, record.cfop, record.serialNumber, record.doc].filter(Boolean).join(" • "), module, kind: "Cadastro" as const })));
     return [...customerItems, ...orderItems, ...moduleItems];
   }, [customerRecords, serviceOrders, moduleRecords]);
-  const pendingItems = useMemo<PendingItem[]>(() => {
-    const now = new Date();
-    const ordersPending = serviceOrders.filter(order => /atras|aguardando|aberta|agendada/i.test(order.status)).map(order => ({ id: `os-${order.id}`, title: `${order.id} • ${order.status}`, detail: `${order.client} • ${order.date || "sem data"}`, module: "Ordens de serviço", tone: /atras/i.test(order.status) ? "red" as const : /aguardando/i.test(order.status) ? "amber" as const : "blue" as const }));
-    const recordsPending = Object.entries(moduleRecords).flatMap(([module, records]) => records.filter(record => /atras|venc|aguardando|pendente|baixo estoque|sem estoque/i.test(record.status || "") || (module === "Estoque" && (record.stockCurrent ?? 0) <= (record.stockMin ?? -1))).map(record => ({ id: `${module}-${record.id}`, title: record.name, detail: `${module} • ${record.status || "Atenção necessária"}`, module, tone: /atras|venc|sem estoque/i.test(record.status || "") ? "red" as const : "amber" as const })));
-    return [...ordersPending, ...recordsPending].slice(0, 20);
-  }, [serviceOrders, moduleRecords]);
+  const pendingItems = useMemo<PendingItem[]>(() => deriveProarActions(serviceOrders, moduleRecords).slice(0,20).map(item=>({
+    id:item.id,title:item.title,detail:item.detail,module:item.module,tone:item.tone,
+  })), [serviceOrders, moduleRecords]);
   const openNew = (option: string) => {
     const routes: Record<string, { module?: string; modal?: string }> = {
       "Cliente": { modal: "Novo cliente" }, "Unidade": { module: "Clientes" }, "Equipamento": { modal: "Novo • Equipamentos" }, "Orçamento": { module: "Orçamentos" }, "Venda": { module: "Vendas" }, "Ordem de Serviço": { modal: "Nova ordem de serviço" }, "Agendamento": { modal: "Nova ordem de serviço" }, "Compra": { modal: "Novo registro • Compras" }, "Produto": { modal: "Novo registro • Produtos" }, "Serviço": { modal: "Novo registro • Serviços" }, "Conta a pagar": { modal: "Novo registro • Financeiro" }, "Conta a receber": { modal: "Novo registro • Financeiro" },
