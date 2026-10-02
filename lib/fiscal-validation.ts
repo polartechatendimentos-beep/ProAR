@@ -1,3 +1,6 @@
+import { validateAdvancedFiscalPayload } from "./fiscal-advanced-validation";
+import type { FiscalAddress, FiscalConstruction, FiscalPayment, FiscalRetention, FiscalTransport, FiscalItemTax } from "./fiscal-domain";
+
 export type FiscalDocumentKind = "NFSE" | "NFCE" | "NFE";
 
 export type FiscalValidationIssue = {
@@ -28,6 +31,8 @@ export type FiscalItemPayload = {
   nbs?: string;
   issRate?: number | string;
   issWithheld?: boolean;
+  discount?: number;
+  taxes?: FiscalItemTax;
 };
 
 export type FiscalValidationPayload = {
@@ -41,6 +46,17 @@ export type FiscalValidationPayload = {
   presenceIndicator?: string;
   freightMode?: string;
   paymentMethod?: string;
+  payments?: FiscalPayment[];
+  change?: number;
+  totalValue?: number;
+  transport?: FiscalTransport;
+  pickupAddress?: FiscalAddress;
+  deliveryAddress?: FiscalAddress;
+  retentions?: FiscalRetention;
+  construction?: FiscalConstruction;
+  intermediary?: { document?: string; name?: string; municipalRegistration?: string; email?: string; address?: FiscalAddress };
+  acquirer?: { document?: string; name?: string; municipalRegistration?: string; email?: string; address?: FiscalAddress };
+  recipient?: { document?: string; name?: string; municipalRegistration?: string; email?: string; address?: FiscalAddress };
   debitNoteType?: string;
   creditNoteType?: string;
   referencedDocuments?: Array<{
@@ -67,6 +83,8 @@ export type FiscalValidationPayload = {
     stateRegistration?: string;
     stateRegistrationIndicator?: "1" | "2" | "9";
     municipalRegistration?: string;
+    countryCode?: string;
+    foreignId?: string;
   };
   service?: {
     description?: string;
@@ -76,6 +94,7 @@ export type FiscalValidationPayload = {
     issRate?: number | string;
     municipalityCode?: string;
     taxationLocation?: string;
+    issWithheld?: boolean;
   };
   items?: FiscalItemPayload[];
   company?: {
@@ -263,6 +282,8 @@ export function validateFiscalPayload(payload: FiscalValidationPayload) {
       warning("config.nfseNational", "NFSE_NATIONAL_REQUIRED", "Para ME/EPP do Simples Nacional, a emissão deve usar o padrão nacional a partir de 01/11/2026.");
     }
   }
+
+  issues.push(...validateAdvancedFiscalPayload(payload));
 
   return {
     valid: !issues.some(issue => issue.severity === "error"),
