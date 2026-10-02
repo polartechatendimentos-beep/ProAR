@@ -658,7 +658,8 @@ function quickPrintServiceOrder(order: ServiceOrder, company: TenantCompany) {
   popup.document.close();
 }
 
-function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: sourceServiceOrders, customers, company, role }: { onOpen: (name: string) => void; onSelect: (order: ServiceOrder) => void; onDelete: (order: ServiceOrder) => void; onUpdate: (order: ServiceOrder) => void; serviceOrders: ServiceOrder[]; customers: Customer[]; company: TenantCompany; role?: string }) {\n  let serviceOrders = sourceServiceOrders;
+function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: sourceServiceOrders, customers, company, role }: { onOpen: (name: string) => void; onSelect: (order: ServiceOrder) => void; onDelete: (order: ServiceOrder) => void; onUpdate: (order: ServiceOrder) => void; serviceOrders: ServiceOrder[]; customers: Customer[]; company: TenantCompany; role?: string }) {
+  let serviceOrders = sourceServiceOrders;
   const [query, setQuery] = useState("");
   const technicianMode = /t[eé]cnico/i.test(role || "");
   const [visibility, setVisibility] = useState(technicianMode ? "Hoje" : "Em aberto");
