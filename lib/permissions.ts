@@ -14,7 +14,7 @@ export type Permission =
   | "estoque.visualizar" | "estoque.editar" | "estoque.ajustar"
   | "compras.visualizar" | "compras.editar" | "compras.receber"
   | "comercial.editar" | "catalogo.editar" | "financeiro.conciliar"
-  | "integridade.visualizar" | "rotas.visualizar"
+  | "integridade.visualizar" | "rotas.visualizar" | "aprovacoes.visualizar" | "aprovacoes.aprovar"
   | "fiscal.consultar" | "fiscal.preparar" | "fiscal.emitir" | "fiscal.cancelar" | "fiscal.configurar";
 
 const legacy: Record<string, string[]> = {
@@ -31,6 +31,7 @@ const legacy: Record<string, string[]> = {
   catalogo: ["Produtos", "Serviços"],
   rotas: ["Rotas"],
   integridade: ["Integridade do Sistema"],
+  aprovacoes: ["Aprovações"],
   // Permissões fiscais são deliberadamente explícitas: não herdam mutações de Financeiro/Vendas/OS.
   fiscal: [],
 };
