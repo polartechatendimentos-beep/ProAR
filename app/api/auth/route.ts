@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
       const instanceResponse = await supabaseRest(`proar_tenant_instances?select=provisioning_status&company_id=eq.${encodeURIComponent(company.id)}&limit=1`);
       const instances = instanceResponse.ok ? await instanceResponse.json() : [];
       if (instances[0]?.provisioning_status !== "ready") return NextResponse.json({ error: "Seu ambiente exclusivo ainda está sendo preparado. Tente novamente em alguns instantes ou contate o suporte." }, { status: 503 });
-      if (company.status !== "active") return NextResponse.json({ code:"SYSTEM_BLOCKED", blocked:true, error:"Sistema bloqueado pelo ProAR Manager." }, { status: 403 });
+      if (company.status !== "active") return NextResponse.json({ code:"SYSTEM_BLOCKED", blocked:true, error:"Sistema bloqueado. Entre em contato com a equipe da ProAR." }, { status: 403 });
       if (company.trial_expires_at && new Date(company.trial_expires_at).getTime() < Date.now()) return NextResponse.json({ code:"TRIAL_EXPIRED", error:"O período de teste desta empresa terminou." }, { status: 403 });
       const userResponse = await supabaseRest(`proar_trial_users?select=username,display_name,password_hash,role,permissions,active,must_change_password&company_id=eq.${encodeURIComponent(company.id)}&username=eq.${encodeURIComponent(String(username).toLowerCase())}&limit=1`);
       const rows = userResponse.ok ? await userResponse.json() : []; const user = rows[0];
