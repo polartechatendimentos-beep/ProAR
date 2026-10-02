@@ -277,7 +277,7 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
     const quantity = Number(entry.quantity);
     if (!products.some(product => product.id === entry.productId) || !Number.isFinite(quantity) || quantity <= 0 || !["Entrada", "Saída", "Ajuste"].includes(entry.movementType)) throw new OperationError("Movimento exige produto, tipo e quantidade válida.");
     if (!String(entry.changeReason || entry.description || "").trim()) throw new OperationError("Informe o motivo do movimento.");
-    addMovement({ id: `MAN-${entry.id}`, productId: entry.productId, quantity: entry.movementType === "Saída" ? -quantity : quantity, kind: entry.movementType, createdAt: now, user: actor.username, reason: entry.changeReason || entry.description }, stock);
+    addMovement({ id: `MAN-${entry.id}`, productId: entry.productId, quantity: entry.movementType === "Saída" ? -quantity : quantity, kind: entry.movementType, destinationType: entry.destinationType || "Estoque central", destinationId: entry.destinationId || "", destinationName: entry.destinationName || "", createdAt: now, user: actor.username, reason: entry.changeReason || entry.description }, stock);
   }
   for (const order of list(next.serviceOrders)) {
     const before = list(old.serviceOrders).find(item => item.id === order.id);
