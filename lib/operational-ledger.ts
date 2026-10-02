@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @next/next/no-assign-module-variable */
-import { deriveProarActions } from "./proar-insights";
+import { deriveProarActions } from "./proar-insights.ts";
 // Dynamic records retain the fields of the historical ERP snapshots.
 export type ErpRecord = Record<string, any>;
 export type ErpState = ErpRecord & { customers?: ErpRecord[]; serviceOrders?: ErpRecord[]; moduleRecords?: Record<string, ErpRecord[]> };
