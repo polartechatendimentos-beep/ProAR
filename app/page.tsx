@@ -667,6 +667,12 @@ function Dashboard({ onNavigate, serviceOrders, modules }: { onNavigate: (s: str
   const todayOrders = serviceOrders.filter(order => order.date === today);
   const overdueOrders = serviceOrders.filter(order => order.date && order.date < today && !/conclu[ií]d|cancelad/i.test(order.status));
   const workItems = deriveProarActions(serviceOrders, modules, today).slice(0,8);
+  const financeRecords = modules.Financeiro ?? [];
+  const openFinance = financeRecords.filter(record => !/paga|recebida|cancel/i.test(String(record.status || "")));
+  const dashboardReceivable = openFinance.filter(record => /receber|cliente|fatur/i.test(`${record.transactionType || ""} ${record.category || ""}`)).reduce((sum,record)=>sum+Math.max(0,Number(record.value||0)-Number(record.settledValue||0)),0);
+  const dashboardPayable = openFinance.filter(record => /pagar|fornecedor|compra/i.test(`${record.transactionType || ""} ${record.category || ""}`)).reduce((sum,record)=>sum+Math.max(0,Number(record.value||0)-Number(record.settledValue||0)),0);
+  const dashboardNet = dashboardReceivable-dashboardPayable;
+  const dashboardMoney = (value:number)=>value.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
   const dashboardStats = [
     { icon: ClipboardList, value: String(serviceOrders.filter(order => order.status !== "Concluída").length).padStart(2, "0"), label: "OS em aberto", note: `${todayOrders.length} programada(s) para hoje`, tone: "blue", trend: "Atual" },
     { icon: Activity, value: String(serviceOrders.filter(order => order.status === "Em andamento").length).padStart(2, "0"), label: "Em andamento", note: "Atendimentos ativos", tone: "cyan", trend: "Agora" },
@@ -679,7 +685,7 @@ function Dashboard({ onNavigate, serviceOrders, modules }: { onNavigate: (s: str
       <div className="live-status"><i/><span>Dados atualizados agora</span></div>
       <button className="filter-btn"><Filter size={14}/> Mais filtros <ChevronDown size={13}/></button>
     </section>
-    <section className="stat-grid">{dashboardStats.map(({icon: Icon, ...s}) => <article className={`stat-card ${s.tone}`} key={s.label}>
+    <section className="stat-grid">{dashboardStats.map(({icon: Icon, ...s}) => <article className={`stat-card ${s.tone}`} key={s.label} role="button" tabIndex={0} onClick={()=>onNavigate(s.label==="OS em aberto"||s.label==="Em andamento"||s.label==="Concluídas"||s.label==="Atrasadas"?"Ordens de serviço":"Painel inicial")} onKeyDown={event=>{if(event.key==="Enter")onNavigate("Ordens de serviço")}}>
       <div className="stat-top"><div className={`stat-icon ${s.tone}`}><Icon size={21} strokeWidth={1.8}/></div><span className={`trend ${s.tone}`}>{s.trend}</span></div>
       <div className="stat-value"><strong>{s.value}</strong><span>{s.label}</span></div><small>{s.note}</small>
       <button aria-label={`Detalhes de ${s.label}`}><ChevronRight size={15}/></button>
@@ -695,9 +701,9 @@ function Dashboard({ onNavigate, serviceOrders, modules }: { onNavigate: (s: str
       </div>
       <aside className="side-stack">
         <div className="panel financial">
-          <div className="panel-head"><div><span className="section-kicker"><ChartNoAxesCombined size={12}/> PERFORMANCE</span><h2>Resumo financeiro</h2><p>Sem lançamentos</p></div><button aria-label="Mais opções"><MoreHorizontal size={17}/></button></div>
-          <div className="finance-total"><small>RESULTADO PREVISTO</small><strong>R$ 0,00</strong><span><TrendingUp size={12}/> 0%</span></div>
-          <div className="finance-split"><div><span className="money-icon green"><ArrowUpRight size={17}/></span><small>A receber</small><strong>R$ 0,00</strong></div><div><span className="money-icon red"><ArrowDownRight size={17}/></span><small>A pagar</small><strong>R$ 0,00</strong></div></div>
+          <div className="panel-head"><div><span className="section-kicker"><ChartNoAxesCombined size={12}/> PERFORMANCE</span><h2>Resumo financeiro</h2><p>{openFinance.length} título(s) em aberto</p></div><button aria-label="Abrir Financeiro" onClick={()=>onNavigate("Financeiro")}><ChevronRight size={17}/></button></div>
+          <div className="finance-total"><small>SALDO PREVISTO EM ABERTO</small><strong>{dashboardMoney(dashboardNet)}</strong><span><TrendingUp size={12}/> {dashboardNet>=0?"Positivo":"Negativo"}</span></div>
+          <div className="finance-split"><div><span className="money-icon green"><ArrowUpRight size={17}/></span><small>A receber</small><strong>{dashboardMoney(dashboardReceivable)}</strong></div><div><span className="money-icon red"><ArrowDownRight size={17}/></span><small>A pagar</small><strong>{dashboardMoney(dashboardPayable)}</strong></div></div>
         </div>
         <div className="panel alerts">
           <div className="panel-head"><div><span className="section-kicker"><AlertTriangle size={12}/> CENTRAL DE TRABALHO DO DIA</span><h2>Próximas ações</h2><p>Somente o que precisa de atenção agora.</p></div><span>{workItems.length}</span></div>
