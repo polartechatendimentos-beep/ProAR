@@ -400,6 +400,9 @@ type ModuleRecord = {
   firstDueDate?: string;
   paymentInstallments?: PurchaseInstallment[];
   purchaseId?: string;
+  sourceType?: string;
+  sourceId?: string;
+  quantity?: number;
   installmentNumber?: number;
   reminderMessage?: string;
   serviceOrderId?: string;
