@@ -147,3 +147,29 @@
   .employee-list-toolbar .list-search{width:100%}
   .employee-table table{min-width:980px}
 }
+
+
+/* Obras — acesso externo: formulário estável e feedback no próprio modal */
+.external-access-modal{width:min(92vw,860px)!important;max-width:860px!important}
+.external-access-modal .work-register-body{overflow-x:hidden}
+.external-access-modal .external-access-form{
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  align-items:end!important;
+  gap:14px!important;
+}
+.external-access-modal .external-access-form>label{min-width:0!important;width:100%!important}
+.external-access-modal .external-access-form input,
+.external-access-modal .external-access-form select{width:100%!important}
+.external-access-modal .external-access-submit{grid-column:1/-1;justify-self:start;width:auto!important;min-width:180px}
+.external-access-notice{grid-column:1/-1;padding:10px 12px;border:1px solid;border-radius:9px;font-size:11px;font-weight:700}
+.external-access-notice.info{border-color:#245486;background:#0a223a;color:#9dccf4}
+.external-access-notice.success{border-color:#1d684e;background:#092d23;color:#77e0b4}
+.external-access-notice.error{border-color:#7b3542;background:#35141b;color:#ff9aaa}
+.external-access-list article{min-width:0}
+.external-access-list article code{overflow-wrap:anywhere}
+@media(max-width:720px){
+  .external-access-modal .external-access-form{grid-template-columns:1fr!important}
+  .external-access-modal .external-access-submit,.external-access-notice{grid-column:1}
+  .external-access-modal .external-access-submit{width:100%!important}
+}
