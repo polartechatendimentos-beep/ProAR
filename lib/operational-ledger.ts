@@ -133,12 +133,12 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
   assertUnique(list(modules.Equipamentos), list(oldModules.Equipamentos), "serialNumber");
   const financial = list(modules.Financeiro);
   modules.Financeiro = financial;
-  const approvals = structuredClone(list(oldModules["Aprovações"]));
+  const approvals = structuredClone(list(modules["Aprovações"]));
   modules["Aprovações"] = approvals;
   const ensureApproval = (sourceModule:string, source:ErpRecord, reason:string, value:number) => {
-    const existing=approvals.find(item=>item.sourceModule===sourceModule && item.sourceId===source.id && !/Rejeitado|Cancelado/i.test(item.status||""));
+    const existing=approvals.find(item=>item.sourceModule===sourceModule && item.sourceId===source.id && Number(item.value||0)===Number(value) && !/Rejeitado|Cancelado/i.test(item.status||""));
     if(existing){ source.approvalRequired=true; source.approvalStatus=existing.status; return existing; }
-    const approval={ id:`APR-${sourceModule.replace(/\W/g,"").toUpperCase()}-${source.id}`, name:`Aprovação • ${source.name || source.id}`, sourceModule, sourceId:source.id, client:source.client, value, reason, status:"Pendente", requestedAt:now, requestedBy:actor.username, createdAt:now };
+    const approval={ id:`APR-${sourceModule.replace(/\W/g,"").toUpperCase()}-${source.id}-${crypto.randomUUID().slice(0,8)}`, name:`Aprovação • ${source.name || source.id}`, sourceModule, sourceId:source.id, client:source.client, value, reason, status:"Pendente", requestedAt:now, requestedBy:actor.username, createdAt:now };
     approvals.push(approval); source.approvalRequired=true; source.approvalStatus="Pendente"; return approval;
   };
   for(const purchase of list(modules.Compras)){
