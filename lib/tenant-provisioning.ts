@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { encryptTenantSecret } from "./tenant-crypto";
 import { supabaseRest } from "./supabase-rest";
+import { tenantIdentity } from "./tenant-identity";
 
 const MANAGEMENT_API = "https://api.supabase.com/v1";
 const operationalSchema = `
@@ -43,7 +44,7 @@ export async function provisionTenant(company: { id: string; slug: string; trade
     await supabaseRest(`proar_tenant_instances?on_conflict=company_id`, {
       method: "POST",
       headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-      body: JSON.stringify({ company_id: company.id, provider: "supabase", provisioning_status: "manual", provisioning_error: "Configure SUPABASE_MANAGEMENT_TOKEN e SUPABASE_ORGANIZATION_SLUG para provisionamento automático.", updated_at: new Date().toISOString() }),
+      body: JSON.stringify({ company_id: company.id, provider: "supabase", project_name: tenantIdentity({ companyId: company.id, slug: company.slug, tradeName: company.tradeName, primaryCompanyId: process.env.PROAR_PRIMARY_COMPANY_ID, primarySlug: process.env.PROAR_PRIMARY_COMPANY_SLUG }).projectName, provisioning_status: "manual", provisioning_error: "Configure SUPABASE_MANAGEMENT_TOKEN e SUPABASE_ORGANIZATION_SLUG para provisionamento automático.", updated_at: new Date().toISOString() }),
     });
     return { mode: "manual" as const };
   }
@@ -56,7 +57,8 @@ export async function provisionTenant(company: { id: string; slug: string; trade
 
   try {
     const dbPass = randomBytes(24).toString("base64url");
-    const projectName = `proar-${company.slug}`.slice(0, 48);
+    const identity = tenantIdentity({ companyId: company.id, slug: company.slug, tradeName: company.tradeName, primaryCompanyId: process.env.PROAR_PRIMARY_COMPANY_ID, primarySlug: process.env.PROAR_PRIMARY_COMPANY_SLUG });
+    const projectName = identity.projectName;
     const created = await management("/projects", { method: "POST", body: JSON.stringify({ name: projectName, organization_slug: organizationSlug, db_pass: dbPass }) });
     const project = await created.json();
     if (!created.ok) throw new Error(project?.message || project?.error || "Falha ao criar projeto Supabase.");
