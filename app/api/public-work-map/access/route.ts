@@ -20,7 +20,9 @@ export async function POST(request: NextRequest) {
   const token = String(body.token ?? "").trim();
   const username = normalize(body.username);
   const password = String(body.password ?? "");
-  if (!token || !username || !password) return NextResponse.json({ error: "Informe o link, login e senha." }, { status: 400 });\n  const rateKey=attemptKey(request,token,username);\n  if(limited(rateKey)) return NextResponse.json({ error: "Muitas tentativas. Aguarde alguns minutos e tente novamente." }, { status: 429, headers: { "Retry-After": "900" } });
+  if (!token || !username || !password) return NextResponse.json({ error: "Informe o link, login e senha." }, { status: 400 });
+  const rateKey=attemptKey(request,token,username);
+  if(limited(rateKey)) return NextResponse.json({ error: "Muitas tentativas. Aguarde alguns minutos e tente novamente." }, { status: 429, headers: { "Retry-After": "900" } });
   const { url, key } = config();
   if (!url || !key) return NextResponse.json({ error: "Base de dados indisponível." }, { status: 503 });
   const response = await databaseFetch(`${url}/rest/v1/proar_state?id=like.workmap-*&select=payload`, { headers: headers(key), cache: "no-store" });
@@ -30,7 +32,8 @@ export async function POST(request: NextRequest) {
   if (!current) return NextResponse.json({ error: "Link da obra não localizado." }, { status: 404 });
   const accesses = Array.isArray(current.externalAccess) ? current.externalAccess as Record<string, unknown>[] : [];
   const access = accesses.find(item => normalize(item.username) === username && item.active === true && equalHash(String(item.passwordHash ?? ""), hash(password)));
-  if (!access) { fail(rateKey); return NextResponse.json({ error: "Login inválido ou acesso inativo." }, { status: 401 }); }\n  attempts.delete(rateKey);
+  if (!access) { fail(rateKey); return NextResponse.json({ error: "Login inválido ou acesso inativo." }, { status: 401 }); }
+  attempts.delete(rateKey);
   const houses = Array.isArray(current.houses) ? current.houses as Record<string, unknown>[] : [];
   const houseId = String(body.houseId ?? "").trim();
   const description = String(body.description ?? "").trim();
