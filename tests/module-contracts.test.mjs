@@ -43,6 +43,7 @@ for (const [name, source] of [["NF-e",nfe],["NFC-e",nfce],["NFS-e",nfse]]) {
 assert.ok(page.includes("ncm?: string") && page.includes("cfop?: string") && page.includes("serviceCode?: string"), "Produtos e Serviços devem manter campos fiscais próprios");
 assert.ok(page.includes('detailTab === "Fiscal"'), "cadastros especializados devem expor aba Fiscal");
 assert.ok(page.includes("profilePresets"), "Funcionários devem oferecer perfis de acesso predefinidos");
+assert.ok(!page.includes("moduleKeys = Object.keys(localStorage)"), "login não pode autenticar funcionário por cache local");
 const inventory = await readFile(new URL("../components/InventoryOperations.tsx", import.meta.url), "utf8");
 assert.ok(inventory.includes("Transferência") && inventory.includes("sourceType"), "Estoque deve suportar transferência rastreável entre destinos");
 console.log("module-contracts.test.mjs: ok");
