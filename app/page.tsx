@@ -658,7 +658,7 @@ function quickPrintServiceOrder(order: ServiceOrder, company: TenantCompany) {
   popup.document.close();
 }
 
-function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders, customers, company, role }: { onOpen: (name: string) => void; onSelect: (order: ServiceOrder) => void; onDelete: (order: ServiceOrder) => void; onUpdate: (order: ServiceOrder) => void; serviceOrders: ServiceOrder[]; customers: Customer[]; company: TenantCompany; role?: string }) {
+function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: sourceServiceOrders, customers, company, role }: { onOpen: (name: string) => void; onSelect: (order: ServiceOrder) => void; onDelete: (order: ServiceOrder) => void; onUpdate: (order: ServiceOrder) => void; serviceOrders: ServiceOrder[]; customers: Customer[]; company: TenantCompany; role?: string }) {\n  let serviceOrders = sourceServiceOrders;
   const [query, setQuery] = useState("");
   const technicianMode = /t[eé]cnico/i.test(role || "");
   const [visibility, setVisibility] = useState(technicianMode ? "Hoje" : "Em aberto");
@@ -3352,7 +3352,7 @@ export default function Home() {
         const belongsToPrevious = contract.id === previousOrder?.certameId;
         if (!belongsToCurrent && !belongsToPrevious) return contract;
         return { ...contract, certameItems:(contract.certameItems ?? []).map(contractItem => {
-          let movements = [...(contractItem.movements ?? [])];
+          const movements = [...(contractItem.movements ?? [])];
           const previousLinks = previousContractItems.filter(link => link.certameItemId === contractItem.id);
           const currentIndexes = nextContractItems.map((link,index) => ({link,index})).filter(entry => entry.link.certameItemId === contractItem.id);
 
