@@ -1,4 +1,3 @@
-import { deriveWorkflowSuggestions } from "./workflow-automation.ts";
 export type OperationalActionTone = "blue" | "amber" | "red";
 
 export type OperationalAction = {
@@ -14,6 +13,27 @@ export type OperationalAction = {
 };
 
 type GenericRecord = Record<string, unknown>;
+type WorkflowSuggestion = {
+  id:string; title:string; detail:string; module:string; priority:1|2|3; sourceId:string;
+};
+
+function deriveWorkflowSuggestions(serviceOrders: GenericRecord[], modules: Record<string, GenericRecord[]>): WorkflowSuggestion[] {
+  const items:WorkflowSuggestion[]=[];
+  for(const budget of modules.Orçamentos||[]){
+    const status=String(budget.status||"");
+    if(/aprovad/i.test(status)&&!/convertid/i.test(status)) items.push({id:`wf-budget-${budget.id}`,title:`Orçamento aprovado aguardando conversão • ${budget.name||budget.id}`,detail:"Converta para venda ou ordem de serviço para continuar o fluxo.",module:"Orçamentos",priority:2,sourceId:String(budget.id||"")});
+  }
+  for(const order of serviceOrders||[]){
+    if(/conclu[ií]d/i.test(String(order.status||""))&&!/autorizada|emitida|cancelada/i.test(String(order.nfseStatus||""))) items.push({id:`wf-os-fiscal-${order.id}`,title:`OS concluída aguardando faturamento • ${order.id}`,detail:[order.client,"Preparar documento fiscal e financeiro"].filter(Boolean).join(" • "),module:"Fiscal",priority:2,sourceId:String(order.id||"")});
+  }
+  for(const purchase of modules.Compras||[]){
+    if(/recebid|conclu[ií]d/i.test(String(purchase.status||""))&&!purchase.stockMovementId) items.push({id:`wf-purchase-stock-${purchase.id}`,title:`Compra recebida sem entrada de estoque • ${purchase.name||purchase.id}`,detail:"Confirme a entrada física para atualizar estoque e rastreabilidade.",module:"Estoque",priority:1,sourceId:String(purchase.id||"")});
+  }
+  for(const sale of modules.Vendas||[]){
+    if(/confirmad|conclu[ií]d/i.test(String(sale.status||""))&&!sale.financialRecordId) items.push({id:`wf-sale-finance-${sale.id}`,title:`Venda sem vínculo financeiro • ${sale.name||sale.id}`,detail:"Gerar ou vincular o título financeiro da venda.",module:"Financeiro",priority:1,sourceId:String(sale.id||"")});
+  }
+  return items;
+}
 
 function dateOnly(value: unknown) {
   if (!value) return "";
