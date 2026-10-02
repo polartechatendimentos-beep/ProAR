@@ -101,8 +101,8 @@ export function auditOperationalIntegrity(state: StateData, checkedAt = new Date
     const ownerName = normalized(order.client || order.customer || order.customerName);
     if (ownerId && !customerIds.has(ownerId)) {
       push(findings, "OS com cliente inválido", "Crítico", order, `OS ${text(order.id)} com cliente inexistente`, `O customerId/clientId ${ownerId} não existe no cadastro de clientes.`);
-    } else if (!ownerId && ownerName && !customerNames.has(ownerName)) {
-      push(findings, "OS sem vínculo estável de cliente", "Atenção", order, `OS ${text(order.id)} depende do nome do cliente`, "A OS não possui customerId válido e o vínculo depende somente do nome. Recomenda-se consolidar o ID do cliente.");
+    } else if (!ownerId && ownerName) {
+      push(findings, "OS sem vínculo estável de cliente", customerNames.has(ownerName) ? "Atenção" : "Crítico", order, `OS ${text(order.id)} depende do nome do cliente`, customerNames.has(ownerName) ? "A OS foi reconhecida pelo nome, mas ainda não possui customerId. Consolide o vínculo por ID para evitar falhas futuras." : "A OS não possui customerId e o nome informado não corresponde a um cliente cadastrado.");
     }
     const structureId = text(order.roomId || order.sectorId || order.unitId || order.structureId);
     if (structureId && !structureIds.has(structureId)) {
