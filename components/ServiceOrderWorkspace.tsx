@@ -90,6 +90,22 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
   const productsTotal = Number(draft.productsTotal || catalog.filter(item => item.kind === "Produto").reduce((sum, item) => sum + Number((item as unknown as RecordItem).price || 0), 0));
   const discount = Number(draft.discount || 0);
   const total = Math.max(0, servicesTotal + productsTotal - discount);
+  const itemCost = catalog.reduce((sum,item) => {
+    const record = item as unknown as RecordItem;
+    const unitCost = Number(record.unitCost || record.averageCost || record.costValue || record.cost || 0);
+    return sum + (Number.isFinite(unitCost) ? unitCost * Number(item.quantity || 1) : 0);
+  },0);
+  const costCoverage = catalog.length ? catalog.filter(item => {
+    const record = item as unknown as RecordItem;
+    return Number(record.unitCost || record.averageCost || record.costValue || record.cost || 0) > 0;
+  }).length / catalog.length : 1;
+  const laborCost = Number(draft.actualLaborCost || 0);
+  const travelCost = Number(draft.actualTravelCost || 0);
+  const taxCost = Number(draft.actualTaxCost || 0);
+  const otherCost = Number(draft.actualOtherCost || 0);
+  const actualCost = itemCost + laborCost + travelCost + taxCost + otherCost;
+  const actualMargin = total - actualCost;
+  const actualMarginPct = total > 0 ? actualMargin / total * 100 : 0;
 
   const setField = (key: string, value: unknown) => setDraft(current => ({ ...current, [key]: value }));
   const assist = (key: string, kind: "observacao" | "cliente" = "observacao") => {
@@ -164,7 +180,23 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
 
     {activeTab === "Histórico" && <div className="os-tab-content os-history-layout"><article className="os-card"><div className="os-card-heading"><div><span className="os-section-label">HISTÓRICO DESTA OS</span><h3>Linha do tempo operacional</h3></div><History size={18}/></div>{history.length ? <div className="os-timeline">{history.map((event, index) => <div className="os-timeline-item" key={String(event.id || index)}><i/><div><b>{text(event, "status", "action") || "Atualização registrada"}</b><small><Clock3 size={12}/> {text(event, "createdAt", "date") || "Data não informada"}</small><p>{text(event, "internalNote", "customerNote", "description")}</p></div></div>)} </div> : <p className="os-empty">Ainda não há eventos registrados nesta OS.</p>}</article><article className="os-card"><div className="os-card-heading"><div><span className="os-section-label">HISTÓRICO DO AMBIENTE</span><h3>{selectedRoom}</h3></div></div><p className="os-helper-text">As ordens anteriores do ambiente aparecerão aqui quando estiverem vinculadas ao mesmo cadastro.</p><button className="os-link-button" onClick={() => setNotice("Histórico completo do ambiente disponível após o vínculo do cadastro.")}>Ver histórico completo <ChevronRight size={14}/></button></article></div>}
 
-    {activeTab === "Financeiro" && <div className="os-tab-content"><article className="os-card"><span className="os-section-label">RESUMO FINANCEIRO</span><h3>Valores autorizados da ordem</h3><div className="os-finance-grid"><div><small>Serviços</small><b>{money(servicesTotal)}</b></div><div><small>Produtos / materiais</small><b>{money(productsTotal)}</b></div><div><small>Desconto</small><b>{money(discount)}</b></div><div className="highlight"><small>Total da OS</small><b>{money(total)}</b></div></div><p className="os-helper-text">Quantidade, preço autorizado e desconto devem ser revisados antes da conclusão da OS.</p></article></div>}
+    {activeTab === "Financeiro" && <div className="os-tab-content">
+      <article className="os-card"><span className="os-section-label">RESUMO FINANCEIRO</span><h3>Receita e rentabilidade real</h3>
+        <div className="os-finance-grid"><div><small>Serviços</small><b>{money(servicesTotal)}</b></div><div><small>Produtos / materiais</small><b>{money(productsTotal)}</b></div><div><small>Desconto</small><b>{money(discount)}</b></div><div className="highlight"><small>Total da OS</small><b>{money(total)}</b></div><div><small>Custo conhecido dos itens</small><b>{money(itemCost)}</b></div><div><small>Custo operacional</small><b>{money(laborCost+travelCost+taxCost+otherCost)}</b></div><div><small>Custo real conhecido</small><b>{money(actualCost)}</b></div><div className="highlight"><small>Margem real conhecida</small><b>{money(actualMargin)} • {actualMarginPct.toFixed(1)}%</b></div></div>
+        <p className="os-helper-text">Cobertura de custo dos itens: {(costCoverage*100).toFixed(0)}%. A margem usa apenas custos efetivamente cadastrados.</p>
+      </article>
+      <article className="os-card"><div className="os-card-heading"><div><span className="os-section-label">CUSTOS REAIS</span><h3>Apontamento operacional</h3></div></div>
+        <div className="os-form-grid">
+          <label>Mão de obra (R$)<input type="number" min="0" step="0.01" disabled={!canEdit} value={String(draft.actualLaborCost || 0)} onChange={event=>setField("actualLaborCost",Number(event.target.value)||0)}/></label>
+          <label>Deslocamento (R$)<input type="number" min="0" step="0.01" disabled={!canEdit} value={String(draft.actualTravelCost || 0)} onChange={event=>setField("actualTravelCost",Number(event.target.value)||0)}/></label>
+          <label>Impostos / taxas (R$)<input type="number" min="0" step="0.01" disabled={!canEdit} value={String(draft.actualTaxCost || 0)} onChange={event=>setField("actualTaxCost",Number(event.target.value)||0)}/></label>
+          <label>Outros custos (R$)<input type="number" min="0" step="0.01" disabled={!canEdit} value={String(draft.actualOtherCost || 0)} onChange={event=>setField("actualOtherCost",Number(event.target.value)||0)}/></label>
+          <label>Horas técnicas<input type="number" min="0" step="0.25" disabled={!canEdit} value={String(draft.actualLaborHours || 0)} onChange={event=>setField("actualLaborHours",Number(event.target.value)||0)}/></label>
+          <label>Km rodados<input type="number" min="0" step="0.1" disabled={!canEdit} value={String(draft.actualDistanceKm || 0)} onChange={event=>setField("actualDistanceKm",Number(event.target.value)||0)}/></label>
+        </div>
+        <p className="os-helper-text">Esses valores permitem comparar o que foi orçado com o que realmente aconteceu e melhorar os próximos preços.</p>
+      </article>
+    </div>}
 
     {activeTab === "Docs" && <div className="os-tab-content"><article className="os-card"><span className="os-section-label">DOCUMENTOS</span><h3>Documentos relacionados</h3><div className="os-doc-row"><FileText size={18}/><span><b>Ordem de Serviço {draft.id}</b><small>Documento operacional e relatório técnico</small></span><button className="os-secondary-button" onClick={() => setNotice("Use o botão de impressão da OS para gerar o documento.")}>Abrir / imprimir</button></div></article></div>}
   </section>;
