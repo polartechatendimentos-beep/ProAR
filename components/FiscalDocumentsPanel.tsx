@@ -36,6 +36,8 @@ export type FiscalDocumentRecord = AnyRecord & {
   fiscalRejectionMessage?: string;
   fiscalXmlUrl?: string;
   fiscalDanfeUrl?: string;
+  fiscalDanfseLayoutVersion?: string;
+  fiscalDanfseGeneratedAt?: string;
   fiscalEnvironment?: string;
   fiscalIssuedAt?: string;
   fiscalOperationNature?: string;
@@ -359,6 +361,47 @@ export function FiscalDocumentsPanel({
     }
   };
 
+  const generateDanfse = async (record: FiscalDocumentRecord) => {
+    if (record.fiscalDocumentType !== "NFS-e") return;
+    setFiscalActionLoading(true);
+    setFiscalActionMessage("Gerando DANFSe no leiaute nacional NT 008/2026 v1.02...");
+    try {
+      const response = await fetch("/api/fiscal/danfse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          documentId: record.id,
+          accessKey: record.fiscalKey,
+          verificationCode: record.fiscalVerificationCode,
+          xmlUrl: record.fiscalXmlUrl,
+          environment: record.fiscalEnvironment || config?.company?.environment,
+        }),
+      });
+      const data = await response.json();
+      if (response.status === 202 || data.status === "processing") {
+        setFiscalActionMessage("DANFSe em processamento no gerador fiscal.");
+        return;
+      }
+      if (!response.ok || data.status !== "generated" || !data.pdfUrl) {
+        throw new Error(data.error || "Não foi possível gerar o DANFSe.");
+      }
+      const updated: FiscalDocumentRecord = {
+        ...record,
+        fiscalDanfeUrl: data.pdfUrl,
+        fiscalDanfseLayoutVersion: data.layoutVersion || "NT 008/2026 v1.02",
+        fiscalDanfseGeneratedAt: data.generatedAt || new Date().toISOString(),
+      };
+      await onSaveDocument(updated);
+      setSelected(updated);
+      setFiscalActionMessage("DANFSe gerado conforme NT 008/2026 v1.02.");
+      window.open(data.pdfUrl, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      setFiscalActionMessage(error instanceof Error ? error.message : "Falha ao gerar o DANFSe.");
+    } finally {
+      setFiscalActionLoading(false);
+    }
+  };
+
   return <section className="space-y-5">
     <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-950 to-slate-800 p-5 text-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -444,15 +487,17 @@ export function FiscalDocumentsPanel({
       <section className="relative z-10 max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
         <header className="flex items-start justify-between border-b p-5"><div><small className="font-bold text-blue-600">{selected.fiscalDocumentType} • {selected.id}</small><h3 className="mt-1 text-xl font-bold">{selected.client}</h3><p className="text-sm text-slate-500">{selected.fiscalSourceType} {selected.fiscalSourceId ? `• ${selected.fiscalSourceId}` : ""}</p></div><button onClick={()=>setSelected(null)}><X size={18}/></button></header>
         <div className="grid gap-4 p-5 md:grid-cols-2">
-          <div className="rounded-xl border p-4"><small className="text-slate-500">Status</small><div className="mt-2"><StatusPill status={selected.status}/></div><div className="mt-4 text-sm"><p><b>Valor:</b> {money(Number(selected.value||0))}</p><p><b>Número:</b> {selected.fiscalNumber || "—"}</p><p><b>Série:</b> {selected.fiscalSeries || "—"}</p><p><b>Protocolo:</b> {selected.fiscalProtocol || "—"}</p><p><b>Chave/código:</b> {selected.fiscalKey || selected.fiscalVerificationCode || "—"}</p>{selected.fiscalRejectionMessage && <p className="mt-2 text-red-700"><b>Rejeição:</b> {selected.fiscalRejectionCode ? `${selected.fiscalRejectionCode} • ` : ""}{selected.fiscalRejectionMessage}</p>}</div></div>
+          <div className="rounded-xl border p-4"><small className="text-slate-500">Status</small><div className="mt-2"><StatusPill status={selected.status}/></div><div className="mt-4 text-sm"><p><b>Valor:</b> {money(Number(selected.value||0))}</p><p><b>Número:</b> {selected.fiscalNumber || "—"}</p><p><b>Série:</b> {selected.fiscalSeries || "—"}</p><p><b>Protocolo:</b> {selected.fiscalProtocol || "—"}</p><p><b>Chave/código:</b> {selected.fiscalKey || selected.fiscalVerificationCode || "—"}</p>{selected.fiscalDocumentType === "NFS-e" && selected.fiscalDanfseLayoutVersion && <p><b>DANFSe:</b> {selected.fiscalDanfseLayoutVersion}</p>}{selected.fiscalRejectionMessage && <p className="mt-2 text-red-700"><b>Rejeição:</b> {selected.fiscalRejectionCode ? `${selected.fiscalRejectionCode} • ` : ""}{selected.fiscalRejectionMessage}</p>}</div></div>
           <div className="rounded-xl border p-4"><small className="text-slate-500">Pré-validação</small>{selected.fiscalPreflight ? selected.fiscalPreflight.ok ? <div className="mt-2 flex items-center gap-2 text-sm font-bold text-emerald-700"><CheckCircle2 size={17}/> Sem pendências conhecidas</div> : <div className="mt-2 space-y-2">{selected.fiscalPreflight.issues.map(issue=><p key={issue} className="flex gap-2 text-xs text-red-700"><AlertTriangle size={14} className="shrink-0"/>{issue}</p>)}</div> : <p className="mt-2 text-sm text-slate-500">Ainda não executada.</p>}</div>
           <div className="md:col-span-2 rounded-xl border p-4"><b className="text-sm">Itens</b><div className="mt-3 divide-y">{selected.fiscalItems?.map(item=><div key={item.id} className="flex items-center justify-between py-2 text-sm"><div><b>{item.description}</b><small className="block text-slate-500">{item.kind}{item.ncm ? ` • NCM ${item.ncm}` : ""}{item.cfop ? ` • CFOP ${item.cfop}` : ""}</small></div><span>{item.quantity} × {money(item.unitValue)}</span></div>)}</div></div>
         </div>
         {fiscalActionMessage && <div className="mx-5 mb-2 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">{fiscalActionMessage}</div>}
         <footer className="flex flex-wrap justify-end gap-2 border-t p-4">
           <button disabled={fiscalActionLoading} onClick={()=>void validateRecord(selected)} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold disabled:opacity-50"><FileCheck2 size={14}/> Validar pré-emissão</button>
+          {selected.status === "Autorizada" && selected.fiscalDocumentType === "NFS-e" && <button disabled={fiscalActionLoading || !selected.fiscalXmlUrl || digits(selected.fiscalKey).length !== 50} onClick={()=>void generateDanfse(selected)} title={!selected.fiscalXmlUrl ? "O XML autorizado é obrigatório para gerar o DANFSe." : digits(selected.fiscalKey).length !== 50 ? "A chave de acesso da NFS-e deve possuir 50 dígitos." : "Gerar DANFSe conforme NT 008/2026 v1.02"} className="inline-flex items-center gap-2 rounded-xl border border-blue-200 px-4 py-2 text-xs font-bold text-blue-700 disabled:opacity-40"><FileText size={14}/> {selected.fiscalDanfeUrl ? "Regenerar DANFSe" : "Gerar DANFSe"}</button>}
+          {selected.status === "Autorizada" && selected.fiscalDocumentType === "NFS-e" && selected.fiscalDanfeUrl && <button disabled={fiscalActionLoading} onClick={()=>window.open(selected.fiscalDanfeUrl,"_blank","noopener,noreferrer")} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold"><FileText size={14}/> Abrir DANFSe</button>}
           {selected.status === "Autorizada" && <button disabled={fiscalActionLoading} onClick={()=>void cancelRecord(selected)} className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-4 py-2 text-xs font-bold text-red-700 disabled:opacity-50"><X size={14}/> Cancelar nota</button>}
-          <button onClick={()=>void transmitRecord(selected)} disabled={fiscalActionLoading || !selected.fiscalPreflight?.ok || selected.status === "Autorizada" || selected.status === "Cancelada"} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"><Send size={14}/>{fiscalActionLoading ? " Processando..." : " Transmitir"}</button>
+          <button onClick={()=>void transmitRecord(selected) disabled={fiscalActionLoading || !selected.fiscalPreflight?.ok || selected.status === "Autorizada" || selected.status === "Cancelada"} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"><Send size={14}/>{fiscalActionLoading ? " Processando..." : " Transmitir"}</button>
         </footer>
       </section>
     </div>}
