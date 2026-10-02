@@ -2036,7 +2036,8 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
       localStorage.setItem(projectsKey,JSON.stringify(attempt.next));
 
       try {
-        await syncExternalAccessMap(attempt.externalAccess);
+        if (shareToken) await syncExternalAccessMap(attempt.externalAccess);
+        else await publishPublicMap(houses, serverRevision, attempt.externalAccess);
       } catch (syncError) {
         setNewAccessName("");
         setNewAccessUsername("");
