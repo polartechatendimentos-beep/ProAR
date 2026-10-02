@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BookOpen, Camera, CheckCircle2, ClipboardList, PackagePlus, RefreshCcw, ShieldAlert, ShoppingCart, Stethoscope } from "lucide-react";
 import {
   buildGuidedSteps, buildPurchaseHandoff, buildQuoteHandoff, calculateDeltaT, confirmFieldSolution,
   diagnosticConfidence, summarizeRecurrence, type DiagnosticMeasurements, type GuidedStep,
 } from "@/lib/diagnostic-workflow";
 import { normalizeDiagnosticManual, rankDiagnosticManuals } from "@/lib/diagnostic-manual-library";
+import { clearOfflineDiagnosticDraft, loadOfflineDiagnosticDraft, saveOfflineDiagnosticDraft } from "@/lib/diagnostic-offline";
 
 type RecordItem=Record<string,unknown>;
 type DiagnosticResult={
@@ -45,6 +46,8 @@ export function DiagnosticAdvancedPanel({order,equipment,manuals=[],brand,model,
   const [solution,setSolution]=useState("");
   const [photoLoading,setPhotoLoading]=useState(false);
   const [photoResult,setPhotoResult]=useState<RecordItem|null>((order.diagnosticPhotoAnalysis as RecordItem)||null);
+  const [online,setOnline]=useState(true);
+  const [offlineDraftAt,setOfflineDraftAt]=useState("");
   const equipmentHistory=Array.isArray(equipment?.diagnosticHistory)?equipment?.diagnosticHistory as unknown[]:[];
   const orderHistory=Array.isArray(order.diagnosticHistory)?order.diagnosticHistory as unknown[]:[];
   const recurrence=useMemo(()=>summarizeRecurrence([...equipmentHistory,...orderHistory],{code,symptom}),[equipmentHistory,orderHistory,code,symptom]);
@@ -58,6 +61,25 @@ export function DiagnosticAdvancedPanel({order,equipment,manuals=[],brand,model,
     measurements,guidedSteps:steps,
   }),[result,model,code,blinkPattern,manualMatches,measurements,steps]);
   const deltaT=calculateDeltaT(measurements);
+  useEffect(()=>{
+    const update=()=>setOnline(navigator.onLine);
+    update(); window.addEventListener("online",update); window.addEventListener("offline",update);
+    const saved=loadOfflineDiagnosticDraft(String(order.id||"")); if(saved?.savedAt)setOfflineDraftAt(saved.savedAt);
+    return()=>{window.removeEventListener("online",update);window.removeEventListener("offline",update);};
+  },[order.id]);
+  useEffect(()=>{
+    if(!online){
+      saveOfflineDiagnosticDraft(String(order.id||""),{measurements,steps,photoResult,brand,model,equipmentType,code,blinkPattern,symptom});
+      setOfflineDraftAt(new Date().toISOString());
+    }
+  },[online,order.id,measurements,steps,photoResult,brand,model,equipmentType,code,blinkPattern,symptom]);
+  const restoreOffline=()=>{
+    const saved=loadOfflineDiagnosticDraft(String(order.id||"")); const payload=saved?.payload||{};
+    if(payload.measurements)setMeasurements(payload.measurements as DiagnosticMeasurements);
+    if(Array.isArray(payload.steps))setSteps(payload.steps as GuidedStep[]);
+    if(payload.photoResult)setPhotoResult(payload.photoResult as RecordItem);
+    onPatch(payload); if(saved?.savedAt)setOfflineDraftAt(saved.savedAt);
+  };
 
   const updateMeasurement=(key:keyof DiagnosticMeasurements,value:string)=>{
     const next={...measurements,[key]:key==="refrigerant"||key==="pressureUnit"||key==="temperatureUnit"||key==="notes"?value:numberValue(value)};
@@ -107,6 +129,7 @@ export function DiagnosticAdvancedPanel({order,equipment,manuals=[],brand,model,
   };
 
   return <div className="diagnostic-advanced">
+    <div className={online?"offline-status online":"offline-status offline"}><span>{online?"Online":"Sem conexão • rascunho local ativo"}</span>{offlineDraftAt&&<small>Último rascunho: {new Date(offlineDraftAt).toLocaleString("pt-BR")}</small>}{online&&offlineDraftAt&&<button onClick={()=>{restoreOffline();clearOfflineDiagnosticDraft(String(order.id||""));setOfflineDraftAt("");}}>Restaurar rascunho</button>}</div>
     <article className="diagnostic-panel">
       <header><div><b>Confiança técnica</b><small>Calculada por referência, modelo, medições e testes executados.</small></div><span className="confidence-score">{confidence.score}%</span></header>
       <div className="confidence-level"><ShieldAlert size={16}/><div><b>{confidence.level}</b><small>{confidence.reasons.join(" • ")||"Adicione modelo, referência e medições para aumentar a confiança."}</small></div></div>
