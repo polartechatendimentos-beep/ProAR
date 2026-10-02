@@ -370,7 +370,7 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
       break;
     case "stock":
       requireAction(actor, data.movementType === "Ajuste" ? "estoque.ajustar" : "estoque.editar");
-      records.push({ id: operationId, name: `${data.movementType} de estoque`, productId: data.productId, quantity: data.quantity, movementType: data.movementType, changeReason: data.reason, description: data.reason, createdAt: now });
+      records.push({ id: operationId, name: `${data.movementType} de estoque`, productId: data.productId, quantity: data.quantity, movementType: data.movementType, destinationType: data.destinationType || "Estoque central", destinationId: data.destinationId || "", destinationName: data.destinationName || "", changeReason: data.reason, description: data.reason, createdAt: now });
       break;
     case "reconcile": {
       requireAction(actor, "financeiro.conciliar");
