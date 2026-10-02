@@ -1,0 +1,28 @@
+/* Usability hardening — legibilidade, densidade e responsividade */
+.app-shell{font-size:14px}
+.app-shell .nav-group>p{font-size:11px!important;letter-spacing:.08em!important}
+.app-shell .nav-group button{font-size:13px!important;min-height:40px!important}
+.app-shell .brand-copy small{font-size:10px!important}
+.app-shell .brand-copy em{font-size:9px!important}
+.app-shell .eyebrow{font-size:11px!important}
+.app-shell .eyebrow i{font-size:10px!important}
+.app-shell .headline h1{font-size:24px!important}
+.app-shell .headline p{font-size:13px!important}
+.app-shell .global-search input{font-size:13px!important;width:220px!important}
+.app-shell .primary-btn,.app-shell .outline-btn,.app-shell .filter-btn,.app-shell button{font-size:13px}
+.app-shell input,.app-shell select,.app-shell textarea{font-size:14px!important}
+.app-shell .section-kicker{font-size:11px!important}
+.app-shell .panel-head p,.app-shell .panel p,.app-shell .customer-tab-head p{font-size:13px!important}
+.app-shell .stat-value span,.app-shell .stat-card small{font-size:12px!important}
+.app-shell .table-wrap th,.app-shell .customer-history-table th{font-size:11px!important}
+.app-shell .table-wrap td,.app-shell .customer-history-table td{font-size:13px!important}
+.app-shell .company-context{font-size:13px!important}
+.app-shell .company-context small{font-size:12px!important}
+.dashboard-filters{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin:-2px 0 14px;padding:12px;border:1px solid #17304d;border-radius:10px;background:#061323}
+.dashboard-filters label{display:grid;gap:6px;min-width:200px;color:#9eb0c6;font-size:12px;font-weight:700}
+.stat-card[role="button"]{cursor:pointer}
+.stat-card[role="button"]:focus-visible{outline:2px solid #268cff;outline-offset:3px}
+.outline-btn.compact{min-height:32px;padding:0 10px}
+@media(max-width:1180px){.app-shell .global-search{display:flex!important}.app-shell .global-search input{width:130px!important}}
+@media(max-width:900px){.app-shell .headline h1{font-size:20px!important}.dashboard-filters{display:grid;grid-template-columns:1fr 1fr}.app-shell .table-wrap table{min-width:780px}}
+@media(max-width:640px){.dashboard-filters{grid-template-columns:1fr}.dashboard-filters label{min-width:0}.app-shell .headline h1{font-size:18px!important}.app-shell .nav-group button{font-size:14px!important}.app-shell input,.app-shell select,.app-shell textarea{font-size:16px!important}.app-shell .table-wrap{overflow-x:auto}.app-shell .management-hero,.app-shell .panel-head{gap:10px}}
