@@ -407,6 +407,13 @@ type ModuleRecord = {
   settlementAccount?: string;
   interestValue?: number;
   discountValue?: number;
+  discountPercent?: number;
+  subtotal?: number;
+  approvalRequired?: boolean;
+  approvalStatus?: "Pendente" | "Aprovado" | "Rejeitado";
+  approvalDecidedAt?: string;
+  approvalDecidedBy?: string;
+  approvalDecisionReason?: string;
   changeReason?: string;
   stockAdjustmentReason?: string;
   receiptHistory?: { id: string; createdAt: string; items: { itemId: string; productId: string; quantity: number }[] }[];
