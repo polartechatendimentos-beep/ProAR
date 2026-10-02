@@ -24,6 +24,7 @@ type Props={
   order:RecordItem;
   equipment?:RecordItem;
   manuals?:RecordItem[];
+  catalog?:RecordItem[];
   brand:string;
   model:string;
   equipmentType:string;
@@ -39,7 +40,7 @@ type Props={
 const numberValue=(value:string)=>value.trim()===""?undefined:Number(value.replace(",","."));
 const text=(record:RecordItem|undefined,...keys:string[])=>{for(const key of keys){const value=record?.[key];if(typeof value==="string"&&value.trim())return value.trim();}return""};
 
-export function DiagnosticAdvancedPanel({order,equipment,manuals=[],brand,model,equipmentType,code,blinkPattern,symptom,result,canEdit,onPatch,onApplyPhotoContext}:Props){
+export function DiagnosticAdvancedPanel({order,equipment,manuals=[],catalog=[],brand,model,equipmentType,code,blinkPattern,symptom,result,canEdit,onPatch,onApplyPhotoContext}:Props){
   const initialMeasurements=(order.diagnosticMeasurements as DiagnosticMeasurements)||{};
   const [measurements,setMeasurements]=useState<DiagnosticMeasurements>(initialMeasurements);
   const [steps,setSteps]=useState<GuidedStep[]>(()=>Array.isArray(order.diagnosticGuidedSteps)?order.diagnosticGuidedSteps as GuidedStep[]:[]);
@@ -61,6 +62,11 @@ export function DiagnosticAdvancedPanel({order,equipment,manuals=[],brand,model,
     measurements,guidedSteps:steps,
   }),[result,model,code,blinkPattern,manualMatches,measurements,steps]);
   const deltaT=calculateDeltaT(measurements);
+  const partMatches=useMemo(()=>((result?.recommendedParts||[]).map(part=>{
+    const wanted=(part.part||"").toLocaleLowerCase("pt-BR");
+    const match=catalog.find(item=>wanted&&String(item.name||item.description||"").toLocaleLowerCase("pt-BR").includes(wanted));
+    return {part,match,stock:Number(match?.stock||match?.quantity||match?.availableStock||0)};
+  })),[result,catalog]);
   useEffect(()=>{
     const update=()=>setOnline(navigator.onLine);
     update(); window.addEventListener("online",update); window.addEventListener("offline",update);
@@ -117,7 +123,7 @@ export function DiagnosticAdvancedPanel({order,equipment,manuals=[],brand,model,
     })});
   };
   const preparePurchase=()=>{
-    const parts=(result?.recommendedParts||[]).map(item=>item.part||"").filter(Boolean);
+    const parts=partMatches.filter(item=>!item.match||item.stock<=0).map(item=>item.part.part||"").filter(Boolean);
     onPatch({diagnosticPurchaseHandoff:buildPurchaseHandoff({orderId:String(order.id||""),equipmentId:String(equipment?.id||""),parts})});
   };
   const confirmSolution=()=>{
@@ -174,7 +180,7 @@ export function DiagnosticAdvancedPanel({order,equipment,manuals=[],brand,model,
     {result&&<article className="diagnostic-panel">
       <header><div><b>Próximas ações</b><small>Crie rascunhos ligados à OS sem executar compras ou orçamento automaticamente.</small></div><ClipboardList size={17}/></header>
       <div className="diagnostic-handoffs"><button disabled={!canEdit} onClick={prepareQuote}><ShoppingCart size={15}/> Preparar orçamento</button><button disabled={!canEdit} onClick={preparePurchase}><PackagePlus size={15}/> Preparar solicitação de material</button></div>
-      {(result.recommendedParts||[]).length>0&&<div className="parts-hypothesis"><b>Peças condicionais</b>{(result.recommendedParts||[]).map((part,index)=><p key={index}><strong>{part.part}</strong> — {part.reason} <small>{part.onlyIf?"Somente se: "+part.onlyIf:""}</small></p>)}</div>}
+      {partMatches.length>0&&<div className="parts-hypothesis"><b>Peças condicionais × estoque</b>{partMatches.map(({part,match,stock},index)=><p key={index}><strong>{part.part}</strong> — {part.reason}<small>{part.onlyIf?"Somente se: "+part.onlyIf:""}{match?" • Catálogo: "+String(match.name||match.description)+" • saldo "+stock:" • Não localizada no catálogo"}</small></p>)}</div>}
       <div className="confirmed-solution"><label>Solução confirmada em campo<textarea value={solution} onChange={e=>setSolution(e.target.value)} placeholder="Ex.: sensor da serpentina medido fora da curva; substituído e equipamento normalizado."/></label><button disabled={!canEdit||!solution.trim()} onClick={confirmSolution}><CheckCircle2 size={14}/> Confirmar solução PolarTech</button></div>
     </article>}
   </div>;
