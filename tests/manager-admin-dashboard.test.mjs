@@ -24,6 +24,9 @@ test("Manager dashboard exposes health, audit, tenant detail and rollout metadat
   assert.ok(page.includes("Auditoria recente"));
   assert.ok(page.includes("manager-detail"));
   assert.ok(page.includes("Verificar banco"));
+  assert.ok(page.includes("Plano e módulos"));
+  assert.ok(page.includes("Segurança"));
+  assert.ok(page.includes("Logs"));
 });
 
 test("Manager API returns dashboard summary and platform metadata",async()=>{
@@ -33,6 +36,8 @@ test("Manager API returns dashboard summary and platform metadata",async()=>{
   assert.ok(route.includes("databaseErrors"));
   assert.ok(route.includes("staleHealth"));
   assert.ok(route.includes("proar_manager_audit"));
+  assert.ok(route.includes("MANAGER_PLANS"));
+  assert.ok(route.includes("keepCustomModules"));
 });
 
 console.log("manager-admin-dashboard.test.mjs: ok");
