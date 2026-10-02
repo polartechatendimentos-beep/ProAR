@@ -574,14 +574,14 @@ const tiagoEmployee: ModuleRecord = { id: "FUN-000001", name: "Tiago Viana", cli
 const linkedUnits: Record<string, { icon: IconType; name: string; type: string; doc: string; responsible: string; phone: string; address: string; orders: number }[]> = {};
 const linkedSectors: Record<string, { icon: IconType; name: string; type: string; doc: string; responsible: string; phone: string; address: string; orders: number }[]> = {};
 
-function Header({ title, subtitle, onMenu, onNew, searchItems, pendingItems, onSearchSelect, onPendingSelect, userName, userRole, onSwitchUser, online, syncing, onPull }: { title: string; subtitle: string; onMenu: () => void; onNew: (option: string) => void; searchItems: GlobalSearchItem[]; pendingItems: PendingItem[]; onSearchSelect: (item: GlobalSearchItem) => void; onPendingSelect: (item: PendingItem) => void; userName: string; userRole: string; onSwitchUser: () => void; online: boolean; syncing: boolean; onPull: () => void; onPush: () => void }) {
+function Header({ title, subtitle, onMenu, onNew, searchProvider, pendingItems, onSearchSelect, onPendingSelect, userName, userRole, onSwitchUser, online, syncing, onPull }: { title: string; subtitle: string; onMenu: () => void; onNew: (option: string) => void; searchProvider: (query: string) => GlobalSearchItem[]; pendingItems: PendingItem[]; onSearchSelect: (item: GlobalSearchItem) => void; onPendingSelect: (item: PendingItem) => void; userName: string; userRole: string; onSwitchUser: () => void; online: boolean; syncing: boolean; onPull: () => void; onPush: () => void }) {
   const [searchOpen,setSearchOpen]=useState(false);
   const [pendingOpen,setPendingOpen]=useState(false);
   const [quickOpen,setQuickOpen]=useState(false);
   const [query,setQuery]=useState("");
   const deferredQuery=useDeferredValue(query);
   const normalizedQuery=deferredQuery.trim().toLowerCase();
-  const matches=normalizedQuery.length<2?[]:searchItems.filter(item=>`${item.title} ${item.detail} ${item.module}`.toLowerCase().includes(normalizedQuery)).slice(0,10);
+  const matches=useMemo(()=>normalizedQuery.length<2?[]:searchProvider(normalizedQuery),[normalizedQuery,searchProvider]);
   useEffect(()=>{
     const onKeyDown=(event:KeyboardEvent)=>{
       if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==="k"){
@@ -4028,12 +4028,31 @@ export default function Home() {
     localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(confirmedModules));
     setSavedMessage("Operação confirmada no banco e registrada na auditoria.");
   };
-  const globalSearchItems = useMemo<GlobalSearchItem[]>(() => {
-    const customerItems = customerRecords.map(customer => ({ id: customer.id, title: customer.name, detail: [customer.doc, customer.phone, customer.city || customer.address].filter(Boolean).join(" • "), module: "Clientes", kind: "Cliente" as const }));
-    const orderItems = serviceOrders.map(order => ({ id: order.id, title: order.id, detail: [order.client, order.service, order.tech].filter(Boolean).join(" • "), module: "Ordens de serviço", kind: "OS" as const }));
-    const moduleItems = Object.entries(moduleRecords).flatMap(([module, records]) => records.map(record => ({ id: record.id, title: record.name, detail: [record.id, record.client, record.sku, record.barcode, record.ncm, record.cfop, record.serialNumber, record.doc].filter(Boolean).join(" • "), module, kind: "Cadastro" as const })));
-    return [...customerItems, ...orderItems, ...moduleItems];
-  }, [customerRecords, serviceOrders, moduleRecords]);
+  const searchGlobal = (normalizedQuery: string): GlobalSearchItem[] => {
+    const found: GlobalSearchItem[] = [];
+    const match=(value: unknown)=>String(value??"").toLowerCase().includes(normalizedQuery);
+    for(const customer of customerRecords){
+      if(match(customer.name)||match(customer.doc)||match(customer.phone)||match(customer.city)||match(customer.address)){
+        found.push({ id:customer.id,title:customer.name,detail:[customer.doc,customer.phone,customer.city||customer.address].filter(Boolean).join(" • "),module:"Clientes",kind:"Cliente" });
+        if(found.length>=10) return found;
+      }
+    }
+    for(const order of serviceOrders){
+      if(match(order.id)||match(order.client)||match(order.service)||match(order.tech)){
+        found.push({ id:order.id,title:order.id,detail:[order.client,order.service,order.tech].filter(Boolean).join(" • "),module:"Ordens de serviço",kind:"OS" });
+        if(found.length>=10) return found;
+      }
+    }
+    for(const [module,records] of Object.entries(moduleRecords)){
+      for(const record of records){
+        if([record.id,record.name,record.client,record.sku,record.barcode,record.ncm,record.cfop,record.serialNumber,record.doc].some(match)){
+          found.push({ id:record.id,title:record.name,detail:[record.id,record.client,record.sku,record.barcode,record.ncm,record.cfop,record.serialNumber,record.doc].filter(Boolean).join(" • "),module,kind:"Cadastro" });
+          if(found.length>=10) return found;
+        }
+      }
+    }
+    return found;
+  };
   const pendingItems = useMemo<PendingItem[]>(() => deriveProarActions(serviceOrders, moduleRecords).slice(0,20).map(item=>({
     id:item.id,title:item.title,detail:item.detail,module:item.module,tone:item.tone,
   })), [serviceOrders, moduleRecords]);
@@ -4060,7 +4079,7 @@ export default function Home() {
   return <div className="app-shell">
     <div data-testid="proar-sidebar"><Sidebar current={current} setCurrent={setCurrent} open={menuOpen} close={() => setMenuOpen(false)} permissions={authenticatedUser.permissions} role={authenticatedUser.role}/></div>
     <main className="main">
-      <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNew={openNew} searchItems={globalSearchItems} pendingItems={pendingItems} onSearchSelect={openGlobalSearch} onPendingSelect={openPending} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onSwitchUser={logout} online={online} syncing={syncing} onPull={() => void pullFromDatabase()} onPush={() => void pushToDatabase()}/>
+      <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNew={openNew} searchProvider={searchGlobal} pendingItems={pendingItems} onSearchSelect={openGlobalSearch} onPendingSelect={openPending} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onSwitchUser={logout} online={online} syncing={syncing} onPull={() => void pullFromDatabase()} onPush={() => void pushToDatabase()}/>
       {syncPhase !== "idle" && <div className={`sync-progress ${syncPhase}`} role="status" aria-label={syncPhase === "complete" ? "Dados atualizados" : "Sincronizando dados"}><i/></div>}
       {savedMessage && <div className={`save-toast feedback-${feedbackTone}`} role={feedbackTone === "error" ? "alert" : "status"} aria-live={feedbackTone === "error" ? "assertive" : "polite"}>{feedbackTone === "error" || feedbackTone === "warning" ? <AlertTriangle size={16}/> : <CheckCircle2 size={16}/>}<span>{savedMessage}</span></div>}
       <div className="company-context"><Building2 size={13}/><span>{activeCompany.tradeName}</span><small>{activeCompany.cnpj || "CNPJ pendente"} • {activeCompany.city}/{activeCompany.state}</small></div>
