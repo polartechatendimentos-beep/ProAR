@@ -57,6 +57,7 @@ import { DashboardWorkspace } from "@/components/DashboardWorkspace";
 import { ApprovalCenter } from "@/components/ApprovalCenter";
 import { FiscalWorkspace } from "@/components/FiscalWorkspace";
 import { inferFeedbackTone, notifyFeedback, type FeedbackTone } from "@/lib/ui-feedback";
+import { friendlyErrorMessage } from "@/lib/error-messages";
 import { CURRENT_PROAR_RELEASE, PROAR_RELEASES, type ReleaseNoteType } from "@/lib/release-notes";
 import { ActivityCenter } from "@/components/ActivityCenter";
 import { DiagnosticManagementDashboard } from "@/components/DiagnosticManagementDashboard";
@@ -2671,7 +2672,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
       if (result.mustChangePassword && tenant) { window.location.href = `/trocar-senha`; return; }
       onLogin({ username: result.username, displayName: result.displayName, role: result.role, permissions: result.permissions, companyId: result.companyId, companySlug: result.companySlug, trialExpiresAt: result.trialExpiresAt });
     } catch (loginError) {
-      setError(loginError instanceof Error ? loginError.message : "Não foi possível entrar. Verifique sua conexão e tente novamente.");
+      setError(friendlyErrorMessage(loginError, { fallback:"Não foi possível entrar. Verifique os dados e tente novamente." }));
     } finally {
       setLoading(false);
     }
@@ -3595,7 +3596,7 @@ export default function Home() {
       if (response.status===409 && result.state) { const serverCustomers=result.state.customers??[]; const serverOrders=result.state.serviceOrders??[]; const serverModules=mergeImportedServices(result.state.moduleRecords??{}); setCustomerRecords(serverCustomers);setServiceOrders(serverOrders);setModuleRecords(serverModules);setStateRevision(Number(result.state._revision||0));localStorage.setItem(companyStorageKey(activeCompany.id,"customers"),JSON.stringify(serverCustomers));localStorage.setItem(companyStorageKey(activeCompany.id,"service-orders"),JSON.stringify(serverOrders));localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(serverModules));setSavedMessage("Conflito detectado: a versão mais recente do banco online foi preservada. Refaça apenas a alteração pendente.");return; }
       if (!response.ok) throw new Error(result.error || "Falha ao confirmar a gravação"); const confirmedModules = mergeImportedServices(result.state?.moduleRecords ?? nextModules); setModuleRecords(confirmedModules); localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(confirmedModules)); setStateRevision(Number(result.state?._revision||stateRevision+1));
     }).catch((error) => {
-      setSavedMessage(error instanceof Error ? error.message : "Falha no banco online. A cópia local não substituirá a versão principal.");
+      setSavedMessage(friendlyErrorMessage(error, { fallback:"Não foi possível sincronizar com o banco online. Seus dados locais foram preservados." }));
     });
   };
   const pullFromDatabase = async () => {
