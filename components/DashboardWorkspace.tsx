@@ -1,9 +1,8 @@
 "use client";
-import { useState, type ComponentType } from "react";
-import { Activity, AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, Boxes, CalendarDays, ChartNoAxesCombined, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, FileChartColumn, FileText, Filter, MoreHorizontal, ShieldCheck, ShoppingBag, ShoppingCart, TrendingUp, UsersRound, WalletCards, Zap } from "lucide-react";
+import { useState } from "react";
+import { Activity, AlertTriangle, ArrowRight, ArrowUpRight, Bell, Boxes, CalendarDays, ChartNoAxesCombined, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock3, FileChartColumn, FileText, Filter, MoreHorizontal, ShieldCheck, ShoppingBag, ShoppingCart, TrendingUp, UsersRound, WalletCards, Zap } from "lucide-react";
 import { deriveOperationalActions } from "@/lib/action-center";
 
-type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type DashboardOrder = { id:string; client:string; unit:string; service:string; tech:string; date:string; time:string; status:string; tone:string; avatar:string };
 type DashboardRecord = { id:string; name:string; category?:string; transactionType?:"Pagar"|"Receber"; value?:number; settledValue?:number; status?:string; date?:string; firstDueDate?:string; [key:string]:unknown };
 
@@ -34,8 +33,8 @@ export function DashboardWorkspace({ onNavigate, serviceOrders, modules, role }:
     const date = String(record.date || record.firstDueDate || "").slice(0,10);
     return !date || (date >= startOfPeriod && date <= todayIso);
   });
-  const isPayable = (record: ModuleRecord) => record.transactionType === "Pagar" || /pagar|compra|fornecedor/i.test(`${record.name} ${record.category}`);
-  const outstandingFinancial = (record: ModuleRecord) => /cancelad/i.test(record.status || "") ? 0 : Math.max(0, Number(record.value || 0) - Number(record.settledValue || 0));
+  const isPayable = (record: DashboardRecord) => record.transactionType === "Pagar" || /pagar|compra|fornecedor/i.test(`${record.name} ${record.category}`);
+  const outstandingFinancial = (record: DashboardRecord) => /cancelad/i.test(record.status || "") ? 0 : Math.max(0, Number(record.value || 0) - Number(record.settledValue || 0));
   const receivableOpen = financialRecords.filter(record => !isPayable(record)).reduce((sum,record)=>sum+outstandingFinancial(record),0);
   const payableOpen = financialRecords.filter(record => isPayable(record)).reduce((sum,record)=>sum+outstandingFinancial(record),0);
   const predictedResult = receivableOpen - payableOpen;
