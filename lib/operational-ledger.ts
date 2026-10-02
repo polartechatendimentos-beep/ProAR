@@ -417,7 +417,10 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
       if (!(Number(data.quantity) > 0) || !String(data.sourceType || "").trim() || !String(data.destinationType || "").trim()) throw new OperationError("Transferência exige quantidade, origem e destino.");
       if (stockLocationKey(data.sourceType,data.sourceId,data.sourceName) === stockLocationKey(data.destinationType,data.destinationId,data.destinationName)) throw new OperationError("Origem e destino da transferência devem ser diferentes.");
       {
-        const sourceBalance=stockBalanceAtLocation(list(modules["Livro de estoque"]),String(data.productId),String(data.sourceType),String(data.sourceId||""),String(data.sourceName||""));
+        const book=list(modules["Livro de estoque"]);
+        const productMovements=book.filter(item=>String(item.productId)===String(data.productId));
+        const calculated=stockBalanceAtLocation(book,String(data.productId),String(data.sourceType),String(data.sourceId||""),String(data.sourceName||""));
+        const sourceBalance=!productMovements.length && String(data.sourceType)==="Estoque central" ? Number(list(modules.Produtos).find(item=>item.id===data.productId)?.stockCurrent||0) : calculated;
         if(sourceBalance + 1e-9 < Number(data.quantity)) throw new OperationError(`Saldo insuficiente na origem: disponível ${sourceBalance}.`);
       }
       records.push({ id: operationId, name: "Transferência de estoque", productId: data.productId, quantity: data.quantity, movementType: "Transferência", sourceType: data.sourceType, sourceId: data.sourceId || "", sourceName: data.sourceName || "", destinationType: data.destinationType, destinationId: data.destinationId || "", destinationName: data.destinationName || "", changeReason: data.reason || "Transferência interna", description: data.reason || "Transferência interna", createdAt: now });
