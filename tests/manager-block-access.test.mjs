@@ -20,7 +20,8 @@ test("login renders a dedicated Sistema bloqueado state",async()=>{
   const source=await readFile(new URL("../app/page.tsx",import.meta.url),"utf8");
   assert.ok(source.includes("Sistema bloqueado"));
   assert.ok(source.includes("login-blocked-panel"));
-  assert.ok(source.includes("O acesso será liberado automaticamente"));
+  assert.ok(source.includes("Sistema bloqueado. Entre em contato com a equipe da ProAR."));
+  assert.ok(source.includes("Entre em contato com a equipe da ProAR para regularizar o acesso ao sistema."));
 });
 
 console.log("manager-block-access.test.mjs: ok");
