@@ -42,6 +42,7 @@ import { improveTechnicalText } from "@/lib/text-assist";
 import { WORK_STATUSES, getWorkProgress, getWorkStatusColor, normalizeWorkStatus, type WorkStatus } from "@/lib/work-status";
 import { prepareCustomerStructureSave } from "@/lib/customer-structure";
 import { deriveProarActions } from "@/lib/proar-insights";
+import { compressImageFile } from "@/lib/client-image";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type NavItem = { icon: IconType; name: string; badge?: string };
@@ -827,24 +828,7 @@ function Agenda({ serviceOrders, onOpen, onSelect }: { serviceOrders: ServiceOrd
 }
 
 async function imageFileToDataUrl(file: File) {
-  const source = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const element = new Image();
-    element.onload = () => resolve(element);
-    element.onerror = reject;
-    element.src = source;
-  });
-  const scale = Math.min(1, 960 / image.width);
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(image.width * scale));
-  canvas.height = Math.max(1, Math.round(image.height * scale));
-  canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL("image/jpeg", 0.68);
+  return compressImageFile(file, { maxWidth: 1280, maxHeight: 1280, quality: 0.72 });
 }
 
 function SignaturePad({ label, value, onChange }: { label: string; value?: string; onChange: (value: string) => void }) {
