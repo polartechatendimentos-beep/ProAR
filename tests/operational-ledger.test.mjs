@@ -143,3 +143,9 @@ test("segunda operação grava apenas entidades alteradas",()=>{
 test("ordem das chaves JSON não gera falso conflito",()=>{
   const state=base();const target=state.moduleRecords.Financeiro[0];const expected=Object.fromEntries(Object.entries(target).reverse());const next=run(state,{...settlement(),expectedRecord:expected});assert.equal(next.moduleRecords.Financeiro[0].settledValue,100);
 });
+
+test("movimento de estoque preserva destino operacional",()=>{
+  const next=run(base(),command("stock",{productId:"P1",movementType:"Saída",quantity:2,reason:"Aplicação em campo",destinationType:"OS",destinationId:"OS-123",destinationName:"OS-123"},undefined));
+  const movement=next.moduleRecords["Livro de estoque"].find(item=>item.kind==="Saída" || item.movementType==="Saída");
+  assert.equal(movement.destinationType,"OS");assert.equal(movement.destinationId,"OS-123");assert.equal(next.moduleRecords.Produtos[0].stockCurrent,8);
+});
