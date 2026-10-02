@@ -21,6 +21,7 @@ import "./login-minimal.css";
 import "./operational-refresh.css";
 import "./google-calendar.css";
 import "./usability-hardening.css";
+import "./fiscal-workspace.css";
 
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
