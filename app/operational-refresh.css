@@ -122,3 +122,28 @@
 .header-popover>small{display:block;padding:14px 6px;color:#64748b}.header-popover-title{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 10px}.header-popover-title span{font-size:11px;font-weight:800;background:#eef3f8;padding:3px 7px;border-radius:10px}
 .header-result-list{max-height:360px;overflow:auto;display:grid;gap:5px;margin-top:8px}.header-result-list button{text-align:left;border:0;background:#f8fafc;border-radius:10px;padding:9px 10px;display:grid;grid-template-columns:1fr auto;gap:2px 8px;cursor:pointer}.header-result-list button:hover{background:#eef4fa}.header-result-list b{font-size:12px}.header-result-list span{grid-column:1/2;font-size:11px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.header-result-list em{grid-column:2;grid-row:1/3;align-self:center;font-style:normal;font-size:9px;font-weight:800;color:#47627f;text-transform:uppercase}.header-result-list button.red{border-left:3px solid #dc2626}.header-result-list button.amber{border-left:3px solid #d97706}.header-result-list button.blue{border-left:3px solid #2563eb}
 .spin{animation:proar-spin .9s linear infinite}@keyframes proar-spin{to{transform:rotate(360deg)}}@media(max-width:760px){.header-popover{position:fixed;top:68px;right:12px;left:12px;width:auto}.top-actions .profile{display:none}}
+
+
+/* Funcionários — correção de tabela em larguras intermediárias */
+.employee-table .table-wrap{width:100%;overflow-x:auto;overscroll-behavior-inline:contain}
+.employee-table table{width:100%;min-width:1060px;table-layout:fixed;border-collapse:separate;border-spacing:0}
+.employee-table th,.employee-table td{box-sizing:border-box;padding:10px 12px;vertical-align:middle;overflow:hidden;text-overflow:ellipsis}
+.employee-table th{white-space:nowrap;font-size:11px;letter-spacing:.025em}
+.employee-table td{font-size:12px;line-height:1.3}
+.employee-table th:nth-child(1),.employee-table td:nth-child(1){width:120px}
+.employee-table th:nth-child(2),.employee-table td:nth-child(2){width:210px}
+.employee-table th:nth-child(3),.employee-table td:nth-child(3){width:190px}
+.employee-table th:nth-child(4),.employee-table td:nth-child(4){width:155px}
+.employee-table th:nth-child(5),.employee-table td:nth-child(5){width:145px}
+.employee-table th:nth-child(6),.employee-table td:nth-child(6){width:105px}
+.employee-table th:nth-child(7),.employee-table td:nth-child(7){width:135px}
+.employee-table td:nth-child(2) strong,.employee-table td:nth-child(3) strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.employee-table td small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.employee-table .record-actions{display:flex;align-items:center;gap:7px;white-space:nowrap}
+.employee-table .record-actions button{flex:0 0 auto}
+.employee-access-profile{display:inline-flex;max-width:100%;padding:5px 8px;border:1px solid #234769;border-radius:999px;background:#0b2138;color:#b9d7f2;font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:760px){
+  .employee-list-toolbar{align-items:stretch;flex-direction:column}
+  .employee-list-toolbar .list-search{width:100%}
+  .employee-table table{min-width:980px}
+}
