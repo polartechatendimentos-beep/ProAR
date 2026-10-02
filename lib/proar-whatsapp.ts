@@ -1,7 +1,10 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { get, put } from "@vercel/blob";
+import { databaseFetch } from "./supabase-rest";
+import { resolveTenantDb, tenantHeaders } from "./tenant-rest";
 
-const STORAGE_PATH = "proar/whatsapp-config.enc";
+const storagePath = (companyId:string) => `proar/whatsapp/${createHash("sha256").update(companyId).digest("hex").slice(0,24)}/config.enc`;
+const databaseRecordId = (companyId:string) => `whatsapp-config:${createHash("sha256").update(companyId).digest("hex").slice(0,24)}`;
 
 export type WhatsAppConfig = {
   active: boolean;
@@ -30,7 +33,7 @@ const defaults: WhatsAppConfig = {
 };
 
 function key() {
-  const secret = process.env.PROAR_FISCAL_ENCRYPTION_KEY ?? "";
+  const secret = process.env.PROAR_FISCAL_ENCRYPTION_KEY ?? process.env.PROAR_TENANT_MASTER_KEY ?? "";
   if (secret.length < 32) throw new Error("Cofre seguro não configurado");
   return createHash("sha256").update(`${secret}:whatsapp`).digest();
 }
@@ -49,17 +52,47 @@ function decrypt(value: string): WhatsAppConfig {
   return { ...defaults, ...JSON.parse(Buffer.concat([decipher.update(Buffer.from(payload.data, "base64")), decipher.final()]).toString("utf8")) };
 }
 
-export async function loadWhatsAppConfig() {
-  if (!process.env.BLOB_READ_WRITE_TOKEN) throw new Error("Cofre seguro não configurado");
-  const result = await get(STORAGE_PATH, { access: "private", token: process.env.BLOB_READ_WRITE_TOKEN });
-  if (!result) return { ...defaults };
-  if (result.statusCode !== 200 || !result.stream) throw new Error("Falha ao ler configuração do WhatsApp");
-  return decrypt(await new Response(result.stream).text());
+export async function loadWhatsAppConfig(companyId="polartech-principal") {
+  key();
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    try {
+      const result = await get(storagePath(companyId), { access: "private", token: process.env.BLOB_READ_WRITE_TOKEN });
+      if (result) {
+        if (result.statusCode !== 200 || !result.stream) throw new Error("Falha ao ler configuração do WhatsApp");
+        return decrypt(await new Response(result.stream).text());
+      }
+    } catch (error) {
+      console.warn("WhatsApp Blob unavailable, using tenant database fallback.", error);
+    }
+  }
+  const db=await resolveTenantDb(companyId);
+  if(!db.url||!db.key)return { ...defaults };
+  const response=await databaseFetch(`${db.url}/rest/v1/proar_state?select=payload&id=eq.${encodeURIComponent(databaseRecordId(companyId))}&limit=1`,{headers:tenantHeaders(db.key),cache:"no-store"});
+  if(!response.ok)return { ...defaults };
+  const rows=await response.json() as {payload?:{encrypted?:string}}[];
+  const encrypted=rows[0]?.payload?.encrypted;
+  return encrypted ? decrypt(encrypted) : { ...defaults };
 }
 
-export async function saveWhatsAppConfig(config: WhatsAppConfig) {
-  if (!process.env.BLOB_READ_WRITE_TOKEN) throw new Error("Cofre seguro não configurado");
-  await put(STORAGE_PATH, encrypt({ ...defaults, ...config }), { access: "private", token: process.env.BLOB_READ_WRITE_TOKEN, addRandomSuffix: false, allowOverwrite: true, contentType: "application/octet-stream", cacheControlMaxAge: 60 });
+export async function saveWhatsAppConfig(config: WhatsAppConfig,companyId="polartech-principal") {
+  key();
+  const encrypted=encrypt({ ...defaults, ...config });
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    try {
+      await put(storagePath(companyId), encrypted, { access: "private", token: process.env.BLOB_READ_WRITE_TOKEN, addRandomSuffix: false, allowOverwrite: true, contentType: "application/octet-stream", cacheControlMaxAge: 60 });
+      return;
+    } catch (error) {
+      console.warn("WhatsApp Blob write failed, using tenant database fallback.", error);
+    }
+  }
+  const db=await resolveTenantDb(companyId);
+  if(!db.url||!db.key)throw new Error("Cofre seguro não configurado");
+  const response=await databaseFetch(`${db.url}/rest/v1/proar_state?on_conflict=id`,{
+    method:"POST",
+    headers:{...tenantHeaders(db.key),Prefer:"resolution=merge-duplicates,return=minimal"},
+    body:JSON.stringify({id:databaseRecordId(companyId),payload:{encrypted,kind:"whatsapp-config",version:1},updated_at:new Date().toISOString()}),
+  });
+  if(!response.ok)throw new Error("Não foi possível salvar a configuração do WhatsApp");
 }
 
 export function publicWhatsAppConfig(config: WhatsAppConfig) {
