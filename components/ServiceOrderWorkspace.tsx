@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Camera, Check, ChevronRight, Clock3, FileText, History, ImagePlus, MapPin, Plus, Save, Sparkles, Wrench, X } from "lucide-react";
 import { improveTechnicalText } from "@/lib/text-assist";
 import { CustomerSearchSelect } from "@/components/CustomerSearchSelect";
+import { compressImageFile } from "@/lib/client-image";
 import "./service-order-workspace.css";
 
 type WorkspaceOrder = {
@@ -113,9 +114,12 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
   };
   const addPhoto = async (category: string, file?: File) => {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setPhotos(current => ({ ...current, [category]: [...(current[category] || []), String(reader.result)] }));
-    reader.readAsDataURL(file);
+    try {
+      const encoded = await compressImageFile(file, { maxWidth: 1280, maxHeight: 1280, quality: 0.72 });
+      setPhotos(current => ({ ...current, [category]: [...(current[category] || []), encoded] }));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Não foi possível processar a foto.");
+    }
   };
   const addService = () => {
     if (!newService.trim()) return;
