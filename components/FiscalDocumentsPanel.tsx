@@ -33,6 +33,13 @@ export type FiscalDocumentRecord = AnyRecord & {
   fiscalDanfeUrl?: string;
   fiscalEnvironment?: string;
   fiscalIssuedAt?: string;
+  fiscalOperationNature?: string;
+  fiscalPurpose?: string;
+  fiscalPresenceIndicator?: string;
+  fiscalFreightMode?: string;
+  fiscalPaymentMethod?: string;
+  fiscalServiceMunicipalityCode?: string;
+  fiscalServiceTaxationLocation?: string;
 };
 
 type FiscalItem = {
@@ -43,7 +50,21 @@ type FiscalItem = {
   unitValue: number;
   ncm?: string;
   cfop?: string;
+  cest?: string;
+  fiscalOrigin?: string;
+  icmsCst?: string;
+  csosn?: string;
+  pisCst?: string;
+  cofinsCst?: string;
+  gtin?: string;
+  unitOfMeasure?: string;
+  fiscalBenefitCode?: string;
+  ibsCbsCst?: string;
+  ibsCbsClassCode?: string;
   serviceCode?: string;
+  nbs?: string;
+  issRate?: number;
+  issWithheld?: boolean;
 };
 
 type FiscalPreflight = {
@@ -122,35 +143,97 @@ export function FiscalDocumentsPanel({
     rejected: documents.filter(item => item.status === "Rejeitada").length,
   };
 
-  const preflight = (draft: Partial<FiscalDocumentRecord>) => {
-    const issues: string[] = [];
+  const preflight = async (draft: Partial<FiscalDocumentRecord>): Promise<FiscalPreflight> => {
     const customer = customers.find(item => item.id === draft.fiscalCustomerId || item.name === draft.client);
     const documentType = draft.fiscalDocumentType ?? "NF-e";
-    if (digits(company?.cnpj).length !== 14) issues.push("CNPJ da empresa emitente não está completo.");
-    if (!company?.taxRegime && !config?.company?.taxRegime) issues.push("Regime tributário da empresa não configurado.");
-    if (!customer) issues.push("Cliente/destinatário não selecionado.");
-    else if (![11,14].includes(digits(customer.doc).length)) issues.push("CPF/CNPJ do cliente está inválido ou incompleto.");
-    if (!draft.fiscalItems?.length) issues.push("Inclua ao menos um item na nota.");
-    if (documentType === "NFS-e") {
-      const serviceItems = draft.fiscalItems?.filter(item => item.kind === "Serviço") ?? [];
-      if (!serviceItems.length) issues.push("NFS-e deve possuir ao menos um serviço.");
-      if (!config?.nfse?.serviceCode && !serviceItems.some(item => item.serviceCode)) issues.push("Código de serviço NFS-e não configurado.");
-      if (!config?.company?.municipalRegistration && !company?.municipalRegistration) issues.push("Inscrição Municipal da empresa não informada.");
-    } else {
-      const productItems = draft.fiscalItems?.filter(item => item.kind === "Produto") ?? [];
-      if (!productItems.length) issues.push(`${documentType} deve possuir ao menos um produto.`);
-      productItems.forEach((item, index) => {
-        if (digits(item.ncm).length !== 8) issues.push(`Item ${index + 1}: NCM deve ter 8 dígitos.`);
-        if (digits(item.cfop).length !== 4) issues.push(`Item ${index + 1}: CFOP deve ter 4 dígitos.`);
-      });
-      if (!config?.certificate) issues.push("Certificado digital A1 não configurado.");
-      if (documentType === "NFC-e" && !config?.nfce?.cscConfigured) issues.push("CSC da NFC-e não configurado.");
+    const firstService = draft.fiscalItems?.find(item => item.kind === "Serviço");
+    const payload = {
+      kind: documentType === "NF-e" ? "NFE" : documentType === "NFC-e" ? "NFCE" : "NFSE",
+      issueDate: draft.date || today(),
+      operationNature: draft.fiscalOperationNature || (documentType === "NFS-e" ? "Prestação de serviços" : "Venda de mercadoria"),
+      purpose: draft.fiscalPurpose || "1",
+      presenceIndicator: draft.fiscalPresenceIndicator || (documentType === "NFC-e" ? "1" : "9"),
+      freightMode: draft.fiscalFreightMode || (documentType === "NF-e" ? "9" : undefined),
+      paymentMethod: draft.fiscalPaymentMethod || (documentType === "NFC-e" ? "01" : undefined),
+      company: {
+        document: company?.cnpj,
+        name: company?.legalName || company?.tradeName,
+        city: company?.city,
+        state: company?.state,
+        stateRegistration: config?.company?.stateRegistration || company?.stateRegistration,
+        municipalRegistration: config?.company?.municipalRegistration || company?.municipalRegistration,
+        taxRegime: config?.company?.taxRegime || company?.taxRegime,
+      },
+      customer: customer ? {
+        document: customer.doc,
+        name: customer.legalName || customer.name,
+        address: customer.address,
+        zipCode: customer.zipCode,
+        street: customer.street,
+        number: customer.addressNumber,
+        neighborhood: customer.neighborhood,
+        city: customer.city,
+        state: customer.state,
+        stateRegistration: customer.stateRegistration,
+        stateRegistrationIndicator: customer.stateRegistration ? "1" : "9",
+        municipalRegistration: customer.municipalRegistration,
+      } : undefined,
+      items: draft.fiscalItems?.filter(item => item.kind === "Produto").map(item => ({
+        description: item.description,
+        quantity: item.quantity,
+        unitValue: item.unitValue,
+        unitOfMeasure: item.unitOfMeasure,
+        ncm: item.ncm,
+        cfop: item.cfop,
+        cest: item.cest,
+        gtin: item.gtin,
+        fiscalOrigin: item.fiscalOrigin,
+        icmsCst: item.icmsCst,
+        csosn: item.csosn,
+        pisCst: item.pisCst,
+        cofinsCst: item.cofinsCst,
+        fiscalBenefitCode: item.fiscalBenefitCode,
+        ibsCbsCst: item.ibsCbsCst,
+        ibsCbsClassCode: item.ibsCbsClassCode,
+      })),
+      service: firstService ? {
+        description: firstService.description,
+        value: firstService.quantity * firstService.unitValue,
+        serviceCode: firstService.serviceCode,
+        nbs: firstService.nbs,
+        issRate: firstService.issRate,
+        municipalityCode: draft.fiscalServiceMunicipalityCode,
+        taxationLocation: draft.fiscalServiceTaxationLocation,
+      } : undefined,
+      config: {
+        environment: config?.company?.environment,
+        certificateConfigured: Boolean(config?.certificate),
+        certificateValidTo: config?.certificate?.validTo,
+        nfeSeries: config?.nfe?.series,
+        nfceSeries: config?.nfce?.series,
+        cscConfigured: Boolean(config?.nfce?.cscConfigured),
+        cscId: config?.nfce?.cscId,
+        nfseSeries: config?.nfse?.rpsSeries,
+        nfseServiceCode: config?.nfse?.serviceCode,
+        nfseIssRate: config?.nfse?.issRate,
+      },
+    };
+    try {
+      const response = await fetch("/api/fiscal/preflight", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const data = await response.json();
+      if (!response.ok && !data.issues) throw new Error(data.error || "Falha na pré-validação fiscal.");
+      return {
+        checkedAt: data.checkedAt || new Date().toISOString(),
+        ok: Boolean(data.valid),
+        issues: Array.isArray(data.issues) ? data.issues.map((issue: any) => issue.message || String(issue)) : [],
+      };
+    } catch (error) {
+      return { checkedAt: new Date().toISOString(), ok: false, issues: [error instanceof Error ? error.message : "Falha na pré-validação fiscal."] };
     }
-    return { checkedAt: new Date().toISOString(), ok: issues.length === 0, issues } as FiscalPreflight;
   };
 
   const validateRecord = async (record: FiscalDocumentRecord) => {
-    const result = preflight(record);
+    const result = await preflight(record);
     const next: FiscalDocumentRecord = { ...record, status: result.ok ? "Pendente" : "Pendente", fiscalPreflight: result };
     await onSaveDocument(next);
     setSelected(next);
@@ -256,7 +339,7 @@ export function FiscalDocumentsPanel({
 
 function FiscalCreateDialog({ customers, products, services, sales, serviceOrders, financeRecords, config, preflight, onClose, onSave }: {
   customers: AnyRecord[]; products: AnyRecord[]; services: AnyRecord[]; sales: AnyRecord[]; serviceOrders: AnyRecord[]; financeRecords: AnyRecord[]; config: any;
-  preflight: (draft: Partial<FiscalDocumentRecord>) => FiscalPreflight;
+  preflight: (draft: Partial<FiscalDocumentRecord>) => Promise<FiscalPreflight>;
   onClose: () => void; onSave: (record: FiscalDocumentRecord) => void | Promise<void>;
 }) {
   const [documentType, setDocumentType] = useState<"NF-e"|"NFC-e"|"NFS-e">("NF-e");
@@ -266,7 +349,15 @@ function FiscalCreateDialog({ customers, products, services, sales, serviceOrder
   const [items, setItems] = useState<FiscalItem[]>([]);
   const [itemId, setItemId] = useState("");
   const [quantity, setQuantity] = useState(1);
+  const [operationNature, setOperationNature] = useState("Venda de mercadoria");
+  const [purpose, setPurpose] = useState("1");
+  const [presenceIndicator, setPresenceIndicator] = useState("1");
+  const [freightMode, setFreightMode] = useState("9");
+  const [paymentMethod, setPaymentMethod] = useState("01");
+  const [serviceMunicipalityCode, setServiceMunicipalityCode] = useState("");
+  const [serviceTaxationLocation, setServiceTaxationLocation] = useState("Município da prestação");
   const [preview, setPreview] = useState<FiscalPreflight | null>(null);
+  const [validating, setValidating] = useState(false);
 
   const sourceRecords = sourceType === "Venda" ? sales : sourceType === "Ordem de Serviço" ? serviceOrders : sourceType === "Financeiro" ? financeRecords : [];
   const catalog = documentType === "NFS-e" ? services : products;
@@ -292,7 +383,21 @@ function FiscalCreateDialog({ customers, products, services, sales, serviceOrder
       unitValue: Number(record.value || 0),
       ncm: record.ncm || "",
       cfop: record.cfop || "",
+      cest: record.cest || "",
+      fiscalOrigin: record.fiscalOrigin || "0",
+      icmsCst: record.icmsCst || "",
+      csosn: record.csosn || "",
+      pisCst: record.pisCst || "",
+      cofinsCst: record.cofinsCst || "",
+      gtin: record.taxGtin || record.barcode || "SEM GTIN",
+      unitOfMeasure: record.unitOfMeasure || (documentType === "NFS-e" ? "serviço" : "un"),
+      fiscalBenefitCode: record.fiscalBenefitCode || "",
+      ibsCbsCst: record.ibsCbsCst || "",
+      ibsCbsClassCode: record.ibsCbsClassCode || "",
       serviceCode: record.serviceCode || config?.nfse?.serviceCode || "",
+      nbs: record.nbs || "",
+      issRate: Number(record.issRate || config?.nfse?.issRate || 0),
+      issWithheld: Boolean(record.issWithheld),
     }]);
     setItemId("");
     setQuantity(1);
@@ -314,12 +419,23 @@ function FiscalCreateDialog({ customers, products, services, sales, serviceOrder
     fiscalCustomerId: customerId || undefined,
     fiscalItems: items,
     fiscalEnvironment: config?.company?.environment || "Homologação",
+    fiscalOperationNature: operationNature,
+    fiscalPurpose: purpose,
+    fiscalPresenceIndicator: presenceIndicator,
+    fiscalFreightMode: freightMode,
+    fiscalPaymentMethod: paymentMethod,
+    fiscalServiceMunicipalityCode: serviceMunicipalityCode,
+    fiscalServiceTaxationLocation: serviceTaxationLocation,
   });
 
-  const validate = () => setPreview(preflight(draft()));
+  const validate = async () => {
+    setValidating(true);
+    try { setPreview(await preflight(draft())); }
+    finally { setValidating(false); }
+  };
   const save = async () => {
     const record = draft();
-    record.fiscalPreflight = preflight(record);
+    record.fiscalPreflight = await preflight(record);
     await onSave(record);
   };
 
@@ -332,6 +448,12 @@ function FiscalCreateDialog({ customers, products, services, sales, serviceOrder
         <label className="text-xs font-semibold text-slate-600">Origem<select className="mt-1 w-full rounded-xl border p-3 text-sm" value={sourceType} onChange={event=>{setSourceType(event.target.value as any);setSourceId("")}}><option>Manual</option><option>Venda</option><option>Ordem de Serviço</option><option>Financeiro</option></select></label>
         {sourceType !== "Manual" && <label className="text-xs font-semibold text-slate-600 md:col-span-2">Registro de origem<select className="mt-1 w-full rounded-xl border p-3 text-sm" value={sourceId} onChange={event=>setSourceId(event.target.value)}><option value="">Selecione...</option>{sourceRecords.map(item=><option key={item.id} value={item.id}>{item.id} • {item.name || item.client || item.description}</option>)}</select></label>}
         <label className="text-xs font-semibold text-slate-600 md:col-span-2">Cliente / destinatário<select className="mt-1 w-full rounded-xl border p-3 text-sm" value={customerId} onChange={event=>setCustomerId(event.target.value)}><option value="">Selecione...</option>{customers.map(item=><option key={item.id} value={item.id}>{item.name} • {item.doc || "sem documento"}</option>)}</select></label>
+        <label className="text-xs font-semibold text-slate-600">Natureza da operação<input className="mt-1 w-full rounded-xl border p-3 text-sm" value={operationNature} onChange={event=>setOperationNature(event.target.value)} placeholder={documentType === "NFS-e" ? "Prestação de serviços" : "Venda de mercadoria"}/></label>
+        {documentType === "NF-e" && <label className="text-xs font-semibold text-slate-600">Finalidade<select className="mt-1 w-full rounded-xl border p-3 text-sm" value={purpose} onChange={event=>setPurpose(event.target.value)}><option value="1">Normal</option><option value="2">Complementar</option><option value="3">Ajuste</option><option value="4">Devolução/retorno</option></select></label>}
+        {documentType !== "NFS-e" && <label className="text-xs font-semibold text-slate-600">Indicador de presença<select className="mt-1 w-full rounded-xl border p-3 text-sm" value={presenceIndicator} onChange={event=>setPresenceIndicator(event.target.value)}><option value="1">Operação presencial</option><option value="2">Internet</option><option value="3">Teleatendimento</option><option value="5">Fora do estabelecimento</option><option value="9">Outros</option></select></label>}
+        {documentType === "NF-e" && <label className="text-xs font-semibold text-slate-600">Modalidade do frete<select className="mt-1 w-full rounded-xl border p-3 text-sm" value={freightMode} onChange={event=>setFreightMode(event.target.value)}><option value="9">Sem frete</option><option value="0">Por conta do remetente</option><option value="1">Por conta do destinatário</option><option value="2">Por conta de terceiros</option></select></label>}
+        {documentType === "NFC-e" && <label className="text-xs font-semibold text-slate-600">Forma de pagamento<select className="mt-1 w-full rounded-xl border p-3 text-sm" value={paymentMethod} onChange={event=>setPaymentMethod(event.target.value)}><option value="01">Dinheiro</option><option value="03">Cartão de crédito</option><option value="04">Cartão de débito</option><option value="17">PIX</option><option value="90">Sem pagamento</option><option value="99">Outros</option></select></label>}
+        {documentType === "NFS-e" && <><label className="text-xs font-semibold text-slate-600">Código IBGE do município da prestação<input className="mt-1 w-full rounded-xl border p-3 text-sm" value={serviceMunicipalityCode} onChange={event=>setServiceMunicipalityCode(event.target.value.replace(/\D/g,"").slice(0,7))} placeholder="Ex.: 3530300"/></label><label className="text-xs font-semibold text-slate-600">Local de incidência<input className="mt-1 w-full rounded-xl border p-3 text-sm" value={serviceTaxationLocation} onChange={event=>setServiceTaxationLocation(event.target.value)} placeholder="Município da prestação"/></label></>}
 
         <div className="md:col-span-2 rounded-xl border bg-slate-50 p-4">
           <div className="flex items-center gap-2"><Package size={16}/><b className="text-sm">{documentType === "NFS-e" ? "Serviços da nota" : "Produtos da nota"}</b></div>
@@ -349,7 +471,7 @@ function FiscalCreateDialog({ customers, products, services, sales, serviceOrder
           {!preview.ok && <div className="mt-2 space-y-1">{preview.issues.map(issue=><p key={issue} className="text-xs text-red-700">• {issue}</p>)}</div>}
         </div>}
       </div>
-      <footer className="flex flex-wrap justify-end gap-2 border-t p-4"><button onClick={validate} className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-bold"><FileCheck2 size={14}/> Pré-validar</button><button onClick={()=>void save()} disabled={!canCreate(customerId, items)} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-40"><ReceiptText size={14}/> Salvar nota pendente</button></footer>
+      <footer className="flex flex-wrap justify-end gap-2 border-t p-4"><button onClick={()=>void validate()} disabled={validating} className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-bold disabled:opacity-50"><FileCheck2 size={14}/>{validating ? " Validando..." : " Pré-validar"}</button><button onClick={()=>void save()} disabled={!canCreate(customerId, items)} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-40"><ReceiptText size={14}/> Salvar nota pendente</button></footer>
     </section>
   </div>;
 }
