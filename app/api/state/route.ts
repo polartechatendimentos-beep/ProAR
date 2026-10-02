@@ -18,13 +18,17 @@ function stateRest(db: { url: string; key: string }, path: string, init: Request
 function safeCompany(value: unknown) { return String(value || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80); }
 function sessionFor(request: NextRequest) { return readSession(request.cookies.get("proar_session")?.value); }
 const PRIMARY_COMPANY_ID = safeCompany(process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal") || "polartech-principal";
+const PRIMARY_COMPANY_SLUG = String(process.env.PROAR_PRIMARY_COMPANY_SLUG || "polartech").trim().toLowerCase();
 
 function requestedCompany(request: NextRequest) { return safeCompany(request.nextUrl.searchParams.get("company")); }
 function companyKey(request: NextRequest, session: ReturnType<typeof sessionFor>) {
-  // Tenant autenticado sempre usa exclusivamente o companyId presente na sessão.
+  // A PolarTech sempre aponta para a base histórica principal, inclusive para sessões antigas
+  // emitidas com UUID do cadastro empresarial em vez do identificador canônico.
+  if (String(session?.companySlug || "").trim().toLowerCase() === PRIMARY_COMPANY_SLUG) return PRIMARY_COMPANY_ID;
+  if (session?.companyId === PRIMARY_COMPANY_ID) return PRIMARY_COMPANY_ID;
+  // Outros tenants usam exclusivamente o companyId presente na sessão.
   if (session?.companyId) return session.companyId;
-  // Instalações legadas de uma única empresa usam um identificador canônico no servidor.
-  // Nunca dependemos do localStorage do dispositivo para escolher a base principal.
+  // Instalações legadas de uma única empresa usam o identificador canônico do servidor.
   return PRIMARY_COMPANY_ID;
 }
 
@@ -101,7 +105,7 @@ async function writeState(db: { url: string; key: string }, id: string, payload:
 export async function GET(request: NextRequest) {
   const session = sessionFor(request); if (!session) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
   try {
-    const company = companyKey(request, session); const db = await resolveTenantDb(session.companyId); if (!db.url || !db.key) throw new Error("Banco indisponível");
+    const company = companyKey(request, session); const db = await resolveTenantDb(company); if (!db.url || !db.key) throw new Error("Banco indisponível");
     const id = db.dedicated ? "main" : company;
 
     // A empresa principal possui instalações históricas que podem ter usado
@@ -143,7 +147,7 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   const session = sessionFor(request); if (!session) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
   try {
-    const body = await request.json(); const company = companyKey(request, session); const db = await resolveTenantDb(session.companyId); if (!db.url || !db.key) throw new Error("Banco indisponível");
+    const body = await request.json(); const company = companyKey(request, session); const db = await resolveTenantDb(company); if (!db.url || !db.key) throw new Error("Banco indisponível");
     const id = db.dedicated ? "main" : company;
     const currentResponse = await stateRest(db, `proar_state?id=eq.${encodeURIComponent(id)}&select=payload`);
     if (!currentResponse.ok) throw new Error("Falha ao ler a versão vigente");
