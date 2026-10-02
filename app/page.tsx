@@ -587,7 +587,7 @@ function Header({ title, subtitle, onMenu, searchItems, pendingItems, onSearchSe
 }
 
 function Sidebar({ current, setCurrent, open, close, permissions, role }: { current: string; setCurrent: (s: string) => void; open: boolean; close: () => void; permissions?: string[]; role?: string }) {
-  const allowed = (name: string) => Boolean(role === "Administrador" || permissions?.includes("*") || permissions?.includes(name) || (name === "Integridade do Sistema" && permissions?.includes("integridade.visualizar")));
+  const allowed = (name: string) => Boolean(role === "Administrador" || permissions?.includes("*") || permissions?.includes(name) || (name === "Integridade do Sistema" && permissions?.includes("integridade.visualizar")) || (name === "Aprovações" && (permissions?.includes("aprovacoes.visualizar") || permissions?.includes("aprovacoes.aprovar"))));
   return <>
     {open && <button className="backdrop" aria-label="Fechar menu" onClick={close} />}
     <aside className={`sidebar ${open ? "open" : ""}`}>
@@ -2058,7 +2058,7 @@ function EmployeesWorkspace({ records, serviceOrders, onOpen, onUpdate, onDelete
   const save=()=>{if(!draft)return;onUpdate("Funcionários",draft);setSelected(draft);setDraft({...draft});};
   const field=(key:keyof ModuleRecord,label:string,type="text")=><label>{label}<input type={type} value={String(draft?.[key]??"")} onChange={e=>setDraft(d=>d?{...d,[key]:type==="number"?Number(e.target.value):e.target.value}:d)}/></label>;
   const open=(r:ModuleRecord)=>{setSelected(r);setDraft({...r});setTab("Dados Gerais");};
-  const permissionModules=["Painel inicial","Central de pendências","Agenda","Clientes","Equipamentos","Orçamentos","Vendas","Licitações","Ordens de serviço","PMOC e conformidade","Obras","Produtos","Estoque","Compras","Fornecedores","Financeiro","Relatórios"];
+  const permissionModules=["Painel inicial","Central de pendências","Agenda","Clientes","Equipamentos","Orçamentos","Vendas","Licitações","Ordens de serviço","PMOC e conformidade","Obras","Produtos","Estoque","Compras","Fornecedores","Financeiro","Aprovações","Relatórios"];
   const permissionActions=["Visualizar","Criar","Editar","Excluir"] as const;
   const profilePresets: Record<string, Record<string, ("Visualizar"|"Criar"|"Editar"|"Excluir")[]>> = {
     "Técnico": {
@@ -2068,10 +2068,10 @@ function EmployeesWorkspace({ records, serviceOrders, onOpen, onUpdate, onDelete
       "Painel inicial":["Visualizar"],"Central de pendências":["Visualizar"],"Clientes":["Visualizar","Criar","Editar"],"Equipamentos":["Visualizar"],"Orçamentos":["Visualizar","Criar","Editar"],"Vendas":["Visualizar","Criar","Editar"],"Relatórios":["Visualizar"],
     },
     "Financeiro": {
-      "Painel inicial":["Visualizar"],"Central de pendências":["Visualizar"],"Clientes":["Visualizar"],"Compras":["Visualizar"],"Financeiro":["Visualizar","Criar","Editar"],"Relatórios":["Visualizar"],"Licitações":["Visualizar"],
+      "Painel inicial":["Visualizar"],"Central de pendências":["Visualizar"],"Clientes":["Visualizar"],"Compras":["Visualizar"],"Financeiro":["Visualizar","Criar","Editar"],"Aprovações":["Visualizar"],"Relatórios":["Visualizar"],"Licitações":["Visualizar"],
     },
-    "Gestão": Object.fromEntries(["Painel inicial","Central de pendências","Agenda","Clientes","Equipamentos","Orçamentos","Vendas","Licitações","Ordens de serviço","PMOC e conformidade","Obras","Produtos","Estoque","Compras","Fornecedores","Financeiro","Relatórios"].map(module=>[module,["Visualizar","Criar","Editar"]])),
-    "Administrador": Object.fromEntries(["Painel inicial","Central de pendências","Agenda","Clientes","Equipamentos","Orçamentos","Vendas","Licitações","Ordens de serviço","PMOC e conformidade","Obras","Produtos","Estoque","Compras","Fornecedores","Financeiro","Relatórios"].map(module=>[module,[...permissionActions]])),
+    "Gestão": Object.fromEntries(["Painel inicial","Central de pendências","Agenda","Clientes","Equipamentos","Orçamentos","Vendas","Licitações","Ordens de serviço","PMOC e conformidade","Obras","Produtos","Estoque","Compras","Fornecedores","Financeiro","Aprovações","Relatórios"].map(module=>[module,["Visualizar","Criar","Editar"]])),
+    "Administrador": Object.fromEntries(["Painel inicial","Central de pendências","Agenda","Clientes","Equipamentos","Orçamentos","Vendas","Licitações","Ordens de serviço","PMOC e conformidade","Obras","Produtos","Estoque","Compras","Fornecedores","Financeiro","Aprovações","Relatórios"].map(module=>[module,[...permissionActions]])),
   };
   const applyAccessProfile=(profile:string)=>setDraft(d=>d?{...d,accessProfile:profile,employeePermissions:profilePresets[profile]??d.employeePermissions}:d);
   const togglePermission=(module:string,action:typeof permissionActions[number])=>setDraft(d=>{if(!d)return d;const current=d.employeePermissions?.[module]??[];const next=current.includes(action)?current.filter(a=>a!==action):[...current,action];return {...d,employeePermissions:{...(d.employeePermissions??{}),[module]:next}};});
