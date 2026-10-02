@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @next/next/no-assign-module-variable */
+import { deriveProarActions } from "./proar-insights";
 // Dynamic records retain the fields of the historical ERP snapshots.
 export type ErpRecord = Record<string, any>;
 export type ErpState = ErpRecord & { customers?: ErpRecord[]; serviceOrders?: ErpRecord[]; moduleRecords?: Record<string, ErpRecord[]> };
@@ -332,8 +333,21 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
   modules["Razão financeiro"] = ledger;
   modules["Livro de estoque"] = stock;
   modules["Auditoria operacional"] = audit;
+  modules["Notificações"] = deriveProarActions(list(next.serviceOrders), modules, now.slice(0,10)).map(action => ({
+    id: `ALERT-${action.id}`,
+    name: action.title,
+    description: action.detail,
+    status: action.tone === "red" ? "Urgente" : action.tone === "amber" ? "Atenção" : "Informativo",
+    category: action.reason,
+    sourceModule: action.module,
+    sourceRecordId: action.recordId,
+    priority: action.priority,
+    dueDate: action.dueDate,
+    generatedAt: now,
+    derived: true,
+  }));
   // The client audit remains available for compatibility; the operational audit is server-authored.
-  next._erpLedgerVersion = 1;
+  next._erpLedgerVersion = 2;
   return next;
 }
 
