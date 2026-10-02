@@ -149,3 +149,16 @@ test("movimento de estoque preserva destino operacional",()=>{
   const movement=next.moduleRecords["Livro de estoque"].find(item=>item.kind==="Saída" || item.movementType==="Saída");
   assert.equal(movement.destinationType,"OS");assert.equal(movement.destinationId,"OS-123");assert.equal(next.moduleRecords.Produtos[0].stockCurrent,8);
 });
+
+
+test("transferência interna preserva saldo global e registra origem e destino",()=>{
+  const initial=base();
+  const before=initial.moduleRecords.Produtos[0].stockCurrent;
+  const next=run(initial,command("stock-transfer",{productId:"P1",quantity:3,sourceType:"Estoque central",sourceId:"CENTRAL",sourceName:"Central",destinationType:"Veículo",destinationId:"VAN-01",destinationName:"VAN-01",reason:"Abastecimento da equipe"},undefined));
+  const movement=next.moduleRecords["Livro de estoque"].find(item=>item.kind==="Transferência");
+  assert.ok(movement);
+  assert.equal(movement.transferQuantity,3);
+  assert.equal(movement.sourceType,"Estoque central");
+  assert.equal(movement.destinationType,"Veículo");
+  assert.equal(next.moduleRecords.Produtos[0].stockCurrent,before);
+});
