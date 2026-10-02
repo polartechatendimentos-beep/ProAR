@@ -5,7 +5,7 @@ const actions = deriveOperationalActions(
   [
     { id: "OS-1", client: "Cliente A", service: "Corretiva", status: "Aberta", date: "2026-10-01", time: "09:00" },
     { id: "OS-2", client: "Cliente B", service: "Preventiva", status: "Agendada", date: "2026-10-02", time: "10:30" },
-    { id: "OS-3", client: "Cliente C", service: "Instalação", status: "Concluída", date: "2026-09-30" },
+    { id: "OS-3", client: "Cliente C", service: "Instalação", status: "Concluída", nfseStatus: "Emitida", date: "2026-09-30" },
   ],
   {
     Financeiro: [
@@ -32,7 +32,7 @@ const actions = deriveOperationalActions(
 assert.equal(actions[0].priority, 1, "ações críticas devem aparecer primeiro");
 assert.ok(actions.some(item => item.id === "os-overdue-OS-1" && item.tone === "red"));
 assert.ok(actions.some(item => item.id === "os-today-OS-2" && item.module === "Agenda"));
-assert.ok(!actions.some(item => item.recordId === "OS-3"), "OS concluída não deve gerar pendência");
+assert.ok(!actions.some(item => item.recordId === "OS-3"), "OS concluída e faturada não deve gerar pendência");
 assert.ok(actions.some(item => item.id === "finance-overdue-FIN-1" && item.detail.includes("800,00")));
 assert.ok(actions.some(item => item.id === "finance-due-FIN-2"));
 assert.ok(actions.some(item => item.id === "stock-P-1" && item.priority === 1));
