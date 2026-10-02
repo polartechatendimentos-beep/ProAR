@@ -34,6 +34,7 @@ type Props = {
   catalogSource?: RecordItem[];
   canEdit: boolean;
   onSave: (order: WorkspaceOrder) => Promise<unknown>;
+  onSyncEquipmentDiagnostic?: (equipmentId:string, entry:RecordItem) => Promise<unknown>;
   onClose?: () => void;
 };
 
@@ -56,7 +57,7 @@ function money(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-export function ServiceOrderWorkspace({ order, customers = [], structures = [], equipment = [], errorCodes = [], manuals = [], catalogSource = [], canEdit, onSave, onClose }: Props) {
+export function ServiceOrderWorkspace({ order, customers = [], structures = [], equipment = [], errorCodes = [], manuals = [], catalogSource = [], canEdit, onSave, onSyncEquipmentDiagnostic, onClose }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("Resumo");
   const [draft, setDraft] = useState<WorkspaceOrder>(order);
   const [saving, setSaving] = useState(false);
@@ -143,6 +144,12 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
     try {
       const result = await onSave({ ...draft, photos, servicesTotal, productsTotal, discount, total, materialCost, laborCost, travelCost, outsourcedCost, taxCost, commissionCost, totalCost, grossMargin, marginPercent, closeChecklist:closeChecks });
       if (!result) throw new Error("Gravação não confirmada");
+      const diagnosticHistory = Array.isArray(draft.diagnosticHistory) ? draft.diagnosticHistory as RecordItem[] : [];
+      const latestDiagnostic = diagnosticHistory[0];
+      const targetEquipmentId = linkedEquipment[0]?.id;
+      if (latestDiagnostic && typeof targetEquipmentId === "string" && onSyncEquipmentDiagnostic) {
+        await onSyncEquipmentDiagnostic(targetEquipmentId, latestDiagnostic);
+      }
       setNotice("Alterações salvas com sucesso.");
     } catch {
       setNotice("Não foi possível salvar. Verifique a conexão e tente novamente.");
