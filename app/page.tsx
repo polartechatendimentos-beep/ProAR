@@ -407,6 +407,7 @@ type ModuleRecord = {
   settlementAccount?: string;
   interestValue?: number;
   discountValue?: number;
+  discount?: number;
   discountPercent?: number;
   subtotal?: number;
   approvalRequired?: boolean;
