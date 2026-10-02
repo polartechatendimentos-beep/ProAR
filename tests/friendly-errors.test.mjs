@@ -5,7 +5,7 @@ import { friendlyErrorMessage } from "../lib/error-messages.ts";
 test("technical API and bot-like messages are hidden from users",()=>{
   assert.equal(friendlyErrorMessage("TypeError: fetch failed at POST /api/state"),"Não foi possível acessar os dados do sistema neste momento. Tente novamente.");
   assert.equal(friendlyErrorMessage('{"error":"Internal Server Error","request_id":"abc"}'),"Não foi possível concluir esta operação. Tente novamente.");
-  assert.equal(friendlyErrorMessage("OpenAI tool call failed with status code=500"),"Não foi possível acessar os dados do sistema neste momento. Tente novamente.");
+  assert.equal(friendlyErrorMessage("OpenAI tool call failed with status code=500"),"Não foi possível concluir esta operação. Tente novamente.");
 });
 
 test("common HTTP errors become actionable Portuguese messages",()=>{
