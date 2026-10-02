@@ -6,6 +6,20 @@ export const HVAC_REFERENCE_PORTAL = {
   brands:["Admiral","Agratto","Comfee","Consul","Daikin","DeLonghi","Electrolux","Elgin","Fujitsu","Gree","Hitachi","Komeco","LG","Midea","Panasonic","Philco","Rheem","Rinetto","Samsung","Trane","Tivah","Ventisol","Vulcano","York"],
 };
 
+
+export type HvacReferenceSource={brand:string;equipmentType?:string;label:string;url:string;priority:"complementary"|"manufacturer"};
+export const HVAC_REFERENCE_SOURCES:HvacReferenceSource[]=[
+  ...HVAC_REFERENCE_PORTAL.brands.map(brand=>({brand,label:"Índice de códigos WebArCondicionado",url:HVAC_REFERENCE_PORTAL.url,priority:"complementary" as const})),
+  {brand:"Elgin",equipmentType:"Split Hi-Wall",label:"Tabela de códigos Elgin Split",url:"https://static.webarcondicionado.com.br/blog/uploads/2022/09/codigo-erro-ar-condicionado-split-elgin.pdf",priority:"complementary"},
+  {brand:"Elgin",equipmentType:"Piso Teto",label:"Tabela de códigos Elgin Piso-Teto",url:"https://static.webarcondicionado.com.br/blog/uploads/2022/09/codigo-erro-ar-condicionado-piso-teto-elgin.pdf",priority:"complementary"},
+  {brand:"Elgin",equipmentType:"Cassete",label:"Página de códigos Elgin com arquivo separado por tipo",url:"https://www.webarcondicionado.com.br/codigo-erro-ar-condicionado-elgin",priority:"complementary"},
+];
+
+export function diagnosticSourcesFor(brand:string,equipmentType?:string){
+  const normalized=brand.trim().toLocaleLowerCase("pt-BR");
+  return HVAC_REFERENCE_SOURCES.filter(source=>source.brand.toLocaleLowerCase("pt-BR")===normalized && (!source.equipmentType||!equipmentType||source.equipmentType===equipmentType));
+}
+
 export const BUILTIN_HVAC_ERROR_CODES: DiagnosticCodeRecord[] = [
   {
     id:"SRC-ELGIN-SPLIT-E1",brand:"Elgin",equipmentTypes:["Split Hi-Wall"],unit:"Evaporadora",code:"E1",blinkPattern:"1 piscada por segundo",
