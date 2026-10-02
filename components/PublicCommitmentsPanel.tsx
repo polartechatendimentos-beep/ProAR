@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
-import { CheckCircle2, Download, FileText, HandCoins, Plus } from "lucide-react";
+import { CheckCircle2, Download, Edit3, FileText, HandCoins, Plus, XCircle } from "lucide-react";
 import { validateEmpenhoAllocations, type EmpenhoAllocation } from "@/lib/public-contracts";
 import type { PublicContractRecord } from "@/components/PublicContractsPanel";
 
@@ -55,12 +55,13 @@ function downloadCsv(name: string, rows: unknown[][]) {
   URL.revokeObjectURL(url);
 }
 
-export function PublicCommitmentsPanel({ orders, contracts, commitments, onSave, onReadyToInvoice }: {
+export function PublicCommitmentsPanel({ orders, contracts, commitments, onSave, onReadyToInvoice, onCancel }: {
   orders: ContractOrder[];
   contracts: PublicContractRecord[];
   commitments: PublicCommitmentRecord[];
   onSave: (record: PublicCommitmentRecord) => Promise<boolean>;
   onReadyToInvoice: (record: PublicCommitmentRecord) => Promise<boolean>;
+  onCancel: (record: PublicCommitmentRecord) => Promise<boolean>;
 }) {
   const [creating, setCreating] = useState(false);
   const [number, setNumber] = useState("");
@@ -73,9 +74,10 @@ export function PublicCommitmentsPanel({ orders, contracts, commitments, onSave,
   const [saving, setSaving] = useState(false);
   const [advancingId, setAdvancingId] = useState("");
   const [message, setMessage] = useState("");
+  const [editingId,setEditingId]=useState("");
 
   const eligible = useMemo(() => {
-    const allocations = commitments.flatMap(record => record.empenhoAllocations ?? []);
+    const allocations = commitments.filter(record=>!/cancelad/i.test(record.status??"")).flatMap(record => record.empenhoAllocations ?? []);
     return orders.flatMap(order => {
       if (!order.certameId || !/conclu[ií]da/i.test(order.status)) return [];
       const executedItems = (order.contractItems ?? []).filter(item => item.executionMovementId);
@@ -101,7 +103,7 @@ export function PublicCommitmentsPanel({ orders, contracts, commitments, onSave,
   }, [orders, commitments]);
 
   const selectedTotal = Object.values(selected).reduce((sum, raw) => sum + (Number(raw) || 0), 0);
-  const reset = () => { setNumber("");setDate(new Date().toISOString().slice(0,10));setValue("");setFicha("");setPurchaseOrder("");setAuthorization("");setSelected({}); };
+  const reset = () => { setEditingId("");setNumber("");setDate(new Date().toISOString().slice(0,10));setValue("");setFicha("");setPurchaseOrder("");setAuthorization("");setSelected({}); };
 
   const exportAwaiting = () => downloadCsv("servicos-aguardando-empenho", [
     ["OS", "Cliente", "Unidade", "Certame", "Item", "Quantidade executada", "Valor executado", "Valor já empenhado", "Saldo aguardando", "Data"],
@@ -135,7 +137,8 @@ export function PublicCommitmentsPanel({ orders, contracts, commitments, onSave,
     if (selectedEntries.some(entry => Number(selected[entry.key]) > entry.available)) { setMessage("Um dos valores ultrapassa o saldo executado ainda não empenhado do item.");return; }
     const certameIds = Array.from(new Set(selectedEntries.map(entry => entry.order.certameId)));
     if (certameIds.length !== 1) { setMessage("Um Empenho deve ser registrado dentro de um único Certame.");return; }
-    const id = `EMP-${Date.now().toString().slice(-8)}`;
+    const existing=commitments.find(record=>record.id===editingId);
+    const id = existing?.id || `EMP-${Date.now().toString().slice(-8)}`;
     const allocations: EmpenhoAllocation[] = selectedEntries.map((entry,index) => {
       const amount = Number(selected[entry.key]);
       return { id:`${id}-VINC-${index+1}`, empenhoId:id, serviceOrderId:entry.order.id, certameItemId:entry.item.certameItemId, quantity:entry.item.unitValue > 0 ? amount / entry.item.unitValue : undefined, unitValue:entry.item.unitValue, amount };
@@ -146,7 +149,7 @@ export function PublicCommitmentsPanel({ orders, contracts, commitments, onSave,
     setSaving(true);setMessage("Salvando...");
     let saved = false;
     try {
-      saved = await onSave({ id, name:`Empenho ${number.trim()}`, client:contract?.client || selectedEntries[0].order.client, description:`Vinculado a ${new Set(allocations.map(allocation => allocation.serviceOrderId)).size} OS e ${allocations.length} item(ns) do Certame`, createdAt:new Date().toLocaleString("pt-BR"), status:"Empenho recebido", date, value:empenhoValue, category:"Empenho público", certameId:certameIds[0], empenhoNumber:number.trim(), empenhoFicha:ficha.trim(), empenhoProcess:contract?.administrativeProcess, empenhoPurchaseOrder:purchaseOrder.trim(), empenhoAuthorization:authorization.trim(), empenhoAllocations:allocations });
+      saved = await onSave({ id, name:`Empenho ${number.trim()}`, client:contract?.client || selectedEntries[0].order.client, description:`Vinculado a ${new Set(allocations.map(allocation => allocation.serviceOrderId)).size} OS e ${allocations.length} item(ns) do Certame`, createdAt:existing?.createdAt || new Date().toLocaleString("pt-BR"), status:existing?.status || "Empenho recebido", date, value:empenhoValue, category:"Empenho público", certameId:certameIds[0], empenhoNumber:number.trim(), empenhoFicha:ficha.trim(), empenhoProcess:contract?.administrativeProcess, empenhoPurchaseOrder:purchaseOrder.trim(), empenhoAuthorization:authorization.trim(), empenhoAllocations:allocations });
     } catch {
       saved = false;
     }
@@ -155,12 +158,36 @@ export function PublicCommitmentsPanel({ orders, contracts, commitments, onSave,
     reset();setCreating(false);setMessage("✓ Alteração efetuada");
   };
 
+  const startEdit=(record:PublicCommitmentRecord)=>{
+    setEditingId(record.id);
+    setNumber(record.empenhoNumber||record.name.replace(/^Empenho\s+/i,""));
+    setDate(record.date||new Date().toISOString().slice(0,10));
+    setValue(String(record.value??""));
+    setFicha(record.empenhoFicha||"");
+    setPurchaseOrder(record.empenhoPurchaseOrder||"");
+    setAuthorization(record.empenhoAuthorization||"");
+    const selectedMap:Record<string,string>={};
+    for(const allocation of record.empenhoAllocations??[]){
+      if(allocation.certameItemId) selectedMap[`${allocation.serviceOrderId}::${allocation.certameItemId}`]=String(allocation.amount);
+    }
+    setSelected(selectedMap);
+    setCreating(true);
+    setMessage(`Editando ${record.name}. Vínculos e valores serão revalidados antes de salvar.`);
+  };
+  const cancelCommitment=async(record:PublicCommitmentRecord)=>{
+    const reason=window.prompt("Motivo do cancelamento do Empenho:");
+    if(!reason?.trim())return;
+    if(!window.confirm(`Cancelar ${record.name}? O histórico será preservado e os valores vinculados voltarão a ficar disponíveis para novo Empenho.`))return;
+    const saved=await onCancel({...record,status:"Cancelado",description:`${record.description||""} • Cancelado: ${reason.trim()}`});
+    setMessage(saved?"✓ Empenho cancelado e saldo liberado novamente.":"Não foi possível cancelar o Empenho.");
+  };
+
   return <section className="public-commitments">
     <header><div><span className="section-kicker"><HandCoins size={13}/> EXECUÇÃO E EMPENHOS</span><h2>Serviços executados — aguardando Empenho</h2><p>O Empenho classifica financeiramente a execução e não movimenta novamente o Saldo do Certame.</p></div><button className="primary-btn" onClick={()=>setCreating(value=>!value)}><Plus size={15}/> Registrar Empenho recebido</button></header>
     {message && <div className="public-contract-message"><CheckCircle2 size={15}/>{message}</div>}
     <div className="commitment-kpis grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"><article className="min-h-0 rounded-xl p-4"><small>OS AGUARDANDO EMPENHO</small><strong>{new Set(eligible.map(entry=>entry.order.id)).size}</strong></article><article className="min-h-0 rounded-xl p-4"><small>VALOR AGUARDANDO</small><strong>{money(eligible.reduce((sum,item)=>sum+item.available,0))}</strong></article><article className="min-h-0 rounded-xl p-4"><small>EMPENHOS RECEBIDOS</small><strong>{commitments.length}</strong></article><article className="min-h-0 rounded-xl p-4"><small>VALOR EMPENHADO</small><strong>{money(commitments.reduce((sum,item)=>sum+(item.value??0),0))}</strong></article></div>
     <div className="public-contract-report-actions flex flex-wrap items-center justify-start gap-2 border-t border-slate-800 pt-3"><button type="button" onClick={exportAwaiting}><Download size={13}/> Serviços aguardando Empenho</button><button type="button" onClick={()=>exportCommitments()}><Download size={13}/> Empenhos recebidos</button><button type="button" onClick={()=>exportCommitments(["Pronto para faturar"])}><Download size={13}/> Pronto para faturar</button><button type="button" onClick={()=>exportCommitments(["Faturado","Recebido"])}><Download size={13}/> Faturados e recebidos</button></div>
-    {creating && <form className="commitment-form panel" onSubmit={save}><div className="commitment-fields"><label>Número do Empenho<input value={number} onChange={event=>setNumber(event.target.value)} required/></label><label>Data<input type="date" value={date} onChange={event=>setDate(event.target.value)}/></label><label>Valor do Empenho<input type="number" min="0.01" step="0.01" value={value} onChange={event=>setValue(event.target.value)} required/></label><label>Ficha<input value={ficha} onChange={event=>setFicha(event.target.value)}/></label><label>Pedido de Compra<input value={purchaseOrder} onChange={event=>setPurchaseOrder(event.target.value)}/></label><label>Autorização de Fornecimento<input value={authorization} onChange={event=>setAuthorization(event.target.value)}/></label></div><section className="commitment-orders"><header><b>Itens executados disponíveis</b><strong>Total selecionado: {money(selectedTotal)}</strong></header>{eligible.map(entry=><label key={entry.key}><input type="checkbox" checked={selected[entry.key] !== undefined} onChange={event=>setSelected(current=>{const next={...current};if(event.target.checked)next[entry.key]=String(entry.available);else delete next[entry.key];return next;})}/><span><b>{entry.order.id} • {entry.item.description}</b><small>{entry.order.client} • {entry.order.unit} • disponível {money(entry.available)}</small></span><input type="number" min="0.01" max={entry.available} step="0.01" disabled={selected[entry.key]===undefined} value={selected[entry.key]??""} onChange={event=>setSelected(current=>({...current,[entry.key]:event.target.value}))}/></label>)}</section><footer><button type="button" className="outline-btn" disabled={saving} onClick={()=>{reset();setCreating(false)}}>Cancelar</button><button className="primary-btn" disabled={saving} type="submit">{saving?"Salvando...":"Salvar alterações"}</button></footer></form>}
-    <div className="commitment-list">{commitments.map(record=><article className="panel" key={record.id}><FileText size={18}/><span><b>{record.name}</b><small>{record.client} • {record.date || record.createdAt} • {new Set((record.empenhoAllocations??[]).map(allocation=>allocation.serviceOrderId)).size} OS / {(record.empenhoAllocations??[]).filter(allocation=>allocation.certameItemId).length} item(ns)</small></span><strong>{money(record.value??0)}</strong><em>{record.status}</em>{record.status==="Empenho recebido"&&<button className="outline-btn" disabled={Boolean(advancingId)} onClick={async()=>{setAdvancingId(record.id);setMessage("Salvando...");let saved=false;try{saved=await onReadyToInvoice(record)}catch{saved=false}setAdvancingId("");setMessage(saved?"✓ Alteração efetuada":"Não foi possível enviar para faturamento.")}}>{advancingId===record.id?"Salvando...":"Pronto para faturar"}</button>}</article>)}{!commitments.length&&<div className="linked-empty panel min-h-0 rounded-xl py-6"><HandCoins size={23}/><h4>Nenhum Empenho registrado</h4><p>Empenhos antigos não serão vinculados automaticamente.</p></div>}</div>
+    {creating && <form className="commitment-form panel" onSubmit={save}><div className="commitment-fields"><label>Número do Empenho<input value={number} onChange={event=>setNumber(event.target.value)} required/></label><label>Data<input type="date" value={date} onChange={event=>setDate(event.target.value)}/></label><label>Valor do Empenho<input type="number" min="0.01" step="0.01" value={value} onChange={event=>setValue(event.target.value)} required/></label><label>Ficha<input value={ficha} onChange={event=>setFicha(event.target.value)}/></label><label>Pedido de Compra<input value={purchaseOrder} onChange={event=>setPurchaseOrder(event.target.value)}/></label><label>Autorização de Fornecimento<input value={authorization} onChange={event=>setAuthorization(event.target.value)}/></label></div><section className="commitment-orders"><header><b>Itens executados disponíveis</b><strong>Total selecionado: {money(selectedTotal)}</strong></header>{eligible.map(entry=><label key={entry.key}><input type="checkbox" checked={selected[entry.key] !== undefined} onChange={event=>setSelected(current=>{const next={...current};if(event.target.checked)next[entry.key]=String(entry.available);else delete next[entry.key];return next;})}/><span><b>{entry.order.id} • {entry.item.description}</b><small>{entry.order.client} • {entry.order.unit} • disponível {money(entry.available)}</small></span><input type="number" min="0.01" max={entry.available} step="0.01" disabled={selected[entry.key]===undefined} value={selected[entry.key]??""} onChange={event=>setSelected(current=>({...current,[entry.key]:event.target.value}))}/></label>)}</section><footer><button type="button" className="outline-btn" disabled={saving} onClick={()=>{reset();setCreating(false)}}>Cancelar</button><button className="primary-btn" disabled={saving} type="submit">{saving?"Salvando...":editingId?"Salvar alterações":"Registrar Empenho"}</button></footer></form>}
+    <div className="commitment-list">{commitments.map(record=><article className="panel" key={record.id}><FileText size={18}/><span><b>{record.name}</b><small>{record.client} • {record.date || record.createdAt} • {new Set((record.empenhoAllocations??[]).map(allocation=>allocation.serviceOrderId)).size} OS / {(record.empenhoAllocations??[]).filter(allocation=>allocation.certameItemId).length} item(ns)</small></span><strong>{money(record.value??0)}</strong><em>{record.status}</em><div className="record-actions">{!/cancelad|faturad|recebid/i.test(record.status??"")&&<button title="Alterar Empenho" onClick={()=>startEdit(record)}><Edit3 size={14}/></button>}{record.status==="Empenho recebido"&&<button className="outline-btn" disabled={Boolean(advancingId)} onClick={async()=>{setAdvancingId(record.id);setMessage("Salvando...");let saved=false;try{saved=await onReadyToInvoice(record)}catch{saved=false}setAdvancingId("");setMessage(saved?"✓ Alteração efetuada":"Não foi possível enviar para faturamento.")}}>{advancingId===record.id?"Salvando...":"Pronto para faturar"}</button>}{!/cancelad|faturad|recebid/i.test(record.status??"")&&<button className="danger" title="Cancelar Empenho" onClick={()=>void cancelCommitment(record)}><XCircle size={14}/> Cancelar</button>}</div></article>)}{!commitments.length&&<div className="linked-empty panel min-h-0 rounded-xl py-6"><HandCoins size={23}/><h4>Nenhum Empenho registrado</h4><p>Empenhos antigos não serão vinculados automaticamente.</p></div>}</div>
   </section>;
 }
