@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
   if (isReservedSlug(slug)) slug = `empresa-${document.slice(-6)}`;
 
   const now = new Date();
-  const expires = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const expires = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   const companyId = personType === "PJ" ? document : `pf-${document}`;
   const company = {
     id: companyId,
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
     } catch {}
   }
 
-  await supabaseRest("proar_manager_audit", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ company_id: companyId, action: "TRIAL_CREATED", actor: email, details: { slug, expiresAt: expires.toISOString(), provisioning: provisioning.mode } }) });
+  await supabaseRest("proar_manager_audit", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ company_id: companyId, action: "TRIAL_CREATED", actor: email, details: { slug, expiresAt: expires.toISOString(), provisioning: provisioning.mode, trialDays: 30 } }) });
 
   return NextResponse.json({ created: true, companyId, slug, username: "admin", temporaryPassword, mustChangePassword: true, trialExpiresAt: expires.toISOString(), accessUrl: companyUrl(slug), provisioning });
 }
