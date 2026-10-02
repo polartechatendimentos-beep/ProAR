@@ -36,3 +36,12 @@
 
 .finance-management-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:12px}
 @media(max-width:900px){.finance-management-grid{grid-template-columns:1fr}}
+
+.technician-command{display:grid;gap:12px;margin-bottom:14px;padding:16px;border:1px solid #17304d;border-radius:12px;background:#061323}
+.technician-command h2{margin:3px 0 2px;color:#f5f9ff}.technician-command p{margin:0;color:#8396ae}
+.technician-command-grid{display:grid;gap:8px}
+.technician-command-grid>button{display:grid;grid-template-columns:90px minmax(0,1fr) auto 18px;gap:12px;align-items:center;min-height:62px;padding:10px 12px;border:1px solid #17304d;border-radius:10px;background:#081729;color:#dbe7f7;text-align:left}
+.technician-command-grid>button:hover{border-color:#2b7bd3;background:#0a1d33}
+.technician-command-grid>button span,.technician-command-grid>button div{display:grid;gap:3px}
+.technician-command-grid>button small{color:#7d91aa}.technician-command-grid>button em{font-style:normal;padding:5px 8px;border-radius:999px;background:#0b2f63;color:#8dc0ff;font-size:11px}
+@media(max-width:640px){.technician-command{padding:12px}.technician-command-grid>button{grid-template-columns:72px minmax(0,1fr) 18px}.technician-command-grid>button em{grid-column:2;justify-self:start}.technician-mode .module-toolbar{position:sticky;top:66px;z-index:7}}
