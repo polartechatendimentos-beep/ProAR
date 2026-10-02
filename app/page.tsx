@@ -1773,6 +1773,8 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
   const [newAccessRole, setNewAccessRole] = useState<WorkExternalAccess["role"]>("Engenheiro");
   const [newAccessUsername, setNewAccessUsername] = useState("");
   const [newAccessPassword, setNewAccessPassword] = useState("");
+  const [accessSaving, setAccessSaving] = useState(false);
+  const [accessNotice, setAccessNotice] = useState<{ tone: "success" | "error" | "info"; text: string } | null>(null);
   useEffect(() => {
     const normalizeProjects = (items: WorkProject[]) => {
       const normalized = items.length ? items.map(project => project.id === RESERVA_IMPERIAL.id ? {...project,name:"Reserva Imperial",commonAreas:Array.from(new Set([...(project.commonAreas ?? []),...RESERVA_IMPERIAL.commonAreas]))} : project) : [RESERVA_IMPERIAL];
@@ -1873,28 +1875,117 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     void fetch('/api/work-projects',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({companyId,projects:next,baseRevision:projectsRevision})}).then(async response=>{const result=await response.json();if(response.status===409&&result.state){const authoritative=result.state.projects as WorkProject[];setProjects(authoritative);setProjectsRevision(Number(result.state.revision||0));localStorage.setItem(projectsKey,JSON.stringify(authoritative));throw new Error("Outro aparelho atualizou a lista de obras. A versão online foi mantida; tente cadastrar novamente.");}if(!response.ok)throw new Error(result.error||"Falha ao salvar obra");setProjects(next);setProjectsRevision(Number(result.state?.revision||projectsRevision+1));localStorage.setItem(projectsKey,JSON.stringify(next));localStorage.setItem(selectedProjectKey,id);setActiveProjectId(id);setBlockFilter("Todas");setWorkManagerOpen(false);setNewWorkName("");setNewBlocks([{block:"A",houses:1}]);setNewCommonAreas([]);setReportNotice(`Obra ${name} cadastrada com sucesso e disponível em todos os aparelhos.`);}).catch(error=>setReportNotice(error.message));
   };
   const selectWorkProject = (id:string) => { setActiveProjectId(id); localStorage.setItem(selectedProjectKey,id); setBlockFilter("Todas"); setStatusFilter("Todos"); setQuery(""); };
+  const syncExternalAccessMap = async (externalAccess: WorkExternalAccess[]) => {
+    const response = await fetch("/api/public-work-map", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        companyId,
+        workId: activeProject.id,
+        workName: activeProject.name,
+        title: `Acompanhamento da obra — ${activeProject.name}`,
+        houses,
+        externalAccess,
+        externalAccessOnly: true,
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || "Não foi possível sincronizar o acesso com o mapa da obra.");
+    if (result.map?.revision !== undefined) setServerRevision(Number(result.map.revision));
+    if (result.token) {
+      setShareToken(String(result.token));
+      localStorage.setItem(shareKey, String(result.token));
+    }
+  };
   const saveExternalAccess = async () => {
-    const name = newAccessName.trim(); const username = newAccessUsername.trim().toLowerCase();
-    if (!name || !username || newAccessPassword.length < 6) { setReportNotice("Informe nome, login e senha com pelo menos 6 caracteres."); return; }
-    if (!navigator.onLine) { setReportNotice("A gestão de acessos externos exige conexão com a base principal."); return; }
-    const access: WorkExternalAccess = { id: `obra-access-${Date.now()}`, name, role: newAccessRole, username, passwordHash: await passwordHash(newAccessPassword), active: true, createdAt: new Date().toISOString() };
-    const nextProject = { ...activeProject, externalAccess: [access, ...(activeProject.externalAccess ?? [])] };
-    const next = projects.map(project => project.id === activeProject.id ? nextProject : project);
+    if (accessSaving) return;
+    const name = newAccessName.trim();
+    const username = newAccessUsername.trim().toLocaleLowerCase("pt-BR");
+    if (!name || !username || newAccessPassword.length < 6) {
+      setAccessNotice({ tone:"error", text:"Informe nome, usuário e senha com pelo menos 6 caracteres." });
+      return;
+    }
+    if (!/^[a-z0-9._-]{3,60}$/i.test(username)) {
+      setAccessNotice({ tone:"error", text:"Use um usuário com 3 a 60 caracteres, contendo apenas letras, números, ponto, hífen ou sublinhado." });
+      return;
+    }
+    if ((activeProject.externalAccess ?? []).some(item => item.username.toLocaleLowerCase("pt-BR") === username)) {
+      setAccessNotice({ tone:"error", text:"Este usuário já possui acesso cadastrado nesta obra." });
+      return;
+    }
+    if (!navigator.onLine) {
+      setAccessNotice({ tone:"error", text:"A gestão de acessos externos exige conexão com a base principal." });
+      return;
+    }
+    setAccessSaving(true);
+    setAccessNotice({ tone:"info", text:"Criando acesso e sincronizando com a obra..." });
     try {
-      const response = await fetch('/api/work-projects', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ companyId, projects:next, baseRevision:projectsRevision }) });
-      const result = await response.json(); if (!response.ok) throw new Error(result.error || "Não foi possível salvar o acesso.");
-      setProjects(next); setProjectsRevision(Number(result.state?.revision || projectsRevision + 1)); localStorage.setItem(projectsKey, JSON.stringify(next)); await publishPublicMap(houses, serverRevision, nextProject.externalAccess);
-      setNewAccessName(""); setNewAccessUsername(""); setNewAccessPassword(""); setReportNotice("Acesso externo criado e disponível para uso.");
-    } catch (error) { setReportNotice(error instanceof Error ? error.message : "Não foi possível salvar o acesso."); }
+      const access: WorkExternalAccess = {
+        id: `obra-access-${Date.now()}-${crypto.randomUUID().slice(0,8)}`,
+        name,
+        role: newAccessRole,
+        username,
+        passwordHash: await passwordHash(newAccessPassword),
+        active: true,
+        createdAt: new Date().toISOString(),
+      };
+      const externalAccess = [access, ...(activeProject.externalAccess ?? [])];
+      const nextProject = { ...activeProject, externalAccess };
+      const next = projects.map(project => project.id === activeProject.id ? nextProject : project);
+      const response = await fetch("/api/work-projects", {
+        method:"PUT",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ companyId, projects:next, baseRevision:projectsRevision }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.status === 409 && result.state?.projects) {
+        const authoritative = result.state.projects as WorkProject[];
+        setProjects(authoritative);
+        setProjectsRevision(Number(result.state.revision || projectsRevision));
+        localStorage.setItem(projectsKey, JSON.stringify(authoritative));
+        throw new Error("A lista de obras foi atualizada por outro usuário. Os dados mais recentes foram carregados; tente adicionar novamente.");
+      }
+      if (!response.ok) throw new Error(result.error || "Não foi possível salvar o acesso.");
+      await syncExternalAccessMap(externalAccess);
+      setProjects(next);
+      setProjectsRevision(Number(result.state?.revision || projectsRevision + 1));
+      localStorage.setItem(projectsKey, JSON.stringify(next));
+      setNewAccessName("");
+      setNewAccessUsername("");
+      setNewAccessPassword("");
+      setAccessNotice({ tone:"success", text:`Acesso de ${name} criado com sucesso.` });
+      setReportNotice("Acesso externo criado e sincronizado com a obra.");
+    } catch (error) {
+      setAccessNotice({ tone:"error", text:error instanceof Error ? error.message : "Não foi possível salvar o acesso." });
+    } finally {
+      setAccessSaving(false);
+    }
   };
   const toggleExternalAccess = async (accessId: string) => {
-    const nextProject = { ...activeProject, externalAccess: (activeProject.externalAccess ?? []).map(access => access.id === accessId ? { ...access, active: !access.active } : access) };
+    if (accessSaving) return;
+    const externalAccess = (activeProject.externalAccess ?? []).map(access => access.id === accessId ? { ...access, active: !access.active } : access);
+    const nextProject = { ...activeProject, externalAccess };
     const next = projects.map(project => project.id === activeProject.id ? nextProject : project);
+    setAccessSaving(true);
+    setAccessNotice({ tone:"info", text:"Atualizando acesso..." });
     try {
-      const response = await fetch('/api/work-projects', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ companyId, projects:next, baseRevision:projectsRevision }) });
-      const result = await response.json(); if (!response.ok) throw new Error(result.error || "Não foi possível atualizar o acesso.");
-      setProjects(next); setProjectsRevision(Number(result.state?.revision || projectsRevision + 1)); localStorage.setItem(projectsKey, JSON.stringify(next)); await publishPublicMap(houses, serverRevision, nextProject.externalAccess);
-    } catch (error) { setReportNotice(error instanceof Error ? error.message : "Não foi possível atualizar o acesso."); }
+      const response = await fetch("/api/work-projects", {
+        method:"PUT",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ companyId, projects:next, baseRevision:projectsRevision }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Não foi possível atualizar o acesso.");
+      await syncExternalAccessMap(externalAccess);
+      setProjects(next);
+      setProjectsRevision(Number(result.state?.revision || projectsRevision + 1));
+      localStorage.setItem(projectsKey, JSON.stringify(next));
+      setAccessNotice({ tone:"success", text:"Acesso atualizado com sucesso." });
+    } catch (error) {
+      setAccessNotice({ tone:"error", text:error instanceof Error ? error.message : "Não foi possível atualizar o acesso." });
+    } finally {
+      setAccessSaving(false);
+    }
   };
   const openUpdate = (house: HouseWorkItem) => { const normalized=normalizeHouseStatus(house.status); setEditing(house); setNextStatus(normalized === "STATUS NÃO IDENTIFICADO" ? "INÍCIO DE OBRA" : normalized); setNote(house.note ?? ""); setPhotos({}); setSaveError(""); setHouseModalTab("Etapa"); setIncidentType("Perda"); setIncidentNote(""); setIncidentPhoto(""); };
   const readStagePhoto = async (label: string, file?: File) => {
@@ -2037,7 +2128,7 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
 <div className="house-status"><i/><span>{normalizeHouseStatus(house.status)}</span></div><div className="house-mini-progress"><i><b style={{width:`${houseProgress(house.status)}%`}}/></i><small>{houseProgress(house.status)}%</small></div>
 {house.note && <p>{house.note}</p>}<small className="house-date">{house.updatedAt ? `Atualizado em ${new Date(house.updatedAt).toLocaleString("pt-BR")}` : "Sem alterações registradas"}</small><footer><button onClick={() => openUpdate(house)} title="Alterar status"><Edit3 size={13}/></button><button disabled={!house.history?.length} onClick={() => setHistoryHouse(house)} title="Histórico"><History size={13}/></button><button onClick={() => issueWorkReport([house], `Relatório da Quadra ${house.block} — Casa ${String(house.lot).padStart(2, "0")}`)} title="Gerar PDF"><FileText size={13}/></button><button onClick={() => issueWorkReport([house], `Relatório da Quadra ${house.block} — Casa ${String(house.lot).padStart(2, "0")}`, true)} title="Enviar pelo WhatsApp"><MessageCircle size={13}/></button></footer></article>)}</div></section>; })}</div>
     {!visible.length && <div className="linked-empty"><Search size={22}/><h4>Nenhuma casa encontrada</h4><p>Altere os filtros para visualizar outros lotes.</p></div>}
-    {accessManagerOpen && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={()=>setAccessManagerOpen(false)} aria-label="Fechar"/><div className="modal work-register-modal external-access-modal"><div className="modal-head"><div><span>ACESSO EXTERNO DA OBRA</span><h2>Engenheiros e Fiscais</h2><p>O acesso externo permite somente registrar apontamentos com descrição e fotos. Status, progresso, etapas, custos e histórico interno permanecem protegidos.</p></div><button onClick={()=>setAccessManagerOpen(false)}><X size={18}/></button></div><div className="work-register-body"><section className="work-config-section"><header><div><b>Adicionar acesso</b><small>Crie quantos acessos forem necessários para esta obra.</small></div></header><div className="work-config-row external-access-form"><label>Nome<input value={newAccessName} onChange={event=>setNewAccessName(event.target.value)} placeholder="Nome do engenheiro ou fiscal"/></label><label>Função<select value={newAccessRole} onChange={event=>setNewAccessRole(event.target.value as WorkExternalAccess["role"])}><option>Engenheiro</option><option>Fiscal</option></select></label><label>Usuário de acesso<input required value={newAccessUsername} onChange={event=>setNewAccessUsername(event.target.value)} placeholder="usuário para login" autoComplete="username"/></label><label>Senha de acesso<input required minLength={6} type="password" value={newAccessPassword} onChange={event=>setNewAccessPassword(event.target.value)} placeholder="mínimo 6 caracteres" autoComplete="new-password"/></label><button type="button" className="primary-btn" onClick={()=>void saveExternalAccess()}><Plus size={14}/> Adicionar acesso</button></div></section><section className="work-config-section"><header><div><b>Acessos cadastrados</b><small>{(activeProject.externalAccess ?? []).length} pessoa(s) • somente apontamentos externos</small></div></header>{activeProject.externalAccess?.length ? <div className="external-access-list">{activeProject.externalAccess.map(access=><article key={access.id}><div><b>{access.name}</b><small>{access.role} • <code>{access.username}</code></small></div><span className={access.active ? "active" : "inactive"}>{access.active ? "Ativo" : "Inativo"}</span><button type="button" className="outline-btn" onClick={()=>void toggleExternalAccess(access.id)}>{access.active ? "Inativar" : "Ativar"}</button></article>)}</div> : <p className="work-config-empty">Nenhum acesso externo cadastrado nesta obra.</p>}</section></div><div className="modal-actions"><button className="primary-btn" onClick={()=>setAccessManagerOpen(false)}>Concluir</button></div></div></div>}
+    {accessManagerOpen && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={()=>setAccessManagerOpen(false)} aria-label="Fechar"/><div className="modal work-register-modal external-access-modal"><div className="modal-head"><div><span>ACESSO EXTERNO DA OBRA</span><h2>Engenheiros e Fiscais</h2><p>O acesso externo permite somente registrar apontamentos com descrição e fotos. Status, progresso, etapas, custos e histórico interno permanecem protegidos.</p></div><button onClick={()=>setAccessManagerOpen(false)}><X size={18}/></button></div><div className="work-register-body"><section className="work-config-section"><header><div><b>Adicionar acesso</b><small>Crie quantos acessos forem necessários para esta obra.</small></div></header><form className="work-config-row external-access-form" onSubmit={event=>{event.preventDefault();void saveExternalAccess();}}><label>Nome<input required value={newAccessName} onChange={event=>setNewAccessName(event.target.value)} placeholder="Nome do engenheiro ou fiscal"/></label><label>Função<select value={newAccessRole} onChange={event=>setNewAccessRole(event.target.value as WorkExternalAccess["role"])}><option>Engenheiro</option><option>Fiscal</option></select></label><label>Usuário de acesso<input required value={newAccessUsername} onChange={event=>setNewAccessUsername(event.target.value)} placeholder="usuario.externo" autoComplete="username"/></label><label>Senha de acesso<input required minLength={6} type="password" value={newAccessPassword} onChange={event=>setNewAccessPassword(event.target.value)} placeholder="mínimo 6 caracteres" autoComplete="new-password"/></label><button type="submit" className="primary-btn external-access-submit" disabled={accessSaving}><Plus size={14}/> {accessSaving?"Salvando...":"Adicionar acesso"}</button>{accessNotice&&<div className={`external-access-notice ${accessNotice.tone}`} role="status">{accessNotice.text}</div>}</form></section><section className="work-config-section"><header><div><b>Acessos cadastrados</b><small>{(activeProject.externalAccess ?? []).length} pessoa(s) • somente apontamentos externos</small></div></header>{activeProject.externalAccess?.length ? <div className="external-access-list">{activeProject.externalAccess.map(access=><article key={access.id}><div><b>{access.name}</b><small>{access.role} • <code>{access.username}</code></small></div><span className={access.active ? "active" : "inactive"}>{access.active ? "Ativo" : "Inativo"}</span><button type="button" className="outline-btn" disabled={accessSaving} onClick={()=>void toggleExternalAccess(access.id)}>{access.active ? "Inativar" : "Ativar"}</button></article>)}</div> : <p className="work-config-empty">Nenhum acesso externo cadastrado nesta obra.</p>}</section></div><div className="modal-actions"><button className="primary-btn" onClick={()=>setAccessManagerOpen(false)}>Concluir</button></div></div></div>}
     {workManagerOpen && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={()=>setWorkManagerOpen(false)} aria-label="Fechar"/><div className="modal work-register-modal"><div className="modal-head"><div><span>GERENCIADOR DE OBRAS</span><h2>Cadastrar nova obra</h2><p>Defina as quadras, a quantidade de casas e as áreas comuns.</p></div><button onClick={()=>setWorkManagerOpen(false)}><X size={18}/></button></div><div className="work-register-body"><label className="wide">Nome da obra<input value={newWorkName} onChange={event=>setNewWorkName(event.target.value)} placeholder="Ex.: Residencial Primavera"/></label><section className="work-config-section"><header><div><b>Quadras e casas</b><small>Informe a identificação e a quantidade de casas de cada quadra.</small></div><button type="button" onClick={()=>setNewBlocks(current=>[...current,{block:String.fromCharCode(65+current.length),houses:1}])}><Plus size={13}/> Quadra</button></header>{newBlocks.map((item,index)=><div className="work-config-row" key={index}><label>Quadra<input value={item.block} onChange={event=>setNewBlocks(current=>current.map((block,i)=>i===index?{...block,block:event.target.value}:block))}/></label><label>Quantidade de casas<input type="number" min="1" value={item.houses} onChange={event=>setNewBlocks(current=>current.map((block,i)=>i===index?{...block,houses:Math.max(1,Number(event.target.value)||1)}:block))}/></label><button type="button" disabled={newBlocks.length===1} onClick={()=>setNewBlocks(current=>current.filter((_,i)=>i!==index))}><Trash2 size={14}/></button></div>)}</section><section className="work-config-section"><header><div><b>Áreas comuns</b><small>Adicione a quantidade necessária e dê um nome para cada área.</small></div><button type="button" onClick={()=>setNewCommonAreas(current=>[...current,""])}><Plus size={13}/> Área comum</button></header>{newCommonAreas.length===0?<p className="work-config-empty">Nenhuma área comum adicionada.</p>:newCommonAreas.map((name,index)=><div className="work-config-row common" key={index}><label>Nome da área comum<input value={name} onChange={event=>setNewCommonAreas(current=>current.map((area,i)=>i===index?event.target.value:area))} placeholder="Ex.: Academia, salão de festas..."/></label><button type="button" onClick={()=>setNewCommonAreas(current=>current.filter((_,i)=>i!==index))}><Trash2 size={14}/></button></div>)}</section></div><div className="modal-actions"><button className="outline-btn" onClick={()=>setWorkManagerOpen(false)}>Cancelar</button><button className="primary-btn" onClick={createWorkProject}><CheckCircle2 size={15}/> Cadastrar obra</button></div></div></div>}
     {editing && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={() => setEditing(null)} aria-label="Fechar"/><div className="modal house-update-modal"><div className="modal-head"><div><span>ATUALIZAÇÃO DA OBRA</span><h2>Quadra {editing.block} • Casa {String(editing.lot).padStart(2,"0")}</h2><p>Status atual: {normalizeHouseStatus(editing.status)} • Responsável: {responsibleUser}</p></div><button onClick={() => setEditing(null)}><X size={18}/></button></div><div className="house-modal-tabs"><button className={houseModalTab === "Etapa" ? "active" : ""} onClick={()=>setHouseModalTab("Etapa")}><CheckCircle2 size={14}/> Etapa da obra</button><button className={houseModalTab === "Perdas e Roubos" ? "active warning" : ""} onClick={()=>setHouseModalTab("Perdas e Roubos")}><AlertTriangle size={14}/> Perdas e Roubos {editing.incidents?.length ? <span>{editing.incidents.length}</span> : null}</button></div>{houseModalTab === "Etapa" ? <><div className="house-stage-progress">{HOUSE_STATUSES.map((stage,index) => { const activeIndex = HOUSE_STATUSES.findIndex(item => item.name === nextStatus); return <div key={stage.name} className={index <= activeIndex ? "active" : ""}><i>{index < activeIndex ? <CheckCircle2 size={12}/> : index + 1}</i><span>{stage.name}</span></div>; })}</div><div className="house-update-body"><label>Novo status<select value={nextStatus} onChange={event => { setNextStatus(event.target.value as HouseWorkStatus); setPhotos({}); setSaveError(""); }}>{HOUSE_STATUSES.map(status => <option key={status.name}>{status.name}</option>)}</select></label><div className="status-preview" style={{"--preview-color":statusColor(nextStatus)} as React.CSSProperties}><i/><span>{nextStatus}</span></div>{HOUSE_STAGE_PHOTOS[nextStatus].length > 0 && <div className="stage-photo-slots wide">{HOUSE_STAGE_PHOTOS[nextStatus].map(label => <label className={photos[label] ? "filled" : ""} key={label}>{photos[label] ? <img src={photos[label]} alt={label}/> : <ImageIcon size={22}/>}<b>{label}</b><small>{photos[label] ? "Foto pronta • toque para substituir" : HOUSE_STAGE_OPTIONAL_PHOTOS.includes(nextStatus) ? "Foto opcional" : "Foto obrigatória"}</small><input type="file" accept="image/*" capture="environment" onChange={event => void readStagePhoto(label,event.target.files?.[0])}/>{photos[label] && <button type="button" onClick={event => { event.preventDefault(); setPhotos(current => { const next = {...current}; delete next[label]; return next; }); }}><X size={12}/> Remover</button>}</label>)}</div>}<label className="wide">Observação da etapa<textarea value={note} onChange={event => { setNote(event.target.value); setSaveError(""); }} placeholder={nextStatus === "AG. TUBULAÇÃO FORÇADA" ? "Informe os detalhes da tubulação forçada..." : "Descreva o serviço executado, pendências ou materiais utilizados..."}/><small>A observação poderá ser consultada no histórico permanente da casa.</small></label>{nextStatus === "SERVIÇO CONCLUÍDO" && <div className="completion-warning wide"><CheckCircle2 size={19}/><span><b>Finalização da casa</b><small>Ao confirmar, o sistema registrará automaticamente data, horário e {responsibleUser} como responsável.</small></span></div>}</div><div className="modal-actions"><button className="outline-btn" onClick={() => setEditing(null)}>Cancelar</button><button className="primary-btn" disabled={!stageDirty || saveState === "saving"} onClick={() => void saveUpdate()}>{saveState === "saving" ? <RefreshCw size={15}/> : <CheckCircle2 size={15}/>} {saveState === "saving" ? "Salvando..." : "Salvar alterações"}</button></div></> : <><div className="incident-register-body"><div className="incident-form"><label>Tipo da ocorrência<select value={incidentType} onChange={event=>setIncidentType(event.target.value as "Perda" | "Roubo")}><option>Perda</option><option>Roubo</option></select></label><label className="incident-photo-upload">{incidentPhoto ? <img src={incidentPhoto} alt="Foto da ocorrência"/> : <><Camera size={25}/><b>Anexar foto da ocorrência</b><small>Câmera ou galeria • foto obrigatória</small></>}<input type="file" accept="image/*" capture="environment" onChange={event=>void readIncidentPhoto(event.target.files?.[0])}/></label><label className="wide">Observação<textarea value={incidentNote} onChange={event=>setIncidentNote(event.target.value)} placeholder="Descreva o item perdido ou roubado e os detalhes da ocorrência..."/></label></div><section className="incident-history"><header><b>Registros desta unidade</b><small>{editing.incidents?.length ?? 0} ocorrência(s)</small></header>{editing.incidents?.length ? editing.incidents.map(incident=>
 <article key={incident.id}><label className="replaceable-photo"><img src={incident.photo} alt={incident.type}/><span>Alterar foto</span><input type="file" accept="image/*" capture="environment" onChange={event=>void replaceIncidentPhoto(incident.id,event.target.files?.[0])}/></label>
