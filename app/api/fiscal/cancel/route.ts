@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token}`,
-        "X-ProAR-Company": access.session.companyId,
+        "X-ProAR-Company": String(access.session.companyId || ""),
       },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(45_000),
