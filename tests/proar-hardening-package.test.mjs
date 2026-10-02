@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { classifyProarError, proarError } from "../lib/system-errors.ts";
-import { rolePermissionPreset } from "../lib/permissions.ts";
+import { rolePermissionPreset } from "../lib/role-permissions.ts";
 import { deriveWorkflowSuggestions } from "../lib/workflow-automation.ts";
 import { runProarTestLab, summarizeTestLab } from "../lib/test-lab.ts";
 import { buildStructuredAuditEntry } from "../lib/audit-utils.ts";
