@@ -132,10 +132,10 @@ export async function PUT(request: NextRequest) {
     const current = await loadRecord(user.companyId);
     const record: FiscalRecord = {
       ...current,
-      company: body.company ?? current.company,
-      nfe: body.nfe ?? current.nfe,
-      nfce: body.nfce ?? current.nfce ?? {},
-      nfse: body.nfse ?? current.nfse,
+      company: { ...(current.company ?? {}), ...(body.company ?? {}) },
+      nfe: { ...(current.nfe ?? {}), ...(body.nfe ?? {}) },
+      nfce: { ...(current.nfce ?? {}), ...(body.nfce ?? {}) },
+      nfse: { ...(current.nfse ?? {}), ...(body.nfse ?? {}) },
       updatedAt: new Date().toISOString(),
       updatedBy: user.displayName,
     };
