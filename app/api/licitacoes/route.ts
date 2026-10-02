@@ -37,7 +37,11 @@ export type PncpTender = {
   sourcePortal?: "PNCP" | "Compras.gov.br" | "BLL Compras" | "Licitações-e" | "Portal Municipal";
   orgaoEntidade?: { razaoSocial?: string; cnpj?: string };
   unidadeOrgao?: { municipioNome?: string; ufSigla?: string; nomeUnidade?: string; codigoIbge?: string };
-  distanciaMirassol?: number;\n  validationStatus?: "active_confirmed" | "history" | "incomplete";\n  validationReason?: string;\n  canonicalKey?: string;\n};
+  distanciaMirassol?: number;
+  validationStatus?: "active_confirmed" | "history" | "incomplete";
+  validationReason?: string;
+  canonicalKey?: string;
+};
 
 
 function canonicalTenderKey(item: PncpTender) {
@@ -286,12 +290,19 @@ async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radi
       const key = `Compras.gov.br-${code}`; startedAt.set(key, Date.now());
       const value = await fetchCompras(publicationStart, publicationEnd, code, municipality?.ibge);
       return { value, diagnostic: { source: key, status: "ok" as const, attempts: value.attempts, durationMs: Date.now() - (startedAt.get(key) ?? Date.now()), count: value.items.length } };
-    }),\n    Promise.all(MUNICIPAL_SOURCES.filter(source=>source.distance <= (options?.radius??300)).map(fetchMunicipalSource)),\n  ]);\n  const raw = [
+    }),
+    Promise.all(MUNICIPAL_SOURCES.filter(source=>source.distance <= (options?.radius??300)).map(fetchMunicipalSource)),
+  ]);
+  const raw = [
     ...pncpSettled.flatMap(result => result.status === "fulfilled" ? result.value.value.items : []),
-    ...comprasSettled.flatMap(result => result.status === "fulfilled" ? result.value.value.items : []),\n    ...municipalSettled.flatMap(result=>result.items),\n  ];
+    ...comprasSettled.flatMap(result => result.status === "fulfilled" ? result.value.value.items : []),
+    ...municipalSettled.flatMap(result=>result.items),
+  ];
   const diagnostics: SourceDiagnostic[] = [
     ...pncpSettled.map((result, index) => result.status === "fulfilled" ? result.value.diagnostic : { source: `PNCP-${UFS[index]}`, status: "error" as const, attempts: MAX_RETRIES + 1, durationMs: Date.now() - (startedAt.get(`PNCP-${UFS[index]}`) ?? Date.now()), count: 0, error: result.reason instanceof Error ? result.reason.message : String(result.reason) }),
-    ...comprasSettled.map((result, index) => result.status === "fulfilled" ? result.value.diagnostic : { source: `Compras.gov.br-${MODALITIES[index]}`, status: "error" as const, attempts: MAX_RETRIES + 1, durationMs: Date.now() - (startedAt.get(`Compras.gov.br-${MODALITIES[index]}`) ?? Date.now()), count: 0, error: result.reason instanceof Error ? result.reason.message : String(result.reason) }),\n    ...municipalSettled.map(result=>result.diagnostic),\n  ];
+    ...comprasSettled.map((result, index) => result.status === "fulfilled" ? result.value.diagnostic : { source: `Compras.gov.br-${MODALITIES[index]}`, status: "error" as const, attempts: MAX_RETRIES + 1, durationMs: Date.now() - (startedAt.get(`Compras.gov.br-${MODALITIES[index]}`) ?? Date.now()), count: 0, error: result.reason instanceof Error ? result.reason.message : String(result.reason) }),
+    ...municipalSettled.map(result=>result.diagnostic),
+  ];
   const failedSources = diagnostics.filter(item => item.status === "error").map(item => item.source);
   for (const item of diagnostics.filter(item => item.status === "error")) console.warn("PNCP source unavailable", item);
 
@@ -326,7 +337,11 @@ async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radi
     item.sourcePortal = item.sourcePortal ?? identifySource(item);
     return true;
   });
-  const validated = filtered.map(item => validateTender(item));\n  const deduped = new Map<string, PncpTender>();\n  for (const item of validated) { const key=item.canonicalKey ?? canonicalTenderKey(item); const current=deduped.get(key); deduped.set(key,current?preferValidatedTender(current,item):item); }\n  const unique = Array.from(deduped.values());\n  unique.sort((a, b) => new Date(a.dataEncerramentoProposta ?? 0).getTime() - new Date(b.dataEncerramentoProposta ?? 0).getTime());
+  const validated = filtered.map(item => validateTender(item));
+  const deduped = new Map<string, PncpTender>();
+  for (const item of validated) { const key=item.canonicalKey ?? canonicalTenderKey(item); const current=deduped.get(key); deduped.set(key,current?preferValidatedTender(current,item):item); }
+  const unique = Array.from(deduped.values());
+  unique.sort((a, b) => new Date(a.dataEncerramentoProposta ?? 0).getTime() - new Date(b.dataEncerramentoProposta ?? 0).getTime());
   return { data: unique.slice(0, 500), failedSources, diagnostics };
 }
 
