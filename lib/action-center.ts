@@ -1,4 +1,4 @@
-import { deriveWorkflowSuggestions } from "./workflow-automation";
+import { deriveWorkflowSuggestions } from "./workflow-automation.ts";
 export type OperationalActionTone = "blue" | "amber" | "red";
 
 export type OperationalAction = {
