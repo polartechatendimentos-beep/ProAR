@@ -31,3 +31,37 @@ export function auditMatches(record:Record<string,unknown>,moduleName:string,rec
   const text=`${record.description??""} ${record.name??""}`.toLocaleLowerCase("pt-BR");
   return text.includes(recordId.toLocaleLowerCase("pt-BR")) || Boolean(recordName&&text.includes(recordName.toLocaleLowerCase("pt-BR")));
 }
+
+export type StructuredAuditEntry={
+  action:string;
+  moduleName:string;
+  recordId:string;
+  recordName?:string;
+  actor:string;
+  reason?:string;
+  createdAt:string;
+  changes:AuditChange[];
+};
+
+export function buildStructuredAuditEntry(input:{
+  action:string;
+  moduleName:string;
+  recordId:string;
+  recordName?:string;
+  actor:string;
+  reason?:string;
+  before?:Record<string,unknown>;
+  after?:Record<string,unknown>;
+  createdAt?:string;
+}):StructuredAuditEntry{
+  return {
+    action:input.action,
+    moduleName:input.moduleName,
+    recordId:input.recordId,
+    recordName:input.recordName,
+    actor:input.actor,
+    reason:input.reason,
+    createdAt:input.createdAt||new Date().toISOString(),
+    changes:diffAuditRecord(input.before,input.after),
+  };
+}
