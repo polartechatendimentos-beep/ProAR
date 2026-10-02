@@ -216,3 +216,19 @@ test("transferência não permite retirar mais que o saldo da localização",()=
   const moved=run(initial,command("stock-transfer",{productId:"P1",quantity:3,sourceType:"Estoque central",destinationType:"Veículo",destinationId:"V1",destinationName:"V1"},undefined));
   assert.throws(()=>run(moved,command("stock-transfer",{productId:"P1",quantity:4,sourceType:"Veículo",sourceId:"V1",sourceName:"V1",destinationType:"OS",destinationId:"OS-1",destinationName:"OS-1"},undefined)),/Saldo insuficiente na origem/);
 });
+
+
+test("mudança do desconto do orçamento renova aprovação mesmo com total igual",()=>{
+  const state=base();
+  state.moduleRecords.Orçamentos=[{id:"O1",name:"Orçamento",client:"Cliente",value:900,discountPercent:15,status:"Enviado"}];
+  const draft=structuredClone(state);
+  draft.moduleRecords.Orçamentos[0].description="Solicitação de aprovação";
+  const prepared=prepareOperationalState(state,draft,admin,"2026-10-02T10:00:00Z");
+  const approval=prepared.moduleRecords["Aprovações"].find(item=>item.sourceId==="O1");
+  const approved=run(prepared,command("approval-decide",{decision:"Aprovado",reason:"Desconto autorizado"},approval.id));
+  const changed=structuredClone(approved);
+  changed.moduleRecords.Orçamentos[0].discountPercent=20;
+  const next=prepareOperationalState(approved,changed,admin,"2026-10-02T11:00:00Z");
+  assert.equal(next.moduleRecords.Orçamentos[0].approvalStatus,"Pendente");
+  assert.ok(next.moduleRecords["Aprovações"].filter(item=>item.sourceId==="O1").length>=2);
+});
