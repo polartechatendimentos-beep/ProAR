@@ -11,6 +11,7 @@ test("interprets natural-language field query with brand, outdoor unit, blink co
   assert.equal(parsed.equipmentType,"Piso Teto");
   assert.equal(parsed.capacityBtus,60000);
   assert.equal(parsed.blinkPattern,"5 piscadas");
+  assert.equal(parsed.code,"","\"na\" não pode ser interpretado como código de erro");
 });
 
 test("does not return Elgin split evaporator 5-blink code for a floor-ceiling outdoor-unit query",()=>{
