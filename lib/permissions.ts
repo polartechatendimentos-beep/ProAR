@@ -14,7 +14,8 @@ export type Permission =
   | "estoque.visualizar" | "estoque.editar" | "estoque.ajustar"
   | "compras.visualizar" | "compras.editar" | "compras.receber"
   | "comercial.editar" | "catalogo.editar" | "financeiro.conciliar"
-  | "integridade.visualizar" | "rotas.visualizar";
+  | "integridade.visualizar" | "rotas.visualizar"
+  | "fiscal.consultar" | "fiscal.preparar" | "fiscal.emitir" | "fiscal.cancelar" | "fiscal.configurar";
 
 const legacy: Record<string, string[]> = {
   obras: ["Obras"],
@@ -30,6 +31,8 @@ const legacy: Record<string, string[]> = {
   catalogo: ["Produtos", "Serviços"],
   rotas: ["Rotas"],
   integridade: ["Integridade do Sistema"],
+  // Permissões fiscais são deliberadamente explícitas: não herdam mutações de Financeiro/Vendas/OS.
+  fiscal: [],
 };
 
 export function sessionFromRequest(request: NextRequest) {
@@ -44,7 +47,7 @@ export function hasPermission(session: ProarSession | null, permission: Permissi
   const legacyModule = (legacy[module] || []).some(item => session.permissions.includes(item));
   if (!explicit && !legacyModule) return false;
   // Perfis externos nunca herdam mutações sensíveis apenas por permissão legada de módulo.
-  if (["Fiscal", "Engenheiro"].includes(session.role) && /\.editar$|\.alterar$|\.baixar$|\.estornar$|\.registrar$|\.ajustar$|\.receber$|\.conciliar$/.test(permission)) {
+  if (["Fiscal", "Engenheiro"].includes(session.role) && /\.editar$|\.alterar$|\.baixar$|\.estornar$|\.registrar$|\.ajustar$|\.receber$|\.conciliar$|\.preparar$|\.emitir$|\.cancelar$|\.configurar$/.test(permission)) {
     return explicit;
   }
   return true;
