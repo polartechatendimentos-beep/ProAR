@@ -3,6 +3,8 @@ import { get, put } from "@vercel/blob";
 import forge from "node-forge";
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission, sessionCompany } from "../../../lib/permissions";
+import { databaseFetch } from "../../../lib/supabase-rest";
+import { resolveTenantDb, tenantHeaders } from "../../../lib/tenant-rest";
 
 export const runtime = "nodejs";
 
@@ -35,7 +37,7 @@ type FiscalRecord = {
 
 
 function encryptionKey() {
-  const secret = process.env.PROAR_FISCAL_ENCRYPTION_KEY ?? "";
+  const secret = process.env.PROAR_FISCAL_ENCRYPTION_KEY ?? process.env.PROAR_TENANT_MASTER_KEY ?? "";
   if (secret.length < 32) throw new Error("STORAGE_NOT_CONFIGURED");
   return createHash("sha256").update(secret).digest();
 }
@@ -54,28 +56,70 @@ function decrypt(value: string): FiscalRecord {
   return JSON.parse(Buffer.concat([decipher.update(Buffer.from(payload.data, "base64")), decipher.final()]).toString("utf8"));
 }
 
+const databaseRecordId = (companyId: string) => `fiscal-config:${createHash("sha256").update(companyId).digest("hex").slice(0,24)}`;
+
+async function loadDatabaseRecord(companyId: string): Promise<FiscalRecord | null> {
+  const db=await resolveTenantDb(companyId);
+  if(!db.url||!db.key)return null;
+  const response=await databaseFetch(`${db.url}/rest/v1/proar_state?select=payload&id=eq.${encodeURIComponent(databaseRecordId(companyId))}&limit=1`,{
+    headers:tenantHeaders(db.key),
+    cache:"no-store",
+  });
+  if(!response.ok)return null;
+  const rows=await response.json() as {payload?:{encrypted?:string}}[];
+  const encrypted=rows[0]?.payload?.encrypted;
+  if(!encrypted)return null;
+  return decrypt(encrypted);
+}
+
+async function saveDatabaseRecord(companyId:string,record:FiscalRecord){
+  const db=await resolveTenantDb(companyId);
+  if(!db.url||!db.key)throw new Error("STORAGE_NOT_CONFIGURED");
+  const response=await databaseFetch(`${db.url}/rest/v1/proar_state?on_conflict=id`,{
+    method:"POST",
+    headers:{...tenantHeaders(db.key),Prefer:"resolution=merge-duplicates,return=minimal"},
+    body:JSON.stringify({id:databaseRecordId(companyId),payload:{encrypted:encrypt(record),kind:"fiscal-config",version:1},updated_at:new Date().toISOString()}),
+  });
+  if(!response.ok)throw new Error("STORAGE_WRITE_FAILED");
+}
+
 async function loadRecord(companyId: string): Promise<FiscalRecord> {
-  if (!process.env.BLOB_READ_WRITE_TOKEN) throw new Error("STORAGE_NOT_CONFIGURED");
-  let result = await get(storagePath(companyId), { access: "private", token: process.env.BLOB_READ_WRITE_TOKEN });
-  // Migração legada somente quando o servidor identifica explicitamente a empresa dona do cofre antigo.
-  if (!result && process.env.PROAR_LEGACY_FISCAL_COMPANY_ID === companyId) {
-    result = await get(LEGACY_STORAGE_PATH, { access: "private", token: process.env.BLOB_READ_WRITE_TOKEN });
+  encryptionKey();
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    try {
+      let result = await get(storagePath(companyId), { access: "private", token: process.env.BLOB_READ_WRITE_TOKEN });
+      if (!result && process.env.PROAR_LEGACY_FISCAL_COMPANY_ID === companyId) {
+        result = await get(LEGACY_STORAGE_PATH, { access: "private", token: process.env.BLOB_READ_WRITE_TOKEN });
+      }
+      if (result) {
+        if (result.statusCode !== 200 || !result.stream) throw new Error("STORAGE_READ_FAILED");
+        return decrypt(await new Response(result.stream).text());
+      }
+    } catch (error) {
+      console.warn("Fiscal Blob unavailable, falling back to tenant database.", error);
+    }
   }
-  if (!result) return { company: {}, nfe: {}, nfce: {}, nfse: {} };
-  if (result.statusCode !== 200 || !result.stream) throw new Error("STORAGE_READ_FAILED");
-  return decrypt(await new Response(result.stream).text());
+  return (await loadDatabaseRecord(companyId)) ?? { company: {}, nfe: {}, nfce: {}, nfse: {} };
 }
 
 async function saveRecord(companyId: string, record: FiscalRecord) {
-  if (!process.env.BLOB_READ_WRITE_TOKEN) throw new Error("STORAGE_NOT_CONFIGURED");
-  await put(storagePath(companyId), encrypt(record), {
-    access: "private",
-    token: process.env.BLOB_READ_WRITE_TOKEN,
-    addRandomSuffix: false,
-    allowOverwrite: true,
-    contentType: "application/octet-stream",
-    cacheControlMaxAge: 60,
-  });
+  encryptionKey();
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    try {
+      await put(storagePath(companyId), encrypt(record), {
+        access: "private",
+        token: process.env.BLOB_READ_WRITE_TOKEN,
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        contentType: "application/octet-stream",
+        cacheControlMaxAge: 60,
+      });
+      return;
+    } catch (error) {
+      console.warn("Fiscal Blob write failed, using tenant database fallback.", error);
+    }
+  }
+  await saveDatabaseRecord(companyId, record);
 }
 
 function publicFiscalSection(section: Record<string, string | boolean> = {}) {
@@ -97,6 +141,7 @@ function publicRecord(record: FiscalRecord) {
     nfse: publicFiscalSection(record.nfse ?? {}),
     updatedAt: record.updatedAt,
     updatedBy: record.updatedBy,
+    storage: { provider: process.env.BLOB_READ_WRITE_TOKEN ? "blob-or-database" : "database", encrypted: true },
     certificate: certificate ? {
       fileName: certificate.fileName,
       subject: certificate.subject,
@@ -117,7 +162,7 @@ function publicRecord(record: FiscalRecord) {
 function storageError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
   if (message === "STORAGE_NOT_CONFIGURED") {
-    return NextResponse.json({ error: "O cofre fiscal ainda não foi ativado no servidor." }, { status: 503 });
+    return NextResponse.json({ error: "O cofre fiscal não está disponível. Configure PROAR_TENANT_MASTER_KEY ou PROAR_FISCAL_ENCRYPTION_KEY no servidor." }, { status: 503 });
   }
   console.error("Fiscal configuration error", error);
   return NextResponse.json({ error: "Não foi possível acessar o cofre fiscal." }, { status: 500 });
