@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { FiscalAdvancedFields, emptyFiscalAdvancedData, type FiscalAdvancedData } from "@/components/FiscalAdvancedFields";
+import type { FiscalItemTax } from "@/lib/fiscal-domain";
 import {
   AlertTriangle, CheckCircle2, ChevronRight, FileCheck2, FileText, Filter,
   Landmark, Package, Plus, ReceiptText, RefreshCw, Search, Send, Settings,
@@ -57,6 +59,8 @@ export type FiscalDocumentRecord = AnyRecord & {
   fiscalPaymentMethod?: string;
   fiscalServiceMunicipalityCode?: string;
   fiscalServiceTaxationLocation?: string;
+  fiscalAdvanced?: FiscalAdvancedData;
+  fiscalEvents?: Array<{ id: string; type: string; status: string; protocol?: string; message?: string; createdAt: string }>;
 };
 
 type FiscalItem = {
@@ -82,6 +86,8 @@ type FiscalItem = {
   nbs?: string;
   issRate?: number;
   issWithheld?: boolean;
+  discount?: number;
+  taxes?: FiscalItemTax;
 };
 
 type FiscalPreflight = {
@@ -174,7 +180,18 @@ export function FiscalDocumentsPanel({
       operationDirection: draft.fiscalOperationDirection || "1",
       destinationIndicator: draft.fiscalDestinationIndicator || "1",
       finalConsumer: documentType === "NFC-e" ? true : Boolean(draft.fiscalFinalConsumer),
-      referencedDocuments: draft.fiscalReferencedAccessKey ? [{ type: "NFE", accessKey: draft.fiscalReferencedAccessKey }] : [],
+      referencedDocuments: draft.fiscalAdvanced?.referencedDocuments?.length ? draft.fiscalAdvanced.referencedDocuments : draft.fiscalReferencedAccessKey ? [{ type: "NFE", accessKey: draft.fiscalReferencedAccessKey }] : [],
+      payments: draft.fiscalAdvanced?.payments || [],
+      change: draft.fiscalAdvanced?.change || 0,
+      totalValue: Number(draft.value || 0),
+      transport: draft.fiscalAdvanced?.transport,
+      pickupAddress: draft.fiscalAdvanced?.pickupAddress,
+      deliveryAddress: draft.fiscalAdvanced?.deliveryAddress,
+      retentions: draft.fiscalAdvanced?.retentions,
+      construction: draft.fiscalAdvanced?.construction,
+      intermediary: draft.fiscalAdvanced?.intermediary,
+      acquirer: draft.fiscalAdvanced?.acquirer,
+      recipient: draft.fiscalAdvanced?.recipient,
       debitNoteType: draft.fiscalDebitNoteType,
       creditNoteType: draft.fiscalCreditNoteType,
       nfsePurpose: draft.fiscalNfsePurpose || "0",
@@ -224,6 +241,8 @@ export function FiscalDocumentsPanel({
         fiscalBenefitCode: item.fiscalBenefitCode,
         ibsCbsCst: item.ibsCbsCst,
         ibsCbsClassCode: item.ibsCbsClassCode,
+        discount: item.discount,
+        taxes: item.taxes,
       })),
       service: firstService ? {
         description: firstService.description,
@@ -233,6 +252,7 @@ export function FiscalDocumentsPanel({
         issRate: firstService.issRate,
         municipalityCode: draft.fiscalServiceMunicipalityCode,
         taxationLocation: draft.fiscalServiceTaxationLocation,
+        issWithheld: firstService.issWithheld,
       } : undefined,
       config: {
         environment: config?.company?.environment,
@@ -553,6 +573,7 @@ function FiscalCreateDialog({ customers, products, services, sales, serviceOrder
   const [paymentMethod, setPaymentMethod] = useState("01");
   const [serviceMunicipalityCode, setServiceMunicipalityCode] = useState("");
   const [serviceTaxationLocation, setServiceTaxationLocation] = useState("Município da prestação");
+  const [advanced, setAdvanced] = useState<FiscalAdvancedData>(() => emptyFiscalAdvancedData());
   const [preview, setPreview] = useState<FiscalPreflight | null>(null);
   const [validating, setValidating] = useState(false);
 
@@ -595,6 +616,18 @@ function FiscalCreateDialog({ customers, products, services, sales, serviceOrder
       nbs: record.nbs || "",
       issRate: Number(record.issRate || config?.nfse?.issRate || 0),
       issWithheld: Boolean(record.issWithheld),
+      discount: Number(record.discount || 0),
+      taxes: {
+        icms: { base: Number(record.icmsBase || 0), rate: Number(record.icmsRate || 0), value: record.icmsValue !== undefined ? Number(record.icmsValue) : undefined },
+        icmsSt: { base: Number(record.icmsStBase || 0), rate: Number(record.icmsStRate || 0), value: record.icmsStValue !== undefined ? Number(record.icmsStValue) : undefined },
+        fcp: { base: Number(record.fcpBase || 0), rate: Number(record.fcpRate || 0), value: record.fcpValue !== undefined ? Number(record.fcpValue) : undefined },
+        difalDestination: { base: Number(record.difalBase || 0), rate: Number(record.difalRate || 0), value: record.difalValue !== undefined ? Number(record.difalValue) : undefined },
+        ipi: { base: Number(record.ipiBase || 0), rate: Number(record.ipiRate || 0), value: record.ipiValue !== undefined ? Number(record.ipiValue) : undefined },
+        pis: { base: Number(record.pisBase || 0), rate: Number(record.pisRate || 0), value: record.pisValue !== undefined ? Number(record.pisValue) : undefined },
+        cofins: { base: Number(record.cofinsBase || 0), rate: Number(record.cofinsRate || 0), value: record.cofinsValue !== undefined ? Number(record.cofinsValue) : undefined },
+        ibs: { base: Number(record.ibsBase || 0), rate: Number(record.ibsRate || 0), value: record.ibsValue !== undefined ? Number(record.ibsValue) : undefined },
+        cbs: { base: Number(record.cbsBase || 0), rate: Number(record.cbsRate || 0), value: record.cbsValue !== undefined ? Number(record.cbsValue) : undefined },
+      },
     }]);
     setItemId("");
     setQuantity(1);
@@ -633,6 +666,7 @@ function FiscalCreateDialog({ customers, products, services, sales, serviceOrder
     fiscalPaymentMethod: paymentMethod,
     fiscalServiceMunicipalityCode: serviceMunicipalityCode,
     fiscalServiceTaxationLocation: serviceTaxationLocation,
+    fiscalAdvanced: advanced,
   });
 
   const validate = async () => {
@@ -667,6 +701,8 @@ function FiscalCreateDialog({ customers, products, services, sales, serviceOrder
         {documentType === "NF-e" && <label className="text-xs font-semibold text-slate-600">Modalidade do frete<select className="mt-1 w-full rounded-xl border p-3 text-sm" value={freightMode} onChange={event=>setFreightMode(event.target.value)}><option value="9">Sem frete</option><option value="0">Por conta do remetente</option><option value="1">Por conta do destinatário</option><option value="2">Por conta de terceiros</option></select></label>}
         {documentType === "NFC-e" && <label className="text-xs font-semibold text-slate-600">Forma de pagamento<select className="mt-1 w-full rounded-xl border p-3 text-sm" value={paymentMethod} onChange={event=>setPaymentMethod(event.target.value)}><option value="01">Dinheiro</option><option value="03">Cartão de crédito</option><option value="04">Cartão de débito</option><option value="17">PIX</option><option value="90">Sem pagamento</option><option value="99">Outros</option></select></label>}
         {documentType === "NFS-e" && <><label className="text-xs font-semibold text-slate-600">Finalidade da NFS-e<select className="mt-1 w-full rounded-xl border p-3 text-sm" value={nfsePurpose} onChange={event=>setNfsePurpose(event.target.value as "0"|"1"|"2")}><option value="0">Regular</option><option value="1">Crédito</option><option value="2">Débito</option></select></label><label className="flex items-center gap-2 rounded-xl border p-3 text-xs font-semibold text-slate-700"><input type="checkbox" checked={nfseFinalConsumer} onChange={event=>setNfseFinalConsumer(event.target.checked)}/> Uso ou consumo pessoal (indFinal)</label><label className="text-xs font-semibold text-slate-600">Indicador da operação IBS/CBS (cIndOp)<input className="mt-1 w-full rounded-xl border p-3 text-sm" value={nfseOperationIndicator} onChange={event=>setNfseOperationIndicator(event.target.value.replace(/\D/g,"").slice(0,6))} placeholder="6 dígitos conforme tabela nacional"/></label><label className="text-xs font-semibold text-slate-600">Relação entre as pessoas (indPessoas)<select className="mt-1 w-full rounded-xl border p-3 text-sm" value={nfsePeopleIndicator} onChange={event=>setNfsePeopleIndicator(event.target.value as any)}><option value="0">Tomador = adquirente = destinatário</option><option value="1">Tomador = adquirente; destinatário diferente</option><option value="2">Adquirente = destinatário; tomador diferente</option><option value="3">Tomador = destinatário; adquirente diferente</option><option value="4">Todos distintos</option></select></label><label className="text-xs font-semibold text-slate-600">Código IBGE do município da prestação<input className="mt-1 w-full rounded-xl border p-3 text-sm" value={serviceMunicipalityCode} onChange={event=>setServiceMunicipalityCode(event.target.value.replace(/\D/g,"").slice(0,7))} placeholder="Ex.: 3530300"/></label><label className="text-xs font-semibold text-slate-600">Local de incidência<input className="mt-1 w-full rounded-xl border p-3 text-sm" value={serviceTaxationLocation} onChange={event=>setServiceTaxationLocation(event.target.value)} placeholder="Município da prestação"/></label></>}
+
+        <FiscalAdvancedFields documentType={documentType} purpose={purpose} freightMode={freightMode} nfsePeopleIndicator={nfsePeopleIndicator} total={total} value={advanced} onChange={setAdvanced}/>
 
         <div className="md:col-span-2 rounded-xl border bg-slate-50 p-4">
           <div className="flex items-center gap-2"><Package size={16}/><b className="text-sm">{documentType === "NFS-e" ? "Serviços da nota" : "Produtos da nota"}</b></div>
