@@ -23,7 +23,7 @@ const payable = (record: ErpRecord) => record.transactionType === "Pagar" || /pa
 const canceled = (record: ErpRecord) => /cancelad/i.test(record.status || "");
 const permissionFor: Record<string, string> = {
   Financeiro: "financeiro.editar", "Contas financeiras": "financeiro.editar",
-  Produtos: "estoque.editar", Estoque: "estoque.editar", Compras: "compras.editar",
+  Produtos: "estoque.editar", Estoque: "estoque.editar", "Reservas de estoque": "estoque.editar", Compras: "compras.editar",
   Equipamentos: "equipamentos.editar", "Unidades e setores": "clientes.editar",
   Funcionários: "configuracoes.editar", Certames: "licitacoes.editar", Empenhos: "licitacoes.editar",
   Obras: "obras.editar", Orçamentos: "comercial.editar", Vendas: "comercial.editar", Serviços: "catalogo.editar", Fornecedores: "compras.editar", "Conciliações": "financeiro.conciliar", Lembretes: "os.editar",
@@ -290,10 +290,27 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
       addMovement({ id: `OS-STOCK-${order.id}-${item.id}`, productId: item.id, serviceOrderId: order.id, quantity: -quantity, kind: "Saída", createdAt: now, user: actor.username, reason: "Conclusão da OS" }, stock);
     }
   }
+  const reservations = list(modules["Reservas de estoque"]);
+  const reservationIds = reservations.map(item => id(item.id));
+  if (reservationIds.some(key => !key) || new Set(reservationIds).size !== reservationIds.length) throw new OperationError("Reserva de estoque com identificador inválido ou duplicado.");
+  for (const reservation of reservations) {
+    if (!products.some(product => product.id === reservation.productId) || !Number.isFinite(Number(reservation.quantity)) || Number(reservation.quantity) <= 0) throw new OperationError("Reserva de estoque inválida.");
+  }
+  for (const order of list(next.serviceOrders)) {
+    const before = list(old.serviceOrders).find(item => item.id === order.id);
+    if (!/conclu[ií]da/i.test(order.status || "") || /conclu[ií]da/i.test(before?.status || "")) continue;
+    for (const reservation of reservations.filter(item => item.status === "Ativa" && item.sourceType === "OS" && item.sourceId === order.id)) {
+      reservation.status = "Consumida"; reservation.consumedAt = now; reservation.consumedBy = actor.username;
+    }
+  }
   for (const product of products) {
     const balance = stock.filter(item => item.productId === product.id).reduce((sum, item) => sum + Math.round(Number(item.quantity) * 1000), 0) / 1000;
     if (!Number.isFinite(balance) || balance < -0.000001) throw new OperationError(`Estoque insuficiente: ${product.name}.`);
+    const reserved = reservations.filter(item => item.productId === product.id && item.status === "Ativa").reduce((sum,item)=>sum+Number(item.quantity||0),0);
+    if (reserved > balance + 0.000001) throw new OperationError(`Reservas excedem o estoque físico: ${product.name}.`);
     product.stockCurrent = balance;
+    product.stockReserved = Math.round(reserved * 1000) / 1000;
+    product.stockAvailable = Math.round((balance - reserved) * 1000) / 1000;
   }
   for (const order of list(next.serviceOrders)) {
     const before = list(old.serviceOrders).find(item => item.id === order.id);
@@ -331,13 +348,13 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
   }
   const next = structuredClone(state);
   const modules = next.moduleRecords ||= {};
-  const module = ["settle", "reverse", "cancel", "dates"].includes(command.action) ? "Financeiro" : command.action === "receive" ? "Compras" : command.action === "account" ? "Contas financeiras" : command.action === "stock" ? "Estoque" : command.action === "reconcile" ? "Conciliações" : "";
+  const module = ["settle", "reverse", "cancel", "dates"].includes(command.action) ? "Financeiro" : command.action === "receive" ? "Compras" : command.action === "account" ? "Contas financeiras" : command.action === "stock" ? "Estoque" : ["reserve-stock","release-stock"].includes(command.action) ? "Reservas de estoque" : command.action === "reconcile" ? "Conciliações" : "";
   if (!module) throw new OperationError("Operação desconhecida.");
   const records = modules[module] ||= [];
   const record = records.find(item => item.id === command.recordId);
   if (command.expectedRecord && !same(record, command.expectedRecord)) throw new OperationError("Registro alterado por outro usuário. Atualize antes de continuar.", 409);
   const data = command.data || {};
-  if (["settle", "reverse", "cancel", "dates", "receive"].includes(command.action) && !record) throw new OperationError("Registro não encontrado.", 404);
+  if (["settle", "reverse", "cancel", "dates", "receive", "release-stock"].includes(command.action) && !record) throw new OperationError("Registro não encontrado.", 404);
   const operationId = `OP-${command.idempotencyKey}`;
   switch (command.action) {
     case "settle": {
@@ -372,6 +389,22 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
       requireAction(actor, data.movementType === "Ajuste" ? "estoque.ajustar" : "estoque.editar");
       records.push({ id: operationId, name: `${data.movementType} de estoque`, productId: data.productId, quantity: data.quantity, movementType: data.movementType, changeReason: data.reason, description: data.reason, createdAt: now });
       break;
+    case "reserve-stock": {
+      requireAction(actor, "estoque.editar");
+      const quantity = Number(data.quantity);
+      const product = list(modules.Produtos).find(item => item.id === data.productId);
+      if (!product || !Number.isFinite(quantity) || quantity <= 0) throw new OperationError("Reserva exige produto e quantidade válida.");
+      const reserved = list(modules["Reservas de estoque"]).filter(item => item.productId === data.productId && item.status === "Ativa").reduce((sum,item)=>sum+Number(item.quantity||0),0);
+      const available = Number(product.stockCurrent || 0) - reserved;
+      if (quantity > available + 0.000001) throw new OperationError(`Estoque disponível insuficiente para reservar. Disponível: ${available}.`);
+      records.push({ id: operationId, name: `Reserva • ${product.name}`, productId: data.productId, quantity, sourceType: data.sourceType || "Manual", sourceId: data.sourceId || "", reason: String(data.reason || "").trim() || "Reserva operacional", status: "Ativa", createdAt: now, user: actor.username });
+      break;
+    }
+    case "release-stock":
+      requireAction(actor, "estoque.editar");
+      if (record!.status !== "Ativa") throw new OperationError("Somente reservas ativas podem ser liberadas.");
+      record!.status = "Liberada"; record!.releasedAt = now; record!.releaseReason = String(data.reason || "").trim() || "Reserva liberada"; record!.releasedBy = actor.username;
+      break;
     case "reconcile": {
       requireAction(actor, "financeiro.conciliar");
       const movement = list(modules["Razão financeiro"]).find(item => item.id === data.movementId);
@@ -396,6 +429,6 @@ export function independentOperationalRows(companyId: string, state: ErpState, p
   });
   append("Clientes", list(state.customers));
   append("OS", list(state.serviceOrders));
-  for (const module of ["Financeiro", "Contas financeiras", "Razão financeiro", "Livro de estoque", "Produtos", "Compras", "Equipamentos", "Auditoria operacional"]) append(module, list(state.moduleRecords?.[module]));
+  for (const module of ["Financeiro", "Contas financeiras", "Razão financeiro", "Livro de estoque", "Reservas de estoque", "Produtos", "Compras", "Equipamentos", "Auditoria operacional"]) append(module, list(state.moduleRecords?.[module]));
   return result;
 }
