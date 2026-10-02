@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "../../../../lib/permissions";
+import { validateFiscalPayload } from "../../../../lib/fiscal-validation";
 
 export const runtime = "nodejs";
 
@@ -11,6 +12,8 @@ export async function POST(request: NextRequest) {
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   const user = access.session;
   const body = await request.json();
+  const validation = validateFiscalPayload({ ...body, kind: "NFSE" });
+  if (!validation.valid) return NextResponse.json({ error:"Pré-validação fiscal reprovada.", validation }, { status:422 });
   const providerUrl = process.env.MIRASSOL_NFSE_API_URL;
   const providerToken = process.env.MIRASSOL_NFSE_API_TOKEN;
   if (!providerUrl || !providerToken) {
