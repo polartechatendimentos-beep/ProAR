@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
-import { CheckCircle2, FileText, Landmark, Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, Edit3, FileText, Landmark, Plus, Trash2 } from "lucide-react";
 import { CustomerSearchSelect } from "@/components/CustomerSearchSelect";
 import {
   calculateCertameItemBalance,
@@ -75,12 +75,15 @@ export function PublicContractsPanel({
   records,
   customers,
   onSave,
+  onDelete,
 }: {
   records: PublicContractRecord[];
   customers: CustomerOption[];
   onSave: (record: PublicContractRecord) => Promise<boolean>;
+  onDelete: (record: PublicContractRecord) => void;
 }) {
   const [creating, setCreating] = useState(false);
+  const [editingId, setEditingId] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [process, setProcess] = useState("");
   const [modality, setModality] = useState("");
@@ -111,6 +114,7 @@ export function PublicContractsPanel({
   };
 
   const reset = () => {
+    setEditingId("");
     setCustomerId("");
     setProcess("");
     setModality("");
@@ -147,7 +151,8 @@ export function PublicContractsPanel({
       return;
     }
 
-    const id = `CER-${Date.now().toString().slice(-8)}`;
+    const existing=records.find(record=>record.id===editingId);
+    const id = existing?.id || `CER-${Date.now().toString().slice(-8)}`;
     const certameItems: PublicContractItemRecord[] = validItems.map((item, index) => ({
       id: `${id}-ITEM-${String(index + 1).padStart(3, "0")}`,
       certameId: id,
@@ -156,7 +161,7 @@ export function PublicContractsPanel({
       unit: item.unit.trim() || "UN",
       contractedQuantity: Number(item.contractedQuantity),
       unitValue: Number(item.unitValue),
-      movements: [],
+      movements: existing?.certameItems?.find(previous=>previous.id===`${id}-ITEM-${String(index + 1).padStart(3, "0")}`)?.movements ?? [],
     }));
     const total = certameItems.reduce((sum, item) => sum + item.contractedQuantity * item.unitValue, 0);
     const identifier = auctionNumber || biddingNumber || contractNumber || process || id;
@@ -167,7 +172,7 @@ export function PublicContractsPanel({
       name: `${modality || "Certame"} ${identifier}`,
       client: customer.name,
       description: object.trim(),
-      createdAt: new Date().toLocaleString("pt-BR"),
+      createdAt: existing?.createdAt || new Date().toLocaleString("pt-BR"),
       status,
       date: startsAt,
       endDate: endsAt,
@@ -193,6 +198,29 @@ export function PublicContractsPanel({
     setMessage("✓ Alteração efetuada");
   };
 
+  const startEdit = (record: PublicContractRecord) => {
+    setEditingId(record.id);
+    setCustomerId(record.certameCustomerId || customers.find(item=>item.name===record.client)?.id || "");
+    setProcess(record.administrativeProcess || "");
+    setModality(record.modality || "");
+    setBiddingNumber(record.biddingNumber || "");
+    setAuctionNumber(record.auctionNumber || "");
+    setMinutesNumber(record.minutesNumber || "");
+    setContractNumber(record.contractNumber || "");
+    setObject(record.contractObject || record.description || "");
+    setStartsAt(record.date || "");
+    setEndsAt(record.endDate || "");
+    setStatus((record.status as CertameStatus) || "Em vigência");
+    setItems((record.certameItems || []).length ? (record.certameItems || []).map(item=>({code:item.code||"",description:item.description||"",unit:item.unit||"UN",contractedQuantity:String(item.contractedQuantity||""),unitValue:String(item.unitValue??"")})) : [emptyItem()]);
+    setCreating(true);
+    setMessage(`Editando ${record.name}.`);
+  };
+  const requestDelete = (record: PublicContractRecord) => {
+    const hasMovements=(record.certameItems||[]).some(item=>(item.movements||[]).length>0);
+    if(hasMovements){ setMessage("Este Certame possui movimentações contratuais e não pode ser excluído. Altere a situação para Cancelado ou Encerrado."); return; }
+    if(window.confirm(`Excluir o Certame ${record.name}? Esta ação remove o cadastro contratual sem movimentações.`)) onDelete(record);
+  };
+
   return <section className="public-contracts">
     <header className="public-contracts-head">
       <div>
@@ -212,7 +240,7 @@ export function PublicContractsPanel({
 
     {message && <div className="public-contract-message"><CheckCircle2 size={15}/>{message}</div>}
 
-    {creating && <form className="public-contract-form panel" onSubmit={save}>
+    {creating && <form className="public-contract-form panel" onSubmit={save}><div className="public-contract-edit-title"><strong>{editingId?"ALTERAR CERTAME":"NOVO CERTAME"}</strong>{editingId&&<small>As movimentações já registradas permanecem preservadas.</small>}</div>
       <div className="public-contract-fields">
         <label>Cliente público<CustomerSearchSelect customers={customers} value={customerId} valueMode="id" onChange={value => setCustomerId(value)} placeholder="Pesquisar órgão, Prefeitura ou CNPJ..." /></label>
         <label>Processo administrativo<input value={process} onChange={event => setProcess(event.target.value)} /></label>
@@ -237,7 +265,7 @@ export function PublicContractsPanel({
           <button type="button" aria-label="Remover item" disabled={items.length === 1} onClick={() => setItems(current => current.filter((_, itemIndex) => itemIndex !== index))}><Trash2 size={15}/></button>
         </div>)}
       </section>
-      <footer><button type="button" className="outline-btn" disabled={saving} onClick={() => { reset(); setCreating(false); }}>Cancelar</button><button className="primary-btn" type="submit" disabled={saving}><CheckCircle2 size={16}/> {saving ? "Salvando..." : "Salvar alterações"}</button></footer>
+      <footer><button type="button" className="outline-btn" disabled={saving} onClick={() => { reset(); setCreating(false); setMessage(""); }}>Cancelar</button><button className="primary-btn" type="submit" disabled={saving}><CheckCircle2 size={16}/> {saving ? "Salvando..." : "Salvar alterações"}</button></footer>
     </form>}
 
     <div className="public-contract-list">
@@ -246,7 +274,7 @@ export function PublicContractsPanel({
         <p>{record.contractObject || record.description}</p>
         <div><span>Processo <b>{record.administrativeProcess || "Não informado"}</b></span><span>Contrato <b>{record.contractNumber || "Não informado"}</b></span><span>Itens <b>{record.certameItems?.length ?? 0}</b></span><span>Valor <b>{money(record.value ?? 0)}</b></span></div>
         <section>{(record.certameItems ?? []).map(item => { const balance = calculateCertameItemBalance(item, item.movements ?? []); return <div key={item.id}><span><b>{item.code || "Sem código"}</b>{item.description}</span><span>Contratado <b>{balance.contractedQuantity}</b></span><span>Reservado <b>{balance.reservedQuantity}</b></span><span>Executado <b>{balance.executedQuantity}</b></span><span>Saldo disponível <b>{balance.availableQuantity}</b></span></div>; })}</section>
-        <footer className="public-contract-report-actions"><button type="button" onClick={()=>downloadContractReport(record,"extrato")}>Extrato do Certame</button><button type="button" onClick={()=>downloadContractReport(record,"saldo")}>Saldo por item</button><button type="button" onClick={()=>downloadContractReport(record,"movimentacoes")}>Movimentações</button></footer>
+        <footer className="public-contract-report-actions"><button type="button" onClick={()=>startEdit(record)}><Edit3 size={13}/> Alterar</button><button type="button" onClick={()=>downloadContractReport(record,"extrato")}>Extrato do Certame</button><button type="button" onClick={()=>downloadContractReport(record,"saldo")}>Saldo por item</button><button type="button" onClick={()=>downloadContractReport(record,"movimentacoes")}>Movimentações</button><button type="button" className="danger" onClick={()=>requestDelete(record)}><Trash2 size={13}/> Excluir</button></footer>
       </article>)}
       {!records.length && <div className="linked-empty panel"><Landmark size={24}/><h4>Nenhum Certame cadastrado</h4><p>O monitor de oportunidades continua disponível abaixo. Cadastros contratuais só serão criados após confirmação do utilizador.</p></div>}
     </div>
