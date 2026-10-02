@@ -24,7 +24,7 @@ function deriveWorkflowSuggestions(serviceOrders: GenericRecord[], modules: Reco
     if(/aprovad/i.test(status)&&!/convertid/i.test(status)) items.push({id:`wf-budget-${budget.id}`,title:`Orçamento aprovado aguardando conversão • ${budget.name||budget.id}`,detail:"Converta para venda ou ordem de serviço para continuar o fluxo.",module:"Orçamentos",priority:2,sourceId:String(budget.id||"")});
   }
   for(const order of serviceOrders||[]){
-    if(/conclu[ií]d/i.test(String(order.status||""))&&!/autorizada|emitida|cancelada/i.test(String(order.nfseStatus||""))) items.push({id:`wf-os-fiscal-${order.id}`,title:`OS concluída aguardando faturamento • ${order.id}`,detail:[order.client,"Preparar documento fiscal e financeiro"].filter(Boolean).join(" • "),module:"Fiscal",priority:2,sourceId:String(order.id||"")});
+    if(/conclu[ií]d/i.test(String(order.status||""))&&!/^(autorizada|emitida|cancelada)$/i.test(String(order.nfseStatus||"").trim())) items.push({id:`wf-os-fiscal-${order.id}`,title:`OS concluída aguardando faturamento • ${order.id}`,detail:[order.client,"Preparar documento fiscal e financeiro"].filter(Boolean).join(" • "),module:"Fiscal",priority:2,sourceId:String(order.id||"")});
   }
   for(const purchase of modules.Compras||[]){
     if(/recebid|conclu[ií]d/i.test(String(purchase.status||""))&&!purchase.stockMovementId) items.push({id:`wf-purchase-stock-${purchase.id}`,title:`Compra recebida sem entrada de estoque • ${purchase.name||purchase.id}`,detail:"Confirme a entrada física para atualizar estoque e rastreabilidade.",module:"Estoque",priority:1,sourceId:String(purchase.id||"")});
