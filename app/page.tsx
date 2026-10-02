@@ -3915,6 +3915,7 @@ export default function Home() {
     setCustomerRecords(updatedCustomers);
     localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(updatedCustomers));
     persistSharedState(updatedCustomers, serviceOrders, moduleRecords);
+    showFeedback(`Cliente ${created.name} cadastrado com sucesso.`, "success");
     return created;
   };
   const createQuickStructure = (draft: StructureDraft & { client: string }): ModuleRecord | null => {
@@ -3939,6 +3940,7 @@ export default function Home() {
     localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(updatedModules));
     localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(updatedCustomers));
     persistSharedState(updatedCustomers, serviceOrders, updatedModules);
+    showFeedback(`${created.category || "Estrutura"} cadastrada com sucesso.`, "success");
     return created;
   };
   const saveConfirmedModuleRecord = async (moduleName: string, record: ModuleRecord, relatedRecords: { moduleName: string; record: ModuleRecord }[] = []) => {
@@ -4005,6 +4007,7 @@ export default function Home() {
       localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(confirmedModules));
       setSyncPhase("complete");
       window.setTimeout(() => setSyncPhase("idle"), 1000);
+      showFeedback(exists ? `${moduleName}: alterações salvas com sucesso.` : `${moduleName}: cadastro salvo com sucesso.`, "success");
       return true;
     } catch (error) {
       console.error("Falha ao salvar registro confirmado", { moduleName, recordId: record.id, relatedModules:relatedRecords.map(item=>item.moduleName), error });
@@ -4103,7 +4106,7 @@ export default function Home() {
     localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(confirmedCustomers));
     localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(confirmedOrders));
     localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(confirmedModules));
-    setSavedMessage("Operação confirmada no banco e registrada na auditoria.");
+    showFeedback("Operação confirmada no banco e registrada na auditoria.", "success");
   };
   const globalSearchItems = useMemo<GlobalSearchItem[]>(() => {
     const customerItems = customerRecords.map(customer => ({ id: customer.id, title: customer.name, detail: [customer.doc, customer.phone, customer.city || customer.address].filter(Boolean).join(" • "), module: "Clientes", kind: "Cliente" as const }));
