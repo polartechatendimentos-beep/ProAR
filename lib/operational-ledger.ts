@@ -421,7 +421,10 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
       break;
     }
   }
-  const prepared = prepareOperationalState(state, next, actor, now);
+  const effectiveActor: Actor = command.action === "approval-decide"
+    ? { ...actor, can: permission => actor.can(permission) || ["compras.editar","comercial.editar"].includes(permission) }
+    : actor;
+  const prepared = prepareOperationalState(state, next, effectiveActor, now);
   prepared._operations[command.idempotencyKey] = { fingerprint, createdAt: now, user: actor.username };
   return { state: prepared, replay: false };
 }
