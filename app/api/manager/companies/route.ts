@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readManagerSession } from "../../../../lib/manager-auth";
-import { databaseFetch, masterDatabaseConfig, neonEnabled, supabaseConfigured, supabaseRest } from "../../../../lib/supabase-rest";
+import { databaseFetch, neonEnabled, supabaseConfigured, supabaseRest } from "../../../../lib/supabase-rest";
 import { resumeTenantProvisioning } from "../../../../lib/tenant-provisioning";
 import { tenantIdentity } from "../../../../lib/tenant-identity";
 import { resolveTenantDb, tenantHeaders } from "../../../../lib/tenant-rest";
