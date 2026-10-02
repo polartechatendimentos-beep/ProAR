@@ -559,7 +559,24 @@ function Header({ title, subtitle, onMenu, searchItems, pendingItems, onSearchSe
   const [searchOpen,setSearchOpen]=useState(false);
   const [pendingOpen,setPendingOpen]=useState(false);
   const [query,setQuery]=useState("");
-  const matches=query.trim().length<2?[]:searchItems.filter(item=>`${item.title} ${item.detail} ${item.module}`.toLowerCase().includes(query.trim().toLowerCase())).slice(0,10);
+  const deferredQuery=useDeferredValue(query);
+  const normalizedQuery=deferredQuery.trim().toLowerCase();
+  const matches=normalizedQuery.length<2?[]:searchItems.filter(item=>`${item.title} ${item.detail} ${item.module}`.toLowerCase().includes(normalizedQuery)).slice(0,10);
+  useEffect(()=>{
+    const onKeyDown=(event:KeyboardEvent)=>{
+      if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==="k"){
+        event.preventDefault();
+        setSearchOpen(true);
+        setPendingOpen(false);
+      }
+      if(event.key==="Escape"){
+        setSearchOpen(false);
+        setPendingOpen(false);
+      }
+    };
+    window.addEventListener("keydown",onKeyDown);
+    return()=>window.removeEventListener("keydown",onKeyDown);
+  },[]);
   return <header className="topbar topbar-user-only">
     <div className="headline">
       <button className="menu-toggle" aria-label="Abrir menu" onClick={onMenu}><Menu size={20}/></button>
@@ -568,7 +585,7 @@ function Header({ title, subtitle, onMenu, searchItems, pendingItems, onSearchSe
     </div>
     <div className="top-actions top-actions-user-only">
       <div className="header-global-search">
-        <button className="header-tool-button" aria-label="Busca global" title="Busca global" onClick={()=>{setSearchOpen(value=>!value);setPendingOpen(false)}}><Search size={16}/></button>
+        <button className="header-tool-button" aria-label="Busca global" title="Busca global (Ctrl/Cmd + K)" onClick={()=>{setSearchOpen(value=>!value);setPendingOpen(false)}}><Search size={16}/></button>
         {searchOpen&&<div className="header-popover search-popover"><label><Search size={14}/><input autoFocus value={query} onChange={event=>setQuery(event.target.value)} placeholder="Cliente, CNPJ, OS, série, NF..."/></label>{query.trim().length<2?<small>Digite pelo menos 2 caracteres.</small>:matches.length?<div className="header-result-list">{matches.map(item=><button key={`${item.module}-${item.id}`} onClick={()=>{onSearchSelect(item);setSearchOpen(false);setQuery("")}}><b>{item.title}</b><span>{item.detail||item.module}</span><em>{item.module}</em></button>)}</div>:<small>Nenhum registro encontrado nos dados carregados.</small>}</div>}
       </div>
       <div className="header-pending">
