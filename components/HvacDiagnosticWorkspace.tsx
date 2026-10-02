@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { AlertTriangle, ArrowRight, BookOpen, Calculator, CheckCircle2, Clock3, Gauge, History, Home, Search, ShieldAlert, Sparkles, Thermometer, Wrench } from "lucide-react";
 import { findDiagnosticMatches, normalizeDiagnosticRecord, type DiagnosticCodeRecord } from "@/lib/diagnostic-engine";
+import { validateManufacturerCode } from "@/lib/diagnostic-brand-rules";
 import "./hvac-diagnostic-workspace.css";
 
 type RecordItem=Record<string,unknown>;
@@ -54,7 +55,11 @@ export function HvacDiagnosticWorkspace({order,linkedEquipment=[],errorCodes=[],
     const source=brandFilter==="Todas"?codes:codes.filter(item=>item.brand.toLocaleLowerCase("pt-BR")===brandFilter.toLocaleLowerCase("pt-BR"));
     return findDiagnosticMatches(source,{brand:brandFilter==="Todas"?"":brandFilter,code:search,blinkPattern:search,symptoms:search},40);
   },[codes,search,brandFilter]);
-  const directReference=useMemo(()=>findDiagnosticMatches(codes,{brand,model,code,blinkPattern,symptoms:symptom},1)[0]?.record||null,[codes,brand,model,code,blinkPattern,symptom]);
+  const manufacturerValidation=useMemo(()=>validateManufacturerCode({brand,model,code,blinkPattern}),[brand,model,code,blinkPattern]);
+  const directReference=useMemo(()=>{
+    if(manufacturerValidation.status==="needs-extraction"||manufacturerValidation.status==="invalid") return null;
+    return findDiagnosticMatches(codes,{brand,model,code,blinkPattern,symptoms:symptom},1)[0]?.record||null;
+  },[codes,brand,model,code,blinkPattern,symptom,manufacturerValidation.status]);
 
   const runDiagnosis=async()=>{
     if(!symptom.trim()&&!code.trim()&&!blinkPattern.trim()){setMessage("Informe um sintoma, código de erro ou padrão de piscadas.");return;}
@@ -62,7 +67,7 @@ export function HvacDiagnosticWorkspace({order,linkedEquipment=[],errorCodes=[],
     try{
       const response=await fetch("/api/diagnostic/ai",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
         brand,equipmentType,model,serialNumber:txt(equipment,"serialNumber","serial"),code,blinkPattern,symptoms:symptom,
-        serviceRequest:String(order.request||order.customerRequest||""),measurements,matchedReference:directReference,
+        serviceRequest:String(order.request||order.customerRequest||""),measurements,matchedReference:directReference,manufacturerValidation,
       })});
       const payload=await response.json();
       if(!response.ok)throw new Error(payload.error||"Não foi possível concluir o diagnóstico.");
@@ -107,6 +112,7 @@ export function HvacDiagnosticWorkspace({order,linkedEquipment=[],errorCodes=[],
     {page==="Diagnóstico"&&<div className="diagnostic-page diagnose-layout">
       <article className="diagnostic-panel diagnose-form"><header><div><b>Dados para análise</b><small>O equipamento da OS é usado como contexto automaticamente.</small></div></header>
         <div className="diagnose-fields"><label>Marca<input value={brand} onChange={e=>setBrand(e.target.value)} placeholder="Marca"/></label><label>Tipo<select value={equipmentType} onChange={e=>setEquipmentType(e.target.value)}><option>Split Hi-Wall</option><option>Cassete</option><option>Piso Teto</option><option>VRF / VRV</option><option>Janela</option><option>Chiller</option><option>Fan Coil</option><option>Outro</option></select></label><label>Modelo<input value={model} onChange={e=>setModel(e.target.value)} placeholder="Modelo"/></label><label>Código de erro<input value={code} onChange={e=>setCode(e.target.value)} placeholder="Ex.: E0"/></label><label>Padrão de piscadas<input value={blinkPattern} onChange={e=>setBlinkPattern(e.target.value)} placeholder="Ex.: LED timer pisca 5x"/></label><label className="wide">Sintoma<textarea value={symptom} onChange={e=>setSymptom(e.target.value)} placeholder="Descreva o comportamento observado..."/></label><label className="wide">Medições realizadas<textarea value={measurements} onChange={e=>setMeasurements(e.target.value)} placeholder="Tensão, corrente, pressões, temperaturas, resistência de sensores..."/></label></div>
+        {manufacturerValidation.status!=="empty"&&<div className={`manufacturer-rule ${manufacturerValidation.status}`}><ShieldAlert size={16}/><span><b>{manufacturerValidation.title}</b><small>{manufacturerValidation.message}</small>{manufacturerValidation.instructions.length>0&&<ul>{manufacturerValidation.instructions.map((item,index)=><li key={index}>{item}</li>)}</ul>}</span></div>}
         {directReference&&<div className="reference-hit"><CheckCircle2 size={16}/><span><b>Referência localizada no banco</b><small>{directReference.brand} • {directReference.code||directReference.blinkPattern} • {directReference.title}</small></span></div>}
         <button className="diagnostic-primary" onClick={()=>void runDiagnosis()} disabled={loading}><Sparkles size={15}/>{loading?"Consultando referências e analisando...":"Executar diagnóstico assistido"}</button>
       </article>
