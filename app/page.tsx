@@ -390,6 +390,7 @@ type ModuleRecord = {
   status?: string;
   date?: string;
   value?: number;
+  quantity?: number;
   total?: number;
   category?: string;
   purchaseItems?: PurchaseItem[];
@@ -431,6 +432,7 @@ type ModuleRecord = {
   empenhoId?: string;
   workId?: string;
   sourceId?: string;
+  sourceType?: string;
   invoiceNumber?: string;
   invoiceIssuedAt?: string;
   employeeRole?: string;
