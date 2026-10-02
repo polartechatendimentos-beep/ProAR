@@ -2,12 +2,12 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 import { get, put } from "@vercel/blob";
 import forge from "node-forge";
 import { NextRequest, NextResponse } from "next/server";
-import { readSession } from "../../../lib/proar-auth";
+import { requirePermission } from "../../../lib/permissions";
 
 export const runtime = "nodejs";
 
-const COOKIE_NAME = "proar_session";
-const STORAGE_PATH = "proar/configuracao-fiscal.enc";
+const LEGACY_STORAGE_PATH = "proar/configuracao-fiscal.enc";
+const storagePath = (companyId: string) => `proar/fiscal/${createHash("sha256").update(companyId).digest("hex").slice(0, 24)}/configuracao-fiscal.enc`;
 
 type CertificateRecord = {
   fileName: string;
@@ -32,10 +32,6 @@ type FiscalRecord = {
   updatedBy?: string;
 };
 
-function authorized(request: NextRequest) {
-  const user = readSession(request.cookies.get(COOKIE_NAME)?.value);
-  return user && (user.permissions.includes("*") || user.permissions.includes("Configurações")) ? user : null;
-}
 
 function encryptionKey() {
   const secret = process.env.PROAR_FISCAL_ENCRYPTION_KEY ?? "";
@@ -57,17 +53,21 @@ function decrypt(value: string): FiscalRecord {
   return JSON.parse(Buffer.concat([decipher.update(Buffer.from(payload.data, "base64")), decipher.final()]).toString("utf8"));
 }
 
-async function loadRecord(): Promise<FiscalRecord> {
+async function loadRecord(companyId: string): Promise<FiscalRecord> {
   if (!process.env.BLOB_READ_WRITE_TOKEN) throw new Error("STORAGE_NOT_CONFIGURED");
-  const result = await get(STORAGE_PATH, { access: "private", token: process.env.BLOB_READ_WRITE_TOKEN });
+  let result = await get(storagePath(companyId), { access: "private", token: process.env.BLOB_READ_WRITE_TOKEN });
+  // Migração legada somente quando o servidor identifica explicitamente a empresa dona do cofre antigo.
+  if (!result && process.env.PROAR_LEGACY_FISCAL_COMPANY_ID === companyId) {
+    result = await get(LEGACY_STORAGE_PATH, { access: "private", token: process.env.BLOB_READ_WRITE_TOKEN });
+  }
   if (!result) return { company: {}, nfe: {}, nfse: {} };
   if (result.statusCode !== 200 || !result.stream) throw new Error("STORAGE_READ_FAILED");
   return decrypt(await new Response(result.stream).text());
 }
 
-async function saveRecord(record: FiscalRecord) {
+async function saveRecord(companyId: string, record: FiscalRecord) {
   if (!process.env.BLOB_READ_WRITE_TOKEN) throw new Error("STORAGE_NOT_CONFIGURED");
-  await put(STORAGE_PATH, encrypt(record), {
+  await put(storagePath(companyId), encrypt(record), {
     access: "private",
     token: process.env.BLOB_READ_WRITE_TOKEN,
     addRandomSuffix: false,
@@ -110,20 +110,22 @@ function storageError(error: unknown) {
 }
 
 export async function GET(request: NextRequest) {
-  if (!authorized(request)) return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
+  const access = requirePermission(request, "fiscal.consultar");
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   try {
-    return NextResponse.json(publicRecord(await loadRecord()));
+    return NextResponse.json(publicRecord(await loadRecord(access.session.companyId)));
   } catch (error) {
     return storageError(error);
   }
 }
 
 export async function PUT(request: NextRequest) {
-  const user = authorized(request);
-  if (!user) return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
+  const access = requirePermission(request, "fiscal.configurar");
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  const user = access.session;
   try {
     const body = await request.json() as Partial<FiscalRecord>;
-    const current = await loadRecord();
+    const current = await loadRecord(user.companyId);
     const record: FiscalRecord = {
       ...current,
       company: body.company ?? current.company,
@@ -132,7 +134,7 @@ export async function PUT(request: NextRequest) {
       updatedAt: new Date().toISOString(),
       updatedBy: user.displayName,
     };
-    await saveRecord(record);
+    await saveRecord(user.companyId, record);
     return NextResponse.json(publicRecord(record));
   } catch (error) {
     return storageError(error);
@@ -140,8 +142,9 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const user = authorized(request);
-  if (!user) return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
+  const access = requirePermission(request, "fiscal.configurar");
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  const user = access.session;
   try {
     const form = await request.formData();
     const file = form.get("certificate");
@@ -165,7 +168,7 @@ export async function POST(request: NextRequest) {
     const subject = cert.subject.attributes.map((attribute: { shortName?: string; name?: string; value?: string }) => `${attribute.shortName ?? attribute.name}=${attribute.value ?? ""}`).join(", ");
     const issuer = cert.issuer.attributes.map((attribute: { shortName?: string; name?: string; value?: string }) => `${attribute.shortName ?? attribute.name}=${attribute.value ?? ""}`).join(", ");
     const document = subject.match(/(?:CNPJ|CPF)[:= ]*(\d{11,14})/i)?.[1] ?? subject.match(/\b\d{14}\b/)?.[0] ?? "";
-    const record = await loadRecord();
+    const record = await loadRecord(user.companyId);
     record.certificate = {
       fileName: file.name,
       pfxBase64: bytes.toString("base64"),
@@ -181,7 +184,7 @@ export async function POST(request: NextRequest) {
     };
     record.updatedAt = new Date().toISOString();
     record.updatedBy = user.displayName;
-    await saveRecord(record);
+    await saveRecord(user.companyId, record);
     return NextResponse.json(publicRecord(record));
   } catch (error) {
     return storageError(error);
@@ -189,14 +192,15 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const user = authorized(request);
-  if (!user) return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
+  const access = requirePermission(request, "fiscal.configurar");
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  const user = access.session;
   try {
-    const record = await loadRecord();
+    const record = await loadRecord(user.companyId);
     delete record.certificate;
     record.updatedAt = new Date().toISOString();
     record.updatedBy = user.displayName;
-    await saveRecord(record);
+    await saveRecord(user.companyId, record);
     return NextResponse.json(publicRecord(record));
   } catch (error) {
     return storageError(error);
