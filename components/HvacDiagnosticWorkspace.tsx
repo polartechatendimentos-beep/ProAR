@@ -6,6 +6,7 @@ import { findDiagnosticMatches, normalizeDiagnosticRecord, parseDiagnosticSearch
 import { HVAC_REFERENCE_PORTAL, mergeDiagnosticCatalog } from "@/lib/hvac-error-code-catalog";
 import { validateManufacturerCode } from "@/lib/diagnostic-brand-rules";
 import { DiagnosticAdvancedPanel } from "@/components/DiagnosticAdvancedPanel";
+import { calculateSubcooling, calculateSuperheat } from "@/lib/refrigerant-tools";
 import "./hvac-diagnostic-workspace.css";
 
 type RecordItem=Record<string,unknown>;
@@ -154,13 +155,19 @@ function DiagnosticTools(){
   const [devices,setDevices]=useState("1");
   const [value,setValue]=useState("1");
   const [conversion,setConversion]=useState("kw-btu");
+  const [suctionLineTemp,setSuctionLineTemp]=useState("12");
+  const [evapSatTemp,setEvapSatTemp]=useState("5");
+  const [liquidLineTemp,setLiquidLineTemp]=useState("32");
+  const [condSatTemp,setCondSatTemp]=useState("40");
   const areaN=Math.max(0,Number(area)||0),peopleN=Math.max(1,Number(people)||1),devicesN=Math.max(0,Number(devices)||0);
   const estimate=Math.round(areaN*600+Math.max(0,peopleN-2)*600+devicesN*600);
   const v=Number(value)||0;
   const converted=conversion==="kw-btu"?v*3412.142:conversion==="btu-kw"?v/3412.142:conversion==="psi-bar"?v*0.0689476:conversion==="bar-psi"?v*14.5038:conversion==="c-f"?v*9/5+32:(v-32)*5/9;
+  const superheat=calculateSuperheat(Number(suctionLineTemp)||0,Number(evapSatTemp)||0);
+  const subcooling=calculateSubcooling(Number(condSatTemp)||0,Number(liquidLineTemp)||0);
   return <div className="diagnostic-page tools-grid">
     <article className="diagnostic-panel tool-card"><Gauge size={22}/><h4>Estimativa rápida de BTU/h</h4><p>Triagem preliminar. Dimensionamento definitivo deve considerar carga térmica e critérios técnicos do projeto.</p><div className="tool-fields"><label>Área (m²)<input type="number" value={area} onChange={e=>setArea(e.target.value)}/></label><label>Pessoas<input type="number" value={people} onChange={e=>setPeople(e.target.value)}/></label><label>Equipamentos/cargas<input type="number" value={devices} onChange={e=>setDevices(e.target.value)}/></label></div><strong>{estimate.toLocaleString("pt-BR")} BTU/h</strong></article>
     <article className="diagnostic-panel tool-card"><Calculator size={22}/><h4>Conversor técnico</h4><select value={conversion} onChange={e=>setConversion(e.target.value)}><option value="kw-btu">kW → BTU/h</option><option value="btu-kw">BTU/h → kW</option><option value="psi-bar">psi → bar</option><option value="bar-psi">bar → psi</option><option value="c-f">°C → °F</option><option value="f-c">°F → °C</option></select><input type="number" value={value} onChange={e=>setValue(e.target.value)}/><strong>{Number.isFinite(converted)?converted.toLocaleString("pt-BR",{maximumFractionDigits:3}):"—"}</strong></article>
-    <article className="diagnostic-panel tool-card pt-card"><Thermometer size={22}/><h4>Pressão × Temperatura</h4><p>O ProAR não usa uma tabela genérica embutida para evitar referência errada entre refrigerantes, escalas e condições de saturação. Consulte a referência P×T específica do fluido/fabricante durante o diagnóstico assistido.</p><div className="pt-refrigerants"><span>R-410A</span><span>R-32</span><span>R-22</span></div><small>Melhoria de segurança: a tela prioriza dados rastreáveis a uma fonte técnica em vez de valores aproximados sem origem.</small></article>
+    <article className="diagnostic-panel tool-card"><Thermometer size={22}/><h4>Superaquecimento e sub-resfriamento</h4><div className="tool-fields"><label>Linha sucção °C<input type="number" value={suctionLineTemp} onChange={e=>setSuctionLineTemp(e.target.value)}/></label><label>Saturação evap. °C<input type="number" value={evapSatTemp} onChange={e=>setEvapSatTemp(e.target.value)}/></label><label>Saturação cond. °C<input type="number" value={condSatTemp} onChange={e=>setCondSatTemp(e.target.value)}/></label><label>Linha líquido °C<input type="number" value={liquidLineTemp} onChange={e=>setLiquidLineTemp(e.target.value)}/></label></div><strong>Superaquecimento {superheat.toFixed(1)} K • Sub-resfriamento {subcooling.toFixed(1)} K</strong><small>Use temperatura de saturação obtida de referência P×T verificada para o refrigerante do equipamento.</small></article>\n    <article className="diagnostic-panel tool-card pt-card"><Thermometer size={22}/><h4>Pressão × Temperatura</h4><p>O ProAR não usa uma tabela genérica embutida para evitar referência errada entre refrigerantes, escalas e condições de saturação. Consulte a referência P×T específica do fluido/fabricante durante o diagnóstico assistido.</p><div className="pt-refrigerants"><span>R-410A</span><span>R-32</span><span>R-22</span></div><small>Melhoria de segurança: a tela prioriza dados rastreáveis a uma fonte técnica em vez de valores aproximados sem origem.</small></article>
   </div>;
 }
