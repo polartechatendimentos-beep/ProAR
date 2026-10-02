@@ -5,6 +5,7 @@ import { resumeTenantProvisioning } from "../../../../lib/tenant-provisioning";
 import { tenantIdentity } from "../../../../lib/tenant-identity";
 import { resolveTenantDb, tenantHeaders } from "../../../../lib/tenant-rest";
 import { managerPlatformInfo } from "../../../../lib/manager-platform";
+import { MANAGER_PLANS, managerPlan } from "../../../../lib/manager-plans";
 const isAdmin = (request: NextRequest) => readManagerSession(request);
 
 export async function GET(request: NextRequest) {
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
       return now - new Date(String(instance.last_health_at)).getTime() > 24 * 60 * 60 * 1000;
     }).length,
   };
-  return NextResponse.json({ companies: enrichedCompanies, instances: instanceRows, audit: auditRows, summary, platform: managerPlatformInfo() });
+  return NextResponse.json({ companies: enrichedCompanies, instances: instanceRows, audit: auditRows, summary, platform: managerPlatformInfo(), plans: MANAGER_PLANS });
 }
 
 export async function PATCH(request: NextRequest) {
@@ -98,7 +99,7 @@ export async function PATCH(request: NextRequest) {
   }
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (["active","blocked"].includes(body.status)) patch.status = body.status;
-  if (typeof body.planCode === "string") patch.plan_code = body.planCode.slice(0, 40);
+  if (typeof body.planCode === "string") { const plan=managerPlan(body.planCode); patch.plan_code=plan.code; if (body.keepCustomModules !== true) patch.modules=plan.modules; }
   if (typeof body.extendTrialDays === "number" && body.extendTrialDays > 0) patch.trial_expires_at = new Date(Date.now() + Math.min(body.extendTrialDays, 365) * 86400000).toISOString();
   if (Array.isArray(body.modules)) patch.modules = body.modules;
   const response = await supabaseRest(`proar_companies?id=eq.${encodeURIComponent(companyId)}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify(patch) });
