@@ -35,9 +35,25 @@ export type FiscalValidationPayload = {
   issueDate?: string;
   operationNature?: string;
   purpose?: string;
+  operationDirection?: "0" | "1";
+  destinationIndicator?: "1" | "2" | "3";
+  finalConsumer?: boolean;
   presenceIndicator?: string;
   freightMode?: string;
   paymentMethod?: string;
+  debitNoteType?: string;
+  creditNoteType?: string;
+  referencedDocuments?: Array<{
+    type?: "NFE" | "NFCE" | "CTE" | "ECF" | "OTHER";
+    accessKey?: string;
+    number?: string;
+    series?: string;
+    issueDate?: string;
+  }>;
+  nfsePurpose?: "0" | "1" | "2";
+  nfseFinalConsumer?: boolean;
+  nfseOperationIndicator?: string;
+  nfsePeopleIndicator?: "0" | "1" | "2" | "3" | "4";
   customer?: {
     document?: string;
     name?: string;
@@ -134,7 +150,27 @@ export function validateFiscalPayload(payload: FiscalValidationPayload) {
     if (!payload.config?.nfeSeries?.trim()) error("config.nfeSeries", "NFE_SERIES_REQUIRED", "Série da NF-e não está configurada.");
     if (!payload.customer) error("customer", "CUSTOMER_REQUIRED", "Destinatário é obrigatório para NF-e.");
     if (!payload.freightMode?.trim()) error("freightMode", "FREIGHT_MODE_REQUIRED", "Modalidade do frete deve ser informada na NF-e.");
-    if (!payload.purpose?.trim()) error("purpose", "NFE_PURPOSE_REQUIRED", "Finalidade da NF-e deve ser informada.");
+    if (!/^[1-6]$/.test(clean(payload.purpose))) error("purpose", "NFE_PURPOSE_REQUIRED", "Finalidade da NF-e deve ser Normal, Complementar, Ajuste, Devolução/Retorno, Nota de Crédito ou Nota de Débito.");
+    if (!/^[01]$/.test(clean(payload.operationDirection))) error("operationDirection", "NFE_DIRECTION_REQUIRED", "Informe se a NF-e é de entrada ou saída.");
+    if (!/^[123]$/.test(clean(payload.destinationIndicator))) error("destinationIndicator", "NFE_DESTINATION_REQUIRED", "Informe se a operação é interna, interestadual ou com exterior.");
+    if (typeof payload.finalConsumer !== "boolean") error("finalConsumer", "FINAL_CONSUMER_REQUIRED", "Informe se o destinatário é consumidor final.");
+
+    const purpose = clean(payload.purpose);
+    const refs = payload.referencedDocuments ?? [];
+    if ((purpose === "2" || purpose === "4") && !refs.length) {
+      error("referencedDocuments", "REFERENCED_DOCUMENT_REQUIRED", "NF-e complementar ou de devolução/retorno deve informar o documento fiscal de origem/referência.");
+    }
+    if ((purpose === "3" || purpose === "5" || purpose === "6") && !refs.length) {
+      warning("referencedDocuments", "REFERENCED_DOCUMENT_REVIEW", "Revise a necessidade de documento fiscal referenciado para esta finalidade.");
+    }
+    if (purpose === "6" && !payload.debitNoteType?.trim()) error("debitNoteType", "DEBIT_NOTE_TYPE_REQUIRED", "Informe o tipo da Nota de Débito.");
+    if (purpose === "5" && !payload.creditNoteType?.trim()) warning("creditNoteType", "CREDIT_NOTE_TYPE_REVIEW", "Revise o tipo/motivo da Nota de Crédito conforme o leiaute vigente.");
+
+    refs.forEach((ref, index) => {
+      if ((ref.type === "NFE" || ref.type === "NFCE") && digits(ref.accessKey).length !== 44) {
+        error(`referencedDocuments.${index}.accessKey`, "REFERENCED_KEY_INVALID", `Documento referenciado ${index + 1}: chave de acesso deve possuir 44 dígitos.`);
+      }
+    });
   }
 
   if (payload.kind === "NFCE") {
@@ -143,6 +179,9 @@ export function validateFiscalPayload(payload: FiscalValidationPayload) {
     if (!payload.config?.cscId?.trim()) error("config.cscId", "CSC_ID_REQUIRED", "ID do CSC da NFC-e não está configurado.");
     if (!payload.paymentMethod?.trim()) error("paymentMethod", "PAYMENT_METHOD_REQUIRED", "Forma de pagamento é obrigatória na NFC-e.");
     if (!payload.presenceIndicator?.trim()) error("presenceIndicator", "PRESENCE_REQUIRED", "Indicador de presença do comprador é obrigatório na NFC-e.");
+    if (payload.finalConsumer !== true) error("finalConsumer", "NFCE_FINAL_CONSUMER_REQUIRED", "NFC-e deve representar operação com consumidor final.");
+    if (payload.destinationIndicator && payload.destinationIndicator !== "1") error("destinationIndicator", "NFCE_INTERNAL_OPERATION_REQUIRED", "NFC-e deve ser usada em operação interna.");
+    if (payload.operationDirection && payload.operationDirection !== "1") error("operationDirection", "NFCE_OUTPUT_REQUIRED", "NFC-e deve ser emitida como operação de saída.");
   }
 
   if (payload.customer) {
@@ -198,6 +237,10 @@ export function validateFiscalPayload(payload: FiscalValidationPayload) {
 
   if (payload.kind === "NFSE") {
     if (!payload.company?.municipalRegistration?.trim()) error("company.municipalRegistration", "MUNICIPAL_REGISTRATION_REQUIRED", "Inscrição Municipal do prestador não foi informada.");
+    if (!/^[012]$/.test(clean(payload.nfsePurpose))) error("nfsePurpose", "NFSE_PURPOSE_REQUIRED", "Informe a finalidade da NFS-e: Regular, Crédito ou Débito.");
+    if (typeof payload.nfseFinalConsumer !== "boolean") error("nfseFinalConsumer", "NFSE_FINAL_CONSUMER_REQUIRED", "Informe se a operação da NFS-e é de uso ou consumo pessoal.");
+    if (!/^\d{6}$/.test(digits(payload.nfseOperationIndicator))) error("nfseOperationIndicator", "NFSE_OPERATION_INDICATOR_REQUIRED", "Informe o cIndOp de 6 dígitos conforme a tabela vigente do padrão nacional.");
+    if (!/^[0-4]$/.test(clean(payload.nfsePeopleIndicator))) error("nfsePeopleIndicator", "NFSE_PEOPLE_INDICATOR_REQUIRED", "Informe a relação entre tomador, adquirente e destinatário (indPessoas).");
     if (!payload.config?.nfseSeries?.trim()) error("config.nfseSeries", "NFSE_SERIES_REQUIRED", "Série RPS/DPS da NFS-e não está configurada.");
     if (!payload.service?.description?.trim()) error("service.description", "SERVICE_DESCRIPTION_REQUIRED", "Descrição do serviço é obrigatória.");
     if (!(Number(payload.service?.value) > 0)) error("service.value", "SERVICE_VALUE_INVALID", "Valor do serviço deve ser maior que zero.");
@@ -214,7 +257,7 @@ export function validateFiscalPayload(payload: FiscalValidationPayload) {
   return {
     valid: !issues.some(issue => issue.severity === "error"),
     checkedAt: new Date().toISOString(),
-    ruleset: "ProAR Fiscal 2026.10 / NF-e-NFC-e RTC / NFS-e Nacional",
+    ruleset: "ProAR Fiscal 2026.10 / NF-e-NFC-e RTC / NFS-e Nacional NT009 v1.01",
     issues,
     errors: issues.filter(issue => issue.severity === "error").length,
     warnings: issues.filter(issue => issue.severity === "warning").length,
