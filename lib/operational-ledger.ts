@@ -13,6 +13,21 @@ const digits = (value: any) => String(value ?? "").replace(/\D/g, "");
 const canonical = (value: any): any => Array.isArray(value) ? value.map(canonical) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().filter(key => value[key] !== undefined).map(key => [key, canonical(value[key])])) : value;
 const same = (a: any, b: any) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 const id = (value: any) => String(value ?? "");
+const stockLocationKey = (type: unknown, locationId: unknown, name: unknown) => `${String(type || "Estoque central")}::${String(locationId || name || "principal")}`;
+function stockBalanceAtLocation(movements: ErpRecord[], productId: string, type: string, locationId = "", name = "") {
+  const target=stockLocationKey(type,locationId,name);
+  let total=0;
+  for(const movement of movements.filter(item=>String(item.productId)===String(productId))){
+    if(movement.kind==="Transferência" || movement.movementType==="Transferência"){
+      const quantity=Number(movement.transferQuantity ?? movement.quantity ?? 0);
+      if(stockLocationKey(movement.sourceType,movement.sourceId,movement.sourceName)===target) total-=quantity;
+      if(stockLocationKey(movement.destinationType,movement.destinationId,movement.destinationName)===target) total+=quantity;
+    } else if(stockLocationKey(movement.destinationType,movement.destinationId,movement.destinationName)===target) {
+      total+=Number(movement.quantity || 0);
+    }
+  }
+  return Math.round(total*1000)/1000;
+}
 export const cents = (value: any) => {
   const number = Number(value ?? 0);
   if (!Number.isFinite(number)) throw new OperationError("Valor numérico inválido.");
@@ -400,6 +415,11 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
     case "stock-transfer":
       requireAction(actor, "estoque.editar");
       if (!(Number(data.quantity) > 0) || !String(data.sourceType || "").trim() || !String(data.destinationType || "").trim()) throw new OperationError("Transferência exige quantidade, origem e destino.");
+      if (stockLocationKey(data.sourceType,data.sourceId,data.sourceName) === stockLocationKey(data.destinationType,data.destinationId,data.destinationName)) throw new OperationError("Origem e destino da transferência devem ser diferentes.");
+      {
+        const sourceBalance=stockBalanceAtLocation(list(modules["Livro de estoque"]),String(data.productId),String(data.sourceType),String(data.sourceId||""),String(data.sourceName||""));
+        if(sourceBalance + 1e-9 < Number(data.quantity)) throw new OperationError(`Saldo insuficiente na origem: disponível ${sourceBalance}.`);
+      }
       records.push({ id: operationId, name: "Transferência de estoque", productId: data.productId, quantity: data.quantity, movementType: "Transferência", sourceType: data.sourceType, sourceId: data.sourceId || "", sourceName: data.sourceName || "", destinationType: data.destinationType, destinationId: data.destinationId || "", destinationName: data.destinationName || "", changeReason: data.reason || "Transferência interna", description: data.reason || "Transferência interna", createdAt: now });
       break;
     case "approval-decide": {
