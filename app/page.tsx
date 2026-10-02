@@ -20,7 +20,7 @@ import "./public-contracts.css";
 import "./login-minimal.css";
 import "./operational-refresh.css";
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
   Activity, AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight,
   Bell, Boxes, BriefcaseBusiness, Building2, CalendarDays, ChartNoAxesCombined,
@@ -45,7 +45,7 @@ import { deriveProarActions } from "@/lib/proar-insights";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type NavItem = { icon: IconType; name: string; badge?: string };
-type GlobalSearchItem = { id: string; title: string; detail: string; module: string; kind: "Cliente" | "OS" | "Cadastro" };
+type GlobalSearchItem = { id: string; title: string; detail: string; module: string; kind: "Cliente" | "OS" | "Cadastro" | "Módulo" };
 type PendingItem = { id: string; title: string; detail: string; module: string; tone: "blue" | "amber" | "red" };
 
 function ModuleLoading() {
@@ -4028,9 +4028,16 @@ export default function Home() {
     localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(confirmedModules));
     setSavedMessage("Operação confirmada no banco e registrada na auditoria.");
   };
-  const searchGlobal = (normalizedQuery: string): GlobalSearchItem[] => {
+  const searchGlobal = useCallback((normalizedQuery: string): GlobalSearchItem[] => {
     const found: GlobalSearchItem[] = [];
     const match=(value: unknown)=>String(value??"").toLowerCase().includes(normalizedQuery);
+    const canSeeModule=(name:string)=>Boolean(authenticatedUser?.role==="Administrador"||authenticatedUser?.permissions?.includes("*")||authenticatedUser?.permissions?.includes(name)||(name==="Integridade do Sistema"&&authenticatedUser?.permissions?.includes("integridade.visualizar")));
+    for(const item of navGroups.flatMap(group=>group.items)){
+      if(canSeeModule(item.name)&&match(item.name)){
+        found.push({id:`module-${item.name}`,title:item.name,detail:"Abrir módulo",module:item.name,kind:"Módulo"});
+        if(found.length>=10) return found;
+      }
+    }
     for(const customer of customerRecords){
       if(match(customer.name)||match(customer.doc)||match(customer.phone)||match(customer.city)||match(customer.address)){
         found.push({ id:customer.id,title:customer.name,detail:[customer.doc,customer.phone,customer.city||customer.address].filter(Boolean).join(" • "),module:"Clientes",kind:"Cliente" });
@@ -4052,7 +4059,7 @@ export default function Home() {
       }
     }
     return found;
-  };
+  },[authenticatedUser,customerRecords,serviceOrders,moduleRecords]);
   const pendingItems = useMemo<PendingItem[]>(() => deriveProarActions(serviceOrders, moduleRecords).slice(0,20).map(item=>({
     id:item.id,title:item.title,detail:item.detail,module:item.module,tone:item.tone,
   })), [serviceOrders, moduleRecords]);
