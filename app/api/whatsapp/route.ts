@@ -10,7 +10,8 @@ function authorized(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  if (!authorized(request)) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  const user=authorized(request);
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   try { return NextResponse.json(publicWhatsAppConfig(await loadWhatsAppConfig(user.companyId || "polartech-principal"))); }
   catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Falha ao carregar a configuração" }, { status: 500 }); }
 }
