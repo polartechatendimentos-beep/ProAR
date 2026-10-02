@@ -4,6 +4,7 @@ import { databaseFetch, neonEnabled, supabaseConfigured, supabaseRest } from "..
 import { resumeTenantProvisioning } from "../../../../lib/tenant-provisioning";
 import { tenantIdentity } from "../../../../lib/tenant-identity";
 import { resolveTenantDb, tenantHeaders } from "../../../../lib/tenant-rest";
+import { managerPlatformInfo } from "../../../../lib/manager-platform";
 const isAdmin = (request: NextRequest) => readManagerSession(request);
 
 export async function GET(request: NextRequest) {
@@ -11,6 +12,7 @@ export async function GET(request: NextRequest) {
   if (!supabaseConfigured()) return NextResponse.json({ error: "Banco mestre não configurado." }, { status: 503 });
   const companies = await supabaseRest("proar_companies?select=*&order=created_at.desc");
   const instances = await supabaseRest("proar_tenant_instances?select=*&order=created_at.desc");
+  const audit = await supabaseRest("proar_manager_audit?select=*&order=created_at.desc&limit=40");
   if (!companies.ok) return NextResponse.json({ error: "Falha ao consultar empresas." }, { status: 502 });
   const companyRows = await companies.json();
   const instanceRows = instances.ok ? await instances.json() : [];
@@ -26,7 +28,27 @@ export async function GET(request: NextRequest) {
       primarySlug,
     }),
   }));
-  return NextResponse.json({ companies: enrichedCompanies, instances: instanceRows });
+  const auditRows = audit.ok ? await audit.json() : [];
+  const now = Date.now();
+  const summary = {
+    total: enrichedCompanies.length,
+    active: enrichedCompanies.filter((company: Record<string,unknown>) => company.status === "active").length,
+    blocked: enrichedCompanies.filter((company: Record<string,unknown>) => company.status !== "active").length,
+    trials: enrichedCompanies.filter((company: Record<string,unknown>) => !company.plan_code || company.plan_code === "trial").length,
+    expiringTrials: enrichedCompanies.filter((company: Record<string,unknown>) => {
+      if (!company.trial_expires_at) return false;
+      const remaining = new Date(String(company.trial_expires_at)).getTime() - now;
+      return remaining >= 0 && remaining <= 3 * 86400000;
+    }).length,
+    readyDatabases: instanceRows.filter((instance: Record<string,unknown>) => instance.provisioning_status === "ready").length,
+    databaseErrors: instanceRows.filter((instance: Record<string,unknown>) => instance.provisioning_status === "error" || Boolean(instance.provisioning_error)).length,
+    pendingDatabases: instanceRows.filter((instance: Record<string,unknown>) => !["ready","error"].includes(String(instance.provisioning_status || ""))).length,
+    staleHealth: instanceRows.filter((instance: Record<string,unknown>) => {
+      if (!instance.last_health_at) return true;
+      return now - new Date(String(instance.last_health_at)).getTime() > 24 * 60 * 60 * 1000;
+    }).length,
+  };
+  return NextResponse.json({ companies: enrichedCompanies, instances: instanceRows, audit: auditRows, summary, platform: managerPlatformInfo() });
 }
 
 export async function PATCH(request: NextRequest) {
