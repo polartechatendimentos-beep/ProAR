@@ -21,6 +21,7 @@ import "./login-minimal.css";
 import "./operational-refresh.css";
 import "./google-calendar.css";
 import "./usability-hardening.css";
+import "./fiscal-workspace.css";
 
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
@@ -54,6 +55,9 @@ import { deriveOperationalActions } from "@/lib/action-center";
 import { OperationsActionCenter } from "@/components/OperationsActionCenter";
 import { DashboardWorkspace } from "@/components/DashboardWorkspace";
 import { ApprovalCenter } from "@/components/ApprovalCenter";
+import { FiscalWorkspace } from "@/components/FiscalWorkspace";
+import { inferFeedbackTone, notifyFeedback, type FeedbackTone } from "@/lib/ui-feedback";
+import { CURRENT_PROAR_RELEASE, PROAR_RELEASES, type ReleaseNoteType } from "@/lib/release-notes";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type NavItem = { icon: IconType; name: string; badge?: string };
@@ -85,6 +89,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
   ]},
   { label: "GESTÃO", items: [
     { icon: WalletCards, name: "Financeiro" },
+    { icon: ReceiptText, name: "Fiscal" },
     { icon: ShieldCheck, name: "Aprovações" },
     { icon: BriefcaseBusiness, name: "Funcionários" },
     { icon: FileChartColumn, name: "Relatórios" },
@@ -587,7 +592,11 @@ function Header({ title, subtitle, onMenu, searchItems, pendingItems, onSearchSe
 }
 
 function Sidebar({ current, setCurrent, open, close, permissions, role }: { current: string; setCurrent: (s: string) => void; open: boolean; close: () => void; permissions?: string[]; role?: string }) {
-  const allowed = (name: string) => Boolean(role === "Administrador" || permissions?.includes("*") || permissions?.includes(name) || (name === "Integridade do Sistema" && permissions?.includes("integridade.visualizar")) || (name === "Aprovações" && (permissions?.includes("aprovacoes.visualizar") || permissions?.includes("aprovacoes.aprovar"))));
+  const [versionOpen,setVersionOpen]=useState(false);
+  const [selectedVersion,setSelectedVersion]=useState(CURRENT_PROAR_RELEASE.version);
+  const selectedRelease=PROAR_RELEASES.find(item=>item.version===selectedVersion)??CURRENT_PROAR_RELEASE;
+  const noteClass=(type:ReleaseNoteType)=>type.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  const allowed = (name: string) => Boolean(role === "Administrador" || permissions?.includes("*") || permissions?.includes(name) || (name === "Fiscal" && permissions?.some(permission => /^fiscal\./i.test(permission))) || (name === "Integridade do Sistema" && permissions?.includes("integridade.visualizar")) || (name === "Aprovações" && (permissions?.includes("aprovacoes.visualizar") || permissions?.includes("aprovacoes.aprovar"))));
   return <>
     {open && <button className="backdrop" aria-label="Fechar menu" onClick={close} />}
     <aside className={`sidebar ${open ? "open" : ""}`}>
@@ -599,13 +608,24 @@ function Sidebar({ current, setCurrent, open, close, permissions, role }: { curr
         </button>)}
       </div> : null; })}</nav>
       <div className="help-card"><div><Headphones size={17}/></div><strong>Suporte ProAR</strong><p>Conte com a nossa equipe sempre que precisar.</p><button>Falar com especialista <ArrowRight size={12}/></button></div>
-      <div className="secure"><ShieldCheck size={13}/><span>Ambiente seguro</span><b>v2.0</b></div>
+      <div className="secure"><ShieldCheck size={13}/><span>Ambiente seguro</span><button type="button" className="version-button" onClick={()=>setVersionOpen(true)} title="Ver novidades desta versão">v{CURRENT_PROAR_RELEASE.version}</button></div>
     </aside>
+    {versionOpen&&<div className="version-modal-layer" role="dialog" aria-modal="true" aria-label="Novidades do ProAR"><button className="version-modal-backdrop" aria-label="Fechar histórico de versões" onClick={()=>setVersionOpen(false)}/><section className="version-modal">
+      <header><div><span><Sparkles size={14}/> NOVIDADES DO PROAR</span><h2>Versão {selectedRelease.version}</h2><p>{selectedRelease.title} • {selectedRelease.date}</p></div><button type="button" aria-label="Fechar" onClick={()=>setVersionOpen(false)}><X size={18}/></button></header>
+      <div className="version-modal-body">
+        <aside>{PROAR_RELEASES.map((release,index)=><button type="button" key={release.version} className={selectedRelease.version===release.version?"active":""} onClick={()=>setSelectedVersion(release.version)}><b>v{release.version}</b><small>{release.date}</small>{index===0&&<em>Atual</em>}</button>)}</aside>
+        <main>
+          <div className="version-summary"><span>v{selectedRelease.version}</span><div><h3>{selectedRelease.title}</h3><p>{selectedRelease.summary}</p></div></div>
+          <div className="version-notes">{selectedRelease.notes.map((note,index)=><article key={`${note.type}-${note.title}-${index}`} className={`release-${noteClass(note.type)}`}><span>{note.type==="Correção"?<CheckCircle2 size={16}/>:note.type==="Segurança"?<ShieldCheck size={16}/>:note.type==="Novidade"?<Sparkles size={16}/>:<RefreshCw size={16}/>}</span><div><header><b>{note.title}</b><em>{note.type}</em></header><small>{note.module||"Sistema"}</small><p>{note.description}</p></div></article>)}</div>
+        </main>
+      </div>
+      <footer><span>Histórico de melhorias do ProAR</span><button type="button" className="primary-btn" onClick={()=>setVersionOpen(false)}>Entendi</button></footer>
+    </section></div>}
     <nav className="mobile-nav" aria-label="Navegação rápida">{(
       /t[eé]cnico/i.test(role || "") ? [
         {name:"Agenda",label:"Agenda",icon:CalendarDays},{name:"Ordens de serviço",label:"Ordens",icon:ClipboardList},{name:"Equipamentos",label:"Equip.",icon:Boxes},{name:"PMOC e conformidade",label:"PMOC",icon:ShieldCheck},{name:"Painel inicial",label:"Início",icon:MoreHorizontal}
       ] : /finance/i.test(role || "") ? [
-        {name:"Painel inicial",label:"Início",icon:LayoutDashboard},{name:"Financeiro",label:"Financeiro",icon:WalletCards},{name:"Central de pendências",label:"Pendências",icon:Bell},{name:"Compras",label:"Compras",icon:ShoppingCart},{name:"Relatórios",label:"Relatórios",icon:MoreHorizontal}
+        {name:"Painel inicial",label:"Início",icon:LayoutDashboard},{name:"Financeiro",label:"Financeiro",icon:WalletCards},{name:"Fiscal",label:"Fiscal",icon:ReceiptText},{name:"Compras",label:"Compras",icon:ShoppingCart},{name:"Central de pendências",label:"Pendências",icon:MoreHorizontal}
       ] : /vendedor/i.test(role || "") ? [
         {name:"Painel inicial",label:"Início",icon:LayoutDashboard},{name:"Clientes",label:"Clientes",icon:UsersRound},{name:"Orçamentos",label:"Orç.",icon:FileText},{name:"Vendas",label:"Vendas",icon:ShoppingBag},{name:"Central de pendências",label:"Pendências",icon:MoreHorizontal}
       ] : [
@@ -1538,6 +1558,10 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
   const [businessPhone, setBusinessPhone] = useState("+55 17 2122-2806");
   const [token, setToken] = useState("");
   const [saved, setSaved] = useState("");
+  useEffect(() => {
+    if (!saved) return;
+    notifyFeedback({ message: saved, tone: inferFeedbackTone(saved), title: "Configurações" });
+  }, [saved]);
   const [aiKey, setAiKey] = useState("");
   const [aiStatus, setAiStatus] = useState<{configured:boolean;last4:string|null;source:string}>({configured:false,last4:null,source:"none"});
   const [aiBusy, setAiBusy] = useState(false);
@@ -1758,6 +1782,10 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
   const [historyHouse, setHistoryHouse] = useState<HouseWorkItem | null>(null);
   const [historyUpdate, setHistoryUpdate] = useState<HouseWorkUpdate | null>(null);
   const [reportNotice, setReportNotice] = useState("");
+  useEffect(() => {
+    if (!reportNotice) return;
+    notifyFeedback({ message: reportNotice, tone: inferFeedbackTone(reportNotice), title: "Obras" });
+  }, [reportNotice]);
   const [shareToken, setShareToken] = useState("");
   const [serverRevision, setServerRevision] = useState(0);
   const [mapOnline, setMapOnline] = useState(true);
@@ -1773,6 +1801,8 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
   const [newAccessRole, setNewAccessRole] = useState<WorkExternalAccess["role"]>("Engenheiro");
   const [newAccessUsername, setNewAccessUsername] = useState("");
   const [newAccessPassword, setNewAccessPassword] = useState("");
+  const [accessSaving, setAccessSaving] = useState(false);
+  const [accessNotice, setAccessNotice] = useState<{ tone: "success" | "error" | "info"; text: string } | null>(null);
   useEffect(() => {
     const normalizeProjects = (items: WorkProject[]) => {
       const normalized = items.length ? items.map(project => project.id === RESERVA_IMPERIAL.id ? {...project,name:"Reserva Imperial",commonAreas:Array.from(new Set([...(project.commonAreas ?? []),...RESERVA_IMPERIAL.commonAreas]))} : project) : [RESERVA_IMPERIAL];
@@ -1873,28 +1903,117 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     void fetch('/api/work-projects',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({companyId,projects:next,baseRevision:projectsRevision})}).then(async response=>{const result=await response.json();if(response.status===409&&result.state){const authoritative=result.state.projects as WorkProject[];setProjects(authoritative);setProjectsRevision(Number(result.state.revision||0));localStorage.setItem(projectsKey,JSON.stringify(authoritative));throw new Error("Outro aparelho atualizou a lista de obras. A versão online foi mantida; tente cadastrar novamente.");}if(!response.ok)throw new Error(result.error||"Falha ao salvar obra");setProjects(next);setProjectsRevision(Number(result.state?.revision||projectsRevision+1));localStorage.setItem(projectsKey,JSON.stringify(next));localStorage.setItem(selectedProjectKey,id);setActiveProjectId(id);setBlockFilter("Todas");setWorkManagerOpen(false);setNewWorkName("");setNewBlocks([{block:"A",houses:1}]);setNewCommonAreas([]);setReportNotice(`Obra ${name} cadastrada com sucesso e disponível em todos os aparelhos.`);}).catch(error=>setReportNotice(error.message));
   };
   const selectWorkProject = (id:string) => { setActiveProjectId(id); localStorage.setItem(selectedProjectKey,id); setBlockFilter("Todas"); setStatusFilter("Todos"); setQuery(""); };
+  const syncExternalAccessMap = async (externalAccess: WorkExternalAccess[]) => {
+    const response = await fetch("/api/public-work-map", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        companyId,
+        workId: activeProject.id,
+        workName: activeProject.name,
+        title: `Acompanhamento da obra — ${activeProject.name}`,
+        houses,
+        externalAccess,
+        externalAccessOnly: true,
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || "Não foi possível sincronizar o acesso com o mapa da obra.");
+    if (result.map?.revision !== undefined) setServerRevision(Number(result.map.revision));
+    if (result.token) {
+      setShareToken(String(result.token));
+      localStorage.setItem(shareKey, String(result.token));
+    }
+  };
   const saveExternalAccess = async () => {
-    const name = newAccessName.trim(); const username = newAccessUsername.trim().toLowerCase();
-    if (!name || !username || newAccessPassword.length < 6) { setReportNotice("Informe nome, login e senha com pelo menos 6 caracteres."); return; }
-    if (!navigator.onLine) { setReportNotice("A gestão de acessos externos exige conexão com a base principal."); return; }
-    const access: WorkExternalAccess = { id: `obra-access-${Date.now()}`, name, role: newAccessRole, username, passwordHash: await passwordHash(newAccessPassword), active: true, createdAt: new Date().toISOString() };
-    const nextProject = { ...activeProject, externalAccess: [access, ...(activeProject.externalAccess ?? [])] };
-    const next = projects.map(project => project.id === activeProject.id ? nextProject : project);
+    if (accessSaving) return;
+    const name = newAccessName.trim();
+    const username = newAccessUsername.trim().toLocaleLowerCase("pt-BR");
+    if (!name || !username || newAccessPassword.length < 6) {
+      setAccessNotice({ tone:"error", text:"Informe nome, usuário e senha com pelo menos 6 caracteres." });
+      return;
+    }
+    if (!/^[a-z0-9._-]{3,60}$/i.test(username)) {
+      setAccessNotice({ tone:"error", text:"Use um usuário com 3 a 60 caracteres, contendo apenas letras, números, ponto, hífen ou sublinhado." });
+      return;
+    }
+    if ((activeProject.externalAccess ?? []).some(item => item.username.toLocaleLowerCase("pt-BR") === username)) {
+      setAccessNotice({ tone:"error", text:"Este usuário já possui acesso cadastrado nesta obra." });
+      return;
+    }
+    if (!navigator.onLine) {
+      setAccessNotice({ tone:"error", text:"A gestão de acessos externos exige conexão com a base principal." });
+      return;
+    }
+    setAccessSaving(true);
+    setAccessNotice({ tone:"info", text:"Criando acesso e sincronizando com a obra..." });
     try {
-      const response = await fetch('/api/work-projects', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ companyId, projects:next, baseRevision:projectsRevision }) });
-      const result = await response.json(); if (!response.ok) throw new Error(result.error || "Não foi possível salvar o acesso.");
-      setProjects(next); setProjectsRevision(Number(result.state?.revision || projectsRevision + 1)); localStorage.setItem(projectsKey, JSON.stringify(next)); await publishPublicMap(houses, serverRevision, nextProject.externalAccess);
-      setNewAccessName(""); setNewAccessUsername(""); setNewAccessPassword(""); setReportNotice("Acesso externo criado e disponível para uso.");
-    } catch (error) { setReportNotice(error instanceof Error ? error.message : "Não foi possível salvar o acesso."); }
+      const access: WorkExternalAccess = {
+        id: `obra-access-${Date.now()}-${crypto.randomUUID().slice(0,8)}`,
+        name,
+        role: newAccessRole,
+        username,
+        passwordHash: await passwordHash(newAccessPassword),
+        active: true,
+        createdAt: new Date().toISOString(),
+      };
+      const externalAccess = [access, ...(activeProject.externalAccess ?? [])];
+      const nextProject = { ...activeProject, externalAccess };
+      const next = projects.map(project => project.id === activeProject.id ? nextProject : project);
+      const response = await fetch("/api/work-projects", {
+        method:"PUT",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ companyId, projects:next, baseRevision:projectsRevision }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.status === 409 && result.state?.projects) {
+        const authoritative = result.state.projects as WorkProject[];
+        setProjects(authoritative);
+        setProjectsRevision(Number(result.state.revision || projectsRevision));
+        localStorage.setItem(projectsKey, JSON.stringify(authoritative));
+        throw new Error("A lista de obras foi atualizada por outro usuário. Os dados mais recentes foram carregados; tente adicionar novamente.");
+      }
+      if (!response.ok) throw new Error(result.error || "Não foi possível salvar o acesso.");
+      await syncExternalAccessMap(externalAccess);
+      setProjects(next);
+      setProjectsRevision(Number(result.state?.revision || projectsRevision + 1));
+      localStorage.setItem(projectsKey, JSON.stringify(next));
+      setNewAccessName("");
+      setNewAccessUsername("");
+      setNewAccessPassword("");
+      setAccessNotice({ tone:"success", text:`Acesso de ${name} criado com sucesso.` });
+      setReportNotice("Acesso externo criado e sincronizado com a obra.");
+    } catch (error) {
+      setAccessNotice({ tone:"error", text:error instanceof Error ? error.message : "Não foi possível salvar o acesso." });
+    } finally {
+      setAccessSaving(false);
+    }
   };
   const toggleExternalAccess = async (accessId: string) => {
-    const nextProject = { ...activeProject, externalAccess: (activeProject.externalAccess ?? []).map(access => access.id === accessId ? { ...access, active: !access.active } : access) };
+    if (accessSaving) return;
+    const externalAccess = (activeProject.externalAccess ?? []).map(access => access.id === accessId ? { ...access, active: !access.active } : access);
+    const nextProject = { ...activeProject, externalAccess };
     const next = projects.map(project => project.id === activeProject.id ? nextProject : project);
+    setAccessSaving(true);
+    setAccessNotice({ tone:"info", text:"Atualizando acesso..." });
     try {
-      const response = await fetch('/api/work-projects', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ companyId, projects:next, baseRevision:projectsRevision }) });
-      const result = await response.json(); if (!response.ok) throw new Error(result.error || "Não foi possível atualizar o acesso.");
-      setProjects(next); setProjectsRevision(Number(result.state?.revision || projectsRevision + 1)); localStorage.setItem(projectsKey, JSON.stringify(next)); await publishPublicMap(houses, serverRevision, nextProject.externalAccess);
-    } catch (error) { setReportNotice(error instanceof Error ? error.message : "Não foi possível atualizar o acesso."); }
+      const response = await fetch("/api/work-projects", {
+        method:"PUT",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ companyId, projects:next, baseRevision:projectsRevision }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Não foi possível atualizar o acesso.");
+      await syncExternalAccessMap(externalAccess);
+      setProjects(next);
+      setProjectsRevision(Number(result.state?.revision || projectsRevision + 1));
+      localStorage.setItem(projectsKey, JSON.stringify(next));
+      setAccessNotice({ tone:"success", text:"Acesso atualizado com sucesso." });
+    } catch (error) {
+      setAccessNotice({ tone:"error", text:error instanceof Error ? error.message : "Não foi possível atualizar o acesso." });
+    } finally {
+      setAccessSaving(false);
+    }
   };
   const openUpdate = (house: HouseWorkItem) => { const normalized=normalizeHouseStatus(house.status); setEditing(house); setNextStatus(normalized === "STATUS NÃO IDENTIFICADO" ? "INÍCIO DE OBRA" : normalized); setNote(house.note ?? ""); setPhotos({}); setSaveError(""); setHouseModalTab("Etapa"); setIncidentType("Perda"); setIncidentNote(""); setIncidentPhoto(""); };
   const readStagePhoto = async (label: string, file?: File) => {
@@ -2037,7 +2156,7 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
 <div className="house-status"><i/><span>{normalizeHouseStatus(house.status)}</span></div><div className="house-mini-progress"><i><b style={{width:`${houseProgress(house.status)}%`}}/></i><small>{houseProgress(house.status)}%</small></div>
 {house.note && <p>{house.note}</p>}<small className="house-date">{house.updatedAt ? `Atualizado em ${new Date(house.updatedAt).toLocaleString("pt-BR")}` : "Sem alterações registradas"}</small><footer><button onClick={() => openUpdate(house)} title="Alterar status"><Edit3 size={13}/></button><button disabled={!house.history?.length} onClick={() => setHistoryHouse(house)} title="Histórico"><History size={13}/></button><button onClick={() => issueWorkReport([house], `Relatório da Quadra ${house.block} — Casa ${String(house.lot).padStart(2, "0")}`)} title="Gerar PDF"><FileText size={13}/></button><button onClick={() => issueWorkReport([house], `Relatório da Quadra ${house.block} — Casa ${String(house.lot).padStart(2, "0")}`, true)} title="Enviar pelo WhatsApp"><MessageCircle size={13}/></button></footer></article>)}</div></section>; })}</div>
     {!visible.length && <div className="linked-empty"><Search size={22}/><h4>Nenhuma casa encontrada</h4><p>Altere os filtros para visualizar outros lotes.</p></div>}
-    {accessManagerOpen && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={()=>setAccessManagerOpen(false)} aria-label="Fechar"/><div className="modal work-register-modal external-access-modal"><div className="modal-head"><div><span>ACESSO EXTERNO DA OBRA</span><h2>Engenheiros e Fiscais</h2><p>O acesso externo permite somente registrar apontamentos com descrição e fotos. Status, progresso, etapas, custos e histórico interno permanecem protegidos.</p></div><button onClick={()=>setAccessManagerOpen(false)}><X size={18}/></button></div><div className="work-register-body"><section className="work-config-section"><header><div><b>Adicionar acesso</b><small>Crie quantos acessos forem necessários para esta obra.</small></div></header><div className="work-config-row external-access-form"><label>Nome<input value={newAccessName} onChange={event=>setNewAccessName(event.target.value)} placeholder="Nome do engenheiro ou fiscal"/></label><label>Função<select value={newAccessRole} onChange={event=>setNewAccessRole(event.target.value as WorkExternalAccess["role"])}><option>Engenheiro</option><option>Fiscal</option></select></label><label>Usuário de acesso<input required value={newAccessUsername} onChange={event=>setNewAccessUsername(event.target.value)} placeholder="usuário para login" autoComplete="username"/></label><label>Senha de acesso<input required minLength={6} type="password" value={newAccessPassword} onChange={event=>setNewAccessPassword(event.target.value)} placeholder="mínimo 6 caracteres" autoComplete="new-password"/></label><button type="button" className="primary-btn" onClick={()=>void saveExternalAccess()}><Plus size={14}/> Adicionar acesso</button></div></section><section className="work-config-section"><header><div><b>Acessos cadastrados</b><small>{(activeProject.externalAccess ?? []).length} pessoa(s) • somente apontamentos externos</small></div></header>{activeProject.externalAccess?.length ? <div className="external-access-list">{activeProject.externalAccess.map(access=><article key={access.id}><div><b>{access.name}</b><small>{access.role} • <code>{access.username}</code></small></div><span className={access.active ? "active" : "inactive"}>{access.active ? "Ativo" : "Inativo"}</span><button type="button" className="outline-btn" onClick={()=>void toggleExternalAccess(access.id)}>{access.active ? "Inativar" : "Ativar"}</button></article>)}</div> : <p className="work-config-empty">Nenhum acesso externo cadastrado nesta obra.</p>}</section></div><div className="modal-actions"><button className="primary-btn" onClick={()=>setAccessManagerOpen(false)}>Concluir</button></div></div></div>}
+    {accessManagerOpen && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={()=>setAccessManagerOpen(false)} aria-label="Fechar"/><div className="modal work-register-modal external-access-modal"><div className="modal-head"><div><span>ACESSO EXTERNO DA OBRA</span><h2>Engenheiros e Fiscais</h2><p>O acesso externo permite somente registrar apontamentos com descrição e fotos. Status, progresso, etapas, custos e histórico interno permanecem protegidos.</p></div><button onClick={()=>setAccessManagerOpen(false)}><X size={18}/></button></div><div className="work-register-body"><section className="work-config-section"><header><div><b>Adicionar acesso</b><small>Crie quantos acessos forem necessários para esta obra.</small></div></header><form className="work-config-row external-access-form" onSubmit={event=>{event.preventDefault();void saveExternalAccess();}}><label>Nome<input required value={newAccessName} onChange={event=>setNewAccessName(event.target.value)} placeholder="Nome do engenheiro ou fiscal"/></label><label>Função<select value={newAccessRole} onChange={event=>setNewAccessRole(event.target.value as WorkExternalAccess["role"])}><option>Engenheiro</option><option>Fiscal</option></select></label><label>Usuário de acesso<input required value={newAccessUsername} onChange={event=>setNewAccessUsername(event.target.value)} placeholder="usuario.externo" autoComplete="username"/></label><label>Senha de acesso<input required minLength={6} type="password" value={newAccessPassword} onChange={event=>setNewAccessPassword(event.target.value)} placeholder="mínimo 6 caracteres" autoComplete="new-password"/></label><button type="submit" className="primary-btn external-access-submit" disabled={accessSaving}><Plus size={14}/> {accessSaving?"Salvando...":"Adicionar acesso"}</button>{accessNotice&&<div className={`external-access-notice ${accessNotice.tone}`} role="status">{accessNotice.text}</div>}</form></section><section className="work-config-section"><header><div><b>Acessos cadastrados</b><small>{(activeProject.externalAccess ?? []).length} pessoa(s) • somente apontamentos externos</small></div></header>{activeProject.externalAccess?.length ? <div className="external-access-list">{activeProject.externalAccess.map(access=><article key={access.id}><div><b>{access.name}</b><small>{access.role} • <code>{access.username}</code></small></div><span className={access.active ? "active" : "inactive"}>{access.active ? "Ativo" : "Inativo"}</span><button type="button" className="outline-btn" disabled={accessSaving} onClick={()=>void toggleExternalAccess(access.id)}>{access.active ? "Inativar" : "Ativar"}</button></article>)}</div> : <p className="work-config-empty">Nenhum acesso externo cadastrado nesta obra.</p>}</section></div><div className="modal-actions"><button className="primary-btn" onClick={()=>setAccessManagerOpen(false)}>Concluir</button></div></div></div>}
     {workManagerOpen && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={()=>setWorkManagerOpen(false)} aria-label="Fechar"/><div className="modal work-register-modal"><div className="modal-head"><div><span>GERENCIADOR DE OBRAS</span><h2>Cadastrar nova obra</h2><p>Defina as quadras, a quantidade de casas e as áreas comuns.</p></div><button onClick={()=>setWorkManagerOpen(false)}><X size={18}/></button></div><div className="work-register-body"><label className="wide">Nome da obra<input value={newWorkName} onChange={event=>setNewWorkName(event.target.value)} placeholder="Ex.: Residencial Primavera"/></label><section className="work-config-section"><header><div><b>Quadras e casas</b><small>Informe a identificação e a quantidade de casas de cada quadra.</small></div><button type="button" onClick={()=>setNewBlocks(current=>[...current,{block:String.fromCharCode(65+current.length),houses:1}])}><Plus size={13}/> Quadra</button></header>{newBlocks.map((item,index)=><div className="work-config-row" key={index}><label>Quadra<input value={item.block} onChange={event=>setNewBlocks(current=>current.map((block,i)=>i===index?{...block,block:event.target.value}:block))}/></label><label>Quantidade de casas<input type="number" min="1" value={item.houses} onChange={event=>setNewBlocks(current=>current.map((block,i)=>i===index?{...block,houses:Math.max(1,Number(event.target.value)||1)}:block))}/></label><button type="button" disabled={newBlocks.length===1} onClick={()=>setNewBlocks(current=>current.filter((_,i)=>i!==index))}><Trash2 size={14}/></button></div>)}</section><section className="work-config-section"><header><div><b>Áreas comuns</b><small>Adicione a quantidade necessária e dê um nome para cada área.</small></div><button type="button" onClick={()=>setNewCommonAreas(current=>[...current,""])}><Plus size={13}/> Área comum</button></header>{newCommonAreas.length===0?<p className="work-config-empty">Nenhuma área comum adicionada.</p>:newCommonAreas.map((name,index)=><div className="work-config-row common" key={index}><label>Nome da área comum<input value={name} onChange={event=>setNewCommonAreas(current=>current.map((area,i)=>i===index?event.target.value:area))} placeholder="Ex.: Academia, salão de festas..."/></label><button type="button" onClick={()=>setNewCommonAreas(current=>current.filter((_,i)=>i!==index))}><Trash2 size={14}/></button></div>)}</section></div><div className="modal-actions"><button className="outline-btn" onClick={()=>setWorkManagerOpen(false)}>Cancelar</button><button className="primary-btn" onClick={createWorkProject}><CheckCircle2 size={15}/> Cadastrar obra</button></div></div></div>}
     {editing && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={() => setEditing(null)} aria-label="Fechar"/><div className="modal house-update-modal"><div className="modal-head"><div><span>ATUALIZAÇÃO DA OBRA</span><h2>Quadra {editing.block} • Casa {String(editing.lot).padStart(2,"0")}</h2><p>Status atual: {normalizeHouseStatus(editing.status)} • Responsável: {responsibleUser}</p></div><button onClick={() => setEditing(null)}><X size={18}/></button></div><div className="house-modal-tabs"><button className={houseModalTab === "Etapa" ? "active" : ""} onClick={()=>setHouseModalTab("Etapa")}><CheckCircle2 size={14}/> Etapa da obra</button><button className={houseModalTab === "Perdas e Roubos" ? "active warning" : ""} onClick={()=>setHouseModalTab("Perdas e Roubos")}><AlertTriangle size={14}/> Perdas e Roubos {editing.incidents?.length ? <span>{editing.incidents.length}</span> : null}</button></div>{houseModalTab === "Etapa" ? <><div className="house-stage-progress">{HOUSE_STATUSES.map((stage,index) => { const activeIndex = HOUSE_STATUSES.findIndex(item => item.name === nextStatus); return <div key={stage.name} className={index <= activeIndex ? "active" : ""}><i>{index < activeIndex ? <CheckCircle2 size={12}/> : index + 1}</i><span>{stage.name}</span></div>; })}</div><div className="house-update-body"><label>Novo status<select value={nextStatus} onChange={event => { setNextStatus(event.target.value as HouseWorkStatus); setPhotos({}); setSaveError(""); }}>{HOUSE_STATUSES.map(status => <option key={status.name}>{status.name}</option>)}</select></label><div className="status-preview" style={{"--preview-color":statusColor(nextStatus)} as React.CSSProperties}><i/><span>{nextStatus}</span></div>{HOUSE_STAGE_PHOTOS[nextStatus].length > 0 && <div className="stage-photo-slots wide">{HOUSE_STAGE_PHOTOS[nextStatus].map(label => <label className={photos[label] ? "filled" : ""} key={label}>{photos[label] ? <img src={photos[label]} alt={label}/> : <ImageIcon size={22}/>}<b>{label}</b><small>{photos[label] ? "Foto pronta • toque para substituir" : HOUSE_STAGE_OPTIONAL_PHOTOS.includes(nextStatus) ? "Foto opcional" : "Foto obrigatória"}</small><input type="file" accept="image/*" capture="environment" onChange={event => void readStagePhoto(label,event.target.files?.[0])}/>{photos[label] && <button type="button" onClick={event => { event.preventDefault(); setPhotos(current => { const next = {...current}; delete next[label]; return next; }); }}><X size={12}/> Remover</button>}</label>)}</div>}<label className="wide">Observação da etapa<textarea value={note} onChange={event => { setNote(event.target.value); setSaveError(""); }} placeholder={nextStatus === "AG. TUBULAÇÃO FORÇADA" ? "Informe os detalhes da tubulação forçada..." : "Descreva o serviço executado, pendências ou materiais utilizados..."}/><small>A observação poderá ser consultada no histórico permanente da casa.</small></label>{nextStatus === "SERVIÇO CONCLUÍDO" && <div className="completion-warning wide"><CheckCircle2 size={19}/><span><b>Finalização da casa</b><small>Ao confirmar, o sistema registrará automaticamente data, horário e {responsibleUser} como responsável.</small></span></div>}</div><div className="modal-actions"><button className="outline-btn" onClick={() => setEditing(null)}>Cancelar</button><button className="primary-btn" disabled={!stageDirty || saveState === "saving"} onClick={() => void saveUpdate()}>{saveState === "saving" ? <RefreshCw size={15}/> : <CheckCircle2 size={15}/>} {saveState === "saving" ? "Salvando..." : "Salvar alterações"}</button></div></> : <><div className="incident-register-body"><div className="incident-form"><label>Tipo da ocorrência<select value={incidentType} onChange={event=>setIncidentType(event.target.value as "Perda" | "Roubo")}><option>Perda</option><option>Roubo</option></select></label><label className="incident-photo-upload">{incidentPhoto ? <img src={incidentPhoto} alt="Foto da ocorrência"/> : <><Camera size={25}/><b>Anexar foto da ocorrência</b><small>Câmera ou galeria • foto obrigatória</small></>}<input type="file" accept="image/*" capture="environment" onChange={event=>void readIncidentPhoto(event.target.files?.[0])}/></label><label className="wide">Observação<textarea value={incidentNote} onChange={event=>setIncidentNote(event.target.value)} placeholder="Descreva o item perdido ou roubado e os detalhes da ocorrência..."/></label></div><section className="incident-history"><header><b>Registros desta unidade</b><small>{editing.incidents?.length ?? 0} ocorrência(s)</small></header>{editing.incidents?.length ? editing.incidents.map(incident=>
 <article key={incident.id}><label className="replaceable-photo"><img src={incident.photo} alt={incident.type}/><span>Alterar foto</span><input type="file" accept="image/*" capture="environment" onChange={event=>void replaceIncidentPhoto(incident.id,event.target.files?.[0])}/></label>
@@ -2078,7 +2197,7 @@ function EmployeesWorkspace({ records, serviceOrders, onOpen, onUpdate, onDelete
   return <section className="employees-workspace">
     {!selected ? <><div className="management-hero employee-list-hero"><div><span className="section-kicker"><BriefcaseBusiness size={12}/> EQUIPE PROAR</span><h2>Funcionários</h2><p>Equipe, acessos, atividade de campo e histórico operacional.</p></div><button className="primary-btn" onClick={()=>onOpen("Novo registro • Funcionários")}><Plus size={15}/> Novo funcionário</button></div>
     <div className="employee-list-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar por nome, código, cargo, telefone ou e-mail"/></label><span>{filtered.length} funcionário(s)</span></div>
-    <div className="panel employee-table"><div className="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>NOME & CARGO</th><th>TELEFONE / E-MAIL</th><th>PERFIL DE ACESSO</th><th>STATUS GPS</th><th>SITUAÇÃO</th><th>AÇÕES</th></tr></thead><tbody>{filtered.map(r=><tr key={r.id}><td><b className="order-id">{r.id}</b></td><td><strong>{r.name}</strong><small>{r.employeeRole||r.category||"Função não informada"}</small></td><td><strong>{r.phone||"—"}</strong><small>{r.email||"—"}</small></td><td>{r.employeeRole||"—"}</td><td><span className="gps-state offline"><i/>Consultar ficha</span></td><td><span className={`workflow-status ${/ativo/i.test(r.status||"Ativo")?"done":/inativo/i.test(r.status||"")?"blocked":""}`}>{r.status||"Ativo"}</span></td><td><div className="record-actions"><button title="Editar ficha" onClick={()=>open(r)}><Edit3 size={14}/></button><button title="Rastrear no mapa" onClick={()=>{open(r);setTab("Rastreamento GPS");}}><MapPin size={14}/></button><button className="danger" title="Desativar / excluir" onClick={()=>onDelete("Funcionários",r)}><Trash2 size={14}/></button></div></td></tr>)}</tbody></table></div></div></>:
+    <div className="panel employee-table"><div className="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>NOME & CARGO</th><th>TELEFONE / E-MAIL</th><th>PERFIL DE ACESSO</th><th>STATUS GPS</th><th>SITUAÇÃO</th><th>AÇÕES</th></tr></thead><tbody>{filtered.map(r=><tr key={r.id}><td><b className="order-id">{r.id}</b></td><td><strong>{r.name}</strong><small>{r.employeeRole||r.category||"Função não informada"}</small></td><td><strong>{r.phone||"—"}</strong><small>{r.email||"—"}</small></td><td><span className="employee-access-profile">{r.accessProfile || (r.employeePermissions && Object.keys(r.employeePermissions).length ? "Personalizado" : "Não configurado")}</span></td><td><span className="gps-state offline"><i/>Consultar ficha</span></td><td><span className={`workflow-status ${/ativo/i.test(r.status||"Ativo")?"done":/inativo/i.test(r.status||"")?"blocked":""}`}>{r.status||"Ativo"}</span></td><td><div className="record-actions"><button title="Editar ficha" onClick={()=>open(r)}><Edit3 size={14}/></button><button title="Rastrear no mapa" onClick={()=>{open(r);setTab("Rastreamento GPS");}}><MapPin size={14}/></button><button className="danger" title="Desativar / excluir" onClick={()=>onDelete("Funcionários",r)}><Trash2 size={14}/></button></div></td></tr>)}</tbody></table></div></div></>:
     <div className="employee-profile">
       <header className="employee-sticky-header"><button className="employee-back" onClick={()=>setSelected(null)}><ArrowLeft size={15}/> Equipe</button><div className="employee-avatar">{selected.name.split(" ").map(x=>x[0]).slice(0,2).join("").toUpperCase()}</div><div className="employee-identity"><h2>{selected.name}</h2><p>{selected.id} <span>{selected.employeeRole||selected.category||"Funcionário"}</span> <b>{selected.status||"Ativo"}</b></p></div><div className="employee-gps-live"><i/><span>GPS</span><small>Consulte Rastreamento</small></div><div className="employee-header-actions"><button className="outline-btn" onClick={()=>setDraft({...selected})}>Descartar</button><button className="primary-btn" disabled={!canEdit} onClick={save}><Save size={14}/> Salvar</button><button className="outline-btn" title="Mais ações"><MoreHorizontal size={16}/></button></div></header>
       <nav className="employee-tabs"><button className={tab==="Dados Gerais"?"active":""} onClick={()=>setTab("Dados Gerais")}><UserRound size={14}/>Dados Gerais</button><button className={tab==="Permissões de Acesso"?"active":""} onClick={()=>setTab("Permissões de Acesso")}><LockKeyhole size={14}/>Permissões de Acesso</button><button className={tab==="Rastreamento GPS"?"active":""} onClick={()=>setTab("Rastreamento GPS")}><MapPin size={14}/>Rastreamento GPS</button><button className={tab==="Comissões & Histórico"?"active":""} onClick={()=>setTab("Comissões & Histórico")}><BriefcaseBusiness size={14}/>Comissões & Histórico</button></nav>
@@ -3241,21 +3360,18 @@ export default function Home() {
     };
     loadSharedState();
   }, [authenticatedUser, activeCompany.id]);
-  type FeedbackTone = "success" | "error" | "warning" | "info";
   const [feedbackTone, setFeedbackTone] = useState<FeedbackTone>("info");
-  const feedbackTimerRef = useRef<number | null>(null);
   const showFeedback = (message: string, tone: FeedbackTone = "info", duration = 3200) => {
-    if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
     setFeedbackTone(tone);
-    setSavedMessage(message);
-    feedbackTimerRef.current = window.setTimeout(() => {
-      setSavedMessage("");
-      feedbackTimerRef.current = null;
-    }, duration);
+    notifyFeedback({ message, tone, duration });
   };
-  useEffect(() => () => {
-    if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
-  }, []);
+  useEffect(() => {
+    if (!savedMessage) return;
+    const tone=inferFeedbackTone(savedMessage);
+    setFeedbackTone(tone);
+    notifyFeedback({ message:savedMessage, tone });
+    setSavedMessage("");
+  }, [savedMessage]);
   const persistSharedState = (nextCustomers: Customer[], nextOrders: ServiceOrder[], nextModules: Record<string, ModuleRecord[]>) => {
     localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(nextCustomers));
     localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(nextOrders));
@@ -3726,8 +3842,8 @@ export default function Home() {
     window.addEventListener("proar:update-customer", handleProfileCustomerUpdate);
     return () => window.removeEventListener("proar:update-customer", handleProfileCustomerUpdate);
   }, [activeCompany.id, customerRecords, serviceOrders, moduleRecords]);
-  const titles: Record<string,string> = { "Painel inicial": "Olá", "Clientes": "Gestão de clientes", "Obras": "Gestão de obras", "Integridade do Sistema": "Integridade do Sistema" };
-  const subtitles: Record<string,string> = { "Painel inicial": "Uma visão completa da sua empresa em tempo real.", "Clientes": "Cadastros, unidades, histórico e relacionamento.", "Obras": "Planejamento, execução, perdas, custos e progresso em um único módulo.", "Integridade do Sistema": "Diagnóstico empresarial somente leitura da base operacional." };
+  const titles: Record<string,string> = { "Painel inicial": "Olá", "Clientes": "Gestão de clientes", "Obras": "Gestão de obras", "Fiscal": "Central Fiscal", "Integridade do Sistema": "Integridade do Sistema" };
+  const subtitles: Record<string,string> = { "Painel inicial": "Uma visão completa da sua empresa em tempo real.", "Clientes": "Cadastros, unidades, histórico e relacionamento.", "Obras": "Planejamento, execução, perdas, custos e progresso em um único módulo.", "Fiscal": "NF-e, NFC-e, NFS-e, DF-e, validação e acompanhamento fiscal.", "Integridade do Sistema": "Diagnóstico empresarial somente leitura da base operacional." };
   const logout = async () => {
     try { await fetch("/api/auth", { method: "DELETE" }); } catch {}
     localStorage.removeItem("proar-offline-session");
@@ -3818,6 +3934,7 @@ export default function Home() {
     setCustomerRecords(updatedCustomers);
     localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(updatedCustomers));
     persistSharedState(updatedCustomers, serviceOrders, moduleRecords);
+    showFeedback(`Cliente ${created.name} cadastrado com sucesso.`, "success");
     return created;
   };
   const createQuickStructure = (draft: StructureDraft & { client: string }): ModuleRecord | null => {
@@ -3842,6 +3959,7 @@ export default function Home() {
     localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(updatedModules));
     localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(updatedCustomers));
     persistSharedState(updatedCustomers, serviceOrders, updatedModules);
+    showFeedback(`${created.category || "Estrutura"} cadastrada com sucesso.`, "success");
     return created;
   };
   const saveConfirmedModuleRecord = async (moduleName: string, record: ModuleRecord, relatedRecords: { moduleName: string; record: ModuleRecord }[] = []) => {
@@ -3908,6 +4026,7 @@ export default function Home() {
       localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(confirmedModules));
       setSyncPhase("complete");
       window.setTimeout(() => setSyncPhase("idle"), 1000);
+      showFeedback(exists ? `${moduleName}: alterações salvas com sucesso.` : `${moduleName}: cadastro salvo com sucesso.`, "success");
       return true;
     } catch (error) {
       console.error("Falha ao salvar registro confirmado", { moduleName, recordId: record.id, relatedModules:relatedRecords.map(item=>item.moduleName), error });
@@ -4006,7 +4125,7 @@ export default function Home() {
     localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(confirmedCustomers));
     localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(confirmedOrders));
     localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(confirmedModules));
-    setSavedMessage("Operação confirmada no banco e registrada na auditoria.");
+    showFeedback("Operação confirmada no banco e registrada na auditoria.", "success");
   };
   const globalSearchItems = useMemo<GlobalSearchItem[]>(() => {
     const customerItems = customerRecords.map(customer => ({ id: customer.id, title: customer.name, detail: [customer.doc, customer.phone, customer.city || customer.address].filter(Boolean).join(" • "), module: "Clientes", kind: "Cliente" as const }));
@@ -4043,10 +4162,10 @@ export default function Home() {
     <main className="main">
       <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNew={openNew} searchItems={globalSearchItems} pendingItems={pendingItems} onSearchSelect={openGlobalSearch} onPendingSelect={openPending} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onSwitchUser={logout} online={online} syncing={syncing} onPull={() => void pullFromDatabase()} onPush={() => void pushToDatabase()}/>
       {syncPhase !== "idle" && <div className={`sync-progress ${syncPhase}`} role="status" aria-label={syncPhase === "complete" ? "Dados atualizados" : "Sincronizando dados"}><i/></div>}
-      {savedMessage && <div className={`save-toast feedback-${feedbackTone}`} role={feedbackTone === "error" ? "alert" : "status"} aria-live={feedbackTone === "error" ? "assertive" : "polite"}>{feedbackTone === "error" || feedbackTone === "warning" ? <AlertTriangle size={16}/> : <CheckCircle2 size={16}/>}<span>{savedMessage}</span></div>}
+      
       <div className="company-context"><Building2 size={13}/><span>{activeCompany.tradeName}</span><small>{activeCompany.cnpj || "CNPJ pendente"} • {activeCompany.city}/{activeCompany.state}</small></div>
       {current === "PMOC e conformidade" ? <TechnicalCompliancePanel plans={(moduleRecords.PMOC ?? []) as any} fluids={(moduleRecords.Refrigerantes ?? []) as any} documents={(moduleRecords["Documentação / Habilitação"] ?? []) as any} onSave={(module,record)=>saveConfirmedModuleRecord(module,record)}/> : null}
-      <div className="page-content">{current === "PMOC e conformidade" ? null : current === "Integridade do Sistema" ? <IntegrityAudit/> : current === "Painel inicial" ? <DashboardWorkspace onNavigate={setCurrent} serviceOrders={serviceOrders} modules={moduleRecords} role={authenticatedUser.role}/> : current === "Central de pendências" ? <OperationsActionCenter serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} modules={moduleRecords as unknown as Record<string,Record<string,unknown>[]>} onNavigate={setCurrent}/> : current === "Clientes" ? <Customers onOpen={name => { setModal(""); window.setTimeout(() => setModal(name), 0); }} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={saveCustomerStructure} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} company={activeCompany} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <LicitacoesWorkspace modules={moduleRecords} customers={customerRecords} orders={serviceOrders} onSaveRecord={(moduleName,record)=>saveConfirmedModuleRecord(moduleName,record)} onReadyToInvoice={record=>saveConfirmedModuleRecord("Empenhos",{...record,status:"Pronto para faturar"},[{moduleName:"Financeiro",record:{id:`FAT-${record.id}`,name:`Faturamento • ${record.name}`,client:record.client,description:`Aguardando emissão de Nota Fiscal • ${record.empenhoProcess || "processo não informado"}`,createdAt:new Date().toLocaleString("pt-BR"),status:"Pronto para faturar",date:new Date().toISOString().slice(0,10),value:record.value??0,category:"Faturamento público",transactionType:"Receber",empenhoId:record.id}}])} onOpenTender={item=>setModal(`Análise de edital • ${item.numeroControlePNCP || item.objetoCompra || "Licitação"}`)}/> : current === "Orçamentos" ? <BudgetPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={record => updateModuleRecord("Orçamentos",record)} onConvert={convertBudget} onDelete={record => deleteModuleRecord("Orçamentos",record)} onCreateCustomer={createQuickCustomer} onCreateStructure={createQuickStructure}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} sales={moduleRecords.Vendas ?? []} onSave={record => updateModuleRecord("Vendas",record)}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders} company={activeCompany}/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany} isAdministrator={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*"))}/> : current === "Aprovações" ? <ApprovalCenter records={moduleRecords["Aprovações"] ?? []} canApprove={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*") || authenticatedUser.permissions?.includes("aprovacoes.aprovar") || authenticatedUser.permissions?.includes("Aprovações"))} onOperation={runOperationalCommand}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} modules={moduleRecords} onOperation={runOperationalCommand} onOpen={setModal} onIssueInvoice={(record,invoiceNumber)=>{const commitment=(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId);const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Faturado"}}]:[];return saveConfirmedModuleRecord("Financeiro",{...record,status:"Em aberto",transactionType:"Receber",invoiceNumber,invoiceIssuedAt:new Date().toISOString()},related)}}/> : current === "Funcionários" ? <EmployeesWorkspace records={moduleRecords["Funcionários"] ?? []} serviceOrders={serviceOrders} onOpen={setModal} onUpdate={updateModuleRecord} onDelete={deleteModuleRecord} canEdit={hasAction("Funcionários","Editar")}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} onUpdate={updateServiceOrder} serviceOrders={serviceOrders} customers={customerRecords} company={activeCompany} role={authenticatedUser.role}/> : <>{(current === "Compras" || current === "Estoque") && <InventoryOperations mode={current} modules={moduleRecords} onOperation={runOperationalCommand}/>}<GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []} allModules={moduleRecords} serviceOrders={serviceOrders}/></>}</div>
+      <div className="page-content">{current === "PMOC e conformidade" ? null : current === "Integridade do Sistema" ? <IntegrityAudit/> : current === "Painel inicial" ? <DashboardWorkspace onNavigate={setCurrent} serviceOrders={serviceOrders} modules={moduleRecords} role={authenticatedUser.role}/> : current === "Central de pendências" ? <OperationsActionCenter serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} modules={moduleRecords as unknown as Record<string,Record<string,unknown>[]>} onNavigate={setCurrent}/> : current === "Clientes" ? <Customers onOpen={name => { setModal(""); window.setTimeout(() => setModal(name), 0); }} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={saveCustomerStructure} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} company={activeCompany} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <LicitacoesWorkspace modules={moduleRecords} customers={customerRecords} orders={serviceOrders} onSaveRecord={(moduleName,record)=>saveConfirmedModuleRecord(moduleName,record)} onReadyToInvoice={record=>saveConfirmedModuleRecord("Empenhos",{...record,status:"Pronto para faturar"},[{moduleName:"Financeiro",record:{id:`FAT-${record.id}`,name:`Faturamento • ${record.name}`,client:record.client,description:`Aguardando emissão de Nota Fiscal • ${record.empenhoProcess || "processo não informado"}`,createdAt:new Date().toLocaleString("pt-BR"),status:"Pronto para faturar",date:new Date().toISOString().slice(0,10),value:record.value??0,category:"Faturamento público",transactionType:"Receber",empenhoId:record.id}}])} onOpenTender={item=>setModal(`Análise de edital • ${item.numeroControlePNCP || item.objetoCompra || "Licitação"}`)}/> : current === "Orçamentos" ? <BudgetPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={record => updateModuleRecord("Orçamentos",record)} onConvert={convertBudget} onDelete={record => deleteModuleRecord("Orçamentos",record)} onCreateCustomer={createQuickCustomer} onCreateStructure={createQuickStructure}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} sales={moduleRecords.Vendas ?? []} onSave={record => updateModuleRecord("Vendas",record)}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders} company={activeCompany}/> : current === "Fiscal" ? <FiscalWorkspace modules={moduleRecords} serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} company={activeCompany} onNavigate={setCurrent}/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany} isAdministrator={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*"))}/> : current === "Aprovações" ? <ApprovalCenter records={moduleRecords["Aprovações"] ?? []} canApprove={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*") || authenticatedUser.permissions?.includes("aprovacoes.aprovar") || authenticatedUser.permissions?.includes("Aprovações"))} onOperation={runOperationalCommand}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} modules={moduleRecords} onOperation={runOperationalCommand} onOpen={setModal} onIssueInvoice={(record,invoiceNumber)=>{const commitment=(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId);const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Faturado"}}]:[];return saveConfirmedModuleRecord("Financeiro",{...record,status:"Em aberto",transactionType:"Receber",invoiceNumber,invoiceIssuedAt:new Date().toISOString()},related)}}/> : current === "Funcionários" ? <EmployeesWorkspace records={moduleRecords["Funcionários"] ?? []} serviceOrders={serviceOrders} onOpen={setModal} onUpdate={updateModuleRecord} onDelete={deleteModuleRecord} canEdit={hasAction("Funcionários","Editar")}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} onUpdate={updateServiceOrder} serviceOrders={serviceOrders} customers={customerRecords} company={activeCompany} role={authenticatedUser.role}/> : <>{(current === "Compras" || current === "Estoque") && <InventoryOperations mode={current} modules={moduleRecords} onOperation={runOperationalCommand}/>}<GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []} allModules={moduleRecords} serviceOrders={serviceOrders}/></>}</div>
       <footer><span>© {new Date().getFullYear()} ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
     {modal && <div data-testid={modal === "Novo cliente" ? "customer-new-dialog" : undefined}><Modal title={modal} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalogRecords={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} supplierRecords={moduleRecords["Fornecedores"] ?? []} employeeRecords={moduleRecords["Funcionários"] ?? [tiagoEmployee]} equipmentRecords={moduleRecords["Equipamentos"] ?? []} close={() => setModal("")} onSave={saveRecord} onCreateStructure={createQuickStructure}/></div>}

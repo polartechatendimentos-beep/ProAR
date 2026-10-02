@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseRest } from "../../../lib/supabase-rest";
-import { municipalityDistances } from "../../../lib/municipality-distances";
+import { municipalityDistances, municipalityNameDistances } from "../../../lib/municipality-distances";
 
 const PNCP_URL = "https://pncp.gov.br/api/consulta/v1/contratacoes/proposta";
 const PNCP_CONSULTA_BASE = "https://pncp.gov.br/api/consulta/v1";
@@ -320,7 +320,8 @@ async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radi
     // mantém publicações recentes; registros com encerramento conhecido e vencido saem.
     if (closing ? (closing < startTime || closing > endTime) : (!published || published < today.getTime() - 60 * 86400000)) return false;
     const municipalityName = normalize(item.unidadeOrgao?.municipioNome ?? "");
-    const distance = municipalityDistances[String(item.unidadeOrgao?.codigoIbge ?? "")] ?? CITY_CODES[municipalityName]?.distance ?? cityDistances[municipalityName];
+    const municipalityKey = `${municipalityName}|${String(item.unidadeOrgao?.ufSigla ?? "").toUpperCase()}`;
+    const distance = municipalityDistances[String(item.unidadeOrgao?.codigoIbge ?? "")] ?? municipalityNameDistances[municipalityKey] ?? CITY_CODES[municipalityName]?.distance ?? cityDistances[municipalityName];
     // Em pesquisa textual explícita, não descarte um resultado oficial apenas
     // porque a tabela local de distâncias ainda não conhece o município.
     // O raio continua obrigatório para o radar automático.
