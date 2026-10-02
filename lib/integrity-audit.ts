@@ -91,9 +91,38 @@ export function auditOperationalIntegrity(state: StateData, checkedAt = new Date
   }
 
   const customerIds = new Set(customers.map(item => text(item.id)).filter(Boolean));
-  const customerNames = new Set(customers.map(item => normalized(item.name)).filter(Boolean));
+  const customerNames = new Set(customers.flatMap(item => [normalized(item.name), normalized(item.legalName), normalized(item.tradeName)]).filter(Boolean));
+  const customerById = new Map(customers.map(item => [text(item.id), item]).filter(([id]) => Boolean(id)));
   const structureIds = new Set(structures.map(item => text(item.id)).filter(Boolean));
   const structureById = new Map(structures.map(item => [text(item.id), item]));
+  const equipmentIds = new Set(equipment.map(item => text(item.id)).filter(Boolean));
+
+  for (const order of orders) {
+    const ownerId = text(order.customerId || order.clientId);
+    const ownerName = normalized(order.client || order.customer || order.customerName);
+    if (ownerId && !customerIds.has(ownerId)) {
+      push(findings, "OS com cliente inválido", "Crítico", order, `OS ${text(order.id)} com cliente inexistente`, `O customerId/clientId ${ownerId} não existe no cadastro de clientes.`);
+    } else if (!ownerId && ownerName && !customerNames.has(ownerName)) {
+      push(findings, "OS sem vínculo estável de cliente", "Atenção", order, `OS ${text(order.id)} depende do nome do cliente`, "A OS não possui customerId válido e o vínculo depende somente do nome. Recomenda-se consolidar o ID do cliente.");
+    }
+    const structureId = text(order.roomId || order.sectorId || order.unitId || order.structureId);
+    if (structureId && !structureIds.has(structureId)) {
+      push(findings, "OS com estrutura inválida", "Crítico", order, `OS ${text(order.id)} com estrutura inexistente`, `O vínculo estrutural ${structureId} não existe.`);
+    } else if (structureId && ownerId) {
+      const location = structureById.get(structureId);
+      const locationOwnerId = text(location?.customerId || location?.clientId);
+      if (locationOwnerId && locationOwnerId !== ownerId) push(findings, "OS em estrutura de outro cliente", "Crítico", order, `OS ${text(order.id)} com vínculo cruzado`, `A estrutura ${structureId} pertence a outro cliente.`);
+    }
+    const linkedIds = Array.isArray(order.equipmentIds) ? order.equipmentIds.map(text).filter(Boolean) : text(order.equipmentId) ? [text(order.equipmentId)] : [];
+    for (const equipmentId of linkedIds) if (!equipmentIds.has(equipmentId)) push(findings, "OS com equipamento inválido", "Atenção", order, `OS ${text(order.id)} referencia equipamento ausente`, `O equipmentId ${equipmentId} não foi localizado no cadastro de equipamentos.`);
+  }
+
+  for (const budget of budgets) {
+    const ownerId = text(budget.customerId || budget.clientId);
+    const ownerName = normalized(budget.client || budget.customer || budget.customerName);
+    if (ownerId && !customerIds.has(ownerId)) push(findings, "Orçamentos com cliente inválido", "Crítico", budget, text(budget.name) || `Orçamento ${text(budget.id)}`, `O customerId/clientId ${ownerId} não existe no cadastro de clientes.`);
+    else if (!ownerId && ownerName && !customerNames.has(ownerName)) push(findings, "Orçamentos sem vínculo estável de cliente", "Atenção", budget, text(budget.name) || `Orçamento ${text(budget.id)}`, "O orçamento depende apenas do nome do cliente e não possui customerId válido.");
+  }
   for (const item of equipment) {
     const ownerId = text(item.customerId || item.clientId);
     const ownerName = normalized(item.client || item.customer || item.customerName);
@@ -143,7 +172,7 @@ export function auditOperationalIntegrity(state: StateData, checkedAt = new Date
     for (const reversal of reversals) if (!financialBook.some(movement => text(movement.id) === `REV-${text(title.id)}-${text(reversal.id)}`)) push(findings, "Estornos sem compensação no razão", "Crítico", title, text(title.name) || `Título ${text(title.id)}`, `O estorno ${text(reversal.id)} não tem movimento compensatório no razão financeiro.`);
   }
 
-  const names = ["Títulos financeiros duplicados", "Compras a prazo sem título", "Títulos sem origem", "Estoque divergente do livro", "Produtos sem livro de movimentos", "Produtos com saldo negativo", "OS concluídas sem saída de estoque", "Equipamentos sem cliente válido", "Equipamentos com estrutura inválida", "Equipamentos em estrutura de outro cliente", "Estruturas órfãs", "CPF/CNPJ duplicados", "Orçamentos convertidos sem OS", "Saldo legado sem baixas detalhadas", "Saldo financeiro divergente das baixas", "Baixas sem movimento no razão", "Estornos sem compensação no razão"];
+  const names = ["OS com cliente inválido", "OS sem vínculo estável de cliente", "OS com estrutura inválida", "OS em estrutura de outro cliente", "OS com equipamento inválido", "Orçamentos com cliente inválido", "Orçamentos sem vínculo estável de cliente", "Títulos financeiros duplicados", "Compras a prazo sem título", "Títulos sem origem", "Estoque divergente do livro", "Produtos sem livro de movimentos", "Produtos com saldo negativo", "OS concluídas sem saída de estoque", "Equipamentos sem cliente válido", "Equipamentos com estrutura inválida", "Equipamentos em estrutura de outro cliente", "Estruturas órfãs", "CPF/CNPJ duplicados", "Orçamentos convertidos sem OS", "Saldo legado sem baixas detalhadas", "Saldo financeiro divergente das baixas", "Baixas sem movimento no razão", "Estornos sem compensação no razão"];
   const checks = names.map(name => resultOf(name, findings));
   const critical = findings.filter(item => item.severity === "Crítico").length;
   const attention = findings.filter(item => item.severity === "Atenção").length;
