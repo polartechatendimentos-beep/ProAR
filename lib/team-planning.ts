@@ -2,7 +2,6 @@ export type PlanningOrder = {
   id?: string;
   client?: string;
   tech?: string;
-  client?: string;
   date?: string;
   time?: string;
   status?: string;
