@@ -1922,6 +1922,36 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     void fetch('/api/work-projects',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({companyId,projects:next,baseRevision:projectsRevision})}).then(async response=>{const result=await response.json();if(response.status===409&&result.state){const authoritative=result.state.projects as WorkProject[];setProjects(authoritative);setProjectsRevision(Number(result.state.revision||0));localStorage.setItem(projectsKey,JSON.stringify(authoritative));throw new Error("Outro aparelho atualizou a lista de obras. A versão online foi mantida; tente cadastrar novamente.");}if(!response.ok)throw new Error(result.error||"Falha ao salvar obra");setProjects(next);setProjectsRevision(Number(result.state?.revision||projectsRevision+1));localStorage.setItem(projectsKey,JSON.stringify(next));localStorage.setItem(selectedProjectKey,id);setActiveProjectId(id);setBlockFilter("Todas");setWorkManagerOpen(false);setNewWorkName("");setNewBlocks([{block:"A",houses:1}]);setNewCommonAreas([]);setReportNotice(`Obra ${name} cadastrada com sucesso e disponível em todos os aparelhos.`);}).catch(error=>setReportNotice(error.message));
   };
   const selectWorkProject = (id:string) => { setActiveProjectId(id); localStorage.setItem(selectedProjectKey,id); setBlockFilter("Todas"); setStatusFilter("Todos"); setQuery(""); };
+  const saveProjectsList=async(next:WorkProject[],message:string,nextActiveId?:string)=>{
+    if(!navigator.onLine){setReportNotice("Alterações no cadastro da obra exigem conexão com a base principal.");return false;}
+    try{
+      const response=await fetch("/api/work-projects",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({companyId,projects:next,baseRevision:projectsRevision})});
+      const result=await response.json().catch(()=>({}));
+      if(response.status===409&&result.state?.projects){
+        const authoritative=result.state.projects as WorkProject[];
+        setProjects(authoritative);setProjectsRevision(Number(result.state.revision||projectsRevision));localStorage.setItem(projectsKey,JSON.stringify(authoritative));
+        throw new Error("Outro aparelho atualizou a lista de obras. A versão mais recente foi carregada.");
+      }
+      if(!response.ok)throw new Error(result.error||"Não foi possível salvar a alteração da obra.");
+      setProjects(next);setProjectsRevision(Number(result.state?.revision||projectsRevision+1));localStorage.setItem(projectsKey,JSON.stringify(next));
+      if(nextActiveId){setActiveProjectId(nextActiveId);localStorage.setItem(selectedProjectKey,nextActiveId);}
+      setReportNotice(message);return true;
+    }catch(error){setReportNotice(error instanceof Error?error.message:"Não foi possível salvar a alteração da obra.");return false;}
+  };
+  const renameActiveProject=async()=>{
+    const name=window.prompt("Novo nome da obra:",activeProject.name)?.trim();
+    if(!name||name===activeProject.name)return;
+    const next=projects.map(project=>project.id===activeProject.id?{...project,name}:project);
+    await saveProjectsList(next,`Obra alterada para “${name}”.`);
+  };
+  const deleteActiveProject=async()=>{
+    if(activeProject.id===RESERVA_IMPERIAL.id){setReportNotice("A obra-base Reserva Imperial está protegida e não pode ser excluída por esta ação.");return;}
+    if(!window.confirm(`Excluir a obra “${activeProject.name}” da lista de obras? Os históricos já registrados não serão reutilizados automaticamente.`))return;
+    const next=projects.filter(project=>project.id!==activeProject.id);
+    const fallback=next[0]?.id||RESERVA_IMPERIAL.id;
+    await saveProjectsList(next,`Obra “${activeProject.name}” removida da lista.`,fallback);
+  };
+
   const syncExternalAccessMap = async (externalAccess: WorkExternalAccess[]) => {
     const response = await fetch("/api/public-work-map", {
       method: "PUT",
@@ -2163,7 +2193,7 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
   };
   return <section className="houses-app">
     {saveState !== "idle" && <div className={`work-save-bar ${saveState}`} role="status"><i/><span>{saveState === "saving" ? "Salvando..." : saveState === "saved" ? "✓ ALTERAÇÃO EFETUADA" : "Não foi possível salvar a alteração"}</span></div>}
-    <div className="work-manager-bar"><div><span><Building2 size={17}/></span><label>Obra ativa<select value={activeProject.id} onChange={event=>selectWorkProject(event.target.value)}>{projects.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}</select></label><small>{activeProject.blocks.length} quadra(s) • {activeProject.blocks.reduce((total,item)=>total+item.houses,0)} casas • {activeProject.commonAreas.length} áreas comuns</small></div><div className="work-manager-actions"><button className="outline-btn" onClick={()=>setAccessManagerOpen(true)}><ShieldCheck size={15}/> Engenheiros e Fiscais / Acesso Externo</button><button className="primary-btn" onClick={()=>setWorkManagerOpen(true)}><Plus size={15}/> Cadastrar obra</button></div></div>
+    <div className="work-manager-bar"><div><span><Building2 size={17}/></span><label>Obra ativa<select value={activeProject.id} onChange={event=>selectWorkProject(event.target.value)}>{projects.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}</select></label><small>{activeProject.blocks.length} quadra(s) • {activeProject.blocks.reduce((total,item)=>total+item.houses,0)} casas • {activeProject.commonAreas.length} áreas comuns</small></div><div className="work-manager-actions"><button className="outline-btn" onClick={()=>void renameActiveProject()}><Edit3 size={15}/> Alterar obra</button>{activeProject.id!==RESERVA_IMPERIAL.id&&<button className="outline-btn danger" onClick={()=>void deleteActiveProject()}><Trash2 size={15}/> Excluir obra</button>}<button className="outline-btn" onClick={()=>setAccessManagerOpen(true)}><ShieldCheck size={15}/> Engenheiros e Fiscais / Acesso Externo</button><button className="primary-btn" onClick={()=>setWorkManagerOpen(true)}><Plus size={15}/> Cadastrar obra</button></div></div>
     <div className="work-external-access-card"><div><span><ShieldCheck size={19}/></span><div><b>Acessos externos da obra</b><small>{(activeProject.externalAccess ?? []).length ? `${(activeProject.externalAccess ?? []).length} acesso(s) cadastrado(s)` : "Nenhum engenheiro ou fiscal cadastrado"} • permissões restritas a apontamentos</small></div></div><button className="primary-btn" onClick={()=>setAccessManagerOpen(true)}><Plus size={14}/> Adicionar engenheiro ou fiscal</button></div>
     <div className="houses-hero"><div><span className="section-kicker"><House size={12}/> CONTROLE DE EXECUÇÃO</span><h2>{activeProject.name}</h2><p>Acompanhamento individual das casas e áreas comuns, com evidências e histórico de execução.</p></div><div className="houses-public-share"><span><MapPin size={18}/></span><div><small>ACESSO DO CLIENTE</small><b>{shareToken ? "Mapa público ativo" : "Criar link de acompanhamento"}</b><em>{shareToken ? "Atualização automática em tempo real" : "O cliente verá somente o andamento da obra"}</em></div><button onClick={refreshWorkMap}><ArrowDownRight size={14}/> Atualizar</button><button onClick={sendWorkMap}><ArrowUpRight size={14}/> Enviar</button><button onClick={sharePublicMap}><MessageCircle size={14}/>{shareToken ? "Link" : "Criar link"}</button>{shareToken && <a href={`/obra/${shareToken}`} target="_blank" rel="noreferrer"><Eye size={14}/> Visualizar</a>}</div><div className="houses-progress"><div><small>PROGRESSO GERAL</small><strong>{completion}%</strong></div><i><b style={{ width: `${completion}%` }}/></i><span>{completed} finalizadas de {houses.length} unidades cadastradas</span></div></div>
     <div className="work-block-overview"><div className="work-block-overview-head"><div><span>PROGRESSO POR QUADRA</span><h3>Visão rápida da execução</h3></div><small>Clique em uma quadra para filtrar as unidades abaixo.</small></div><div className="work-block-summary">{activeProject.blocks.map(({block})=>{const stat=blockProgress(block);return <button key={block} style={{"--block-progress":`${stat.progress}%`} as React.CSSProperties} className={blockFilter===block?"active":""} onClick={()=>setBlockFilter(block)}><div><b>Quadra {block}</b><span>{stat.progress}%</span></div><i><em style={{width:`${stat.progress}%`}}/></i><small>{stat.entries.length} casas • {stat.done} concluídas • {stat.working} em andamento</small></button>})}</div></div>
