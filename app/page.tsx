@@ -739,6 +739,16 @@ function quickPrintServiceOrder(order: ServiceOrder, company: TenantCompany) {
 function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders, customers, company }: { onOpen: (name: string) => void; onSelect: (order: ServiceOrder) => void; onDelete: (order: ServiceOrder) => void; onUpdate: (order: ServiceOrder) => void; serviceOrders: ServiceOrder[]; customers: Customer[]; company: TenantCompany }) {
   const [query, setQuery] = useState("");
   const [visibility, setVisibility] = useState("Em aberto");
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail=(event as CustomEvent<{module?:string;recordId?:string}>).detail;
+      if(detail?.module!=="Ordens de serviço" || !detail.recordId) return;
+      const order=serviceOrders.find(item=>item.id===detail.recordId);
+      if(order) onSelect(order);
+    };
+    window.addEventListener("proar:focus-record",handler);
+    return()=>window.removeEventListener("proar:focus-record",handler);
+  },[serviceOrders,onSelect]);
   const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
   const todayIso = new Date().toISOString().slice(0,10);
   const isClosed = (status:string) => /conclu[ií]d|cancelad/i.test(status);
@@ -2095,6 +2105,16 @@ function GenericModule({ name, onOpen, onDelete, onUpdate, onConvert, companyCnp
   const [detailTab, setDetailTab] = useState("Dados gerais");
   const [employeePasswordReset, setEmployeePasswordReset] = useState("");
   const [nfeStatus, setNfeStatus] = useState("");
+  useEffect(() => {
+    const handler=(event:Event)=>{
+      const detail=(event as CustomEvent<{module?:string;recordId?:string}>).detail;
+      if(detail?.module!==name || !detail.recordId) return;
+      const record=records.find(item=>item.id===detail.recordId);
+      if(record){setDetailRecord(record);setDetailTab("Dados gerais");}
+    };
+    window.addEventListener("proar:focus-record",handler);
+    return()=>window.removeEventListener("proar:focus-record",handler);
+  },[name,records]);
   const catalogEditable = canEdit;
   const descriptions: Record<string,string> = {
     "Equipamentos": "Acompanhe o parque de equipamentos, histórico técnico, garantias e próximas manutenções.",
