@@ -275,9 +275,9 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
     if (!entry.productId || same(before, entry)) continue;
     if (before) throw new OperationError("Movimento de estoque é imutável. Registre um ajuste compensatório.");
     const quantity = Number(entry.quantity);
-    if (!products.some(product => product.id === entry.productId) || !Number.isFinite(quantity) || quantity <= 0 || !["Entrada", "Saída", "Ajuste"].includes(entry.movementType)) throw new OperationError("Movimento exige produto, tipo e quantidade válida.");
+    if (!products.some(product => product.id === entry.productId) || !Number.isFinite(quantity) || quantity <= 0 || !["Entrada", "Saída", "Ajuste", "Transferência"].includes(entry.movementType)) throw new OperationError("Movimento exige produto, tipo e quantidade válida.");
     if (!String(entry.changeReason || entry.description || "").trim()) throw new OperationError("Informe o motivo do movimento.");
-    addMovement({ id: `MAN-${entry.id}`, productId: entry.productId, quantity: entry.movementType === "Saída" ? -quantity : quantity, kind: entry.movementType, destinationType: entry.destinationType || "Estoque central", destinationId: entry.destinationId || "", destinationName: entry.destinationName || "", createdAt: now, user: actor.username, reason: entry.changeReason || entry.description }, stock);
+    addMovement({ id: `MAN-${entry.id}`, productId: entry.productId, quantity: entry.movementType === "Transferência" ? 0 : entry.movementType === "Saída" ? -quantity : quantity, transferQuantity: entry.movementType === "Transferência" ? quantity : undefined, kind: entry.movementType, sourceType: entry.sourceType || "", sourceId: entry.sourceId || "", sourceName: entry.sourceName || "", destinationType: entry.destinationType || "Estoque central", destinationId: entry.destinationId || "", destinationName: entry.destinationName || "", createdAt: now, user: actor.username, reason: entry.changeReason || entry.description }, stock);
   }
   for (const order of list(next.serviceOrders)) {
     const before = list(old.serviceOrders).find(item => item.id === order.id);
@@ -331,7 +331,7 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
   }
   const next = structuredClone(state);
   const modules = next.moduleRecords ||= {};
-  const module = ["settle", "reverse", "cancel", "dates"].includes(command.action) ? "Financeiro" : command.action === "receive" ? "Compras" : command.action === "account" ? "Contas financeiras" : command.action === "stock" ? "Estoque" : command.action === "reconcile" ? "Conciliações" : "";
+  const module = ["settle", "reverse", "cancel", "dates"].includes(command.action) ? "Financeiro" : command.action === "receive" ? "Compras" : command.action === "account" ? "Contas financeiras" : ["stock","stock-transfer"].includes(command.action) ? "Estoque" : command.action === "reconcile" ? "Conciliações" : "";
   if (!module) throw new OperationError("Operação desconhecida.");
   const records = modules[module] ||= [];
   const record = records.find(item => item.id === command.recordId);
@@ -371,6 +371,11 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
     case "stock":
       requireAction(actor, data.movementType === "Ajuste" ? "estoque.ajustar" : "estoque.editar");
       records.push({ id: operationId, name: `${data.movementType} de estoque`, productId: data.productId, quantity: data.quantity, movementType: data.movementType, destinationType: data.destinationType || "Estoque central", destinationId: data.destinationId || "", destinationName: data.destinationName || "", changeReason: data.reason, description: data.reason, createdAt: now });
+      break;
+    case "stock-transfer":
+      requireAction(actor, "estoque.editar");
+      if (!(Number(data.quantity) > 0) || !String(data.sourceType || "").trim() || !String(data.destinationType || "").trim()) throw new OperationError("Transferência exige quantidade, origem e destino.");
+      records.push({ id: operationId, name: "Transferência de estoque", productId: data.productId, quantity: data.quantity, movementType: "Transferência", sourceType: data.sourceType, sourceId: data.sourceId || "", sourceName: data.sourceName || "", destinationType: data.destinationType, destinationId: data.destinationId || "", destinationName: data.destinationName || "", changeReason: data.reason || "Transferência interna", description: data.reason || "Transferência interna", createdAt: now });
       break;
     case "reconcile": {
       requireAction(actor, "financeiro.conciliar");
