@@ -19,7 +19,7 @@ export function deriveWorkflowSuggestions(serviceOrders:RecordLike[],modules:Rec
   }
   for(const order of serviceOrders||[]){
     const status=String(order.status||"");
-    if(/conclu[ií]d/i.test(status)&&!/autorizada|emitida/i.test(String(order.nfseStatus||""))){
+    if(/conclu[ií]d/i.test(status)&&!/^(autorizada|emitida|cancelada)$/i.test(String(order.nfseStatus||"").trim())){
       items.push({id:`wf-os-fiscal-${order.id}`,title:`OS concluída aguardando faturamento • ${order.id}`,detail:[order.client,"Preparar documento fiscal e financeiro"].filter(Boolean).join(" • "),module:"Fiscal",priority:2,sourceModule:"Ordens de serviço",sourceId:String(order.id||""),nextAction:"Preparar faturamento"});
     }
   }
