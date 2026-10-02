@@ -659,7 +659,6 @@ function quickPrintServiceOrder(order: ServiceOrder, company: TenantCompany) {
 }
 
 function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: sourceServiceOrders, customers, company, role }: { onOpen: (name: string) => void; onSelect: (order: ServiceOrder) => void; onDelete: (order: ServiceOrder) => void; onUpdate: (order: ServiceOrder) => void; serviceOrders: ServiceOrder[]; customers: Customer[]; company: TenantCompany; role?: string }) {
-  let serviceOrders = sourceServiceOrders;
   const [query, setQuery] = useState("");
   const technicianMode = /t[eé]cnico/i.test(role || "");
   const [visibility, setVisibility] = useState(technicianMode ? "Hoje" : "Em aberto");
@@ -667,17 +666,17 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: so
     const handler = (event: Event) => {
       const detail=(event as CustomEvent<{module?:string;recordId?:string}>).detail;
       if(detail?.module!=="Ordens de serviço" || !detail.recordId) return;
-      const order=serviceOrders.find(item=>item.id===detail.recordId);
+      const order=sourceServiceOrders.find(item=>item.id===detail.recordId);
       if(order) onSelect(order);
     };
     window.addEventListener("proar:focus-record",handler);
     return()=>window.removeEventListener("proar:focus-record",handler);
-  },[serviceOrders,onSelect]);
+  },[sourceServiceOrders,onSelect]);
   const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
   const todayIso = new Date().toISOString().slice(0,10);
   const isClosed = (status:string) => /conclu[ií]d|cancelad/i.test(status);
-  const visibleOrders = serviceOrders.filter(order => { const customer = customers.find(item => item.name === order.client); const matchesSearch=!query.trim() || normalizeSearch([order.id, order.client, order.unit, order.address, order.tech, customer?.legalName, customer?.tradeName, customer?.doc, customer?.phone].filter(Boolean).join(" ")).includes(normalizeSearch(query)); const matchesFilter=visibility === "Todas" || visibility === "Concluídas" ? /conclu[ií]d/i.test(order.status) : visibility === "Canceladas" ? /cancelad/i.test(order.status) : visibility === "Hoje" ? order.date === todayIso : !isClosed(order.status); return matchesSearch && matchesFilter; });
-  serviceOrders = visibleOrders;
+  const visibleOrders = sourceServiceOrders.filter(order => { const customer = customers.find(item => item.name === order.client); const matchesSearch=!query.trim() || normalizeSearch([order.id, order.client, order.unit, order.address, order.tech, customer?.legalName, customer?.tradeName, customer?.doc, customer?.phone].filter(Boolean).join(" ")).includes(normalizeSearch(query)); const matchesFilter=visibility === "Todas" || visibility === "Concluídas" ? /conclu[ií]d/i.test(order.status) : visibility === "Canceladas" ? /cancelad/i.test(order.status) : visibility === "Hoje" ? order.date === todayIso : !isClosed(order.status); return matchesSearch && matchesFilter; });
+  const serviceOrders = visibleOrders;
   const today = new Date().toISOString().slice(0, 10);
   const reviewAlerts = serviceOrders.filter(order => {
     const reviewDate = serviceOrderReviewDate(order);
