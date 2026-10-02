@@ -135,20 +135,20 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
   modules.Financeiro = financial;
   const approvals = structuredClone(list(modules["Aprovações"]));
   modules["Aprovações"] = approvals;
-  const ensureApproval = (sourceModule:string, source:ErpRecord, reason:string, value:number) => {
-    const existing=approvals.find(item=>item.sourceModule===sourceModule && item.sourceId===source.id && Number(item.value||0)===Number(value) && !/Rejeitado|Cancelado/i.test(item.status||""));
+  const ensureApproval = (sourceModule:string, source:ErpRecord, reason:string, value:number, controlFingerprint:string) => {
+    const existing=approvals.find(item=>item.sourceModule===sourceModule && item.sourceId===source.id && item.controlFingerprint===controlFingerprint && !/Rejeitado|Cancelado/i.test(item.status||""));
     if(existing){ source.approvalRequired=true; source.approvalStatus=existing.status; return existing; }
-    const approval={ id:`APR-${sourceModule.replace(/\W/g,"").toUpperCase()}-${source.id}-${crypto.randomUUID().slice(0,8)}`, name:`Aprovação • ${source.name || source.id}`, sourceModule, sourceId:source.id, client:source.client, value, reason, status:"Pendente", requestedAt:now, requestedBy:actor.username, createdAt:now };
+    const approval={ id:`APR-${sourceModule.replace(/\W/g,"").toUpperCase()}-${source.id}-${crypto.randomUUID().slice(0,8)}`, name:`Aprovação • ${source.name || source.id}`, sourceModule, sourceId:source.id, client:source.client, value, reason, controlFingerprint, status:"Pendente", requestedAt:now, requestedBy:actor.username, createdAt:now };
     approvals.push(approval); source.approvalRequired=true; source.approvalStatus="Pendente"; return approval;
   };
   for(const purchase of list(modules.Compras)){
     const before=list(oldModules.Compras).find(item=>item.id===purchase.id);
-    if(!same(before,purchase) && Number(purchase.value||0)>=5000) ensureApproval("Compras",purchase,"Compra acima da alçada automática de R$ 5.000,00.",Number(purchase.value||0));
+    if(!same(before,purchase) && Number(purchase.value||0)>=5000) ensureApproval("Compras",purchase,"Compra acima da alçada automática de R$ 5.000,00.",Number(purchase.value||0),`purchase-value:${Number(purchase.value||0).toFixed(2)}`);
   }
   for(const budget of list(modules.Orçamentos)){
     const before=list(oldModules.Orçamentos).find(item=>item.id===budget.id);
     const discountPercent=Number(budget.discountPercent||0);
-    if(!same(before,budget) && discountPercent>10) ensureApproval("Orçamentos",budget,`Desconto comercial de ${discountPercent.toFixed(1)}% acima da alçada de 10%.`,Number(budget.value||0));
+    if(!same(before,budget) && discountPercent>10) ensureApproval("Orçamentos",budget,`Desconto comercial de ${discountPercent.toFixed(1)}% acima da alçada de 10%.`,Number(budget.value||0),`budget-discount:${discountPercent.toFixed(4)}:value:${Number(budget.value||0).toFixed(2)}`);
   }
   // Derived titles use stable origin IDs. They are created once, even after reopening
   // an OS or receiving a second delivery of the same purchase.
