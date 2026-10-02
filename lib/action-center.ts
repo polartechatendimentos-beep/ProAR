@@ -196,7 +196,7 @@ export function deriveOperationalActions(
       if (module === "Compras" && /aguardando|pendente|atras|parcial/i.test(recordText)) {
         actions.push({
           id: `purchase-${recordId}`,
-          title: record.name || `Compra ${recordId}`,
+          title: record.name ? String(record.name) : `Compra ${recordId}`,
           detail: [record.client, record.status || "Compra pendente"].filter(Boolean).join(" • "),
           module: "Compras",
           tone: /atras|venc/i.test(recordText) ? "red" : "amber",
@@ -237,7 +237,7 @@ export function deriveOperationalActions(
       } else if (/aguardando|pendente|venc|atras|baixo estoque|sem estoque/i.test(recordText) && !["Financeiro", "Compras", "Orçamentos", "Produtos", "Estoque"].includes(module)) {
         actions.push({
           id: `generic-${module}-${recordId}`,
-          title: record.name || recordId,
+          title: record.name ? String(record.name) : recordId,
           detail: [module, record.status || "Próxima ação necessária"].filter(Boolean).join(" • "),
           module,
           tone: /venc|atras|sem estoque/i.test(recordText) ? "red" : "amber",
