@@ -7,6 +7,14 @@
     {
       "path": "/api/cron/work-route-retention",
       "schedule": "25 8 * * *"
+    },
+    {
+      "path": "/api/cron/licitacoes",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/licitacoes",
+      "schedule": "0 21 * * *"
     }
   ]
 }
