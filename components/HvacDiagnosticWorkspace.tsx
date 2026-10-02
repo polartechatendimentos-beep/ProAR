@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { AlertTriangle, ArrowRight, BookOpen, Calculator, CheckCircle2, Clock3, Gauge, History, Home, Search, ShieldAlert, Sparkles, Thermometer, Wrench } from "lucide-react";
-import { findDiagnosticMatches, normalizeDiagnosticRecord, type DiagnosticCodeRecord } from "@/lib/diagnostic-engine";
+import { findDiagnosticMatches, normalizeDiagnosticRecord, parseDiagnosticSearch, type DiagnosticCodeRecord } from "@/lib/diagnostic-engine";
+import { HVAC_REFERENCE_PORTAL, mergeDiagnosticCatalog } from "@/lib/hvac-error-code-catalog";
 import { validateManufacturerCode } from "@/lib/diagnostic-brand-rules";
 import "./hvac-diagnostic-workspace.css";
 
@@ -50,11 +51,13 @@ export function HvacDiagnosticWorkspace({order,linkedEquipment=[],errorCodes=[],
   const [message,setMessage]=useState("");
   const [result,setResult]=useState<DiagnosticResult|null>((order.diagnosticLastResult as DiagnosticResult)||null);
   const history=Array.isArray(order.diagnosticHistory)?order.diagnosticHistory as HistoryItem[]:[];
-  const codes=useMemo(()=>errorCodes.map(normalizeDiagnosticRecord).filter((item):item is DiagnosticCodeRecord=>Boolean(item)),[errorCodes]);
+  const codes=useMemo(()=>mergeDiagnosticCatalog(errorCodes.map(normalizeDiagnosticRecord).filter((item):item is DiagnosticCodeRecord=>Boolean(item))),[errorCodes]);
+  const parsedSearch=useMemo(()=>parseDiagnosticSearch(search),[search]);
   const searchMatches=useMemo(()=>{
-    const source=brandFilter==="Todas"?codes:codes.filter(item=>item.brand.toLocaleLowerCase("pt-BR")===brandFilter.toLocaleLowerCase("pt-BR"));
-    return findDiagnosticMatches(source,{brand:brandFilter==="Todas"?"":brandFilter,code:search,blinkPattern:search,symptoms:search},40);
-  },[codes,search,brandFilter]);
+    const effectiveBrand=brandFilter==="Todas"?(parsedSearch.brand||""):brandFilter;
+    const source=effectiveBrand?codes.filter(item=>item.brand.toLocaleLowerCase("pt-BR")===effectiveBrand.toLocaleLowerCase("pt-BR")):codes;
+    return findDiagnosticMatches(source,{...parsedSearch,brand:effectiveBrand},40).filter(item=>item.score>5);
+  },[codes,parsedSearch,brandFilter]);
   const manufacturerValidation=useMemo(()=>validateManufacturerCode({brand,model,code,blinkPattern}),[brand,model,code,blinkPattern]);
   const directReference=useMemo(()=>{
     if(manufacturerValidation.status==="needs-extraction"||manufacturerValidation.status==="invalid") return null;
@@ -104,9 +107,10 @@ export function HvacDiagnosticWorkspace({order,linkedEquipment=[],errorCodes=[],
     </div>}
 
     {page==="Códigos"&&<div className="diagnostic-page">
-      <div className="code-search-row"><label><Search size={16}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder='Ex.: "Elgin E0", "E5" ou "5 piscadas"'/></label><select value={brandFilter} onChange={e=>setBrandFilter(e.target.value)}><option>Todas</option>{brands.map(item=><option key={item}>{item}</option>)}</select></div>
-      <div className="code-results">{searchMatches.map(({record,score})=><article key={record.id}><div><span>{record.brand}</span><b>{record.code||record.blinkPattern||"Falha"}</b></div><section><h4>{record.title||"Código técnico"}</h4><p>{record.notes||record.causes?.[0]||"Abra para consultar causas e verificações."}</p><small>{record.verified?"Referência verificada":"Referência cadastrada"} • compatibilidade {score}</small></section><button onClick={()=>selectCode(record)}>Usar no diagnóstico</button></article>)}</div>
-      {!searchMatches.length&&<div className="diagnostic-empty"><BookOpen size={24}/><b>Código não localizado no banco desta empresa.</b><span>Use o Diagnóstico IA para pesquisar documentação técnica e manuais na web sem assumir que códigos iguais significam a mesma falha em marcas diferentes.</span><button className="diagnostic-primary" onClick={()=>{setCode(search);setPage("Diagnóstico")}}>Pesquisar com IA</button></div>}
+      <div className="code-search-row"><label><Search size={16}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder='Ex.: "Elgin condensadora piscando 5 vezes piso teto 60 mil"'/></label><select value={brandFilter} onChange={e=>setBrandFilter(e.target.value)}><option>Todas</option>{brands.map(item=><option key={item}>{item}</option>)}</select></div>
+      {search.trim()&&<div className="smart-query-readout"><b>Filtro entendido pelo ProAR:</b>{parsedSearch.brand&&<span>Marca: {parsedSearch.brand}</span>}{parsedSearch.equipmentType&&<span>Tipo: {parsedSearch.equipmentType}</span>}{parsedSearch.unit&&<span>Unidade: {parsedSearch.unit}</span>}{parsedSearch.capacityBtus&&<span>Capacidade: {Number(parsedSearch.capacityBtus).toLocaleString("pt-BR")} BTU/h</span>}{parsedSearch.code&&<span>Código: {parsedSearch.code}</span>}{parsedSearch.blinkPattern&&<span>Sinal: {parsedSearch.blinkPattern}</span>}</div>}
+      <div className="code-results">{searchMatches.map(({record,score})=><article key={record.id}><div><span>{record.brand}</span><b>{record.code||record.blinkPattern||"Falha"}</b></div><section><h4>{record.title||"Código técnico"}</h4><p>{record.notes||record.causes?.[0]||"Abra para consultar causas e verificações."}</p><small>{record.verified?"Referência verificada":"Referência cadastrada"} • compatibilidade {score}{record.equipmentTypes?.length?` • ${record.equipmentTypes.join("/")}`:""}{record.unit?` • sinal na ${record.unit}`:""}</small></section><button onClick={()=>selectCode(record)}>Usar no diagnóstico</button></article>)}</div>
+      {!searchMatches.length&&<div className="diagnostic-empty"><BookOpen size={24}/><b>Nenhuma referência suficientemente compatível.</b><span>O ProAR não encontrou combinação segura entre marca, tipo, unidade, capacidade e sinal. Ele não vai reaproveitar um código de outro equipamento só porque a quantidade de piscadas coincide.</span><small>Fonte complementar configurada: {HVAC_REFERENCE_PORTAL.name} • {HVAC_REFERENCE_PORTAL.brands.length} marcas catalogadas.</small><button className="diagnostic-primary" onClick={()=>{setBrand(parsedSearch.brand||brand);setEquipmentType(parsedSearch.equipmentType||equipmentType);setCode(parsedSearch.code||"");setBlinkPattern(parsedSearch.blinkPattern||"");setSymptom(search);setPage("Diagnóstico")}}>Pesquisar manuais com IA</button></div>}
     </div>}
 
     {page==="Diagnóstico"&&<div className="diagnostic-page diagnose-layout">
