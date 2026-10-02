@@ -12,7 +12,7 @@ export type OperationalAction = {
   recordId?: string;
 };
 
-type GenericRecord = Record<string, any>;
+type GenericRecord = Record<string, unknown>;
 
 function dateOnly(value: unknown) {
   if (!value) return "";
