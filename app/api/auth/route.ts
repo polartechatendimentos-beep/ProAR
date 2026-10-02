@@ -7,6 +7,8 @@ import { tenantSlugFromHost } from "../../../lib/tenant-host";
 import { validateCompanyAccess } from "../../../lib/company-access";
 import { validateManagerCredentials } from "../../../lib/manager-auth";
 const COOKIE_NAME = "proar_session";
+const PRIMARY_COMPANY_ID = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
+const PRIMARY_COMPANY_SLUG = (process.env.PROAR_PRIMARY_COMPANY_SLUG || "polartech").trim().toLowerCase();
 const safeEqual = (left: string, right: string) => { const a=Buffer.from(left); const b=Buffer.from(right); return a.length===b.length && timingSafeEqual(a,b); };
 
 async function authenticateLegacyEmployee(username: string, password: string) {
@@ -60,9 +62,9 @@ export async function POST(request: NextRequest) {
   const resolvedTenant = hostTenant || String(tenant || "").trim().toLowerCase();
   const isConfiguredTiago = String(username).trim().toLocaleLowerCase("pt-BR") === "tiago.viana" && Boolean(process.env.PROAR_POLARTECH_TIAGO_PASSWORD) && safeEqual(String(password), String(process.env.PROAR_POLARTECH_TIAGO_PASSWORD));
   if (validateManagerCredentials(String(username), String(password)) || isConfiguredTiago) {
-    let companyId = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
-    let companySlug = resolvedTenant || "polartech";
-    if (resolvedTenant && supabaseConfigured()) {
+    let companyId = PRIMARY_COMPANY_ID;
+    let companySlug = resolvedTenant || PRIMARY_COMPANY_SLUG;
+    if (resolvedTenant && resolvedTenant !== PRIMARY_COMPANY_SLUG && supabaseConfigured()) {
       const tenantResponse = await supabaseRest(`proar_companies?select=id,slug,status&slug=eq.${encodeURIComponent(resolvedTenant)}&limit=1`);
       const tenantRows = tenantResponse.ok ? await tenantResponse.json() : [];
       if (tenantRows[0]?.status === "active") { companyId = String(tenantRows[0].id); companySlug = String(tenantRows[0].slug || resolvedTenant); }
