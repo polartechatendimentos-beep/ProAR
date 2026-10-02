@@ -1770,7 +1770,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
         </div>}
         {tab === "Inteligência Artificial" && isAdministrator && <div className="settings-form"><div className="wide settings-security-note"><ShieldCheck size={17}/><span><b>A chave nunca volta ao navegador</b><small>O servidor armazena a credencial criptografada e informa apenas os quatro últimos caracteres.</small></span></div><label className="wide">{aiStatus.configured ? "Trocar chave da OpenAI" : "Chave da OpenAI"}<input type="password" autoComplete="new-password" value={aiKey} onChange={event=>setAiKey(event.target.value)} placeholder={aiStatus.configured?`Configurada • final ${aiStatus.last4}`:"sk-proj-..."}/></label><div className="wide settings-footer-actions"><button className="primary-btn" disabled={aiBusy||!aiKey.trim()} onClick={()=>void saveAiCredential()}><LockKeyhole size={14}/>{aiStatus.configured?"Trocar chave":"Salvar chave"}</button><button className="outline-btn" disabled={aiBusy||(!aiStatus.configured&&aiStatus.source==="none")} onClick={()=>void testAiCredential()}><Zap size={14}/> Testar conexão</button>{aiStatus.configured&&<button className="outline-btn" disabled={aiBusy} onClick={()=>void removeAiCredential()}><Trash2 size={14}/> Remover chave</button>}</div></div>}
         {tab === "Segurança" && <div className="settings-form"><label className="wide settings-switch"><span><b>Exigir autenticação individual</b><small>Somente funcionários ativos podem entrar.</small></span><input type="checkbox" defaultChecked/></label><label className="wide settings-switch"><span><b>Encerrar sessão por inatividade</b><small>Protege o sistema em computadores compartilhados.</small></span><input type="checkbox" defaultChecked/></label></div>}
-        {saved && <p className="settings-message">{saved}</p>}<footer><small>Empresa ativa: {activeCompany.tradeName} • base {activeCompany.id}</small>{tab !== "Inteligência Artificial" && tab !== "Google Agenda" && <div className="settings-footer-actions">{tab === "Empresa" && normalizeCnpj(companyDoc) !== normalizeCnpj(activeCompany.cnpj) && <button className="outline-btn" onClick={createCompany}><Plus size={15}/> Criar como nova empresa</button>}<button className="primary-btn" disabled={tab === "Fiscal" && fiscalBusy} onClick={tab === "Fiscal" ? ()=>void saveFiscalConfiguration() : save}><CheckCircle2 size={15}/> {tab === "Fiscal" ? "Salvar configuração fiscal" : "Salvar configurações"}</button></div>}</footer>
+        <footer><small>Empresa ativa: {activeCompany.tradeName} • base {activeCompany.id}</small>{tab !== "Inteligência Artificial" && tab !== "Google Agenda" && <div className="settings-footer-actions">{tab === "Empresa" && normalizeCnpj(companyDoc) !== normalizeCnpj(activeCompany.cnpj) && <button className="outline-btn" onClick={createCompany}><Plus size={15}/> Criar como nova empresa</button>}<button className="primary-btn" disabled={tab === "Fiscal" && fiscalBusy} onClick={tab === "Fiscal" ? ()=>void saveFiscalConfiguration() : save}><CheckCircle2 size={15}/> {tab === "Fiscal" ? "Salvar configuração fiscal" : "Salvar configurações"}</button></div>}</footer>
       </div></div>
   </section>;
 }
@@ -3330,10 +3330,13 @@ export default function Home() {
   }, [authenticatedUser?.username, activeCompany.id, activeCompany.cnpj, activeCompany.tradeName]);
   const selectCompany = (company: TenantCompany) => {
     if (company.status === "Bloqueada") { setSavedMessage(`O acesso ao CNPJ ${company.cnpj} está bloqueado pelo gerenciador.`); return; }
+    const switchedCompany = company.id !== activeCompany.id;
     setActiveCompany(company);
     localStorage.setItem("proar-v4-active-company", company.id);
-    setSavedMessage(`Empresa alterada para ${company.tradeName}. Base de dados isolada carregada.`);
-    window.setTimeout(() => setSavedMessage(""), 3000);
+    if (switchedCompany) {
+      setSavedMessage(`Empresa alterada para ${company.tradeName}. Base de dados isolada carregada.`);
+      window.setTimeout(() => setSavedMessage(""), 3000);
+    }
   };
   useEffect(() => {
     setOnline(navigator.onLine);
