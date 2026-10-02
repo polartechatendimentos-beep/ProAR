@@ -1,0 +1,46 @@
+export type ProARErrorCode =
+  | "PROAR-AUTH-001"
+  | "PROAR-AUTH-002"
+  | "PROAR-DB-001"
+  | "PROAR-DB-002"
+  | "PROAR-FISCAL-001"
+  | "PROAR-INTEGRATION-001"
+  | "PROAR-PERM-001"
+  | "PROAR-CONFLICT-001"
+  | "PROAR-VALIDATION-001"
+  | "PROAR-UNKNOWN-001";
+
+export type ProARErrorDescriptor = {
+  code: ProARErrorCode;
+  title: string;
+  userMessage: string;
+  severity: "info"|"warning"|"error"|"critical";
+};
+
+const descriptors:Record<ProARErrorCode,ProARErrorDescriptor>={
+  "PROAR-AUTH-001":{code:"PROAR-AUTH-001",title:"Sessão expirada",userMessage:"Sua sessão expirou. Entre novamente no sistema.",severity:"warning"},
+  "PROAR-AUTH-002":{code:"PROAR-AUTH-002",title:"Sistema bloqueado",userMessage:"Sistema bloqueado. Entre em contato com a equipe da ProAR.",severity:"critical"},
+  "PROAR-DB-001":{code:"PROAR-DB-001",title:"Banco indisponível",userMessage:"Não foi possível acessar os dados do sistema neste momento.",severity:"critical"},
+  "PROAR-DB-002":{code:"PROAR-DB-002",title:"Banco lento",userMessage:"O banco está demorando mais que o esperado para responder.",severity:"warning"},
+  "PROAR-FISCAL-001":{code:"PROAR-FISCAL-001",title:"Integração fiscal",userMessage:"A integração fiscal precisa de atenção antes da emissão.",severity:"warning"},
+  "PROAR-INTEGRATION-001":{code:"PROAR-INTEGRATION-001",title:"Integração indisponível",userMessage:"Uma integração externa está indisponível no momento.",severity:"warning"},
+  "PROAR-PERM-001":{code:"PROAR-PERM-001",title:"Acesso não permitido",userMessage:"Você não possui permissão para realizar esta operação.",severity:"warning"},
+  "PROAR-CONFLICT-001":{code:"PROAR-CONFLICT-001",title:"Conflito de atualização",userMessage:"Este registro foi alterado por outro usuário. Atualize e tente novamente.",severity:"warning"},
+  "PROAR-VALIDATION-001":{code:"PROAR-VALIDATION-001",title:"Dados inválidos",userMessage:"Revise os campos destacados antes de continuar.",severity:"info"},
+  "PROAR-UNKNOWN-001":{code:"PROAR-UNKNOWN-001",title:"Falha inesperada",userMessage:"Não foi possível concluir a operação. Tente novamente.",severity:"error"},
+};
+
+export function proarError(code:ProARErrorCode){return descriptors[code];}
+
+export function classifyProarError(input:unknown,status?:number):ProARErrorDescriptor{
+  const message=input instanceof Error?input.message:String((input as any)?.message||(input as any)?.error||input||"");
+  const value=message.toLowerCase();
+  if(/sistema bloqueado|system_blocked/.test(value)) return proarError("PROAR-AUTH-002");
+  if(status===401||/sess[aã]o.*expir|unauthorized|jwt/.test(value)) return proarError("PROAR-AUTH-001");
+  if(status===403||/forbidden|sem permiss[aã]o|permission denied/.test(value)) return proarError("PROAR-PERM-001");
+  if(status===409||/conflito|conflict|revision/.test(value)) return proarError("PROAR-CONFLICT-001");
+  if(status===408||status===504||/timeout|timed out|abort/.test(value)) return proarError("PROAR-DB-002");
+  if(status && status>=500 || /database|postgres|supabase|neon|fetch failed|econn/.test(value)) return proarError("PROAR-DB-001");
+  if(/fiscal|sefaz|nf-e|nfce|nfse|dfe/.test(value)) return proarError("PROAR-FISCAL-001");
+  return proarError("PROAR-UNKNOWN-001");
+}
