@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Camera, Check, ChevronRight, Clock3, FileText, History, ImagePlus, MapPin, Plus, Save, Sparkles, Wrench, X } from "lucide-react";
 import { improveTechnicalText } from "@/lib/text-assist";
 import { CustomerSearchSelect } from "@/components/CustomerSearchSelect";
@@ -65,6 +65,35 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
   const [photos, setPhotos] = useState<Record<string, string[]>>((order.photos as Record<string, string[]>) || {});
   const [newService, setNewService] = useState("");
   const [servicePrice, setServicePrice] = useState("0");
+  const [draftReady, setDraftReady] = useState(false);
+  const autosaveKey = `proar-os-draft:${order.id}`;
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(autosaveKey);
+      if (raw) {
+        const saved = JSON.parse(raw) as { savedAt?: string; draft?: WorkspaceOrder; photos?: Record<string,string[]> };
+        const serverTime = new Date(String(order.updatedAt || order.createdAt || 0)).getTime();
+        const draftTime = new Date(String(saved.savedAt || 0)).getTime();
+        if (saved.draft && (!serverTime || draftTime > serverTime)) {
+          setDraft(saved.draft);
+          if (saved.photos) setPhotos(saved.photos);
+          setNotice("Rascunho local recuperado automaticamente. Revise e salve para confirmar no banco.");
+        }
+      }
+    } catch {}
+    setDraftReady(true);
+  }, [autosaveKey, order.createdAt, order.updatedAt]);
+
+  useEffect(() => {
+    if (!draftReady || !canEdit) return;
+    const timer = window.setTimeout(() => {
+      try {
+        localStorage.setItem(autosaveKey, JSON.stringify({ savedAt:new Date().toISOString(), draft, photos }));
+      } catch {}
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [autosaveKey, canEdit, draft, draftReady, photos]);
 
   const customerOptions = customers.map(item => ({
     id: text(item, "id", "customerId", "uuid", "name"),
@@ -150,6 +179,7 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
       if (latestDiagnostic && typeof targetEquipmentId === "string" && onSyncEquipmentDiagnostic) {
         await onSyncEquipmentDiagnostic(targetEquipmentId, latestDiagnostic);
       }
+      try { localStorage.removeItem(autosaveKey); } catch {}
       setNotice("Alterações salvas com sucesso.");
     } catch {
       setNotice("Não foi possível salvar. Verifique a conexão e tente novamente.");
