@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 import { get, put } from "@vercel/blob";
 import forge from "node-forge";
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "../../../lib/permissions";
+import { requirePermission, sessionCompany } from "../../../lib/permissions";
 
 export const runtime = "nodejs";
 
@@ -126,8 +126,10 @@ function storageError(error: unknown) {
 export async function GET(request: NextRequest) {
   const access = requirePermission(request, "fiscal.consultar");
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  const companyContext = sessionCompany(access.session);
+  if (!companyContext.ok) return NextResponse.json({ error: "Sessão de empresa inválida." }, { status: companyContext.status });
   try {
-    return NextResponse.json(publicRecord(await loadRecord(access.session.companyId)));
+    return NextResponse.json(publicRecord(await loadRecord(companyContext.companyId)));
   } catch (error) {
     return storageError(error);
   }
@@ -136,10 +138,12 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   const access = requirePermission(request, "fiscal.configurar");
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  const companyContext = sessionCompany(access.session);
+  if (!companyContext.ok) return NextResponse.json({ error: "Sessão de empresa inválida." }, { status: companyContext.status });
   const user = access.session;
   try {
     const body = await request.json() as Partial<FiscalRecord>;
-    const current = await loadRecord(user.companyId);
+    const current = await loadRecord(companyContext.companyId);
     const record: FiscalRecord = {
       ...current,
       company: { ...(current.company ?? {}), ...(body.company ?? {}) },
@@ -149,7 +153,7 @@ export async function PUT(request: NextRequest) {
       updatedAt: new Date().toISOString(),
       updatedBy: user.displayName,
     };
-    await saveRecord(user.companyId, record);
+    await saveRecord(companyContext.companyId, record);
     return NextResponse.json(publicRecord(record));
   } catch (error) {
     return storageError(error);
@@ -159,6 +163,8 @@ export async function PUT(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const access = requirePermission(request, "fiscal.configurar");
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  const companyContext = sessionCompany(access.session);
+  if (!companyContext.ok) return NextResponse.json({ error: "Sessão de empresa inválida." }, { status: companyContext.status });
   const user = access.session;
   try {
     const form = await request.formData();
@@ -183,7 +189,7 @@ export async function POST(request: NextRequest) {
     const subject = cert.subject.attributes.map((attribute: { shortName?: string; name?: string; value?: string }) => `${attribute.shortName ?? attribute.name}=${attribute.value ?? ""}`).join(", ");
     const issuer = cert.issuer.attributes.map((attribute: { shortName?: string; name?: string; value?: string }) => `${attribute.shortName ?? attribute.name}=${attribute.value ?? ""}`).join(", ");
     const document = subject.match(/(?:CNPJ|CPF)[:= ]*(\d{11,14})/i)?.[1] ?? subject.match(/\b\d{14}\b/)?.[0] ?? "";
-    const record = await loadRecord(user.companyId);
+    const record = await loadRecord(companyContext.companyId);
     record.certificate = {
       fileName: file.name,
       pfxBase64: bytes.toString("base64"),
@@ -199,7 +205,7 @@ export async function POST(request: NextRequest) {
     };
     record.updatedAt = new Date().toISOString();
     record.updatedBy = user.displayName;
-    await saveRecord(user.companyId, record);
+    await saveRecord(companyContext.companyId, record);
     return NextResponse.json(publicRecord(record));
   } catch (error) {
     return storageError(error);
@@ -209,13 +215,15 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const access = requirePermission(request, "fiscal.configurar");
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  const companyContext = sessionCompany(access.session);
+  if (!companyContext.ok) return NextResponse.json({ error: "Sessão de empresa inválida." }, { status: companyContext.status });
   const user = access.session;
   try {
-    const record = await loadRecord(user.companyId);
+    const record = await loadRecord(companyContext.companyId);
     delete record.certificate;
     record.updatedAt = new Date().toISOString();
     record.updatedBy = user.displayName;
-    await saveRecord(user.companyId, record);
+    await saveRecord(companyContext.companyId, record);
     return NextResponse.json(publicRecord(record));
   } catch (error) {
     return storageError(error);
