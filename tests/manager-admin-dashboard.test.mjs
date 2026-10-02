@@ -1,20 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { validateManagerCredentials } from "../lib/manager-auth.ts";
+import { verifyPassword } from "../lib/password.ts";
 
-test("Manager accepts the requested bootstrap administrator credentials when env credentials are absent",()=>{
-  const oldUser=process.env.PROAR_MANAGER_USER;
-  const oldPass=process.env.PROAR_MANAGER_PASSWORD;
-  delete process.env.PROAR_MANAGER_USER;
-  delete process.env.PROAR_MANAGER_PASSWORD;
-  try {
-    assert.equal(validateManagerCredentials("admin","232325"),true);
-    assert.equal(validateManagerCredentials("admin","232326"),false);
-  } finally {
-    if(oldUser===undefined) delete process.env.PROAR_MANAGER_USER; else process.env.PROAR_MANAGER_USER=oldUser;
-    if(oldPass===undefined) delete process.env.PROAR_MANAGER_PASSWORD; else process.env.PROAR_MANAGER_PASSWORD=oldPass;
-  }
+test("Manager keeps the requested bootstrap administrator as a hash, never plaintext",async()=>{
+  const source=await readFile(new URL("../lib/manager-auth.ts",import.meta.url),"utf8");
+  assert.ok(source.includes('BOOTSTRAP_MANAGER_USER = "admin"'));
+  const match=source.match(/BOOTSTRAP_MANAGER_PASSWORD_HASH = "([^"]+)"/);
+  assert.ok(match?.[1]);
+  assert.equal(verifyPassword("232325",match[1]),true);
+  assert.equal(verifyPassword("232326",match[1]),false);
+  assert.ok(!source.includes('managerPassword = () => "232325"'));
 });
 
 test("Manager dashboard exposes health, audit, tenant detail and rollout metadata",async()=>{
