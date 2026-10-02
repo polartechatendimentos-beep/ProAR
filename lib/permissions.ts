@@ -5,17 +5,18 @@ type ProarSession = NonNullable<ReturnType<typeof readSession>>;
 
 export type Permission =
   | "obras.visualizar" | "obras.editar" | "obras.status.alterar"
-  | "os.visualizar" | "os.editar"
+  | "os.visualizar" | "os.editar" | "os.cancelar" | "os.exportar"
   | "equipamentos.visualizar" | "equipamentos.editar"
   | "financeiro.visualizar" | "financeiro.editar" | "financeiro.baixar" | "financeiro.estornar"
   | "licitacoes.visualizar" | "licitacoes.editar" | "licitacoes.lance.registrar"
-  | "configuracoes.visualizar" | "configuracoes.editar"
-  | "clientes.visualizar" | "clientes.editar"
+  | "configuracoes.visualizar" | "configuracoes.editar" | "configuracoes.usuarios" | "configuracoes.exportar"
+  | "clientes.visualizar" | "clientes.editar" | "clientes.inativar" | "clientes.exportar"
   | "estoque.visualizar" | "estoque.editar" | "estoque.ajustar"
   | "compras.visualizar" | "compras.editar" | "compras.receber"
-  | "comercial.editar" | "catalogo.editar" | "financeiro.conciliar"
+  | "comercial.editar" | "comercial.preco.alterar" | "comercial.desconto.liberar" | "catalogo.editar" | "financeiro.conciliar"
   | "integridade.visualizar" | "rotas.visualizar" | "aprovacoes.visualizar" | "aprovacoes.aprovar"
-  | "fiscal.consultar" | "fiscal.preparar" | "fiscal.emitir" | "fiscal.cancelar" | "fiscal.configurar";
+  | "fiscal.consultar" | "fiscal.preparar" | "fiscal.emitir" | "fiscal.cancelar" | "fiscal.configurar"
+  | "auditoria.visualizar" | "auditoria.exportar" | "suporte.impersonar";
 
 const legacy: Record<string, string[]> = {
   obras: ["Obras"],
@@ -68,3 +69,14 @@ export function sessionCompany(session: ProarSession, requested?: unknown) {
   if (requestedId && requestedId !== companyId) return { ok: false as const, status: 403, error: "Acesso negado para outra empresa." };
   return { ok: true as const, companyId };
 }
+
+export const ROLE_PERMISSION_PRESETS:Record<string,Permission[]>={
+  "Gerência":["clientes.visualizar","clientes.editar","os.visualizar","os.editar","equipamentos.visualizar","equipamentos.editar","comercial.editar","comercial.preco.alterar","comercial.desconto.liberar","compras.visualizar","compras.editar","financeiro.visualizar","integridade.visualizar","auditoria.visualizar"],
+  "Financeiro":["financeiro.visualizar","financeiro.editar","financeiro.baixar","financeiro.estornar","financeiro.conciliar","fiscal.consultar","fiscal.preparar","fiscal.emitir","fiscal.cancelar"],
+  "Vendedor":["clientes.visualizar","clientes.editar","equipamentos.visualizar","comercial.editar","os.visualizar"],
+  "Técnico":["clientes.visualizar","equipamentos.visualizar","os.visualizar","os.editar"],
+  "Estoquista":["estoque.visualizar","estoque.editar","estoque.ajustar","compras.visualizar","compras.receber"],
+  "Consulta":["clientes.visualizar","equipamentos.visualizar","os.visualizar","financeiro.visualizar","licitacoes.visualizar"],
+};
+
+export function rolePermissionPreset(role:string){return ROLE_PERMISSION_PRESETS[role]||[];}
