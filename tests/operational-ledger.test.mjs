@@ -143,3 +143,34 @@ test("segunda operação grava apenas entidades alteradas",()=>{
 test("ordem das chaves JSON não gera falso conflito",()=>{
   const state=base();const target=state.moduleRecords.Financeiro[0];const expected=Object.fromEntries(Object.entries(target).reverse());const next=run(state,{...settlement(),expectedRecord:expected});assert.equal(next.moduleRecords.Financeiro[0].settledValue,100);
 });
+
+test("reserva reduz disponível sem alterar saldo físico",()=>{
+  const state=base();
+  const next=run(state,command("reserve-stock",{productId:"P1",quantity:4,sourceType:"OS",sourceId:"OS1"},undefined));
+  assert.equal(next.moduleRecords.Produtos[0].stockCurrent,10);
+  assert.equal(next.moduleRecords.Produtos[0].stockReserved,4);
+  assert.equal(next.moduleRecords.Produtos[0].stockAvailable,6);
+  assert.equal(next.moduleRecords["Reservas de estoque"].filter(item=>item.status==="Ativa").length,1);
+});
+test("reserva acima do disponível é bloqueada",()=>{
+  const state=run(base(),command("reserve-stock",{productId:"P1",quantity:8,sourceType:"OS",sourceId:"OS1"},undefined));
+  assert.throws(()=>run(state,command("reserve-stock",{productId:"P1",quantity:3,sourceType:"OS",sourceId:"OS2"},undefined)),/disponível insuficiente/);
+});
+test("liberação de reserva recompõe disponível",()=>{
+  const reserved=run(base(),command("reserve-stock",{productId:"P1",quantity:4,sourceType:"OS",sourceId:"OS1"},undefined));
+  const reservation=reserved.moduleRecords["Reservas de estoque"][0];
+  const next=run(reserved,command("release-stock",{reason:"OS cancelada"},reservation.id));
+  assert.equal(next.moduleRecords.Produtos[0].stockReserved,0);
+  assert.equal(next.moduleRecords.Produtos[0].stockAvailable,10);
+});
+test("conclusão da OS consome reserva vinculada",()=>{
+  const state=base();
+  state.serviceOrders=[{id:"OS1",client:"PolarTech",status:"Agendada",catalogItems:[{id:"P1",kind:"Produto",quantity:2}]}];
+  const reserved=run(state,command("reserve-stock",{productId:"P1",quantity:2,sourceType:"OS",sourceId:"OS1"},undefined));
+  const draft=structuredClone(reserved); draft.serviceOrders[0].status="Concluída";
+  const next=prepareOperationalState(reserved,draft,admin);
+  assert.equal(next.moduleRecords.Produtos[0].stockCurrent,8);
+  assert.equal(next.moduleRecords.Produtos[0].stockReserved,0);
+  assert.equal(next.moduleRecords.Produtos[0].stockAvailable,8);
+  assert.equal(next.moduleRecords["Reservas de estoque"][0].status,"Consumida");
+});
