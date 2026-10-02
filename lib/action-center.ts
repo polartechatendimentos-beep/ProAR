@@ -1,3 +1,4 @@
+import { deriveWorkflowSuggestions } from "./workflow-automation";
 export type OperationalActionTone = "blue" | "amber" | "red";
 
 export type OperationalAction = {
@@ -288,6 +289,19 @@ export function deriveOperationalActions(
         });
       }
     }
+  }
+
+  for (const suggestion of deriveWorkflowSuggestions(serviceOrders, modules)) {
+    actions.push({
+      id:suggestion.id,
+      title:suggestion.title,
+      detail:suggestion.detail,
+      module:suggestion.module,
+      tone:suggestion.priority===1?"red":"amber",
+      priority:suggestion.priority,
+      category:"Operação",
+      recordId:suggestion.sourceId,
+    });
   }
 
   const unique = new Map<string, OperationalAction>();
