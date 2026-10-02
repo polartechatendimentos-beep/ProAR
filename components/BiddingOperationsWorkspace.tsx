@@ -120,6 +120,7 @@ export function BiddingOperationsWorkspace({ tenders, onOpen }: { tenders: Biddi
       setAnalysisLoading(false);
     }
   };
+  const askEdital = () => { const normalized = question.toLocaleLowerCase("pt-BR"); if (!question.trim()) return; setAnswer(/visita/.test(normalized) ? "A exigência de visita técnica deve ser conferida no edital e anexos, com página e prazo registrados antes da decisão." : /crea|qualifica/.test(normalized) ? "A análise deve procurar CREA, atestado, responsável técnico e capacidade mínima. Confirme a página no documento oficial." : "A pergunta foi registrada para análise. Abra o documento original e valide a resposta antes de qualquer ato externo."); };
   const openDetail = (tender: BiddingTender) => { setSelected(tender); setDetailTab("Resumo"); onOpen(tender); };
   const addVaultDocument = () => { const id = `vault-${Date.now()}`; setVault(current => [...current, { id, name: "Novo documento — revisar.pdf", category: "A classificar", validUntil: "A confirmar", issuer: "A informar", status: "Vence em breve" }]); setNotice("Documento criado como rascunho no cofre. Complete os metadados antes de usar."); };
   return <section className="bidding-operations-workspace">
