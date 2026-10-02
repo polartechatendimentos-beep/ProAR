@@ -57,6 +57,7 @@ import { DashboardWorkspace } from "@/components/DashboardWorkspace";
 import { ApprovalCenter } from "@/components/ApprovalCenter";
 import { FiscalWorkspace } from "@/components/FiscalWorkspace";
 import { inferFeedbackTone, notifyFeedback, type FeedbackTone } from "@/lib/ui-feedback";
+import { CURRENT_PROAR_RELEASE, PROAR_RELEASES, type ReleaseNoteType } from "@/lib/release-notes";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type NavItem = { icon: IconType; name: string; badge?: string };
@@ -591,6 +592,10 @@ function Header({ title, subtitle, onMenu, searchItems, pendingItems, onSearchSe
 }
 
 function Sidebar({ current, setCurrent, open, close, permissions, role }: { current: string; setCurrent: (s: string) => void; open: boolean; close: () => void; permissions?: string[]; role?: string }) {
+  const [versionOpen,setVersionOpen]=useState(false);
+  const [selectedVersion,setSelectedVersion]=useState(CURRENT_PROAR_RELEASE.version);
+  const selectedRelease=PROAR_RELEASES.find(item=>item.version===selectedVersion)??CURRENT_PROAR_RELEASE;
+  const noteClass=(type:ReleaseNoteType)=>type.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
   const allowed = (name: string) => Boolean(role === "Administrador" || permissions?.includes("*") || permissions?.includes(name) || (name === "Fiscal" && permissions?.some(permission => /^fiscal\./i.test(permission))) || (name === "Integridade do Sistema" && permissions?.includes("integridade.visualizar")) || (name === "Aprovações" && (permissions?.includes("aprovacoes.visualizar") || permissions?.includes("aprovacoes.aprovar"))));
   return <>
     {open && <button className="backdrop" aria-label="Fechar menu" onClick={close} />}
@@ -603,8 +608,19 @@ function Sidebar({ current, setCurrent, open, close, permissions, role }: { curr
         </button>)}
       </div> : null; })}</nav>
       <div className="help-card"><div><Headphones size={17}/></div><strong>Suporte ProAR</strong><p>Conte com a nossa equipe sempre que precisar.</p><button>Falar com especialista <ArrowRight size={12}/></button></div>
-      <div className="secure"><ShieldCheck size={13}/><span>Ambiente seguro</span><b>v2.0</b></div>
+      <div className="secure"><ShieldCheck size={13}/><span>Ambiente seguro</span><button type="button" className="version-button" onClick={()=>setVersionOpen(true)} title="Ver novidades desta versão">v{CURRENT_PROAR_RELEASE.version}</button></div>
     </aside>
+    {versionOpen&&<div className="version-modal-layer" role="dialog" aria-modal="true" aria-label="Novidades do ProAR"><button className="version-modal-backdrop" aria-label="Fechar histórico de versões" onClick={()=>setVersionOpen(false)}/><section className="version-modal">
+      <header><div><span><Sparkles size={14}/> NOVIDADES DO PROAR</span><h2>Versão {selectedRelease.version}</h2><p>{selectedRelease.title} • {selectedRelease.date}</p></div><button type="button" aria-label="Fechar" onClick={()=>setVersionOpen(false)}><X size={18}/></button></header>
+      <div className="version-modal-body">
+        <aside>{PROAR_RELEASES.map((release,index)=><button type="button" key={release.version} className={selectedRelease.version===release.version?"active":""} onClick={()=>setSelectedVersion(release.version)}><b>v{release.version}</b><small>{release.date}</small>{index===0&&<em>Atual</em>}</button>)}</aside>
+        <main>
+          <div className="version-summary"><span>v{selectedRelease.version}</span><div><h3>{selectedRelease.title}</h3><p>{selectedRelease.summary}</p></div></div>
+          <div className="version-notes">{selectedRelease.notes.map((note,index)=><article key={`${note.type}-${note.title}-${index}`} className={`release-${noteClass(note.type)}`}><span>{note.type==="Correção"?<CheckCircle2 size={16}/>:note.type==="Segurança"?<ShieldCheck size={16}/>:note.type==="Novidade"?<Sparkles size={16}/>:<RefreshCw size={16}/>}</span><div><header><b>{note.title}</b><em>{note.type}</em></header><small>{note.module||"Sistema"}</small><p>{note.description}</p></div></article>)}</div>
+        </main>
+      </div>
+      <footer><span>Histórico de melhorias do ProAR</span><button type="button" className="primary-btn" onClick={()=>setVersionOpen(false)}>Entendi</button></footer>
+    </section></div>}
     <nav className="mobile-nav" aria-label="Navegação rápida">{(
       /t[eé]cnico/i.test(role || "") ? [
         {name:"Agenda",label:"Agenda",icon:CalendarDays},{name:"Ordens de serviço",label:"Ordens",icon:ClipboardList},{name:"Equipamentos",label:"Equip.",icon:Boxes},{name:"PMOC e conformidade",label:"PMOC",icon:ShieldCheck},{name:"Painel inicial",label:"Início",icon:MoreHorizontal}
