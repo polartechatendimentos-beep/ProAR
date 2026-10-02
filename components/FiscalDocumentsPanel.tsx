@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { FiscalAdvancedFields, emptyFiscalAdvancedData, type FiscalAdvancedData } from "@/components/FiscalAdvancedFields";
 import type { FiscalItemTax } from "@/lib/fiscal-domain";
+import { translateFiscalRejection } from "@/lib/fiscal-rejections";
 import {
   AlertTriangle, CheckCircle2, ChevronRight, FileCheck2, FileText, Filter,
   Landmark, Package, Plus, ReceiptText, RefreshCw, Search, Send, Settings,
@@ -337,7 +338,8 @@ export function FiscalDocumentsPanel({
         };
         await onSaveDocument(rejected);
         setSelected(rejected);
-        setFiscalActionMessage(rejected.fiscalRejectionMessage);
+        const hint = translateFiscalRejection(rejected.fiscalRejectionCode, rejected.fiscalRejectionMessage);
+        setFiscalActionMessage(`${hint.title}: ${hint.action}`);
         return;
       }
       const authorized: FiscalDocumentRecord = {
@@ -360,6 +362,60 @@ export function FiscalDocumentsPanel({
       setFiscalActionMessage("Documento autorizado pelo órgão fiscal.");
     } catch (error) {
       setFiscalActionMessage(error instanceof Error ? error.message : "Falha na transmissão fiscal.");
+    } finally {
+      setFiscalActionLoading(false);
+    }
+  };
+
+  const consultRecord = async (record: FiscalDocumentRecord) => {
+    setFiscalActionLoading(true);
+    setFiscalActionMessage("Consultando situação no autorizador fiscal...");
+    try {
+      const response = await fetch("/api/fiscal/consult", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          documentId: record.id,
+          documentType: record.fiscalDocumentType,
+          accessKey: record.fiscalKey,
+          verificationCode: record.fiscalVerificationCode,
+          protocol: record.fiscalProtocol,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || data.message || "Consulta fiscal não concluída.");
+      const event = { id: crypto.randomUUID(), type: "Consulta", status: data.status || "ok", protocol: data.protocol, message: data.message, createdAt: data.checkedAt || new Date().toISOString() };
+      const updated = { ...record, fiscalEvents: [...(record.fiscalEvents || []), event] };
+      await onSaveDocument(updated);
+      setSelected(updated);
+      setFiscalActionMessage(`Situação consultada: ${data.status || "retorno recebido"}.`);
+    } catch (error) {
+      setFiscalActionMessage(error instanceof Error ? error.message : "Falha na consulta fiscal.");
+    } finally {
+      setFiscalActionLoading(false);
+    }
+  };
+
+  const cceRecord = async (record: FiscalDocumentRecord) => {
+    const text = window.prompt("Informe o texto da Carta de Correção:", "");
+    if (!text) return;
+    setFiscalActionLoading(true);
+    setFiscalActionMessage("Registrando Carta de Correção...");
+    try {
+      const response = await fetch("/api/fiscal/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentId: record.id, documentType: record.fiscalDocumentType, accessKey: record.fiscalKey, eventType: "CCE", text }),
+      });
+      const data = await response.json();
+      if (!response.ok || data.status !== "registered") throw new Error(data.error || "Carta de Correção não autorizada.");
+      const event = { id: crypto.randomUUID(), type: "CC-e", status: "Registrada", protocol: data.protocol, message: text, createdAt: data.registeredAt || new Date().toISOString() };
+      const updated = { ...record, fiscalEvents: [...(record.fiscalEvents || []), event] };
+      await onSaveDocument(updated);
+      setSelected(updated);
+      setFiscalActionMessage("Carta de Correção registrada pelo autorizador.");
+    } catch (error) {
+      setFiscalActionMessage(error instanceof Error ? error.message : "Falha ao registrar Carta de Correção.");
     } finally {
       setFiscalActionLoading(false);
     }
@@ -530,10 +586,13 @@ export function FiscalDocumentsPanel({
           <div className="rounded-xl border p-4"><small className="text-slate-500">Status</small><div className="mt-2"><StatusPill status={selected.status}/></div><div className="mt-4 text-sm"><p><b>Valor:</b> {money(Number(selected.value||0))}</p><p><b>Número:</b> {selected.fiscalNumber || "—"}</p><p><b>Série:</b> {selected.fiscalSeries || "—"}</p><p><b>Protocolo:</b> {selected.fiscalProtocol || "—"}</p><p><b>Chave/código:</b> {selected.fiscalKey || selected.fiscalVerificationCode || "—"}</p>{selected.fiscalDocumentType === "NFS-e" && selected.fiscalDanfseLayoutVersion && <p><b>DANFSe:</b> {selected.fiscalDanfseLayoutVersion}</p>}{selected.fiscalRejectionMessage && <p className="mt-2 text-red-700"><b>Rejeição:</b> {selected.fiscalRejectionCode ? `${selected.fiscalRejectionCode} • ` : ""}{selected.fiscalRejectionMessage}</p>}</div></div>
           <div className="rounded-xl border p-4"><small className="text-slate-500">Pré-validação</small>{selected.fiscalPreflight ? selected.fiscalPreflight.ok ? <div className="mt-2 flex items-center gap-2 text-sm font-bold text-emerald-700"><CheckCircle2 size={17}/> Sem pendências conhecidas</div> : <div className="mt-2 space-y-2">{selected.fiscalPreflight.issues.map(issue=><p key={issue} className="flex gap-2 text-xs text-red-700"><AlertTriangle size={14} className="shrink-0"/>{issue}</p>)}</div> : <p className="mt-2 text-sm text-slate-500">Ainda não executada.</p>}</div>
           <div className="md:col-span-2 rounded-xl border p-4"><b className="text-sm">Itens</b><div className="mt-3 divide-y">{selected.fiscalItems?.map(item=><div key={item.id} className="flex items-center justify-between py-2 text-sm"><div><b>{item.description}</b><small className="block text-slate-500">{item.kind}{item.ncm ? ` • NCM ${item.ncm}` : ""}{item.cfop ? ` • CFOP ${item.cfop}` : ""}</small></div><span>{item.quantity} × {money(item.unitValue)}</span></div>)}</div></div>
+          {!!selected.fiscalEvents?.length && <div className="md:col-span-2 rounded-xl border p-4"><b className="text-sm">Eventos fiscais</b><div className="mt-3 space-y-2">{selected.fiscalEvents.slice().reverse().map(event=><div key={event.id} className="rounded-lg bg-slate-50 p-3 text-xs"><b>{event.type}</b> • {event.status}<span className="block text-slate-500">{new Date(event.createdAt).toLocaleString("pt-BR")}{event.protocol ? ` • Protocolo ${event.protocol}` : ""}</span>{event.message && <span className="mt-1 block">{event.message}</span>}</div>)}</div></div>}
         </div>
         {fiscalActionMessage && <div className="mx-5 mb-2 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">{fiscalActionMessage}</div>}
         <footer className="flex flex-wrap justify-end gap-2 border-t p-4">
           <button disabled={fiscalActionLoading} onClick={()=>void validateRecord(selected)} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold disabled:opacity-50"><FileCheck2 size={14}/> Validar pré-emissão</button>
+          {selected.status === "Autorizada" && <button disabled={fiscalActionLoading} onClick={()=>void consultRecord(selected)} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold disabled:opacity-50"><RefreshCw size={14}/> Consultar situação</button>}
+          {selected.status === "Autorizada" && selected.fiscalDocumentType === "NF-e" && <button disabled={fiscalActionLoading} onClick={()=>void cceRecord(selected)} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold disabled:opacity-50"><FileText size={14}/> Carta de Correção</button>}
           {selected.status === "Autorizada" && selected.fiscalDocumentType === "NFS-e" && <button disabled={fiscalActionLoading || !selected.fiscalXmlUrl || digits(selected.fiscalKey).length !== 50} onClick={()=>void generateDanfse(selected)} title={!selected.fiscalXmlUrl ? "O XML autorizado é obrigatório para gerar o DANFSe." : digits(selected.fiscalKey).length !== 50 ? "A chave de acesso da NFS-e deve possuir 50 dígitos." : "Gerar DANFSe conforme NT 008/2026 v1.02"} className="inline-flex items-center gap-2 rounded-xl border border-blue-200 px-4 py-2 text-xs font-bold text-blue-700 disabled:opacity-40"><FileText size={14}/> {selected.fiscalDanfeUrl ? "Regenerar DANFSe" : "Gerar DANFSe"}</button>}
           {selected.status === "Autorizada" && selected.fiscalDocumentType === "NFS-e" && selected.fiscalDanfeUrl && <button disabled={fiscalActionLoading} onClick={()=>window.open(selected.fiscalDanfeUrl,"_blank","noopener,noreferrer")} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold"><FileText size={14}/> Abrir DANFSe</button>}
           {selected.status === "Autorizada" && <button disabled={fiscalActionLoading} onClick={()=>void cancelRecord(selected)} className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-4 py-2 text-xs font-bold text-red-700 disabled:opacity-50"><X size={14}/> Cancelar nota</button>}
