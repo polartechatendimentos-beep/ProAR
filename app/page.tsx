@@ -61,7 +61,6 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     { icon: LayoutDashboard, name: "Painel inicial" },
     { icon: Bell, name: "Central de pendências" },
     { icon: CalendarDays, name: "Agenda" },
-    { icon: Bell, name: "Notificações" },
   ]},
   { label: "COMERCIAL", items: [
     { icon: UsersRound, name: "Clientes" },
@@ -581,57 +580,83 @@ function Sidebar({ current, setCurrent, open, close, permissions, role }: { curr
 
 function Dashboard({ onNavigate, serviceOrders, modules }: { onNavigate: (s: string) => void; serviceOrders: ServiceOrder[]; modules: Record<string, ModuleRecord[]> }) {
   const [period, setPeriod] = useState("Este mês");
-  const today = new Date().toISOString().slice(0, 10);
-  const todayOrders = serviceOrders.filter(order => order.date === today);
-  const overdueOrders = serviceOrders.filter(order => order.date && order.date < today && !/conclu[ií]d|cancelad/i.test(order.status));
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [technician, setTechnician] = useState("Todos");
+  const [status, setStatus] = useState("Todos");
+  const today = new Date();
+  const todayIso = today.toISOString().slice(0, 10);
+  const startOfPeriod = (() => {
+    const date = new Date(today);
+    if (period === "Hoje") return todayIso;
+    if (period === "Semana") { date.setDate(today.getDate() - ((today.getDay() + 6) % 7)); return date.toISOString().slice(0,10); }
+    if (period === "Ano") return `${today.getFullYear()}-01-01`;
+    return `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-01`;
+  })();
+  const periodOrders = serviceOrders.filter(order => {
+    const inPeriod = Boolean(order.date && order.date >= startOfPeriod && order.date <= todayIso);
+    const techOk = technician === "Todos" || order.tech === technician;
+    const statusOk = status === "Todos" || order.status === status;
+    return inPeriod && techOk && statusOk;
+  });
+  const todayOrders = serviceOrders.filter(order => order.date === todayIso && (technician === "Todos" || order.tech === technician) && (status === "Todos" || order.status === status));
+  const overdueOrders = serviceOrders.filter(order => order.date && order.date < todayIso && !/conclu[ií]d|cancelad/i.test(order.status) && (technician === "Todos" || order.tech === technician) && (status === "Todos" || order.status === status));
   const workItems = deriveOperationalActions(serviceOrders, modules).slice(0, 8);
-  const financialRecords = modules.Financeiro ?? [];
+  const financialRecords = (modules.Financeiro ?? []).filter(record => {
+    const date = String(record.date || record.firstDueDate || "").slice(0,10);
+    return !date || (date >= startOfPeriod && date <= todayIso);
+  });
   const isPayable = (record: ModuleRecord) => record.transactionType === "Pagar" || /pagar|compra|fornecedor/i.test(`${record.name} ${record.category}`);
   const outstandingFinancial = (record: ModuleRecord) => /cancelad/i.test(record.status || "") ? 0 : Math.max(0, Number(record.value || 0) - Number(record.settledValue || 0));
   const receivableOpen = financialRecords.filter(record => !isPayable(record)).reduce((sum,record)=>sum+outstandingFinancial(record),0);
   const payableOpen = financialRecords.filter(record => isPayable(record)).reduce((sum,record)=>sum+outstandingFinancial(record),0);
   const predictedResult = receivableOpen - payableOpen;
   const moneyDashboard = (value:number) => value.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+  const technicians = ["Todos", ...Array.from(new Set(serviceOrders.map(order=>order.tech).filter(Boolean)))];
+  const statuses = ["Todos", ...Array.from(new Set(serviceOrders.map(order=>order.status).filter(Boolean)))];
   const dashboardStats = [
-    { icon: ClipboardList, value: String(serviceOrders.filter(order => order.status !== "Concluída").length).padStart(2, "0"), label: "OS em aberto", note: `${todayOrders.length} programada(s) para hoje`, tone: "blue", trend: "Atual" },
-    { icon: Activity, value: String(serviceOrders.filter(order => order.status === "Em andamento").length).padStart(2, "0"), label: "Em andamento", note: "Atendimentos ativos", tone: "cyan", trend: "Agora" },
-    { icon: CheckCircle2, value: String(serviceOrders.filter(order => order.status === "Concluída").length).padStart(2, "0"), label: "Concluídas", note: "Total registrado", tone: "green", trend: "Atual" },
-    { icon: AlertTriangle, value: String(overdueOrders.length).padStart(2, "0"), label: "Atrasadas", note: overdueOrders.length ? "Exigem ação imediata" : "Nenhuma pendência", tone: "red", trend: "Atual" },
+    { icon: ClipboardList, value: String(periodOrders.filter(order => !/conclu[ií]d|cancelad/i.test(order.status)).length).padStart(2, "0"), label: "OS em aberto", note: `${todayOrders.length} programada(s) para hoje`, tone: "blue", trend: period, module:"Ordens de serviço" },
+    { icon: Activity, value: String(periodOrders.filter(order => /Em andamento/i.test(order.status)).length).padStart(2, "0"), label: "Em andamento", note: "Atendimentos ativos no período", tone: "cyan", trend: period, module:"Ordens de serviço" },
+    { icon: CheckCircle2, value: String(periodOrders.filter(order => /Conclu[ií]da/i.test(order.status)).length).padStart(2, "0"), label: "Concluídas", note: "Concluídas no período selecionado", tone: "green", trend: period, module:"Ordens de serviço" },
+    { icon: AlertTriangle, value: String(overdueOrders.length).padStart(2, "0"), label: "Atrasadas", note: overdueOrders.length ? "Exigem ação imediata" : "Nenhuma pendência", tone: "red", trend: "Agora", module:"Central de pendências" },
   ];
   return <>
     <section className="command-row">
       <div className="periods">{["Hoje", "Semana", "Este mês", "Ano"].map(p => <button className={period === p ? "active" : ""} onClick={() => setPeriod(p)} key={p}>{p}</button>)}</div>
       <div className="live-status"><i/><span>Dados atualizados agora</span></div>
-      <button className="filter-btn"><Filter size={14}/> Mais filtros <ChevronDown size={13}/></button>
+      <button className={`filter-btn ${filtersOpen?"active":""}`} onClick={()=>setFiltersOpen(value=>!value)} aria-expanded={filtersOpen}><Filter size={14}/> Mais filtros <ChevronDown size={13}/></button>
     </section>
-    <section className="stat-grid">{dashboardStats.map(({icon: Icon, ...s}) => <article className={`stat-card ${s.tone}`} key={s.label}>
+    {filtersOpen && <section className="dashboard-filters" aria-label="Filtros do painel">
+      <label>Técnico<select value={technician} onChange={event=>setTechnician(event.target.value)}>{technicians.map(item=><option key={item}>{item}</option>)}</select></label>
+      <label>Situação<select value={status} onChange={event=>setStatus(event.target.value)}>{statuses.map(item=><option key={item}>{item}</option>)}</select></label>
+      <button className="outline-btn" onClick={()=>{setTechnician("Todos");setStatus("Todos");}}>Limpar filtros</button>
+    </section>}
+    <section className="stat-grid">{dashboardStats.map(({icon: Icon, module, ...s}) => <article className={`stat-card ${s.tone}`} key={s.label} role="button" tabIndex={0} onClick={()=>onNavigate(module)} onKeyDown={event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();onNavigate(module)}}}>
       <div className="stat-top"><div className={`stat-icon ${s.tone}`}><Icon size={21} strokeWidth={1.8}/></div><span className={`trend ${s.tone}`}>{s.trend}</span></div>
       <div className="stat-value"><strong>{s.value}</strong><span>{s.label}</span></div><small>{s.note}</small>
-      <button aria-label={`Detalhes de ${s.label}`}><ChevronRight size={15}/></button>
+      <button aria-label={`Detalhes de ${s.label}`} onClick={event=>{event.stopPropagation();onNavigate(module)}}><ChevronRight size={15}/></button>
     </article>)}</section>
     <section className="content-grid">
       <div className="panel orders-panel">
-        <div className="panel-head"><div><span className="section-kicker"><Zap size={12}/> OPERAÇÃO DE HOJE</span><h2>Ordens de serviço</h2><p>{new Date().toLocaleDateString("pt-BR")}</p></div><button onClick={() => onNavigate("Agenda")}>Ver agenda completa <ArrowRight size={13}/></button></div>
+        <div className="panel-head"><div><span className="section-kicker"><Zap size={12}/> OPERAÇÃO DE HOJE</span><h2>Ordens de serviço</h2><p>{today.toLocaleDateString("pt-BR")}</p></div><button onClick={() => onNavigate("Agenda")}>Ver agenda completa <ArrowRight size={13}/></button></div>
         <div className="table-wrap"><table><thead><tr><th>ORDEM</th><th>CLIENTE / UNIDADE</th><th>SERVIÇO</th><th>TÉCNICO</th><th>HORÁRIO</th><th>SITUAÇÃO</th><th /></tr></thead><tbody>
-          {todayOrders.map(o => <tr key={o.id}><td><b className="order-id">{o.id}</b></td><td><div className="client-cell"><span>{o.avatar}</span><div><strong>{o.client}</strong><small>{o.unit}</small></div></div></td><td>{o.service}</td><td><div className="tech"><span>{o.tech.split(" ").map(x => x[0]).slice(0,2).join("")}</span>{o.tech}</div></td><td><div className="time"><Clock3 size={12}/><b>{o.time}</b></div></td><td><span className={`status ${o.tone}`}><i/> {o.status}</span></td><td><button className="more" aria-label={`Opções da ${o.id}`}><MoreHorizontal size={16}/></button></td></tr>)}
+          {todayOrders.map(o => <tr key={o.id}><td><b className="order-id">{o.id}</b></td><td><div className="client-cell"><span>{o.avatar}</span><div><strong>{o.client}</strong><small>{o.unit}</small></div></div></td><td>{o.service}</td><td><div className="tech"><span>{o.tech.split(" ").map(x => x[0]).slice(0,2).join("")}</span>{o.tech}</div></td><td><div className="time"><Clock3 size={12}/><b>{o.time}</b></div></td><td><span className={`status ${o.tone}`}><i/> {o.status}</span></td><td><button className="more" aria-label={`Abrir ${o.id}`} onClick={()=>onNavigate("Ordens de serviço")}><ChevronRight size={16}/></button></td></tr>)}
         </tbody></table></div>
         {!todayOrders.length && <div className="linked-empty"><CalendarDays size={22}/><h4>Nenhum atendimento para hoje</h4><p>As ordens com data agendada aparecerão aqui.</p></div>}
       </div>
       <aside className="side-stack">
         <div className="panel financial">
-          <div className="panel-head"><div><span className="section-kicker"><ChartNoAxesCombined size={12}/> PERFORMANCE</span><h2>Resumo financeiro</h2><p>{financialRecords.length ? `${financialRecords.length} título(s) integrado(s)` : "Sem lançamentos"}</p></div><button aria-label="Abrir financeiro" onClick={()=>onNavigate("Financeiro")}><MoreHorizontal size={17}/></button></div>
-          <div className="finance-total"><small>RESULTADO PREVISTO</small><strong>{moneyDashboard(predictedResult)}</strong><span><TrendingUp size={12}/> Previsto</span></div>
+          <div className="panel-head"><div><span className="section-kicker"><ChartNoAxesCombined size={12}/> PERFORMANCE</span><h2>Resumo financeiro</h2><p>{financialRecords.length ? `${financialRecords.length} título(s) no período` : "Sem lançamentos no período"}</p></div><button aria-label="Abrir financeiro" onClick={()=>onNavigate("Financeiro")}><MoreHorizontal size={17}/></button></div>
+          <div className="finance-total"><small>RESULTADO PREVISTO</small><strong>{moneyDashboard(predictedResult)}</strong><span><TrendingUp size={12}/> {period}</span></div>
           <div className="finance-split"><div><span className="money-icon green"><ArrowUpRight size={17}/></span><small>A receber</small><strong>{moneyDashboard(receivableOpen)}</strong></div><div><span className="money-icon red"><ArrowDownRight size={17}/></span><small>A pagar</small><strong>{moneyDashboard(payableOpen)}</strong></div></div>
         </div>
         <div className="panel alerts">
-          <div className="panel-head"><div><span className="section-kicker"><AlertTriangle size={12}/> CENTRAL DE TRABALHO DO DIA</span><h2>Próximas ações</h2><p>Somente o que precisa de atenção agora.</p></div><span>{workItems.length}</span></div>
+          <div className="panel-head"><div><span className="section-kicker"><AlertTriangle size={12}/> CENTRAL DE TRABALHO DO DIA</span><h2>Próximas ações</h2><p>Somente o que precisa de atenção agora.</p></div><button className="outline-btn compact" onClick={()=>onNavigate("Central de pendências")}>{workItems.length} ação(ões)</button></div>
           {workItems.length ? <div className="workday-list">{workItems.map(item=><button key={item.id} className={item.tone} onClick={()=>onNavigate(item.module)}><i/><span><b>{item.title}</b><small>{item.detail}</small></span><ChevronRight size={15}/></button>)}</div> : <div className="linked-empty"><CheckCircle2 size={22}/><h4>Tudo certo por aqui</h4><p>Não há ações operacionais pendentes.</p></div>}
         </div>
       </aside>
     </section>
   </>;
 }
-
 function CustomerDetail({ customerName, customers, structures, serviceOrders, modules, canEdit, onBack, onOpen, onUpdateStructure }: { customerName: string; customers: Customer[]; structures: ModuleRecord[]; serviceOrders: ServiceOrder[]; modules: Record<string, ModuleRecord[]>; canEdit: boolean; onBack: () => void; onOpen: (name: string) => void; onUpdateStructure: (record: ModuleRecord) => void | boolean | Promise<boolean> }) {
   const customer = customers.find(item => item.name === customerName);
   if (!customer) return null;
@@ -3923,7 +3948,7 @@ export default function Home() {
   const globalSearchItems = useMemo<GlobalSearchItem[]>(() => {
     const customerItems = customerRecords.map(customer => ({ id: customer.id, title: customer.name, detail: [customer.doc, customer.phone, customer.city || customer.address].filter(Boolean).join(" • "), module: "Clientes", kind: "Cliente" as const }));
     const orderItems = serviceOrders.map(order => ({ id: order.id, title: order.id, detail: [order.client, order.service, order.tech].filter(Boolean).join(" • "), module: "Ordens de serviço", kind: "OS" as const }));
-    const moduleItems = Object.entries(moduleRecords).flatMap(([module, records]) => records.map(record => ({ id: record.id, title: record.name, detail: [record.id, record.client, record.sku, record.barcode, record.serialNumber, record.doc].filter(Boolean).join(" • "), module, kind: "Cadastro" as const })));
+    const moduleItems = Object.entries(moduleRecords).flatMap(([module, records]) => records.map(record => ({ id: record.id, title: record.name, detail: [record.id, record.client, record.sku, record.barcode, record.serialNumber, record.doc, record.invoiceNumber, record.empenhoNumber, record.contractNumber, record.address, record.blockLot, record.category].filter(Boolean).join(" • "), module, kind: "Cadastro" as const })));
     return [...customerItems, ...orderItems, ...moduleItems];
   }, [customerRecords, serviceOrders, moduleRecords]);
   const pendingItems = useMemo<PendingItem[]>(
