@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "../../../../lib/permissions";
+import { resolveFiscalRoute } from "../../../../lib/fiscal-routing";
+import type { FiscalValidationPayload } from "../../../../lib/fiscal-validation";
 
 export const runtime = "nodejs";
 
@@ -15,12 +17,24 @@ export async function POST(request: NextRequest) {
       verificationCode?: string;
       protocol?: string;
       reason?: string;
+      environment?: string;
+      municipalityCode?: string;
     };
     const reason = String(body.reason || "").trim();
     if (!body.documentId || !body.protocol || !(body.accessKey || body.verificationCode)) {
       return NextResponse.json({ error: "Documento, protocolo e chave/código de verificação são obrigatórios." }, { status: 400 });
     }
     if (reason.length < 15) return NextResponse.json({ error: "Informe uma justificativa de cancelamento com pelo menos 15 caracteres." }, { status: 400 });
+
+    const kind = body.documentType === "NFS-e" ? "NFSE" : body.documentType === "NFC-e" ? "NFCE" : "NFE";
+    const routing = resolveFiscalRoute({
+      kind,
+      issueDate: new Date().toISOString().slice(0, 10),
+      operationNature: "Cancelamento",
+      company: { city: kind === "NFSE" ? "Mirassol" : undefined, state: "SP" },
+      service: kind === "NFSE" ? { municipalityCode: body.municipalityCode || "3530300" } : undefined,
+      config: { environment: body.environment || "Homologação" },
+    } as FiscalValidationPayload);
 
     const baseUrl = String(process.env.PROAR_FISCAL_BRIDGE_URL || "").replace(/\/$/, "");
     const token = String(process.env.PROAR_FISCAL_BRIDGE_TOKEN || "");
@@ -35,7 +49,7 @@ export async function POST(request: NextRequest) {
         "Authorization": `Bearer ${token}`,
         "X-ProAR-Company": String(access.session.companyId || ""),
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, routing }),
       signal: AbortSignal.timeout(45_000),
       cache: "no-store",
     });
@@ -43,7 +57,7 @@ export async function POST(request: NextRequest) {
     if (!response.ok || provider?.status !== "cancelled") {
       return NextResponse.json({ status: "rejected", error: provider?.message || "Cancelamento não autorizado.", provider }, { status: 422 });
     }
-    return NextResponse.json({ status: "cancelled", cancelledAt: provider.cancelledAt || new Date().toISOString(), protocol: provider.protocol || body.protocol, provider });
+    return NextResponse.json({ status: "cancelled", cancelledAt: provider.cancelledAt || new Date().toISOString(), protocol: provider.protocol || body.protocol, provider, routing });
   } catch (error) {
     console.error("Fiscal cancellation error", error);
     return NextResponse.json({ error: "Falha ao solicitar o cancelamento fiscal." }, { status: 500 });
