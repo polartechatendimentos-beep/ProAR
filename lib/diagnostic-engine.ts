@@ -44,19 +44,23 @@ export function scoreDiagnosticCode(record:DiagnosticCodeRecord,query:Diagnostic
   const recordCode=compact(record.code);
   if(code && recordCode && code===recordCode) score+=100;
   else if(code && recordCode && (recordCode.includes(code)||code.includes(recordCode))) score+=45;
+  else if(code && recordCode) score-=60;
+  else if(code && !recordCode) score-=25;
   const recordBlink=compact(record.blinkPattern);
   if(blink && recordBlink && blink===recordBlink) score+=90;
   else if(blink && recordBlink && (recordBlink.includes(blink)||blink.includes(recordBlink))) score+=35;
+  else if(blink && recordBlink) score-=60;
+  else if(blink && !recordBlink) score-=30;
   if(equipmentType){
     const types=(record.equipmentTypes||[]).map(normalize);
     if(types.some(type=>type===equipmentType)) score+=35;
     else if(types.some(type=>type.includes(equipmentType)||equipmentType.includes(type))) score+=20;
-    else if(types.length) score-=35;
+    else if(types.length) score-=60;
   }
   if(unit){
     const recordUnit=normalize(record.unit);
     if(recordUnit===unit) score+=35;
-    else if(recordUnit&&unit&&recordUnit!==unit) score-=50;
+    else if(recordUnit&&unit&&recordUnit!==unit) score-=90;
   }
   if(capacity>0 && (record.capacitiesBtus||[]).length){
     const capacities=record.capacitiesBtus||[];
