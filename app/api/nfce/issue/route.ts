@@ -1,14 +1,13 @@
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { readSession } from "../../../../lib/proar-auth";
+import { requirePermission } from "../../../../lib/permissions";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  const user = readSession(request.cookies.get("proar_session")?.value);
-  if (!user || !(user.permissions.includes("*") || user.permissions.includes("Financeiro") || user.permissions.includes("Vendas"))) {
-    return NextResponse.json({ error: "Sem permissão para emitir NFC-e." }, { status: 403 });
-  }
+  const access = requirePermission(request, "fiscal.emitir");
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  const user = access.session;
   const body = await request.json();
   if (!body?.saleId || !Array.isArray(body.items) || !body.items.length || Number(body.total || 0) <= 0) {
     return NextResponse.json({ error: "Venda sem dados fiscais suficientes para NFC-e." }, { status: 400 });
@@ -27,6 +26,16 @@ export async function POST(request: NextRequest) {
     signal: AbortSignal.timeout(30000),
   });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) return NextResponse.json({ error: result?.error || "A SEFAZ/provedor não autorizou a NFC-e.", provider: result }, { status: 502 });
-  return NextResponse.json({ issued: true, idempotencyKey, result });
+  if (!response.ok) return NextResponse.json({ error: result?.error || result?.message || "A SEFAZ/provedor não autorizou a NFC-e.", status:"Rejeitada", provider:result }, { status:502 });
+  const provider = result?.result ?? result?.data ?? result;
+  const cStat = Number(provider?.cStat ?? provider?.statusCode ?? provider?.code ?? 0);
+  const statusText = String(provider?.status ?? provider?.situacao ?? provider?.state ?? "").toLocaleLowerCase("pt-BR");
+  const accessKey = provider?.accessKey ?? provider?.chave ?? provider?.chNFe ?? provider?.key;
+  const protocol = provider?.protocol ?? provider?.protocolo ?? provider?.nProt;
+  const authorized = (cStat === 100 || provider?.authorized === true || provider?.autorizada === true || ["autorizada","autorizado","authorized"].includes(statusText)) && Boolean(accessKey) && Boolean(protocol);
+  if (!authorized) {
+    const processing = ["processando","processing","pendente","pending","recebida","received"].includes(statusText) || [103,105].includes(cStat);
+    return NextResponse.json({ issued:false, status:processing ? "Processando" : "Rejeitada", idempotencyKey, provider:result, error:processing ? undefined : "A resposta não contém autorização válida da NFC-e." }, { status:processing ? 202 : 422 });
+  }
+  return NextResponse.json({ issued:true, status:"Autorizada", idempotencyKey, result });
 }
