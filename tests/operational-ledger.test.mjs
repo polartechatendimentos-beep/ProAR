@@ -232,3 +232,33 @@ test("mudança do desconto do orçamento renova aprovação mesmo com total igua
   assert.equal(next.moduleRecords.Orçamentos[0].approvalStatus,"Pendente");
   assert.ok(next.moduleRecords["Aprovações"].filter(item=>item.sourceId==="O1").length>=2);
 });
+
+
+test("redução da compra abaixo da alçada dispensa aprovação pendente",()=>{
+  const state=base();
+  const draft=structuredClone(state);
+  draft.moduleRecords.Compras[0].value=6000;
+  const prepared=prepareOperationalState(state,draft,admin,"2026-10-02T10:00:00Z");
+  const changed=structuredClone(prepared);
+  changed.moduleRecords.Compras[0].value=4000;
+  const next=prepareOperationalState(prepared,changed,admin,"2026-10-02T11:00:00Z");
+  assert.equal(next.moduleRecords.Compras[0].approvalRequired,false);
+  assert.equal(next.moduleRecords.Compras[0].approvalStatus,"Dispensado");
+  assert.equal(next.moduleRecords["Aprovações"].find(item=>item.sourceId==="C1").status,"Cancelado");
+  const received=run(next,command("receive",{items:[{itemId:"I1",productId:"P1",quantity:1}]},"C1"));
+  assert.equal(received.moduleRecords.Produtos[0].stockCurrent,11);
+});
+
+test("redução do desconto para a alçada dispensa aprovação pendente",()=>{
+  const state=base();
+  state.moduleRecords.Orçamentos=[{id:"O1",name:"Orçamento",client:"Cliente",value:900,discountPercent:15,status:"Enviado"}];
+  const draft=structuredClone(state);
+  draft.moduleRecords.Orçamentos[0].description="Solicitação de aprovação";
+  const prepared=prepareOperationalState(state,draft,admin,"2026-10-02T10:00:00Z");
+  const changed=structuredClone(prepared);
+  changed.moduleRecords.Orçamentos[0].discountPercent=10;
+  const next=prepareOperationalState(prepared,changed,admin,"2026-10-02T11:00:00Z");
+  assert.equal(next.moduleRecords.Orçamentos[0].approvalRequired,false);
+  assert.equal(next.moduleRecords.Orçamentos[0].approvalStatus,"Dispensado");
+  assert.equal(next.moduleRecords["Aprovações"].find(item=>item.sourceId==="O1").status,"Cancelado");
+});
