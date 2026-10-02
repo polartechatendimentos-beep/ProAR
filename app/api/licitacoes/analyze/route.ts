@@ -3,7 +3,7 @@ import { requirePermission, sessionCompany } from "../../../../lib/permissions";
 import { getOpenAiCredential } from "../../../../lib/openai-credential";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 60;
 
 const MAX_PDF_BYTES = 8 * 1024 * 1024;
 const noStore = { "Cache-Control": "no-store, private" };
@@ -63,7 +63,7 @@ function readOutputText(payload: Record<string, unknown>) {
 }
 
 export async function POST(request: NextRequest) {
-  const access = requirePermission(request, "licitacoes.visualizar");
+  const access = requirePermission(request, "licitacoes.editar");
   if (!access.ok) return reply({ error: access.error }, access.status);
   const tenant = sessionCompany(access.session);
   if (!tenant.ok) return reply({ error: "Sessão de empresa inválida." }, tenant.status);
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
         max_output_tokens: 5500,
       }),
       cache: "no-store",
-      signal: AbortSignal.timeout(105000),
+      signal: AbortSignal.timeout(55000),
     });
     const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
     if (!response.ok) {
@@ -127,6 +127,6 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
     console.error("Tender PDF analysis failed", error);
-    return reply({ error: timedOut ? "A análise excedeu 105 segundos. Tente um PDF menor ou tente novamente." : "Não foi possível concluir a análise do edital agora." }, timedOut ? 504 : 502);
+    return reply({ error: timedOut ? "A análise excedeu 55 segundos. Tente um PDF menor ou tente novamente." : "Não foi possível concluir a análise do edital agora." }, timedOut ? 504 : 502);
   }
 }
