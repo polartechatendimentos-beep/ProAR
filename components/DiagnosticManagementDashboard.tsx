@@ -1,5 +1,7 @@
 "use client";
 
+import "./diagnostic-management-dashboard.css";
+
 import { Activity, AlertTriangle, CheckCircle2, RefreshCcw, Stethoscope, Wrench } from "lucide-react";
 
 type RecordItem=Record<string,unknown>;
