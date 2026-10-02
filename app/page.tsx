@@ -705,7 +705,7 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders, cu
     } catch (error) { onUpdate({ ...order, nfseStatus:"Rejeitada", nfseValue:value }); window.alert(error instanceof Error ? error.message : "Não foi possível autorizar a NFS-e."); }
   };
   return <section className="module-page service-orders">
-    <div className="module-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Pesquisar por cliente, OS, CPF/CNPJ, telefone ou unidade..."/></label><label className="status-filter"><Filter size={14}/><select aria-label="Exibir ordens" value={visibility} onChange={event=>setVisibility(event.target.value)}><option>Em aberto</option><option>Todas</option><option>Concluídas</option><option>Canceladas</option><option>Hoje</option></select></label><ContextReports title="Ordens de Serviço" rows={serviceOrders.map(order=>[order.id,order.client,order.status])} options={["Imprimir Ordem de Serviço","Relatório técnico","Certificado de higienização","Relatório fotográfico","Relatório da assistência técnica","Comprovante de entrega","Histórico completo da OS"]}/><button className="primary-btn" onClick={() => onOpen("Nova ordem de serviço")}><Plus size={16}/> Nova ordem de serviço</button></div>
+    <div className="module-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Pesquisar por cliente, OS, CPF/CNPJ, telefone ou unidade..."/></label><label className="status-filter"><Filter size={14}/><select aria-label="Exibir ordens" value={visibility} onChange={event=>setVisibility(event.target.value)}><option>Em aberto</option><option>Todas</option><option>Concluídas</option><option>Canceladas</option><option>Hoje</option></select></label><ContextReports title="Ordens de Serviço" rows={serviceOrders.map(order=>[order.id,order.client,order.status])} options={["Imprimir Ordem de Serviço","Relatório técnico","Certificado de higienização","Relatório fotográfico","Relatório da assistência técnica","Comprovante de entrega","Histórico completo da OS"]}/>{canEdit&&<button className="outline-btn google-calendar-sync-btn" disabled={googleCalendarSyncing||!currentOrder.date} onClick={()=>void syncGoogleCalendar()}><CalendarDays size={15}/>{googleCalendarSyncing?"Sincronizando...":currentOrder.googleCalendarEventId?"Atualizar Google Agenda":"Enviar ao Google Agenda"}</button>}{currentOrder.googleCalendarEventUrl&&<button className="outline-btn" onClick={()=>window.open(currentOrder.googleCalendarEventUrl,"_blank","noopener,noreferrer")}><ArrowRight size={14}/> Abrir evento</button>}<button className="primary-btn" onClick={() => onOpen("Nova ordem de serviço")}><Plus size={16}/> Nova ordem de serviço</button></div>
     <div className="module-summary">
       <article><span><ClipboardList size={19}/></span><div><small>ORDENS ABERTAS</small><strong>{serviceOrders.filter(item => item.status !== "Concluída").length}</strong><em>{serviceOrders.filter(item => item.date === today).length} para hoje</em></div></article>
       <article><span><UserCheck size={19}/></span><div><small>TÉCNICOS EMPENHADOS</small><strong>{new Set(serviceOrders.map(item => item.tech).filter(Boolean)).size}</strong><em>Cadastros reais</em></div></article>
@@ -807,6 +807,7 @@ function OrderDetail({ order, customerPhone, company, catalog, contracts, close,
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveNotice, setSaveNotice] = useState("");
+  const [googleCalendarSyncing, setGoogleCalendarSyncing] = useState(false);
   const [itemsTab, setItemsTab] = useState<"Serviços" | "Produtos">("Serviços");
   const [itemSearch, setItemSearch] = useState("");
   const [contractItemId, setContractItemId] = useState("");
@@ -842,6 +843,22 @@ function OrderDetail({ order, customerPhone, company, catalog, contracts, close,
   const whatsappPhone = (currentOrder.whatsappPhone || customerPhone || "").replace(/\D/g, "");
   const toneForStatus = (status: string) => /cancel|atras/i.test(status) ? "red" : /conclu|confirm|entregue/i.test(status) ? "green" : /aguardando|reagend/i.test(status) ? "amber" : "blue";
   const trackingToken = () => currentOrder.trackingToken || (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID().replace(/-/g, "") : `${Date.now()}${Math.random().toString(36).slice(2)}`);
+  const syncGoogleCalendar = async (sourceOrder: ServiceOrder = currentOrder) => {
+    if(!canEdit){setSaveNotice("Você não possui permissão para sincronizar esta OS.");return sourceOrder;}
+    if(!sourceOrder.date){setSaveNotice("Informe a data da OS antes de sincronizar com o Google Agenda.");return sourceOrder;}
+    setGoogleCalendarSyncing(true); setSaveNotice("Sincronizando com Google Agenda...");
+    try{
+      const response=await fetch("/api/integrations/google-calendar/sync",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({order:sourceOrder})});
+      const result=await response.json();
+      if(!response.ok) throw new Error(result.error||"Não foi possível sincronizar.");
+      const next:ServiceOrder={...sourceOrder,googleCalendarEventId:result.eventId,googleCalendarEventUrl:result.eventUrl,googleCalendarId:result.calendarId,googleCalendarSyncedAt:result.syncedAt,googleCalendarSyncEnabled:true};
+      const confirmed=await onUpdate(next) as ServiceOrder;
+      setCurrentOrder(confirmed);setDirty(false);setSaveNotice("✓ OS sincronizada com o Google Agenda");
+      window.setTimeout(()=>setSaveNotice(""),2600);
+      return confirmed;
+    }catch(error){setSaveNotice(error instanceof Error?error.message:"Não foi possível sincronizar o Google Agenda.");return sourceOrder;}
+    finally{setGoogleCalendarSyncing(false);}
+  };
   const saveChanges = async () => {
     if (!dirty || saving || !canEdit || /^cancelada$/i.test(currentOrder.status)) return;
     setSaving(true); setSaveNotice("Salvando...");
@@ -851,6 +868,7 @@ function OrderDetail({ order, customerPhone, company, catalog, contracts, close,
       const savedOrder = hasUpdate ? { ...currentOrder, trackingToken:trackingToken(), status: statusDraft, tone: toneForStatus(statusDraft), timeline: [...(currentOrder.timeline ?? []), { id:`evt-save-${Date.now()}`, createdAt:new Date().toISOString(), previousStatus:currentOrder.status, status:statusDraft, technician:currentOrder.tech, internalNote:internalUpdate.trim() || (statusChanged ? "Status atualizado pelo salvamento principal." : undefined), customerNote:customerUpdate.trim() || undefined, photos:statusPhotos.length ? statusPhotos : undefined, customerVisible:Boolean(customerUpdate.trim() || statusPhotos.length), whatsappQueued:Boolean(whatsappPhone && currentOrder.whatsappUpdatesEnabled !== false && (customerUpdate.trim() || statusChanged)) }] } : currentOrder;
       const confirmedOrder = await onUpdate(savedOrder) as ServiceOrder;
       setCurrentOrder(confirmedOrder); setStatusDraft(confirmedOrder.status); setInternalUpdate(""); setCustomerUpdate(""); setStatusPhotos([]); setDirty(false); setSaveNotice("✓ Alterações salvas");
+      if(confirmedOrder.googleCalendarSyncEnabled && confirmedOrder.date) await syncGoogleCalendar(confirmedOrder);
       window.setTimeout(() => setSaveNotice(""), 2200);
     } catch { setSaveNotice("Não foi possível salvar esta Ordem de Serviço. Verifique os dados e tente novamente."); }
     finally { setSaving(false); }
@@ -968,6 +986,11 @@ function OrderDetail({ order, customerPhone, company, catalog, contracts, close,
           <article><Wrench size={17}/><div><small>SERVIÇO</small><strong>{order.service}</strong></div></article>
           <article><Activity size={17}/><div><small>SITUAÇÃO</small><strong>{currentOrder.status}</strong></div></article>
         </div>
+        <section className="os-google-calendar-panel">
+          <div><CalendarDays size={18}/><span><b>Google Agenda</b><small>{currentOrder.googleCalendarEventId ? `Sincronizado${currentOrder.googleCalendarSyncedAt ? ` • ${new Date(currentOrder.googleCalendarSyncedAt).toLocaleString("pt-BR")}` : ""}` : "Ainda não sincronizado"}</small></span></div>
+          <label className="tracking-toggle"><input type="checkbox" checked={currentOrder.googleCalendarSyncEnabled===true} onChange={event=>update({googleCalendarSyncEnabled:event.target.checked})}/><span><b>Atualizar automaticamente ao salvar</b><small>Reagenda o mesmo evento sem criar duplicidade.</small></span></label>
+          <button className="outline-btn" type="button" disabled={googleCalendarSyncing||!currentOrder.date} onClick={()=>void syncGoogleCalendar()}><RefreshCw size={14}/>{currentOrder.googleCalendarEventId?"Sincronizar alterações":"Criar evento"}</button>
+        </section>
         <section className="os-tracking-panel">
           <div className="execution-head"><div><span>ACOMPANHAMENTO PELO WHATSAPP</span><h3>Atualizações seguras para o cliente</h3></div><small>{trackingUrl ? "Link ativo" : "Ative ao salvar uma atualização"}</small></div>
           <div className="os-tracking-grid">
