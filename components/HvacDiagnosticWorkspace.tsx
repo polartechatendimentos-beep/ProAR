@@ -29,6 +29,7 @@ type Props={
   linkedEquipment?:RecordItem[];
   errorCodes?:RecordItem[];
   manuals?:RecordItem[];
+  catalog?:RecordItem[];
   canEdit:boolean;
   onApply:(payload:{diagnosis:string;diagnosticHistory:HistoryItem[];diagnosticLastResult:DiagnosticResult})=>void;
   onPatch?:(payload:RecordItem)=>void;
@@ -39,7 +40,7 @@ const brands=["TCL","Midea","Carrier","Elgin","Daikin","LG","Samsung","Gree","Fu
 const symptoms=["Não gela","Pingando água","Não liga","Desarma disjuntor","Evaporadora congelando","Condensadora não parte","Ruído anormal","Erro no display"];
 const txt=(r:RecordItem|undefined,...keys:string[])=>{for(const k of keys){const v=r?.[k];if(typeof v==="string"&&v.trim())return v.trim();}return""};
 
-export function HvacDiagnosticWorkspace({order,linkedEquipment=[],errorCodes=[],manuals=[],canEdit,onApply,onPatch}:Props){
+export function HvacDiagnosticWorkspace({order,linkedEquipment=[],errorCodes=[],manuals=[],catalog=[],canEdit,onApply,onPatch}:Props){
   const [page,setPage]=useState<Page>("Início");
   const equipment=linkedEquipment[0];
   const [brand,setBrand]=useState(txt(equipment,"brand","manufacturer"));
@@ -135,7 +136,7 @@ export function HvacDiagnosticWorkspace({order,linkedEquipment=[],errorCodes=[],
           {(result.safetyWarnings||[]).length>0&&<section className="safety-box"><AlertTriangle size={18}/><div><b>Segurança</b>{(result.safetyWarnings||[]).map((item,index)=><p key={index}>{item}</p>)}</div></section>}
           {(result.sourceUrls||[]).length>0&&<section><b>Fontes consultadas</b><div className="source-links">{(result.sourceUrls||[]).map((url,index)=><a key={index} href={url} target="_blank" rel="noreferrer">Fonte {index+1}</a>)}</div></section>}
           <button className="diagnostic-primary" disabled={!canEdit} onClick={applyResult}><CheckCircle2 size={15}/> Aplicar ao diagnóstico da OS</button>
-          <DiagnosticAdvancedPanel order={order} equipment={equipment} manuals={manuals} brand={brand} model={model} equipmentType={equipmentType} code={code} blinkPattern={blinkPattern} symptom={symptom} result={result} canEdit={canEdit} onPatch={patch} onApplyPhotoContext={data=>{if(data.brand)setBrand(data.brand);if(data.model)setModel(data.model);if(data.code)setCode(data.code);if(data.notes)setMeasurements(current=>current?current+"\nFoto: "+data.notes:"Foto: "+data.notes);}}/>
+          <DiagnosticAdvancedPanel order={order} equipment={equipment} manuals={manuals} catalog={catalog} brand={brand} model={model} equipmentType={equipmentType} code={code} blinkPattern={blinkPattern} symptom={symptom} result={result} canEdit={canEdit} onPatch={patch} onApplyPhotoContext={data=>{if(data.brand)setBrand(data.brand);if(data.model)setModel(data.model);if(data.code)setCode(data.code);if(data.notes)setMeasurements(current=>current?current+"\nFoto: "+data.notes:"Foto: "+data.notes);}}/>
         </div>:<div className="diagnostic-empty"><Sparkles size={26}/><b>Preencha os dados ao lado.</b><span>A análise combina sintomas, código/piscadas, equipamento vinculado e referências técnicas encontradas.</span></div>}
       </article>
     </div>}
