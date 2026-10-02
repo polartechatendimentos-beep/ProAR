@@ -137,3 +137,12 @@
 @media (max-height: 560px) and (min-width: 641px) {
   .login-page { align-items: flex-start !important; }
 }
+
+.login-blocked-page{display:grid;place-items:center;min-height:100vh}
+.login-blocked-panel{max-width:520px;text-align:center;padding:36px 32px}
+.login-blocked-icon{width:68px;height:68px;display:grid;place-items:center;margin:0 auto 14px;border-radius:20px;background:#fff0f0;color:#b83232;border:1px solid #f0c8c8}
+.login-blocked-kicker{display:block;margin-bottom:8px;font-size:10px;font-weight:900;letter-spacing:.18em;color:#7a8b9b}
+.login-blocked-panel h2{margin:0 0 10px;font-size:28px;color:#9e2d2d}
+.login-blocked-panel p{margin:0 auto 14px;max-width:420px;line-height:1.55;color:#5e7183}
+.login-blocked-company{display:inline-flex;margin:4px 0 14px;padding:7px 11px;border-radius:999px;background:#f4f7fa;color:#294960;font-size:11px;font-weight:900}
+.login-blocked-panel small{display:block;line-height:1.5;color:#8292a1}
