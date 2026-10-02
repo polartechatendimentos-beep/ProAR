@@ -43,6 +43,7 @@ import { WORK_STATUSES, getWorkProgress, getWorkStatusColor, normalizeWorkStatus
 import { prepareCustomerStructureSave } from "@/lib/customer-structure";
 import { deriveProarActions } from "@/lib/proar-insights";
 import { compressImageFile } from "@/lib/client-image";
+import { writeLocalSnapshot } from "@/lib/client-storage";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type NavItem = { icon: IconType; name: string; badge?: string };
@@ -3265,15 +3266,19 @@ export default function Home() {
     if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
   }, []);
   const persistSharedState = (nextCustomers: Customer[], nextOrders: ServiceOrder[], nextModules: Record<string, ModuleRecord[]>) => {
-    localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(nextCustomers));
-    localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(nextOrders));
-    localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(nextModules));
     const payload = { companyId: activeCompany.id, customers: nextCustomers, serviceOrders: nextOrders, moduleRecords: nextModules, _baseRevision: stateRevision };
+    const snapshot: Array<[string, unknown]> = [
+      [companyStorageKey(activeCompany.id, "customers"), nextCustomers],
+      [companyStorageKey(activeCompany.id, "service-orders"), nextOrders],
+      [companyStorageKey(activeCompany.id, "module-records"), nextModules],
+    ];
     if (!navigator.onLine) {
+      writeLocalSnapshot(snapshot, true);
       const queue = JSON.parse(localStorage.getItem("proar-offline-queue") || "[]");
       localStorage.setItem("proar-offline-queue", JSON.stringify([...queue.filter((item: { companyId: string }) => item.companyId !== activeCompany.id), { companyId: activeCompany.id, payload, createdAt: new Date().toISOString() }]));
       setSavedMessage("Sem internet: alteração guardada somente neste aparelho."); return;
     }
+    writeLocalSnapshot(snapshot);
     fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -3295,7 +3300,7 @@ export default function Home() {
       const nextCustomers = result.state.customers ?? []; const nextOrders = result.state.serviceOrders ?? []; const nextModules = mergeImportedServices(result.state.moduleRecords ?? {});
       setStateRevision(Number(result.state._revision||0));
       setCustomerRecords(nextCustomers); setServiceOrders(nextOrders); setModuleRecords(nextModules);
-      localStorage.setItem(companyStorageKey(activeCompany.id,"customers"),JSON.stringify(nextCustomers)); localStorage.setItem(companyStorageKey(activeCompany.id,"service-orders"),JSON.stringify(nextOrders)); localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(nextModules));
+      writeLocalSnapshot([[companyStorageKey(activeCompany.id,"customers"),nextCustomers],[companyStorageKey(activeCompany.id,"service-orders"),nextOrders],[companyStorageKey(activeCompany.id,"module-records"),nextModules]]);
       setSyncPhase("complete");
       window.setTimeout(() => setSyncPhase("idle"), 1000);
     } catch { setSyncPhase("idle"); setSavedMessage("Não foi possível atualizar os dados. Os dados deste aparelho foram mantidos."); }
