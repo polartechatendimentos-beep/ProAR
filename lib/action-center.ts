@@ -7,7 +7,7 @@ export type OperationalAction = {
   module: string;
   tone: OperationalActionTone;
   priority: 1 | 2 | 3;
-  category: "OS" | "Financeiro" | "Estoque" | "PMOC" | "Fiscal" | "Compras" | "Comercial" | "Operação";
+  category: "OS" | "Financeiro" | "Estoque" | "PMOC" | "Fiscal" | "Compras" | "Comercial" | "Aprovação" | "Operação";
   dueDate?: string;
   recordId?: string;
 };
@@ -191,6 +191,19 @@ export function deriveOperationalActions(
             recordId,
           });
         }
+      }
+
+      if (module === "Aprovações" && record.status === "Pendente") {
+        actions.push({
+          id: `approval-${recordId}`,
+          title: `Aprovação pendente • ${record.name || recordId}`,
+          detail: [record.sourceModule, record.reason, record.value ? `R$ ${Number(record.value).toLocaleString("pt-BR",{minimumFractionDigits:2})}` : ""].filter(Boolean).join(" • "),
+          module: "Aprovações",
+          tone: "red",
+          priority: 1,
+          category: "Aprovação",
+          recordId,
+        });
       }
 
       if (module === "Compras" && /aguardando|pendente|atras|parcial/i.test(recordText)) {

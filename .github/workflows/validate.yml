@@ -30,3 +30,14 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Quality gate
         run: npm run validate
+      - name: Runtime smoke
+        run: |
+          npm start > /tmp/proar-next.log 2>&1 &
+          APP_PID=$!
+          trap 'kill $APP_PID || true' EXIT
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:3000/ > /tmp/proar-home.html; then break; fi
+            sleep 1
+          done
+          grep -qi "ProAR" /tmp/proar-home.html
+          curl -sS -o /tmp/auth.json -w "%{http_code}" http://127.0.0.1:3000/api/auth | grep -Eq "^(200|401|403)$"

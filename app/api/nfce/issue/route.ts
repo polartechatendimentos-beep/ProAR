@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "../../../../lib/permissions";
+import { validateFiscalPayload } from "../../../../lib/fiscal-validation";
 
 export const runtime = "nodejs";
 
@@ -9,6 +10,8 @@ export async function POST(request: NextRequest) {
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   const user = access.session;
   const body = await request.json();
+  const validation = validateFiscalPayload({ ...body, kind: "NFCE" });
+  if (!validation.valid) return NextResponse.json({ error:"Pré-validação fiscal reprovada.", validation }, { status:422 });
   if (!body?.saleId || !Array.isArray(body.items) || !body.items.length || Number(body.total || 0) <= 0) {
     return NextResponse.json({ error: "Venda sem dados fiscais suficientes para NFC-e." }, { status: 400 });
   }

@@ -11,7 +11,7 @@ type Props = {
   onNavigate: (module: string) => void;
 };
 
-const categories = ["Todas", "OS", "Financeiro", "Estoque", "PMOC", "Fiscal", "Compras", "Comercial", "Operação"] as const;
+const categories = ["Todas", "OS", "Financeiro", "Estoque", "PMOC", "Fiscal", "Compras", "Comercial", "Aprovação", "Operação"] as const;
 const priorityLabel: Record<number,string> = {1:"Crítica",2:"Atenção",3:"Follow-up"};
 
 export function OperationsActionCenter({ serviceOrders, modules, onNavigate }: Props) {

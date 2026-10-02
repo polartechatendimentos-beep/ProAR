@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readSession } from "../../../lib/proar-auth";
+import { requirePermission } from "../../../lib/permissions";
 import { getOpenAiCredential, safeCompanyId } from "../../../lib/openai-credential";
 
 const FIELDS = ["brand", "model", "equipmentType", "capacityBtus", "serialNumber", "voltage", "frequency", "current", "power", "refrigerant", "refrigerantCharge", "manufactureDate", "manufacturerCode"] as const;
 
 export async function POST(request: NextRequest) {
-  const session=readSession(request.cookies.get("proar_session")?.value);
-  if(!session)return NextResponse.json({error:"Sessão inválida."},{status:401});
+  const access=requirePermission(request,"equipamentos.editar");
+  if(!access.ok)return NextResponse.json({error:access.error},{status:access.status});
+  const session=access.session;
   const { image } = await request.json().catch(() => ({}));
   if (typeof image !== "string" || !image.startsWith("data:image/")) return NextResponse.json({ error: "Envie uma imagem válida da etiqueta." }, { status: 400 });
   if (image.length > 11_000_000) return NextResponse.json({ error: "A imagem enviada é muito grande." }, { status: 413 });

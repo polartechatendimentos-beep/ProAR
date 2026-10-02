@@ -47,3 +47,11 @@ assert.ok(summary.critical > 0);
 assert.ok(summary.byCategory.Estoque >= 2);
 
 console.log("action-center.test.mjs: ok");
+
+
+const approvalActions=deriveOperationalActions([],{Aprovações:[{id:"APR1",name:"Aprovação • Compra 1",sourceModule:"Compras",status:"Pendente",reason:"Alçada",value:6000}]},new Date("2026-10-02T12:00:00Z"));
+const approvalItem=approvalActions.find(action=>action.recordId==="APR1");
+assert.ok(approvalItem);
+assert.equal(approvalItem.category,"Aprovação");
+assert.equal(approvalItem.priority,1);
+assert.equal(approvalItem.module,"Aprovações");

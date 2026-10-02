@@ -149,3 +149,116 @@ test("movimento de estoque preserva destino operacional",()=>{
   const movement=next.moduleRecords["Livro de estoque"].find(item=>item.kind==="Saída" || item.movementType==="Saída");
   assert.equal(movement.destinationType,"OS");assert.equal(movement.destinationId,"OS-123");assert.equal(next.moduleRecords.Produtos[0].stockCurrent,8);
 });
+
+
+test("transferência interna preserva saldo global e registra origem e destino",()=>{
+  const initial=base();
+  const before=initial.moduleRecords.Produtos[0].stockCurrent;
+  const next=run(initial,command("stock-transfer",{productId:"P1",quantity:3,sourceType:"Estoque central",sourceId:"CENTRAL",sourceName:"Central",destinationType:"Veículo",destinationId:"VAN-01",destinationName:"VAN-01",reason:"Abastecimento da equipe"},undefined));
+  const movement=next.moduleRecords["Livro de estoque"].find(item=>item.kind==="Transferência");
+  assert.ok(movement);
+  assert.equal(movement.transferQuantity,3);
+  assert.equal(movement.sourceType,"Estoque central");
+  assert.equal(movement.destinationType,"Veículo");
+  assert.equal(next.moduleRecords.Produtos[0].stockCurrent,before);
+});
+
+
+test("compra acima da alçada gera aprovação e bloqueia recebimento",()=>{
+  const state=base();
+  const draft=structuredClone(state);
+  draft.moduleRecords.Compras[0].value=6000;
+  const prepared=prepareOperationalState(state,draft,admin,"2026-10-02T10:00:00Z");
+  const approval=prepared.moduleRecords["Aprovações"].find(item=>item.sourceId==="C1");
+  assert.ok(approval);
+  assert.equal(prepared.moduleRecords.Compras[0].approvalStatus,"Pendente");
+  assert.throws(()=>run(prepared,command("receive",{items:[{itemId:"I1",productId:"P1",quantity:1}]},"C1")),/depende de aprovação/);
+});
+
+test("aprovação por alçada libera recebimento da compra",()=>{
+  const state=base();
+  const draft=structuredClone(state);
+  draft.moduleRecords.Compras[0].value=6000;
+  const prepared=prepareOperationalState(state,draft,admin,"2026-10-02T10:00:00Z");
+  const approval=prepared.moduleRecords["Aprovações"][0];
+  const approved=run(prepared,command("approval-decide",{decision:"Aprovado",reason:"Compra necessária para obra"},approval.id));
+  assert.equal(approved.moduleRecords.Compras[0].approvalStatus,"Aprovado");
+  const received=run(approved,command("receive",{items:[{itemId:"I1",productId:"P1",quantity:1}]},"C1"));
+  assert.equal(received.moduleRecords.Produtos[0].stockCurrent,11);
+});
+
+test("alteração do valor após aprovação exige nova alçada",()=>{
+  const state=base();
+  const draft=structuredClone(state);
+  draft.moduleRecords.Compras[0].value=6000;
+  const prepared=prepareOperationalState(state,draft,admin,"2026-10-02T10:00:00Z");
+  const approval=prepared.moduleRecords["Aprovações"][0];
+  const approved=run(prepared,command("approval-decide",{decision:"Aprovado",reason:"Aprovada"},approval.id));
+  const changed=structuredClone(approved);
+  changed.moduleRecords.Compras[0].value=7000;
+  const next=prepareOperationalState(approved,changed,admin,"2026-10-02T11:00:00Z");
+  assert.equal(next.moduleRecords.Compras[0].approvalStatus,"Pendente");
+  assert.ok(next.moduleRecords["Aprovações"].filter(item=>item.sourceId==="C1").length>=2);
+});
+
+test("conclusão de OS prepara fiscal e lembrete sem emitir automaticamente",()=>{
+  const state=base();
+  state.serviceOrders=[{id:"OS-AUTO",client:"Cliente",status:"Aberta",total:500,reminderDate:"2027-01-10",reminderMessage:"Revisar equipamento"}];
+  const draft=structuredClone(state);
+  draft.serviceOrders[0].status="Concluída";
+  const next=prepareOperationalState(state,draft,admin,"2026-10-02T10:00:00Z");
+  assert.ok(next.moduleRecords["Central Fiscal"].some(item=>item.serviceOrderId==="OS-AUTO"&&item.status==="Pendente"));
+  assert.ok(next.moduleRecords.Lembretes.some(item=>item.serviceOrderId==="OS-AUTO"&&item.date==="2027-01-10"));
+});
+
+test("transferência não permite retirar mais que o saldo da localização",()=>{
+  const initial=base();
+  const moved=run(initial,command("stock-transfer",{productId:"P1",quantity:3,sourceType:"Estoque central",destinationType:"Veículo",destinationId:"V1",destinationName:"V1"},undefined));
+  assert.throws(()=>run(moved,command("stock-transfer",{productId:"P1",quantity:4,sourceType:"Veículo",sourceId:"V1",sourceName:"V1",destinationType:"OS",destinationId:"OS-1",destinationName:"OS-1"},undefined)),/Saldo insuficiente na origem/);
+});
+
+
+test("mudança do desconto do orçamento renova aprovação mesmo com total igual",()=>{
+  const state=base();
+  state.moduleRecords.Orçamentos=[{id:"O1",name:"Orçamento",client:"Cliente",value:900,discountPercent:15,status:"Enviado"}];
+  const draft=structuredClone(state);
+  draft.moduleRecords.Orçamentos[0].description="Solicitação de aprovação";
+  const prepared=prepareOperationalState(state,draft,admin,"2026-10-02T10:00:00Z");
+  const approval=prepared.moduleRecords["Aprovações"].find(item=>item.sourceId==="O1");
+  const approved=run(prepared,command("approval-decide",{decision:"Aprovado",reason:"Desconto autorizado"},approval.id));
+  const changed=structuredClone(approved);
+  changed.moduleRecords.Orçamentos[0].discountPercent=20;
+  const next=prepareOperationalState(approved,changed,admin,"2026-10-02T11:00:00Z");
+  assert.equal(next.moduleRecords.Orçamentos[0].approvalStatus,"Pendente");
+  assert.ok(next.moduleRecords["Aprovações"].filter(item=>item.sourceId==="O1").length>=2);
+});
+
+
+test("redução da compra abaixo da alçada dispensa aprovação pendente",()=>{
+  const state=base();
+  const draft=structuredClone(state);
+  draft.moduleRecords.Compras[0].value=6000;
+  const prepared=prepareOperationalState(state,draft,admin,"2026-10-02T10:00:00Z");
+  const changed=structuredClone(prepared);
+  changed.moduleRecords.Compras[0].value=4000;
+  const next=prepareOperationalState(prepared,changed,admin,"2026-10-02T11:00:00Z");
+  assert.equal(next.moduleRecords.Compras[0].approvalRequired,false);
+  assert.equal(next.moduleRecords.Compras[0].approvalStatus,"Dispensado");
+  assert.equal(next.moduleRecords["Aprovações"].find(item=>item.sourceId==="C1").status,"Cancelado");
+  const received=run(next,command("receive",{items:[{itemId:"I1",productId:"P1",quantity:1}]},"C1"));
+  assert.equal(received.moduleRecords.Produtos[0].stockCurrent,11);
+});
+
+test("redução do desconto para a alçada dispensa aprovação pendente",()=>{
+  const state=base();
+  state.moduleRecords.Orçamentos=[{id:"O1",name:"Orçamento",client:"Cliente",value:900,discountPercent:15,status:"Enviado"}];
+  const draft=structuredClone(state);
+  draft.moduleRecords.Orçamentos[0].description="Solicitação de aprovação";
+  const prepared=prepareOperationalState(state,draft,admin,"2026-10-02T10:00:00Z");
+  const changed=structuredClone(prepared);
+  changed.moduleRecords.Orçamentos[0].discountPercent=10;
+  const next=prepareOperationalState(prepared,changed,admin,"2026-10-02T11:00:00Z");
+  assert.equal(next.moduleRecords.Orçamentos[0].approvalRequired,false);
+  assert.equal(next.moduleRecords.Orçamentos[0].approvalStatus,"Dispensado");
+  assert.equal(next.moduleRecords["Aprovações"].find(item=>item.sourceId==="O1").status,"Cancelado");
+});
