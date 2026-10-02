@@ -30,6 +30,7 @@ type Props = {
   structures?: RecordItem[];
   equipment?: RecordItem[];
   errorCodes?: RecordItem[];
+  manuals?: RecordItem[];
   canEdit: boolean;
   onSave: (order: WorkspaceOrder) => Promise<unknown>;
   onClose?: () => void;
@@ -50,7 +51,7 @@ function money(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-export function ServiceOrderWorkspace({ order, customers = [], structures = [], equipment = [], errorCodes = [], canEdit, onSave, onClose }: Props) {
+export function ServiceOrderWorkspace({ order, customers = [], structures = [], equipment = [], errorCodes = [], manuals = [], canEdit, onSave, onClose }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("Resumo");
   const [draft, setDraft] = useState<WorkspaceOrder>(order);
   const [saving, setSaving] = useState(false);
@@ -180,7 +181,7 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
 
     {activeTab === "Equipamentos" && <div className="os-tab-content"><article className="os-card"><div className="os-card-heading"><div><span className="os-section-label">EQUIPAMENTO DO ATENDIMENTO</span><h3>{linkedEquipment.length || 0} equipamento(s) relacionado(s)</h3></div><button className="os-secondary-button" onClick={() => setNotice("Cadastro de equipamento será aberto na aba Equipamentos.")}><Plus size={14}/> Adicionar equipamento</button></div><div className="os-equipment-grid">{linkedEquipment.map(item => <div className="os-equipment-card" key={text(item, "id", "name")}><div className="os-equipment-icon"><Wrench size={18}/></div><div><h4>{text(item, "name", "description", "model") || "Equipamento"}</h4><p>{text(item, "brand", "manufacturer")} • {text(item, "capacity", "capacityBtu", "model")}</p><small>Patrimônio: {text(item, "assetCode", "patrimony", "patrimonio") || "Não informado"} • Série: {text(item, "serial", "serialNumber") || "Não informada"}</small></div><div className="os-equipment-actions"><button onClick={() => setActiveTab("Histórico")}>Histórico</button><button onClick={() => setActiveTab("Fotos")}>Fotos</button></div></div>)}{!linkedEquipment.length && <div className="os-empty"><Wrench size={22}/><p>Nenhum equipamento foi vinculado a esta OS.</p><button className="os-secondary-button" onClick={() => setNotice("Vincule um equipamento pelo cadastro do cliente e ambiente.")}>Vincular equipamento</button></div>}</div></article></div>}
 
-    {activeTab === "Diagnóstico" && <div className="os-tab-content"><HvacDiagnosticWorkspace order={draft as unknown as RecordItem} linkedEquipment={linkedEquipment} errorCodes={errorCodes} canEdit={canEdit} onApply={payload=>setDraft(current=>({...current,...payload}))}/></div>}
+    {activeTab === "Diagnóstico" && <div className="os-tab-content"><HvacDiagnosticWorkspace order={draft as unknown as RecordItem} linkedEquipment={linkedEquipment} errorCodes={errorCodes} manuals={manuals} canEdit={canEdit} onApply={payload=>setDraft(current=>({...current,...payload}))} onPatch={payload=>setDraft(current=>({...current,...payload}))}/></div>}
 
     {activeTab === "Fotos" && <div className="os-tab-content"><article className="os-card"><div className="os-card-heading"><div><span className="os-section-label">REGISTRO FOTOGRÁFICO</span><h3>Evidências por categoria</h3></div></div><div className="os-photo-categories">{["Antes", "Durante", "Depois", "Equipamento", "Etiqueta", "Defeito", "Medições", "Outros"].map(category => <div className="os-photo-category" key={category}><div><b>{category}</b><span>{(photos[category] || []).length} foto(s)</span></div><label><Camera size={17}/> Tirar ou escolher foto<input type="file" accept="image/*" capture="environment" onChange={event => void addPhoto(category, event.target.files?.[0])}/></label><div className="os-photo-thumbs">{(photos[category] || []).map((src, index) => <img key={index} src={src} alt={`${category} ${index + 1}`}/>)}</div></div>)}</div><p className="os-helper-text"><ImagePlus size={14}/> Cada evidência deve permanecer associada à OS, técnico, data/hora, equipamento e ambiente.</p></article></div>}
 
