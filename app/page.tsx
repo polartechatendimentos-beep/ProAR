@@ -1576,6 +1576,8 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
   const [wabaId, setWabaId] = useState("449236708270435");
   const [businessPhone, setBusinessPhone] = useState("+55 17 2122-2806");
   const [token, setToken] = useState("");
+  const [whatsAppBusy,setWhatsAppBusy]=useState(false);
+  const [whatsAppStatus,setWhatsAppStatus]=useState<{configured:boolean;connected:boolean;tokenPreview?:string;verifiedName?:string;displayPhone?:string}>({configured:false,connected:false});
   const [saved, setSaved] = useState("");
   useEffect(() => {
     if (!saved) return;
@@ -1601,6 +1603,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
   const [fiscalCertificate, setFiscalCertificate] = useState<File | null>(null);
   const [fiscalCertificatePassword, setFiscalCertificatePassword] = useState("");
   const [fiscalCertificateInfo, setFiscalCertificateInfo] = useState<{fileName?:string;validTo?:string;status?:string;daysToExpiry?:number;expiryLevel?:string}|null>(null);
+  const [fiscalStorageProvider,setFiscalStorageProvider]=useState("");
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem(companyStorageKey(activeCompany.id, "settings")) || "{}");
     setCompanyName(activeCompany.legalName);
@@ -1632,8 +1635,44 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
       setFiscalCscConfigured(Boolean(data.nfce?.cscConfigured));
       setFiscalCsc("");
       setFiscalCertificateInfo(data.certificate || null);
+      setFiscalStorageProvider(String(data.storage?.provider || ""));
     }).catch(error=>setSaved(error instanceof Error?error.message:"Não foi possível consultar a configuração fiscal.")).finally(()=>setFiscalBusy(false));
   }, [activeCompany.id, tab]);
+  useEffect(() => {
+    if(tab!=="WhatsApp")return;
+    setWhatsAppBusy(true);
+    fetch("/api/whatsapp",{cache:"no-store"}).then(async response=>{
+      const data=await response.json(); if(!response.ok)throw new Error(data.error||"Não foi possível carregar a configuração do WhatsApp.");
+      setPhoneNumberId(String(data.phoneNumberId||""));
+      setWabaId(String(data.wabaId||""));
+      setWhatsAppStatus({configured:Boolean(data.tokenConfigured),connected:false,tokenPreview:data.tokenPreview||""});
+      setToken("");
+    }).catch(error=>setSaved(error instanceof Error?error.message:"Não foi possível carregar a configuração do WhatsApp.")).finally(()=>setWhatsAppBusy(false));
+  },[activeCompany.id,tab]);
+  const saveWhatsAppConfiguration=async()=>{
+    setWhatsAppBusy(true);
+    setSaved("Salvando configuração do WhatsApp...");
+    try{
+      const response=await fetch("/api/whatsapp",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+        active:true,phoneNumberId:phoneNumberId.trim(),wabaId:wabaId.trim(),...(token.trim()?{accessToken:token.trim()}:{})
+      })});
+      const data=await response.json(); if(!response.ok)throw new Error(data.error||"Não foi possível salvar a configuração do WhatsApp.");
+      setWhatsAppStatus({configured:Boolean(data.tokenConfigured),connected:false,tokenPreview:data.tokenPreview||""});
+      setToken("");
+      setSaved("✓ Configuração do WhatsApp salva no cofre da empresa.");
+    }catch(error){setSaved(error instanceof Error?error.message:"Não foi possível salvar a configuração do WhatsApp.");}
+    finally{setWhatsAppBusy(false);}
+  };
+  const testWhatsAppConfiguration=async()=>{
+    setWhatsAppBusy(true); setSaved("Testando conexão com a Meta...");
+    try{
+      const response=await fetch("/api/whatsapp",{method:"POST"}); const data=await response.json();
+      if(!response.ok)throw new Error(data.error||"Falha ao testar o WhatsApp.");
+      setWhatsAppStatus(current=>({...current,connected:true,verifiedName:data.verified_name||"",displayPhone:data.display_phone_number||""}));
+      setSaved(`✓ WhatsApp conectado${data.verified_name?` • ${data.verified_name}`:""}.`);
+    }catch(error){setWhatsAppStatus(current=>({...current,connected:false}));setSaved(error instanceof Error?error.message:"Falha no teste do WhatsApp.");}
+    finally{setWhatsAppBusy(false);}
+  };
   useEffect(() => {
     if (tab !== "Google Agenda") return;
     setGoogleCalendarBusy(true);
@@ -1684,7 +1723,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
         nfce:{series:fiscalNfceSeries,cscId:fiscalCscId,...(fiscalCsc.trim()?{csc:fiscalCsc.trim()}:{})},
       })});
       const data=await response.json(); if(!response.ok)throw new Error(data.error || "Não foi possível salvar a configuração fiscal.");
-      if (fiscalCsc.trim()) setFiscalCscConfigured(true); setFiscalCsc(""); setFiscalCertificateInfo(data.certificate || fiscalCertificateInfo); setSaved("✓ Configuração fiscal salva no cofre da empresa.");
+      if (fiscalCsc.trim()) setFiscalCscConfigured(true); setFiscalCsc(""); setFiscalCertificateInfo(data.certificate || fiscalCertificateInfo); setFiscalStorageProvider(String(data.storage?.provider || fiscalStorageProvider)); setSaved("✓ Configuração fiscal salva no cofre da empresa.");
     } catch(error){setSaved(error instanceof Error?error.message:"Não foi possível salvar a configuração fiscal.");} finally{setFiscalBusy(false);}
   };
   const uploadFiscalCertificate = async () => {
@@ -1693,7 +1732,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
     try {
       const form=new FormData(); form.set("certificate",fiscalCertificate); form.set("password",fiscalCertificatePassword);
       const response=await fetch("/api/fiscal-config",{method:"POST",body:form}); const data=await response.json(); if(!response.ok)throw new Error(data.error || "Não foi possível importar o certificado.");
-      setFiscalCertificateInfo(data.certificate || null); setFiscalCertificate(null); setFiscalCertificatePassword(""); setSaved("✓ Certificado A1 validado e armazenado no cofre fiscal.");
+      setFiscalCertificateInfo(data.certificate || null); setFiscalStorageProvider(String(data.storage?.provider || fiscalStorageProvider)); setFiscalCertificate(null); setFiscalCertificatePassword(""); setSaved("✓ Certificado A1 validado e armazenado no cofre fiscal.");
     } catch(error){setSaved(error instanceof Error?error.message:"Falha ao importar certificado.");} finally{setFiscalBusy(false);}
   };
   const updateCompany = () => {
@@ -1745,7 +1784,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
     <div className="settings-layout"><nav className="settings-nav">{[{name:"Empresa",icon:Building2,text:"Dados e logomarca"},{name:"WhatsApp",icon:MessageCircle,text:"API oficial da Meta"},{name:"Google Agenda",icon:CalendarDays,text:"Sincronização de OS e agenda"},{name:"Fiscal",icon:FileText,text:"NF-e, NFC-e e NFS-e"},...(isAdministrator?[{name:"Inteligência Artificial",icon:Sparkles,text:"Credencial OpenAI protegida"}]:[]),{name:"Segurança",icon:ShieldCheck,text:"Acessos e proteção"}].map(item => <button key={item.name} className={tab === item.name ? "active" : ""} onClick={() => setTab(item.name as typeof tab)}><item.icon size={17}/><span><b>{item.name}</b><small>{item.text}</small></span></button>)}</nav>
       <div className="settings-card"><header><div><small>CONFIGURAÇÃO • {tab.toUpperCase()}</small><h3>{tab === "WhatsApp" ? "WhatsApp Business Platform" : tab === "Google Agenda" ? "Integração com Google Agenda" : tab === "Empresa" ? "Cadastro da empresa" : tab === "Fiscal" ? "Configuração fiscal" : tab === "Inteligência Artificial" ? "Credencial segura da OpenAI" : "Segurança do sistema"}</h3></div><span className="settings-status"><i/> {tab === "Google Agenda" ? googleCalendarStatus.connected ? `Conectado${googleCalendarStatus.email ? ` • ${googleCalendarStatus.email}` : ""}` : "Não conectado" : tab === "Inteligência Artificial" ? aiStatus.configured ? `Configurada • final ${aiStatus.last4}` : aiStatus.source === "environment" ? "Fallback do servidor" : "Não configurada" : "Configuração disponível"}</span></header>
         {tab === "Empresa" && <div className="settings-form company-settings-form"><label>Razão social / Nome empresarial<input value={companyName} onChange={event => setCompanyName(event.target.value)}/></label><label>Nome fantasia<input value={tradeName} onChange={event => setTradeName(event.target.value)}/></label><label>CNPJ<input value={companyDoc} onChange={event => setCompanyDoc(formatCnpj(event.target.value))} placeholder="00.000.000/0000-00"/></label><label>Telefone<input value={businessPhone} onChange={event => setBusinessPhone(event.target.value)}/></label><label>E-mail<input type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="contato@empresa.com.br"/></label><label>Cidade<input list="proar-cities" value={city} onChange={event => setCity(event.target.value)} placeholder="Selecione ou digite a cidade"/><datalist id="proar-cities">{cities.map(item => <option key={item}>{item}</option>)}</datalist></label><label>Estado<select value={state} onChange={event => setState(event.target.value)}>{["SP","MG","PR","RJ","MS","GO","SC","RS"].map(item => <option key={item}>{item}</option>)}</select></label><label className="wide">Endereço completo<input value={address} onChange={event => setAddress(event.target.value)} placeholder="Rua, número e bairro"/></label><div className="wide company-logo-field"><div className="company-logo-preview">{logo ? <img src={logo} alt="Logomarca da empresa"/> : <Building2 size={30}/>}</div><div><b>Logomarca dos relatórios</b><p>Será utilizada nos cabeçalhos de PDF, impressão, orçamentos e ordens de serviço.</p><label className="logo-upload"><ImagePlus size={15}/> Selecionar logomarca<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={event => readLogo(event.target.files?.[0])}/></label>{logo && <button className="logo-remove" type="button" onClick={() => setLogo("")}><Trash2 size={13}/> Remover</button>}</div></div></div>}
-        {tab === "WhatsApp" && <div className="settings-form whatsapp-settings-form"><div className="wide whatsapp-account-status"><MessageCircle size={20}/><div><small>CONTA LOCALIZADA NA META</small><b>POLARTECH AR CONDICIONADO</b><span>{businessPhone} • Conectado • Qualidade alta</span></div><CheckCircle2 size={19}/></div><label>Phone Number ID<input value={phoneNumberId} onChange={event => setPhoneNumberId(event.target.value)} inputMode="numeric"/><small>ID do número, diferente do telefone.</small></label><label>WABA ID<input value={wabaId} onChange={event => setWabaId(event.target.value)} inputMode="numeric"/><small>ID da conta WhatsApp Business.</small></label><label className="wide">Token permanente<input type="password" value={token} onChange={event => setToken(event.target.value)} autoComplete="new-password" placeholder="Cole o token gerado pelo Utilizador do Sistema"/><small>Por segurança, o token nunca será mostrado depois de salvo.</small></label><div className="wide settings-security-note"><ShieldCheck size={17}/><span><b>Permissões necessárias</b><small>whatsapp_business_management e whatsapp_business_messaging</small></span></div></div>}
+        {tab === "WhatsApp" && <div className="settings-form whatsapp-settings-form"><div className="wide whatsapp-account-status"><MessageCircle size={20}/><div><small>WHATSAPP BUSINESS PLATFORM</small><b>{whatsAppStatus.connected?(whatsAppStatus.verifiedName||"Conta conectada"):whatsAppStatus.configured?"Credencial salva • conexão ainda não testada":"Integração não configurada"}</b><span>{whatsAppStatus.connected?(whatsAppStatus.displayPhone||businessPhone):whatsAppStatus.tokenPreview?`Token ${whatsAppStatus.tokenPreview}`:"Configure os IDs e o token permanente."}</span></div>{whatsAppStatus.connected?<CheckCircle2 size={19}/>:<AlertTriangle size={19}/>}</div><label>Phone Number ID<input value={phoneNumberId} onChange={event => setPhoneNumberId(event.target.value)} inputMode="numeric"/><small>ID do número, diferente do telefone.</small></label><label>WABA ID<input value={wabaId} onChange={event => setWabaId(event.target.value)} inputMode="numeric"/><small>ID da conta WhatsApp Business.</small></label><label className="wide">Token permanente<input type="password" value={token} onChange={event => setToken(event.target.value)} autoComplete="new-password" placeholder="Cole o token gerado pelo Utilizador do Sistema"/><small>Por segurança, o token nunca será mostrado depois de salvo.</small></label><div className="wide settings-security-note"><ShieldCheck size={17}/><span><b>Permissões necessárias</b><small>whatsapp_business_management e whatsapp_business_messaging</small></span></div><div className="wide settings-footer-actions"><button className="primary-btn" disabled={whatsAppBusy||!phoneNumberId.trim()||!wabaId.trim()||(!token.trim()&&!whatsAppStatus.configured)} onClick={()=>void saveWhatsAppConfiguration()}><Save size={14}/>{whatsAppBusy?"Salvando...":"Salvar API WhatsApp"}</button><button className="outline-btn" disabled={whatsAppBusy||!whatsAppStatus.configured} onClick={()=>void testWhatsAppConfiguration()}><Zap size={14}/> Testar conexão</button></div></div>}
         {tab === "Google Agenda" && <div className="settings-form google-calendar-settings">
           <div className="wide google-calendar-connection-card"><CalendarDays size={24}/><div><small>GOOGLE CALENDAR</small><b>{googleCalendarStatus.connected ? "Agenda conectada" : "Agenda ainda não conectada"}</b><span>{googleCalendarStatus.connected ? (googleCalendarStatus.email || "Conta Google autorizada") : "Conecte sua conta Google para sincronizar os agendamentos das Ordens de Serviço."}</span></div><span className={`integration-state ${googleCalendarStatus.connected?"connected":"disconnected"}`}>{googleCalendarStatus.connected?"Conectado":"Desconectado"}</span></div>
           <div className="wide settings-security-note"><ShieldCheck size={17}/><span><b>Conexão por usuário e empresa</b><small>Os tokens OAuth ficam criptografados no servidor. O ProAR solicita acesso ao Google Calendar e nunca armazena sua senha do Google.</small></span></div>
@@ -1766,11 +1805,11 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
           <label>ID CSC<input value={fiscalCscId} onChange={event=>setFiscalCscId(event.target.value)} placeholder="Identificador do CSC"/></label>
           <label>CSC<input type="password" autoComplete="new-password" value={fiscalCsc} onChange={event=>setFiscalCsc(event.target.value)} placeholder="Preencha somente para cadastrar/trocar"/><small>O valor não é exibido novamente.</small></label>
           <div className="wide fiscal-certificate-card"><div><LockKeyhole size={18}/><span><b>Certificado digital A1</b><small>{fiscalCertificateInfo ? `${fiscalCertificateInfo.fileName || "Certificado"} • ${fiscalCertificateInfo.status || "Status indisponível"}${typeof fiscalCertificateInfo.daysToExpiry === "number" ? ` • ${fiscalCertificateInfo.daysToExpiry} dia(s)` : ""}` : "Nenhum certificado disponível para esta empresa."}</small></span></div><div className="fiscal-certificate-inputs"><label>Arquivo<input type="file" accept=".pfx,.p12" onChange={event=>setFiscalCertificate(event.target.files?.[0] || null)}/></label><label>Senha<input type="password" autoComplete="new-password" value={fiscalCertificatePassword} onChange={event=>setFiscalCertificatePassword(event.target.value)} placeholder="Senha do A1"/></label><button type="button" className="outline-btn" disabled={fiscalBusy||!fiscalCertificate||!fiscalCertificatePassword} onClick={()=>void uploadFiscalCertificate()}><LockKeyhole size={14}/> Importar certificado</button></div></div>
-          <div className="wide fiscal-diagnostics"><span><CheckCircle2 size={14}/> Empresa identificada</span><span className={fiscalCertificateInfo?.status === "Válido" ? "ok" : "pending"}>{fiscalCertificateInfo?.status === "Válido" ? "✓" : "!"} Certificado A1</span><span className={fiscalServiceCode ? "ok" : "pending"}>{fiscalServiceCode ? "✓" : "!"} NFS-e</span><span className={fiscalCscId && fiscalCscConfigured ? "ok" : "pending"}>{fiscalCscId && fiscalCscConfigured ? "✓" : "!"} CSC NFC-e</span><span className={fiscalEnvironment === "Produção" ? "production" : "homologation"}>{fiscalEnvironment}</span></div>
+          <div className="wide fiscal-diagnostics"><span><CheckCircle2 size={14}/> Empresa identificada</span><span className={fiscalStorageProvider?"ok":"pending"}>{fiscalStorageProvider?"✓":"!"} Cofre fiscal {fiscalStorageProvider==="database"?"• banco principal":fiscalStorageProvider?"• redundante":"• indisponível"}</span><span className={fiscalCertificateInfo?.status === "Válido" ? "ok" : "pending"}>{fiscalCertificateInfo?.status === "Válido" ? "✓" : "!"} Certificado A1</span><span className={fiscalServiceCode ? "ok" : "pending"}>{fiscalServiceCode ? "✓" : "!"} NFS-e</span><span className={fiscalCscId && fiscalCscConfigured ? "ok" : "pending"}>{fiscalCscId && fiscalCscConfigured ? "✓" : "!"} CSC NFC-e</span><span className={fiscalEnvironment === "Produção" ? "production" : "homologation"}>{fiscalEnvironment}</span></div>
         </div>}
         {tab === "Inteligência Artificial" && isAdministrator && <div className="settings-form"><div className="wide settings-security-note"><ShieldCheck size={17}/><span><b>A chave nunca volta ao navegador</b><small>O servidor armazena a credencial criptografada e informa apenas os quatro últimos caracteres.</small></span></div><label className="wide">{aiStatus.configured ? "Trocar chave da OpenAI" : "Chave da OpenAI"}<input type="password" autoComplete="new-password" value={aiKey} onChange={event=>setAiKey(event.target.value)} placeholder={aiStatus.configured?`Configurada • final ${aiStatus.last4}`:"sk-proj-..."}/></label><div className="wide settings-footer-actions"><button className="primary-btn" disabled={aiBusy||!aiKey.trim()} onClick={()=>void saveAiCredential()}><LockKeyhole size={14}/>{aiStatus.configured?"Trocar chave":"Salvar chave"}</button><button className="outline-btn" disabled={aiBusy||(!aiStatus.configured&&aiStatus.source==="none")} onClick={()=>void testAiCredential()}><Zap size={14}/> Testar conexão</button>{aiStatus.configured&&<button className="outline-btn" disabled={aiBusy} onClick={()=>void removeAiCredential()}><Trash2 size={14}/> Remover chave</button>}</div></div>}
         {tab === "Segurança" && <div className="settings-form"><label className="wide settings-switch"><span><b>Exigir autenticação individual</b><small>Somente funcionários ativos podem entrar.</small></span><input type="checkbox" defaultChecked/></label><label className="wide settings-switch"><span><b>Encerrar sessão por inatividade</b><small>Protege o sistema em computadores compartilhados.</small></span><input type="checkbox" defaultChecked/></label></div>}
-        <footer><small>Empresa ativa: {activeCompany.tradeName} • base {activeCompany.id}</small>{tab !== "Inteligência Artificial" && tab !== "Google Agenda" && <div className="settings-footer-actions">{tab === "Empresa" && normalizeCnpj(companyDoc) !== normalizeCnpj(activeCompany.cnpj) && <button className="outline-btn" onClick={createCompany}><Plus size={15}/> Criar como nova empresa</button>}<button className="primary-btn" disabled={tab === "Fiscal" && fiscalBusy} onClick={tab === "Fiscal" ? ()=>void saveFiscalConfiguration() : save}><CheckCircle2 size={15}/> {tab === "Fiscal" ? "Salvar configuração fiscal" : "Salvar configurações"}</button></div>}</footer>
+        <footer><small>Empresa ativa: {activeCompany.tradeName} • base {activeCompany.id}</small>{tab !== "Inteligência Artificial" && tab !== "Google Agenda" && tab !== "WhatsApp" && <div className="settings-footer-actions">{tab === "Empresa" && normalizeCnpj(companyDoc) !== normalizeCnpj(activeCompany.cnpj) && <button className="outline-btn" onClick={createCompany}><Plus size={15}/> Criar como nova empresa</button>}<button className="primary-btn" disabled={tab === "Fiscal" && fiscalBusy} onClick={tab === "Fiscal" ? ()=>void saveFiscalConfiguration() : save}><CheckCircle2 size={15}/> {tab === "Fiscal" ? "Salvar configuração fiscal" : "Salvar configurações"}</button></div>}</footer>
       </div></div>
   </section>;
 }
