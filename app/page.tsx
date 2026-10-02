@@ -1953,6 +1953,8 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
   };
 
   const syncExternalAccessMap = async (externalAccess: WorkExternalAccess[]) => {
+    // Alterações de login externo não devem reenviar as 142 casas, fotos e históricos.
+    // O mapa público já persistido permanece intacto; atualizamos apenas a lista de acessos.
     const response = await fetch("/api/public-work-map", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -1961,13 +1963,12 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
         workId: activeProject.id,
         workName: activeProject.name,
         title: `Acompanhamento da obra — ${activeProject.name}`,
-        houses,
         externalAccess,
         externalAccessOnly: true,
       }),
     });
     const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(result.error || "Não foi possível sincronizar o acesso com o mapa da obra.");
+    if (!response.ok) throw new Error(result.error || `Não foi possível sincronizar o acesso externo (HTTP ${response.status}).`);
     if (result.map?.revision !== undefined) setServerRevision(Number(result.map.revision));
     if (result.token) {
       setShareToken(String(result.token));
@@ -2006,31 +2007,49 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
         active: true,
         createdAt: new Date().toISOString(),
       };
-      const externalAccess = [access, ...(activeProject.externalAccess ?? [])];
-      const nextProject = { ...activeProject, externalAccess };
-      const next = projects.map(project => project.id === activeProject.id ? nextProject : project);
-      const response = await fetch("/api/work-projects", {
-        method:"PUT",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ companyId, projects:next, baseRevision:projectsRevision }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (response.status === 409 && result.state?.projects) {
-        const authoritative = result.state.projects as WorkProject[];
+
+      const persistAgainst = async (baseProjects: WorkProject[], revision: number) => {
+        const target=baseProjects.find(project=>project.id===activeProject.id);
+        if(!target) throw new Error("A obra ativa não foi localizada na base principal.");
+        if((target.externalAccess ?? []).some(item=>item.username.toLocaleLowerCase("pt-BR")===username)) throw new Error("Este usuário já possui acesso cadastrado nesta obra.");
+        const externalAccess=[access,...(target.externalAccess ?? [])];
+        const next=baseProjects.map(project=>project.id===target.id?{...project,externalAccess}:project);
+        const response=await fetch("/api/work-projects",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({companyId,projects:next,baseRevision:revision})});
+        const result=await response.json().catch(()=>({}));
+        return {response,result,next,externalAccess};
+      };
+
+      let attempt=await persistAgainst(projects,projectsRevision);
+      if(attempt.response.status===409 && attempt.result.state?.projects){
+        const authoritative=attempt.result.state.projects as WorkProject[];
+        const revision=Number(attempt.result.state.revision||0);
         setProjects(authoritative);
-        setProjectsRevision(Number(result.state.revision || projectsRevision));
-        localStorage.setItem(projectsKey, JSON.stringify(authoritative));
-        throw new Error("A lista de obras foi atualizada por outro usuário. Os dados mais recentes foram carregados; tente adicionar novamente.");
+        setProjectsRevision(revision);
+        localStorage.setItem(projectsKey,JSON.stringify(authoritative));
+        attempt=await persistAgainst(authoritative,revision);
       }
-      if (!response.ok) throw new Error(result.error || "Não foi possível salvar o acesso.");
-      await syncExternalAccessMap(externalAccess);
-      setProjects(next);
-      setProjectsRevision(Number(result.state?.revision || projectsRevision + 1));
-      localStorage.setItem(projectsKey, JSON.stringify(next));
+      if(!attempt.response.ok) throw new Error(attempt.result.error || `Não foi possível salvar o acesso na obra (HTTP ${attempt.response.status}).`);
+
+      const savedRevision=Number(attempt.result.state?.revision||projectsRevision+1);
+      setProjects(attempt.next);
+      setProjectsRevision(savedRevision);
+      localStorage.setItem(projectsKey,JSON.stringify(attempt.next));
+
+      try {
+        await syncExternalAccessMap(attempt.externalAccess);
+      } catch (syncError) {
+        setNewAccessName("");
+        setNewAccessUsername("");
+        setNewAccessPassword("");
+        setAccessNotice({tone:"error",text:`O acesso foi salvo na obra, mas não foi possível ativá-lo no portal externo: ${syncError instanceof Error ? syncError.message : "falha de sincronização"}`});
+        setReportNotice("Cadastro salvo, mas o portal externo ainda precisa ser sincronizado.");
+        return;
+      }
+
       setNewAccessName("");
       setNewAccessUsername("");
       setNewAccessPassword("");
-      setAccessNotice({ tone:"success", text:`Acesso de ${name} criado com sucesso.` });
+      setAccessNotice({ tone:"success", text:`Acesso de ${name} criado e ativado no portal externo.` });
       setReportNotice("Acesso externo criado e sincronizado com a obra.");
     } catch (error) {
       setAccessNotice({ tone:"error", text:error instanceof Error ? error.message : "Não foi possível salvar o acesso." });
