@@ -402,7 +402,6 @@ type ModuleRecord = {
   purchaseId?: string;
   sourceType?: string;
   sourceId?: string;
-  quantity?: number;
   installmentNumber?: number;
   reminderMessage?: string;
   serviceOrderId?: string;
@@ -434,8 +433,6 @@ type ModuleRecord = {
   settlementHistory?: { id: string; value: number; interest: number; discount: number; method: string; account: string; createdAt: string }[];
   empenhoId?: string;
   workId?: string;
-  sourceId?: string;
-  sourceType?: string;
   invoiceNumber?: string;
   invoiceIssuedAt?: string;
   employeeRole?: string;
