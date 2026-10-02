@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Camera, Check, ChevronRight, Clock3, FileText, History, ImagePlus, MapPin, Plus, Save, Sparkles, Wrench, X } from "lucide-react";
 import { improveTechnicalText } from "@/lib/text-assist";
 import { CustomerSearchSelect } from "@/components/CustomerSearchSelect";
+import { HvacDiagnosticWorkspace } from "@/components/HvacDiagnosticWorkspace";
 import "./service-order-workspace.css";
 
 type WorkspaceOrder = {
@@ -28,12 +29,13 @@ type Props = {
   customers?: RecordItem[];
   structures?: RecordItem[];
   equipment?: RecordItem[];
+  errorCodes?: RecordItem[];
   canEdit: boolean;
   onSave: (order: WorkspaceOrder) => Promise<unknown>;
   onClose?: () => void;
 };
 
-const tabs = ["Resumo", "Serviços", "Equipamentos", "Fotos", "Histórico", "Financeiro", "Docs"] as const;
+const tabs = ["Resumo", "Serviços", "Equipamentos", "Diagnóstico", "Fotos", "Histórico", "Financeiro", "Docs"] as const;
 type Tab = typeof tabs[number];
 
 function text(record: RecordItem | undefined, ...keys: string[]) {
@@ -48,7 +50,7 @@ function money(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-export function ServiceOrderWorkspace({ order, customers = [], structures = [], equipment = [], canEdit, onSave, onClose }: Props) {
+export function ServiceOrderWorkspace({ order, customers = [], structures = [], equipment = [], errorCodes = [], canEdit, onSave, onClose }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("Resumo");
   const [draft, setDraft] = useState<WorkspaceOrder>(order);
   const [saving, setSaving] = useState(false);
@@ -177,6 +179,8 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
     {activeTab === "Serviços" && <div className="os-tab-content"><article className="os-card"><h3>Quantidade de produtos aplicados</h3>{catalog.filter(item => item.kind === "Produto").map(item => <label className="erp-equipment-option" key={item.id}>{item.name}<input type="number" min="0.001" step="0.001" disabled={!canEdit || saving} value={item.quantity ?? 1} onChange={event => setField("catalogItems",catalog.map(value => value.id === item.id ? {...value,quantity:Number(event.target.value)} : value))}/></label>)}{!catalog.some(item => item.kind === "Produto") && <p>Nenhum produto aplicado nesta OS.</p>}</article><article className="os-card"><div className="os-card-heading"><div><span className="os-section-label">SERVIÇOS ADICIONADOS</span><h3>Serviços e materiais da OS</h3></div><div className="os-inline-form"><input value={newService} onChange={event => setNewService(event.target.value)} placeholder="Nome do serviço"/><input value={servicePrice} onChange={event => setServicePrice(event.target.value)} inputMode="decimal" placeholder="Preço"/><button className="os-primary-button" onClick={addService}><Plus size={14}/> Adicionar</button></div></div><div className="os-items-table"><div className="os-items-head"><span>Serviço / produto</span><span>Tipo</span><span>Valor</span><span/></div>{catalog.map(item => <div className="os-item-row" key={item.id}><span>{item.name}</span><span>{item.kind}</span><span>{money(Number((item as unknown as RecordItem).price || 0))}</span><button onClick={() => setDraft(current => ({ ...current, catalogItems: (current.catalogItems || []).filter(existing => existing.id !== item.id) }))} aria-label={`Remover ${item.name}`}><X size={14}/></button></div>)}{!catalog.length && <p className="os-empty">Nenhum serviço ou material vinculado.</p>}</div><div className="os-totals"><span>Produtos / materiais <b>{money(productsTotal)}</b></span><span>Serviços <b>{money(servicesTotal)}</b></span><span>Desconto <input value={String(discount)} onChange={event => setField("discount", Number(event.target.value.replace(",", ".")) || 0)}/></span><strong>TOTAL DA OS <b>{money(total)}</b></strong></div></article></div>}
 
     {activeTab === "Equipamentos" && <div className="os-tab-content"><article className="os-card"><div className="os-card-heading"><div><span className="os-section-label">EQUIPAMENTO DO ATENDIMENTO</span><h3>{linkedEquipment.length || 0} equipamento(s) relacionado(s)</h3></div><button className="os-secondary-button" onClick={() => setNotice("Cadastro de equipamento será aberto na aba Equipamentos.")}><Plus size={14}/> Adicionar equipamento</button></div><div className="os-equipment-grid">{linkedEquipment.map(item => <div className="os-equipment-card" key={text(item, "id", "name")}><div className="os-equipment-icon"><Wrench size={18}/></div><div><h4>{text(item, "name", "description", "model") || "Equipamento"}</h4><p>{text(item, "brand", "manufacturer")} • {text(item, "capacity", "capacityBtu", "model")}</p><small>Patrimônio: {text(item, "assetCode", "patrimony", "patrimonio") || "Não informado"} • Série: {text(item, "serial", "serialNumber") || "Não informada"}</small></div><div className="os-equipment-actions"><button onClick={() => setActiveTab("Histórico")}>Histórico</button><button onClick={() => setActiveTab("Fotos")}>Fotos</button></div></div>)}{!linkedEquipment.length && <div className="os-empty"><Wrench size={22}/><p>Nenhum equipamento foi vinculado a esta OS.</p><button className="os-secondary-button" onClick={() => setNotice("Vincule um equipamento pelo cadastro do cliente e ambiente.")}>Vincular equipamento</button></div>}</div></article></div>}
+
+    {activeTab === "Diagnóstico" && <div className="os-tab-content"><HvacDiagnosticWorkspace order={draft as unknown as RecordItem} linkedEquipment={linkedEquipment} errorCodes={errorCodes} canEdit={canEdit} onApply={payload=>setDraft(current=>({...current,...payload}))}/></div>}
 
     {activeTab === "Fotos" && <div className="os-tab-content"><article className="os-card"><div className="os-card-heading"><div><span className="os-section-label">REGISTRO FOTOGRÁFICO</span><h3>Evidências por categoria</h3></div></div><div className="os-photo-categories">{["Antes", "Durante", "Depois", "Equipamento", "Etiqueta", "Defeito", "Medições", "Outros"].map(category => <div className="os-photo-category" key={category}><div><b>{category}</b><span>{(photos[category] || []).length} foto(s)</span></div><label><Camera size={17}/> Tirar ou escolher foto<input type="file" accept="image/*" capture="environment" onChange={event => void addPhoto(category, event.target.files?.[0])}/></label><div className="os-photo-thumbs">{(photos[category] || []).map((src, index) => <img key={index} src={src} alt={`${category} ${index + 1}`}/>)}</div></div>)}</div><p className="os-helper-text"><ImagePlus size={14}/> Cada evidência deve permanecer associada à OS, técnico, data/hora, equipamento e ambiente.</p></article></div>}
 
