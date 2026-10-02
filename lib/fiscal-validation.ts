@@ -163,8 +163,18 @@ export function validateFiscalPayload(payload: FiscalValidationPayload) {
     if ((purpose === "3" || purpose === "5" || purpose === "6") && !refs.length) {
       warning("referencedDocuments", "REFERENCED_DOCUMENT_REVIEW", "Revise a necessidade de documento fiscal referenciado para esta finalidade.");
     }
-    if (purpose === "6" && !payload.debitNoteType?.trim()) error("debitNoteType", "DEBIT_NOTE_TYPE_REQUIRED", "Informe o tipo da Nota de Débito.");
-    if (purpose === "5" && !payload.creditNoteType?.trim()) warning("creditNoteType", "CREDIT_NOTE_TYPE_REVIEW", "Revise o tipo/motivo da Nota de Crédito conforme o leiaute vigente.");
+    if (purpose === "6") {
+      const debitType = digits(payload.debitNoteType);
+      if (!/^(01|02|03|04|05|06|07)$/.test(debitType)) {
+        error("debitNoteType", "DEBIT_NOTE_TYPE_REQUIRED", "Tipo da Nota de Débito inválido. Use código 01 a 07 conforme o leiaute vigente.");
+      }
+    }
+    if (purpose === "5") {
+      const creditType = digits(payload.creditNoteType);
+      if (!/^(01|02|03)$/.test(creditType)) {
+        error("creditNoteType", "CREDIT_NOTE_TYPE_REQUIRED", "Tipo da Nota de Crédito inválido. Use 01, 02 ou 03 conforme o leiaute vigente.");
+      }
+    }
 
     refs.forEach((ref, index) => {
       if ((ref.type === "NFE" || ref.type === "NFCE") && digits(ref.accessKey).length !== 44) {
