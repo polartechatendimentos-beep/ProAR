@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "../../../../lib/permissions";
 import { validateFiscalPayload, type FiscalValidationPayload } from "../../../../lib/fiscal-validation";
+import { resolveFiscalRoute } from "../../../../lib/fiscal-routing";
 
 export const runtime = "nodejs";
 
@@ -37,12 +38,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: "rejected", error: "Documento possui pendências fiscais.", preflight }, { status: 422 });
     }
 
+    let routing;
+    try {
+      routing = resolveFiscalRoute(body.payload);
+    } catch (error) {
+      if (error instanceof Error && error.message === "NFSE_MUNICIPALITY_NOT_CONFIGURED") {
+        return NextResponse.json({
+          status: "rejected",
+          code: "NFSE_MUNICIPALITY_NOT_CONFIGURED",
+          error: "O município da NFS-e ainda não possui rota fiscal configurada no ProAR.",
+          preflight,
+        }, { status: 422 });
+      }
+      throw error;
+    }
+
     const bridge = bridgeConfiguration();
     if (!bridge.configured) {
       return NextResponse.json({
         status: "integration_required",
         error: "A ponte fiscal real ainda não está configurada no servidor. Configure PROAR_FISCAL_BRIDGE_URL e PROAR_FISCAL_BRIDGE_TOKEN para transmitir à SEFAZ/NFS-e por um adaptador homologado.",
         preflight,
+        routing,
       }, { status: 503 });
     }
 
@@ -53,7 +70,7 @@ export async function POST(request: NextRequest) {
         "Authorization": `Bearer ${bridge.token}`,
         "X-ProAR-Company": String(access.session.companyId || ""),
       },
-      body: JSON.stringify({ documentId: body.documentId, payload: body.payload }),
+      body: JSON.stringify({ documentId: body.documentId, payload: body.payload, routing }),
       signal: AbortSignal.timeout(45_000),
       cache: "no-store",
     });
@@ -66,11 +83,12 @@ export async function POST(request: NextRequest) {
         error: provider.message || "Documento rejeitado pelo autorizador fiscal.",
         provider,
         preflight,
+        routing,
       }, { status: 422 });
     }
 
     if (provider.status === "processing") {
-      return NextResponse.json({ status: "processing", provider, preflight }, { status: 202 });
+      return NextResponse.json({ status: "processing", provider, preflight, routing }, { status: 202 });
     }
 
     const fiscalIdentifier = provider.accessKey || provider.verificationCode;
@@ -93,6 +111,7 @@ export async function POST(request: NextRequest) {
       xmlUrl: provider.xmlUrl,
       danfeUrl: provider.danfeUrl,
       preflight,
+      routing,
     });
   } catch (error) {
     console.error("Fiscal transmission error", error);
