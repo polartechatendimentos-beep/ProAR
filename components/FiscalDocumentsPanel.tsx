@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FiscalAdvancedFields, emptyFiscalAdvancedData, type FiscalAdvancedData } from "@/components/FiscalAdvancedFields";
 import type { FiscalItemTax } from "@/lib/fiscal-domain";
 import { translateFiscalRejection } from "@/lib/fiscal-rejections";
+import { reconcileFiscalDocuments } from "@/lib/fiscal-reconciliation";
 import {
   AlertTriangle, CheckCircle2, ChevronRight, FileCheck2, FileText, Filter,
   Landmark, Package, Plus, ReceiptText, RefreshCw, Search, Send, Settings,
@@ -168,6 +169,7 @@ export function FiscalDocumentsPanel({
     authorized: documents.filter(item => item.status === "Autorizada").length,
     rejected: documents.filter(item => item.status === "Rejeitada").length,
   };
+  const reconciliation = useMemo(() => reconcileFiscalDocuments({ documents, sales, serviceOrders, financeRecords }), [documents, sales, serviceOrders, financeRecords]);
 
   const buildFiscalPayload = (draft: Partial<FiscalDocumentRecord>) => {
     const customer = customers.find(item => item.id === draft.fiscalCustomerId || item.name === draft.client);
@@ -561,6 +563,12 @@ export function FiscalDocumentsPanel({
         <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-xs text-blue-900">
           <b>Regra de segurança fiscal</b>
           <p className="mt-1 leading-5">O ProAR só deve marcar uma nota como <b>Autorizada</b> após retorno real do provedor/SEFAZ/prefeitura com número, protocolo e chave/código de verificação.</p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center gap-2"><FileCheck2 size={17}/><b className="text-sm">Conciliação fiscal</b></div>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-center"><div className="rounded-lg bg-red-50 p-2"><small className="block text-red-600">Erros</small><b className="text-red-700">{reconciliation.errors}</b></div><div className="rounded-lg bg-amber-50 p-2"><small className="block text-amber-600">Avisos</small><b className="text-amber-700">{reconciliation.warnings}</b></div></div>
+          <p className="mt-3 text-xs text-slate-500">Cruza nota, venda/OS, financeiro e XML para identificar divergências.</p>
+          {!!reconciliation.issues.length && <div className="mt-3 space-y-2">{reconciliation.issues.slice(0,4).map((issue,index)=><button key={issue.documentId+"-"+index} onClick={()=>setSelected(documents.find(item=>item.id===issue.documentId)||null)} className="w-full rounded-lg border p-2 text-left text-[11px] hover:bg-slate-50"><b>{issue.documentId}</b><span className="block text-slate-600">{issue.message}</span></button>)}</div>}
         </div>
       </aside>
     </div>
