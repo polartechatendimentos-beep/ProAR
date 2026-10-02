@@ -582,7 +582,17 @@ function Sidebar({ current, setCurrent, open, close, permissions, role }: { curr
       <div className="help-card"><div><Headphones size={17}/></div><strong>Suporte ProAR</strong><p>Conte com a nossa equipe sempre que precisar.</p><button>Falar com especialista <ArrowRight size={12}/></button></div>
       <div className="secure"><ShieldCheck size={13}/><span>Ambiente seguro</span><b>v2.0</b></div>
     </aside>
-    <nav className="mobile-nav" aria-label="Navegação rápida"><button className={current === "Painel inicial" ? "active" : ""} onClick={() => setCurrent("Painel inicial")}><LayoutDashboard size={18}/><span>Início</span></button><button className={current === "Agenda" ? "active" : ""} onClick={() => setCurrent("Agenda")}><CalendarDays size={18}/><span>Agenda</span></button><button className={current === "Ordens de serviço" ? "active" : ""} onClick={() => setCurrent("Ordens de serviço")}><ClipboardList size={18}/><span>Ordens</span></button><button className={current === "Clientes" ? "active" : ""} onClick={() => setCurrent("Clientes")}><UsersRound size={18}/><span>Clientes</span></button><button className={current === "Configurações" ? "active" : ""} onClick={() => setCurrent("Configurações")}><MoreHorizontal size={18}/><span>Mais</span></button></nav>
+    <nav className="mobile-nav" aria-label="Navegação rápida">{(
+      /t[eé]cnico/i.test(role || "") ? [
+        {name:"Agenda",label:"Agenda",icon:CalendarDays},{name:"Ordens de serviço",label:"Ordens",icon:ClipboardList},{name:"Equipamentos",label:"Equip.",icon:Boxes},{name:"PMOC e conformidade",label:"PMOC",icon:ShieldCheck},{name:"Painel inicial",label:"Início",icon:MoreHorizontal}
+      ] : /finance/i.test(role || "") ? [
+        {name:"Painel inicial",label:"Início",icon:LayoutDashboard},{name:"Financeiro",label:"Financeiro",icon:WalletCards},{name:"Central de pendências",label:"Pendências",icon:Bell},{name:"Compras",label:"Compras",icon:ShoppingCart},{name:"Relatórios",label:"Relatórios",icon:MoreHorizontal}
+      ] : /vendedor/i.test(role || "") ? [
+        {name:"Painel inicial",label:"Início",icon:LayoutDashboard},{name:"Clientes",label:"Clientes",icon:UsersRound},{name:"Orçamentos",label:"Orç.",icon:FileText},{name:"Vendas",label:"Vendas",icon:ShoppingBag},{name:"Central de pendências",label:"Pendências",icon:MoreHorizontal}
+      ] : [
+        {name:"Painel inicial",label:"Início",icon:LayoutDashboard},{name:"Agenda",label:"Agenda",icon:CalendarDays},{name:"Ordens de serviço",label:"Ordens",icon:ClipboardList},{name:"Clientes",label:"Clientes",icon:UsersRound},{name:"Configurações",label:"Mais",icon:MoreHorizontal}
+      ]
+    ).filter(item=>allowed(item.name)).slice(0,5).map(({name,label,icon:Icon})=><button key={name} className={current === name ? "active" : ""} onClick={() => setCurrent(name)}><Icon size={18}/><span>{label}</span></button>)}</nav>
   </>;
 }
 
