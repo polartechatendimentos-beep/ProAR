@@ -536,6 +536,7 @@ function Header({ title, subtitle, onMenu, searchItems, pendingItems, onSearchSe
   const [searchOpen,setSearchOpen]=useState(false);
   const [pendingOpen,setPendingOpen]=useState(false);
   const [query,setQuery]=useState("");
+  useEffect(()=>{ const handler=(event:KeyboardEvent)=>{ if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==="k"){ event.preventDefault(); setSearchOpen(true); setPendingOpen(false); } }; window.addEventListener("keydown",handler); return()=>window.removeEventListener("keydown",handler); },[]);
   const matches=query.trim().length<2?[]:searchItems.filter(item=>`${item.title} ${item.detail} ${item.module}`.toLowerCase().includes(query.trim().toLowerCase())).slice(0,10);
   return <header className="topbar topbar-user-only">
     <div className="headline">
