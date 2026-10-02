@@ -1,17 +1,15 @@
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { readSession } from "../../../../lib/proar-auth";
+import { requirePermission } from "../../../../lib/permissions";
 
 export const runtime = "nodejs";
 
-const allowed = (request: NextRequest) => {
-  const user = readSession(request.cookies.get("proar_session")?.value);
-  return user && (user.permissions.includes("*") || user.permissions.includes("Financeiro") || user.permissions.includes("Ordens de serviço")) ? user : null;
-};
+
 
 export async function POST(request: NextRequest) {
-  const user = allowed(request);
-  if (!user) return NextResponse.json({ error: "Sem permissão para emitir NFS-e." }, { status: 403 });
+  const access = requirePermission(request, "fiscal.emitir");
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  const user = access.session;
   const body = await request.json();
   const providerUrl = process.env.MIRASSOL_NFSE_API_URL;
   const providerToken = process.env.MIRASSOL_NFSE_API_TOKEN;
@@ -30,6 +28,14 @@ export async function POST(request: NextRequest) {
     signal: AbortSignal.timeout(30000),
   });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) return NextResponse.json({ error: result?.error || "A Prefeitura/Provedor não confirmou a emissão da NFS-e.", provider: result }, { status: 502 });
-  return NextResponse.json({ issued: true, idempotencyKey, result });
+  if (!response.ok) return NextResponse.json({ error: result?.error || result?.message || "A Prefeitura/Provedor não confirmou a emissão da NFS-e.", status:"Rejeitada", provider: result }, { status: 502 });
+  const provider = result?.result ?? result?.data ?? result;
+  const statusText = String(provider?.status ?? provider?.situacao ?? provider?.state ?? "").toLocaleLowerCase("pt-BR");
+  const fiscalIdentifier = provider?.number ?? provider?.numero ?? provider?.nfseNumber ?? provider?.chave ?? provider?.key ?? provider?.protocol ?? provider?.protocolo ?? provider?.verificationCode ?? provider?.codigoVerificacao;
+  const authorized = Boolean(provider?.authorized === true || provider?.autorizada === true || provider?.issued === true || ["autorizada","autorizado","authorized","aprovada","aprovado"].includes(statusText)) && Boolean(fiscalIdentifier);
+  if (!authorized) {
+    const processing = ["processando","processing","pendente","pending","recebida","received"].includes(statusText);
+    return NextResponse.json({ issued:false, status:processing ? "Processando" : "Rejeitada", idempotencyKey, provider:result, error:processing ? undefined : "O provedor respondeu, mas não retornou autorização fiscal válida." }, { status:processing ? 202 : 422 });
+  }
+  return NextResponse.json({ issued:true, status:"Autorizada", idempotencyKey, result });
 }
