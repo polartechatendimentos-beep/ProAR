@@ -2648,8 +2648,9 @@ async function passwordHash(value: string) {
 
 function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }) {
   const tenant = typeof window !== "undefined" ? (() => { const host=window.location.hostname.toLowerCase(); const root=(process.env.NEXT_PUBLIC_PROAR_ROOT_DOMAIN || "proar.online").toLowerCase(); if(host.endsWith(`.${root}`)){ const sub=host.slice(0,-(`.${root}`.length)); if(sub && !["www","manager","teste","api","admin","docs","status"].includes(sub)) return sub; } return new URLSearchParams(window.location.search).get("tenant") || ""; })() : "";
-  const [tenantCompany, setTenantCompany] = useState<{trade_name?: string; legal_name?: string; logo_path?: string; brand_config?: {logo?: string; systemName?: string; tagline?: string; primaryColor?: string}; daysRemaining?: number; expired?: boolean} | null>(null);
-  useEffect(() => { if (!tenant) return; fetch(`/api/trial/company?slug=${encodeURIComponent(tenant)}`, {cache:"no-store"}).then(async r => r.ok ? (await r.json()).company : null).then(company => { setTenantCompany(company); if (company?.trade_name) document.title = `${company.trade_name} | ProAR Gestão de Serviços`; }).catch(()=>{}); }, [tenant]);
+  const [tenantCompany, setTenantCompany] = useState<{trade_name?: string; legal_name?: string; logo_path?: string; status?: string; brand_config?: {logo?: string; systemName?: string; tagline?: string; primaryColor?: string}; daysRemaining?: number; expired?: boolean} | null>(null);
+  const [blockedMessage, setBlockedMessage] = useState("");
+  useEffect(() => { if (!tenant) return; fetch(`/api/trial/company?slug=${encodeURIComponent(tenant)}`, {cache:"no-store"}).then(async r => r.ok ? (await r.json()).company : null).then(company => { setTenantCompany(company); setBlockedMessage(company && company.status !== "active" ? "Este sistema está bloqueado pelo ProAR Manager. Entre em contato com o administrador responsável." : ""); if (company?.trade_name) document.title = `${company.trade_name} | ProAR Gestão de Serviços`; }).catch(()=>{}); }, [tenant]);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -2666,7 +2667,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
         body: JSON.stringify({ username, password, tenant }),
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Não foi possível entrar.");
+      if (!response.ok) { if (result.code === "SYSTEM_BLOCKED" || result.blocked === true) setBlockedMessage("Este sistema está bloqueado pelo ProAR Manager. Entre em contato com o administrador responsável."); throw new Error(result.error || "Não foi possível entrar."); }
       if (result.mustChangePassword && tenant) { window.location.href = `/trocar-senha`; return; }
       onLogin({ username: result.username, displayName: result.displayName, role: result.role, permissions: result.permissions, companyId: result.companyId, companySlug: result.companySlug, trialExpiresAt: result.trialExpiresAt });
     } catch (loginError) {
@@ -2675,6 +2676,17 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
       setLoading(false);
     }
   };
+  if (blockedMessage) return <main className="login-page login-blocked-page">
+    <section className="login-panel login-blocked-panel">
+      <div className="login-blocked-icon"><LockKeyhole size={34}/></div>
+      <span className="login-blocked-kicker">PROAR MANAGER</span>
+      <h2>Sistema bloqueado</h2>
+      <p>{blockedMessage}</p>
+      <div className="login-blocked-company">{tenantCompany?.trade_name || tenantCompany?.legal_name || tenant || "Empresa"}</div>
+      <small>O acesso será liberado automaticamente quando o administrador reativar a empresa no ProAR Manager.</small>
+    </section>
+    <span className="login-copyright">ProAR © {new Date().getFullYear()}</span>
+  </main>;
   return <main className="login-page">
     <section className="login-panel">
       <form onSubmit={submit}>
@@ -3480,11 +3492,11 @@ export default function Home() {
         if (response.status === 403 || response.status === 401) {
           localStorage.removeItem("proar-offline-session");
           setAuthenticatedUser(null);
-          setSavedMessage("A empresa foi bloqueada, suspensa ou teve a licença encerrada no ProAR Manager.");
+          setSavedMessage("Sistema bloqueado pelo ProAR Manager.");
         }
       } catch {}
     };
-    const interval = window.setInterval(verifyManagerAccess, 60 * 60 * 1000);
+    const interval = window.setInterval(verifyManagerAccess, 60 * 1000);
     const onFocus = () => void verifyManagerAccess();
     window.addEventListener("focus", onFocus);
     return () => { window.clearInterval(interval); window.removeEventListener("focus", onFocus); };
