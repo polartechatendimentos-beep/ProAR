@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission, sessionCompany } from "../../../../lib/permissions";
 import { getOpenAiCredential } from "../../../../lib/openai-credential";
+import { validateManufacturerCode } from "../../../../lib/diagnostic-brand-rules";
 
 export const runtime="nodejs";
 
@@ -15,6 +16,7 @@ type DiagnosticRequest={
   serviceRequest?:string;
   measurements?:string;
   matchedReference?:Record<string,unknown>|null;
+  manufacturerValidation?:Record<string,unknown>|null;
 };
 
 function responseText(payload:any){
@@ -44,6 +46,7 @@ export async function POST(request:NextRequest){
   const credential=await getOpenAiCredential(scope.companyId);
   if(!credential) return NextResponse.json({error:"Configure a Inteligência Artificial em Configurações antes de usar o diagnóstico assistido.",code:"AI_NOT_CONFIGURED"},{status:503});
 
+  const manufacturerValidation=validateManufacturerCode({brand:body.brand,model:body.model,code:body.code,blinkPattern:body.blinkPattern});
   const context={
     equipment:{
       brand:String(body.brand||"").trim(),
@@ -58,13 +61,17 @@ export async function POST(request:NextRequest){
       serviceRequest:String(body.serviceRequest||"").trim(),
       measurements:String(body.measurements||"").trim(),
     },
-    verifiedReference:body.matchedReference||null,
+    verifiedReference:manufacturerValidation.canUseAsConfirmedReference ? (body.matchedReference||null) : null,
+    manufacturerValidation,
   };
 
   const prompt=`Você é um assistente técnico HVAC-R para apoiar um técnico em campo.
 Analise o contexto JSON abaixo. Use pesquisa na web quando houver marca/modelo/código/piscadas e priorize manual técnico, boletim de serviço ou documentação oficial do fabricante.
 REGRAS:
 - Nunca invente o significado de código de erro, sequência de LEDs, pressão, temperatura, carga de refrigerante ou procedimento específico do fabricante.
+- Respeite manufacturerValidation. Se status="needs-extraction", NÃO interprete o valor informado como código final: explique como obter o código correto para aquele modelo/controlador e mantenha referenceConfidence="nao_confirmada".
+- Se status="needs-model", deixe explícito que o significado depende da família/modelo e não confirme a falha até localizar documentação correspondente.
+- Para Daikin, não assuma que todos os códigos são letra+número: manuais também usam combinações como UA, EA, AF e CJ. Número isolado diferente de 00 deve ser tratado como leitura incompleta/pista, não como código final.
 - Se a documentação localizada não confirmar a associação marca+modelo+código/piscadas, marque referenceConfidence="nao_confirmada".
 - Diferencie "causa provável" de "causa confirmada". Probabilidade é uma estimativa de triagem, não uma medição.
 - Recomende sequência de testes objetivos antes de trocar peças.
