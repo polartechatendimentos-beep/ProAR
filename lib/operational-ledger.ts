@@ -106,7 +106,7 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
   for (const [module, records] of Object.entries(modules)) if (!Array.isArray(records)) throw new OperationError(`Lista inválida: ${module}.`);
   validateRecords(list(old.customers), list(next.customers), "Clientes", { ...actor, can: permission => actor.can(permission === "configuracoes.editar" ? "clientes.editar" : permission) });
   validateRecords(list(old.serviceOrders), list(next.serviceOrders), "OS", { ...actor, can: permission => actor.can(permission === "configuracoes.editar" ? "os.editar" : permission) });
-  const managed = new Set(["Razão financeiro", "Livro de estoque", "Auditoria operacional"]);
+  const managed = new Set(["Razão financeiro", "Livro de estoque", "Auditoria operacional", "Aprovações"]);
   for (const module of new Set([...Object.keys(oldModules), ...Object.keys(modules)])) {
     if (managed.has(module) || module === "Auditoria") continue;
     validateRecords(list(oldModules[module]), list(modules[module]), module, actor);
@@ -118,6 +118,23 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
   assertUnique(list(modules.Equipamentos), list(oldModules.Equipamentos), "serialNumber");
   const financial = list(modules.Financeiro);
   modules.Financeiro = financial;
+  const approvals = structuredClone(list(oldModules["Aprovações"]));
+  modules["Aprovações"] = approvals;
+  const ensureApproval = (sourceModule:string, source:ErpRecord, reason:string, value:number) => {
+    const existing=approvals.find(item=>item.sourceModule===sourceModule && item.sourceId===source.id && !/Rejeitado|Cancelado/i.test(item.status||""));
+    if(existing){ source.approvalRequired=true; source.approvalStatus=existing.status; return existing; }
+    const approval={ id:`APR-${sourceModule.replace(/\W/g,"").toUpperCase()}-${source.id}`, name:`Aprovação • ${source.name || source.id}`, sourceModule, sourceId:source.id, client:source.client, value, reason, status:"Pendente", requestedAt:now, requestedBy:actor.username, createdAt:now };
+    approvals.push(approval); source.approvalRequired=true; source.approvalStatus="Pendente"; return approval;
+  };
+  for(const purchase of list(modules.Compras)){
+    const before=list(oldModules.Compras).find(item=>item.id===purchase.id);
+    if(!same(before,purchase) && Number(purchase.value||0)>=5000 && !/Aprovado/i.test(purchase.approvalStatus||"")) ensureApproval("Compras",purchase,"Compra acima da alçada automática de R$ 5.000,00.",Number(purchase.value||0));
+  }
+  for(const budget of list(modules.Orçamentos)){
+    const before=list(oldModules.Orçamentos).find(item=>item.id===budget.id);
+    const discountPercent=Number(budget.discountPercent||0);
+    if(!same(before,budget) && discountPercent>10 && !/Aprovado/i.test(budget.approvalStatus||"")) ensureApproval("Orçamentos",budget,`Desconto comercial de ${discountPercent.toFixed(1)}% acima da alçada de 10%.`,Number(budget.value||0));
+  }
   // Derived titles use stable origin IDs. They are created once, even after reopening
   // an OS or receiving a second delivery of the same purchase.
   for (const purchase of list(modules.Compras)) {
@@ -132,6 +149,13 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
     const before = list(old.serviceOrders).find(item => item.id === order.id);
     if (/conclu[ií]da/i.test(order.status || "") && !/conclu[ií]da/i.test(before?.status || "") && !order.certameId && !financial.some(item => item.serviceOrderId === order.id)) {
       financial.push({ id: `FIN-OS-${order.id}`, name: `Conta a receber • ${order.id}`, client: order.client, serviceOrderId: order.id, transactionType: "Receber", status: "Em aberto", value: Number(order.total || order.nfseValue || 0), date: now.slice(0, 10), createdAt: now });
+    }
+    if (/conclu[ií]da/i.test(order.status || "") && !/conclu[ií]da/i.test(before?.status || "")) {
+      const fiscalQueue = modules["Central Fiscal"] ||= [];
+      if (Number(order.total || order.nfseValue || 0) > 0 && !fiscalQueue.some(item=>item.serviceOrderId===order.id)) fiscalQueue.push({ id:`FISC-OS-${order.id}`, name:`Preparar documento fiscal • ${order.id}`, client:order.client, serviceOrderId:order.id, status:"Pendente", category:"NFS-e", value:Number(order.total || order.nfseValue || 0), createdAt:now, automation:"OS concluída → preparar fiscal" });
+      const reminders = modules.Lembretes ||= [];
+      const reminderDate = String(order.reminderDate || order.nextMaintenanceDate || "").slice(0,10);
+      if (reminderDate && !reminders.some(item=>item.serviceOrderId===order.id && item.date===reminderDate)) reminders.push({ id:`REM-OS-${order.id}-${reminderDate}`, name:`Retorno preventivo • ${order.client}`, client:order.client, serviceOrderId:order.id, status:"Pendente", date:reminderDate, description:order.reminderMessage || "Entrar em contato para manutenção preventiva / pós-venda.", createdAt:now, automation:"OS concluída → lembrete futuro" });
     }
   }
   assertAppendOnly(list(oldModules["Conciliações"]), list(modules["Conciliações"]), "Conciliações");
@@ -331,13 +355,13 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
   }
   const next = structuredClone(state);
   const modules = next.moduleRecords ||= {};
-  const module = ["settle", "reverse", "cancel", "dates"].includes(command.action) ? "Financeiro" : command.action === "receive" ? "Compras" : command.action === "account" ? "Contas financeiras" : ["stock","stock-transfer"].includes(command.action) ? "Estoque" : command.action === "reconcile" ? "Conciliações" : "";
+  const module = ["settle", "reverse", "cancel", "dates"].includes(command.action) ? "Financeiro" : command.action === "receive" ? "Compras" : command.action === "account" ? "Contas financeiras" : ["stock","stock-transfer"].includes(command.action) ? "Estoque" : command.action === "reconcile" ? "Conciliações" : command.action === "approval-decide" ? "Aprovações" : "";
   if (!module) throw new OperationError("Operação desconhecida.");
   const records = modules[module] ||= [];
   const record = records.find(item => item.id === command.recordId);
   if (command.expectedRecord && !same(record, command.expectedRecord)) throw new OperationError("Registro alterado por outro usuário. Atualize antes de continuar.", 409);
   const data = command.data || {};
-  if (["settle", "reverse", "cancel", "dates", "receive"].includes(command.action) && !record) throw new OperationError("Registro não encontrado.", 404);
+  if (["settle", "reverse", "cancel", "dates", "receive", "approval-decide"].includes(command.action) && !record) throw new OperationError("Registro não encontrado.", 404);
   const operationId = `OP-${command.idempotencyKey}`;
   switch (command.action) {
     case "settle": {
@@ -361,6 +385,7 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
       break;
     case "receive":
       requireAction(actor, "compras.receber");
+      if (record!.approvalRequired && record!.approvalStatus !== "Aprovado") throw new OperationError("Esta compra depende de aprovação por alçada antes do recebimento.",409);
       record!.receiptHistory = [...list(record!.receiptHistory), { id: operationId, items: data.items, createdAt: now }];
       break;
     case "account":
@@ -377,6 +402,16 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
       if (!(Number(data.quantity) > 0) || !String(data.sourceType || "").trim() || !String(data.destinationType || "").trim()) throw new OperationError("Transferência exige quantidade, origem e destino.");
       records.push({ id: operationId, name: "Transferência de estoque", productId: data.productId, quantity: data.quantity, movementType: "Transferência", sourceType: data.sourceType, sourceId: data.sourceId || "", sourceName: data.sourceName || "", destinationType: data.destinationType, destinationId: data.destinationId || "", destinationName: data.destinationName || "", changeReason: data.reason || "Transferência interna", description: data.reason || "Transferência interna", createdAt: now });
       break;
+    case "approval-decide": {
+      requireAction(actor, "configuracoes.editar");
+      const decision = data.decision === "Aprovado" ? "Aprovado" : data.decision === "Rejeitado" ? "Rejeitado" : "";
+      if (!decision || !String(data.reason || "").trim()) throw new OperationError("Aprovação exige decisão e justificativa.");
+      record!.status=decision; record!.decidedAt=now; record!.decidedBy=actor.username; record!.decisionReason=String(data.reason).trim();
+      const sourceModule=String(record!.sourceModule||""); const sourceId=String(record!.sourceId||"");
+      const source=list(modules[sourceModule]).find(item=>item.id===sourceId);
+      if(source){ source.approvalStatus=decision; source.approvalDecidedAt=now; source.approvalDecidedBy=actor.username; source.approvalDecisionReason=record!.decisionReason; }
+      break;
+    }
     case "reconcile": {
       requireAction(actor, "financeiro.conciliar");
       const movement = list(modules["Razão financeiro"]).find(item => item.id === data.movementId);
@@ -401,6 +436,6 @@ export function independentOperationalRows(companyId: string, state: ErpState, p
   });
   append("Clientes", list(state.customers));
   append("OS", list(state.serviceOrders));
-  for (const module of ["Financeiro", "Contas financeiras", "Razão financeiro", "Livro de estoque", "Produtos", "Compras", "Equipamentos", "Auditoria operacional"]) append(module, list(state.moduleRecords?.[module]));
+  for (const module of ["Financeiro", "Contas financeiras", "Razão financeiro", "Livro de estoque", "Produtos", "Compras", "Equipamentos", "Auditoria operacional", "Aprovações", "Central Fiscal", "Lembretes"]) append(module, list(state.moduleRecords?.[module]));
   return result;
 }
