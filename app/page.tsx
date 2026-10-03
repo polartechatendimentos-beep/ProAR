@@ -1322,6 +1322,8 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
   const estimatedCost=cart.reduce((sum,item)=>sum+(catalog.find(record=>record.id===item.productId)?.cost??0)*item.quantity,0);
   const marginValue=total-estimatedCost;
   const marginPercent=total>0?(marginValue/total)*100:0;
+  const selectedBudgetCustomer=customers.find(item=>item.name===customer);
+  const budgetCustomerCredit=selectedBudgetCustomer?.customerCreditBalance||0;
   const add = (record: ModuleRecord) => setCart(current => { const existing = current.find(item => item.productId === record.id); return existing ? current.map(item => item.productId === record.id ? { ...item, quantity: item.quantity + 1 } : item) : [...current, { id:`ORC-ITEM-${Date.now()}-${current.length}`, productId:record.id, description:record.name, quantity:1, unitValue:record.value ?? 0, kind:record.kind }]; });
   const update = (id: string, changes: Partial<PurchaseItem>) => setCart(current => current.map(item => item.id === id ? { ...item, ...changes } : item).filter(item => item.quantity > 0));
   const save = () => {
@@ -1355,7 +1357,7 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
       <main className="proposal-main">
         <section className="proposal-section panel"><header><span>01</span><div><h3>Identificação da proposta</h3><p>Dados comerciais e local de execução.</p></div></header><div className="proposal-fields">
           <label className="wide">Título da proposta<input value={proposalTitle} onChange={e=>setProposalTitle(e.target.value)} placeholder="Ex.: Instalação de sistema de climatização"/></label>
-          <div className="proposal-customer wide"><label>Cliente<CustomerSearchSelect customers={customers} value={customer} onChange={value=>{setCustomer(value);setUnit("")}}/></label><button type="button" className="outline-btn" onClick={()=>setQuickCreate("customer")}><Plus size={13}/> Novo cliente</button></div>
+          <div className="proposal-customer wide"><label>Cliente<CustomerSearchSelect customers={customers} value={customer} onChange={value=>{setCustomer(value);setUnit("")}}/></label><button type="button" className="outline-btn" onClick={()=>setQuickCreate("customer")}><Plus size={13}/> Novo cliente</button></div>{budgetCustomerCredit>0&&<div className="customer-credit-banner wide"><CircleDollarSign size={17}/><div><b>Cliente possui saldo disponível</b><small>O crédito poderá ser utilizado quando o orçamento for convertido em Pedido.</small></div><strong>R$ {budgetCustomerCredit.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div>}
           {customer&&<><label className="wide">Unidade / local<select value={unit} onChange={e=>setUnit(e.target.value)}><option value="">Cliente principal</option>{customerUnits.map(item=><option key={item.id} value={item.id}>{budgetStructureLabel(item)} • {item.category||"Unidade"}</option>)}</select></label><button type="button" className="proposal-inline-action" onClick={()=>setQuickCreate("structure")}><Plus size={13}/> Cadastrar local</button></>}
           <label>Validade<select value={validity} onChange={e=>setValidity(Number(e.target.value))}>{[7,15,30,45,60].map(v=><option key={v} value={v}>{v} dias</option>)}</select></label>
           <label>Tabela de preço<select value={priceTable} onChange={e=>setPriceTable(e.target.value)}><option>Padrão</option><option>Contrato</option><option>Especial</option></select></label>
