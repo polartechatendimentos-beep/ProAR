@@ -280,6 +280,7 @@ type Customer = {
   creditLimit?: number;
   balancePosted?: number;
   customerCreditBalance?: number;
+  customerCreditHistory?: { id:string; type:"Crédito"|"Uso"|"Estorno"; value:number; sourceId:string; description:string; createdAt:string }[];
   financialStatus?: "Liberado" | "Alerta" | "Somente à vista" | "Bloqueado";
 };
 
@@ -602,6 +603,8 @@ type ModuleRecord = {
   returnDestination?: "Reembolso"|"Crédito do cliente";
   returnedValue?: number;
   returnedItems?: { itemId:string; productId:string; description:string; quantity:number; unitValue:number }[];
+  customerCreditApplied?: number;
+  customerCreditMovementId?: string;
 };
 
 // Fonte única para os seletores Cliente → Unidade/Filial/Setor. Ela lê os
