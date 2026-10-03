@@ -1,16 +1,19 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Activity, AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, Boxes, CalendarDays, ChartNoAxesCombined, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock3, FileChartColumn, FileText, Filter, MoreHorizontal, ShieldCheck, ShoppingBag, ShoppingCart, TrendingUp, UsersRound, WalletCards, Zap } from "lucide-react";
 import { deriveOperationalActions } from "@/lib/action-center";
 
 type DashboardOrder = { id:string; client:string; unit:string; service:string; tech:string; date:string; time:string; status:string; tone:string; avatar:string };
 type DashboardRecord = { id:string; name:string; category?:string; transactionType?:"Pagar"|"Receber"; value?:number; settledValue?:number; status?:string; date?:string; firstDueDate?:string; [key:string]:unknown };
 
-export function DashboardWorkspace({ onNavigate, serviceOrders, modules, role }: { onNavigate: (s: string) => void; serviceOrders: DashboardOrder[]; modules: Record<string, DashboardRecord[]>; role?: string }) {
+export function DashboardWorkspace({ onNavigate, onQuickCreate, serviceOrders, modules, role }: { onNavigate: (s: string) => void; onQuickCreate?: (s:string)=>void; serviceOrders: DashboardOrder[]; modules: Record<string, DashboardRecord[]>; role?: string }) {
   const [period, setPeriod] = useState("Este mês");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [technician, setTechnician] = useState("Todos");
   const [status, setStatus] = useState("Todos");
+  const [recentModules,setRecentModules]=useState<string[]>([]);
+  useEffect(()=>{try{setRecentModules(JSON.parse(localStorage.getItem("proar-recent-modules")||"[]"));}catch{setRecentModules([])}},[]);
+  const navigate=(module:string)=>{try{const next=[module,...recentModules.filter(item=>item!==module)].slice(0,5);setRecentModules(next);localStorage.setItem("proar-recent-modules",JSON.stringify(next));}catch{} onNavigate(module);};
   const today = new Date();
   const todayIso = today.toISOString().slice(0, 10);
   const startOfPeriod = (() => {
@@ -28,7 +31,11 @@ export function DashboardWorkspace({ onNavigate, serviceOrders, modules, role }:
   });
   const todayOrders = serviceOrders.filter(order => order.date === todayIso && (technician === "Todos" || order.tech === technician) && (status === "Todos" || order.status === status));
   const overdueOrders = serviceOrders.filter(order => order.date && order.date < todayIso && !/conclu[ií]d|cancelad/i.test(order.status) && (technician === "Todos" || order.tech === technician) && (status === "Todos" || order.status === status));
-  const workItems = deriveOperationalActions(serviceOrders, modules).slice(0, 8);
+  const allWorkItems = useMemo(()=>deriveOperationalActions(serviceOrders, modules),[serviceOrders,modules]);
+  const workItems = allWorkItems.slice(0, 8);
+  const criticalCount=allWorkItems.filter(item=>item.priority===1).length;
+  const attentionCount=allWorkItems.filter(item=>item.priority===2).length;
+  const quickCreate=[{label:"Nova OS",action:"Ordem de Serviço"},{label:"Novo orçamento",action:"Orçamento"},{label:"Novo cliente",action:"Cliente"},{label:"Nova compra",action:"Compra"},{label:"Conta a receber",action:"Conta a receber"}];
   const financialRecords = (modules.Financeiro ?? []).filter(record => {
     const date = String(record.date || record.firstDueDate || "").slice(0,10);
     return !date || (date >= startOfPeriod && date <= todayIso);
@@ -69,8 +76,11 @@ export function DashboardWorkspace({ onNavigate, serviceOrders, modules, role }:
     { icon: AlertTriangle, value: String(overdueOrders.length).padStart(2, "0"), label: "Atrasadas", note: overdueOrders.length ? "Exigem ação imediata" : "Nenhuma pendência", tone: "red", trend: "Agora", module:"Central de pendências" },
   ];
   return <>
+    <section className="today-proar"><div><span className="section-kicker"><Zap size={12}/> HOJE NO PROAR</span><h2>Central de trabalho</h2><p>{criticalCount ? `${criticalCount} situação(ões) crítica(s) precisam de atenção.` : "Nenhuma situação crítica identificada."} {attentionCount ? `${attentionCount} item(ns) em atenção.` : ""}</p></div><button onClick={()=>navigate("Central de pendências")}>Abrir central <ArrowRight size={13}/></button></section>
+    <section className="quick-create-strip" aria-label="Comandos rápidos">{quickCreate.map(item=><button key={item.action} onClick={()=>onQuickCreate?.(item.action)}><Zap size={13}/>{item.label}</button>)}</section>
+    {recentModules.length>0&&<section className="recent-strip"><small>RECENTES</small>{recentModules.map(module=><button key={module} onClick={()=>navigate(module)}>{module}<ChevronRight size={12}/></button>)}</section>}
     <section className="role-shortcuts" aria-label="Atalhos do perfil">
-      {roleShortcuts.map(({label,module,icon:Icon})=><button key={module} onClick={()=>onNavigate(module)}><Icon size={16}/><span>{label}</span><ChevronRight size={14}/></button>)}
+      {roleShortcuts.map(({label,module,icon:Icon})=><button key={module} onClick={()=>navigate(module)}><Icon size={16}/><span>{label}</span><ChevronRight size={14}/></button>)}
     </section>
     <section className="command-row">
       <div className="periods">{["Hoje", "Semana", "Este mês", "Ano"].map(p => <button className={period === p ? "active" : ""} onClick={() => setPeriod(p)} key={p}>{p}</button>)}</div>
@@ -82,10 +92,10 @@ export function DashboardWorkspace({ onNavigate, serviceOrders, modules, role }:
       <label>Situação<select value={status} onChange={event=>setStatus(event.target.value)}>{statuses.map(item=><option key={item}>{item}</option>)}</select></label>
       <button className="outline-btn" onClick={()=>{setTechnician("Todos");setStatus("Todos");}}>Limpar filtros</button>
     </section>}
-    <section className="stat-grid">{dashboardStats.map(({icon: Icon, module, ...s}) => <article className={`stat-card ${s.tone}`} key={s.label} role="button" tabIndex={0} onClick={()=>onNavigate(module)} onKeyDown={event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();onNavigate(module)}}}>
+    <section className="stat-grid">{dashboardStats.map(({icon: Icon, module, ...s}) => <article className={`stat-card ${s.tone}`} key={s.label} role="button" tabIndex={0} onClick={()=>navigate(module)} onKeyDown={event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();navigate(module)}}}>
       <div className="stat-top"><div className={`stat-icon ${s.tone}`}><Icon size={21} strokeWidth={1.8}/></div><span className={`trend ${s.tone}`}>{s.trend}</span></div>
       <div className="stat-value"><strong>{s.value}</strong><span>{s.label}</span></div><small>{s.note}</small>
-      <button aria-label={`Detalhes de ${s.label}`} onClick={event=>{event.stopPropagation();onNavigate(module)}}><ChevronRight size={15}/></button>
+      <button aria-label={`Detalhes de ${s.label}`} onClick={event=>{event.stopPropagation();navigate(module)}}><ChevronRight size={15}/></button>
     </article>)}</section>
     <section className="content-grid">
       <div className="panel orders-panel">
