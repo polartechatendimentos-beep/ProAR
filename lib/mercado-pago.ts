@@ -1,5 +1,5 @@
 import "server-only";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 const API = "https://api.mercadopago.com";
 
@@ -63,7 +63,7 @@ export function verifyMercadoPagoWebhook(request: Request, dataId: string) {
   const received = parts.v1 || "";
   if (!ts || !received || !xRequestId || !dataId) return false;
   const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
-  const expected = createHash("sha256").update(secret + manifest).digest("hex");
+  const expected = createHmac("sha256", secret).update(manifest).digest("hex");
   const a = Buffer.from(expected); const b = Buffer.from(received);
   return a.length === b.length && timingSafeEqual(a, b);
 }
