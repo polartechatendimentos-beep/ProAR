@@ -2668,7 +2668,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
         body: JSON.stringify({ username, password, tenant }),
       });
       const result = await response.json();
-      if (!response.ok) { if (result.code === "SYSTEM_BLOCKED" || result.blocked === true) setBlockedMessage("Sistema bloqueado. Entre em contato com a equipe da ProAR."); throw new Error(result.error || "Não foi possível entrar."); }
+      if (!response.ok) { if (result.code === "FINANCIAL_BLOCKED") setBlockedMessage("Sistema bloqueado por pendência financeira. Entre em contato com a equipe da ProAR."); else if (result.code === "SYSTEM_BLOCKED" || result.blocked === true) setBlockedMessage("Sistema bloqueado. Entre em contato com a equipe da ProAR."); throw new Error(result.error || "Não foi possível entrar."); }
       if (result.mustChangePassword && tenant) { window.location.href = `/trocar-senha`; return; }
       onLogin({ username: result.username, displayName: result.displayName, role: result.role, permissions: result.permissions, companyId: result.companyId, companySlug: result.companySlug, trialExpiresAt: result.trialExpiresAt });
     } catch (loginError) {
@@ -3493,7 +3493,7 @@ export default function Home() {
         if (response.status === 403 || response.status === 401) {
           localStorage.removeItem("proar-offline-session");
           setAuthenticatedUser(null);
-          setSavedMessage("Sistema bloqueado. Entre em contato com a equipe da ProAR.");
+          try { const result = await response.clone().json(); setSavedMessage(result.code === "FINANCIAL_BLOCKED" ? "Sistema bloqueado por pendência financeira. Entre em contato com a equipe da ProAR." : "Sistema bloqueado. Entre em contato com a equipe da ProAR."); } catch { setSavedMessage("Sistema bloqueado. Entre em contato com a equipe da ProAR."); }
         }
       } catch {}
     };
