@@ -949,6 +949,18 @@ function OrderDetail({ order, customerPhone, company, catalog, contracts, close,
     if (dirty && !window.confirm("Existem alterações não salvas nesta Ordem de Serviço. Clique em OK para sair sem salvar ou Cancelar para continuar editando.")) return;
     close();
   };
+  useEffect(()=>{
+    if(!dirty) return;
+    const key=`proar-os-draft-${order.id}`;
+    const timer=window.setTimeout(()=>{try{localStorage.setItem(key,JSON.stringify({order:currentOrder,statusDraft,internalUpdate,customerUpdate,savedAt:new Date().toISOString()}));setSaveNotice("Rascunho salvo neste dispositivo");}catch{}},700);
+    return()=>window.clearTimeout(timer);
+  },[dirty,currentOrder,statusDraft,internalUpdate,customerUpdate,order.id]);
+  useEffect(()=>{
+    try{
+      const raw=localStorage.getItem(`proar-os-draft-${order.id}`); if(!raw)return;
+      const draft=JSON.parse(raw); if(draft?.order&&window.confirm("Existe um rascunho não finalizado desta OS. Deseja restaurar?")){setCurrentOrder(draft.order);setStatusDraft(draft.statusDraft||draft.order.status);setInternalUpdate(draft.internalUpdate||"");setCustomerUpdate(draft.customerUpdate||"");setDirty(true);}
+    }catch{}
+  },[order.id]);
   useEffect(() => {
     const warnBeforeUnload = (event: BeforeUnloadEvent) => { if (!dirty) return; event.preventDefault(); event.returnValue = ""; };
     window.addEventListener("beforeunload", warnBeforeUnload);
@@ -982,7 +994,7 @@ function OrderDetail({ order, customerPhone, company, catalog, contracts, close,
       const hasUpdate = statusChanged || Boolean(internalUpdate.trim() || customerUpdate.trim() || statusPhotos.length);
       const savedOrder = hasUpdate ? { ...currentOrder, trackingToken:trackingToken(), status: statusDraft, tone: toneForStatus(statusDraft), timeline: [...(currentOrder.timeline ?? []), { id:`evt-save-${Date.now()}`, createdAt:new Date().toISOString(), previousStatus:currentOrder.status, status:statusDraft, technician:currentOrder.tech, internalNote:internalUpdate.trim() || (statusChanged ? "Status atualizado pelo salvamento principal." : undefined), customerNote:customerUpdate.trim() || undefined, photos:statusPhotos.length ? statusPhotos : undefined, customerVisible:Boolean(customerUpdate.trim() || statusPhotos.length), whatsappQueued:Boolean(whatsappPhone && currentOrder.whatsappUpdatesEnabled !== false && (customerUpdate.trim() || statusChanged)) }] } : currentOrder;
       const confirmedOrder = await onUpdate(savedOrder) as ServiceOrder;
-      setCurrentOrder(confirmedOrder); setStatusDraft(confirmedOrder.status); setInternalUpdate(""); setCustomerUpdate(""); setStatusPhotos([]); setDirty(false); setSaveNotice("✓ Alterações salvas");
+      setCurrentOrder(confirmedOrder); setStatusDraft(confirmedOrder.status); setInternalUpdate(""); setCustomerUpdate(""); setStatusPhotos([]); setDirty(false); try{localStorage.removeItem(`proar-os-draft-${order.id}`)}catch{} setSaveNotice("✓ Alterações salvas e sincronizadas");
       if(confirmedOrder.googleCalendarSyncEnabled && confirmedOrder.date) await syncGoogleCalendar(confirmedOrder);
       window.setTimeout(() => setSaveNotice(""), 2200);
     } catch { setSaveNotice("Não foi possível salvar esta Ordem de Serviço. Verifique os dados e tente novamente."); }
