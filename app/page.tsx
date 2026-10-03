@@ -1468,18 +1468,22 @@ function SalesPDV({ customers, structures, records, sales, onSave, onDelete, onC
   const [fullScreen, setFullScreen] = useState(false);
   const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
   const [editingSale, setEditingSale] = useState<ModuleRecord | null>(null);
+  const [useCustomerCredit,setUseCustomerCredit]=useState(false);
   const pdvRef = useRef<HTMLElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const quickSaleCatalog: SaleItem[] = records.filter(item => (item.kind === "Produto" || item.kind === "Serviço") && item.status !== "Inativo").map(item => ({ id:item.id, name:item.name, code:item.id, price:item.value ?? 0, kind:item.kind!, unit:item.unitOfMeasure || (item.kind === "Serviço" ? "serviço" : "un"), image:item.catalogImage }));
   const filteredCatalog = quickSaleCatalog.filter(item => `${item.name} ${item.code} ${item.kind}`.toLowerCase().includes(search.toLowerCase()));
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const total = Math.max(0, subtotal - discount);
+  const selectedCustomer = customers.find(item => item.name === customer);
+  const availableCustomerCredit=selectedCustomer?.customerCreditBalance||0;
+  const customerCreditApplied=useCustomerCredit?Math.min(total,availableCustomerCredit):0;
+  const payableTotal=Math.max(0,total-customerCreditApplied);
   const paidTotal = payments.reduce((sum, entry) => sum + Math.max(0, entry.amount || 0), 0);
   const hasCashPayment = payments.some(entry => entry.method === "Dinheiro" && entry.amount > 0);
   const nonCashOverpayment = paidTotal > total && !hasCashPayment;
-  const remaining = Math.max(0, total - paidTotal);
-  const change = hasCashPayment ? Math.max(0, paidTotal - total) : 0;
-  const selectedCustomer = customers.find(item => item.name === customer);
+  const remaining = Math.max(0, payableTotal - paidTotal);
+  const change = hasCashPayment ? Math.max(0, paidTotal - payableTotal) : 0;
   const customerUnits = customer ? customerStructures(customer, customers, structures) : [];
   useEffect(() => {
     if (customer && !customerUnits.some(item => item.name === unit)) setUnit(customerUnits[0]?.name ?? "");
@@ -1533,10 +1537,15 @@ function SalesPDV({ customers, structures, records, sales, onSave, onDelete, onC
     if (nonCashOverpayment) { setNotice("Valor informado superior ao total da venda. Ajuste o pagamento."); setActiveTab("pagamento"); return; }
     if (selectedCustomer?.financialStatus === "Bloqueado") { setNotice("Cliente bloqueado pelo financeiro. A venda não pode ser concluída."); return; }
     if (selectedCustomer?.creditLimit && (selectedCustomer.balancePosted ?? 0) + total > selectedCustomer.creditLimit && payment === "Boleto") { setNotice("Limite de crédito excedido para venda a prazo. Solicite liberação do financeiro."); return; }
+    const creditMovementId=customerCreditApplied>0?`CRED-USO-${Date.now().toString().slice(-6)}`:undefined;
     const sale: ModuleRecord = {
-      ...(editingSale ?? {}), id: editingSale?.id ?? `VEN-${Date.now().toString().slice(-6)}`, name:`Venda • ${customer || "Consumidor final"}`, client:customer || "Consumidor final", unit, paymentMethod:payment, value:total, status:editingSale?.status || "Pedido confirmado", category:"Venda PDV", description:`Subtotal R$ ${subtotal.toLocaleString("pt-BR",{minimumFractionDigits:2})} • desconto R$ ${discount.toLocaleString("pt-BR",{minimumFractionDigits:2})}`, purchaseItems:cart.map(item=>({id:item.id,productId:item.id,description:item.name,quantity:item.quantity,unitValue:item.price,kind:item.kind})), createdAt:editingSale?.createdAt ?? new Date().toLocaleString("pt-BR"), date:editingSale?.date ?? new Date().toISOString().slice(0,10)
+      ...(editingSale ?? {}), customerCreditApplied, customerCreditMovementId:creditMovementId, id: editingSale?.id ?? `VEN-${Date.now().toString().slice(-6)}`, name:`Venda • ${customer || "Consumidor final"}`, client:customer || "Consumidor final", unit, paymentMethod:payment, value:total, status:editingSale?.status || "Pedido confirmado", category:"Venda PDV", description:`Subtotal R$ ${subtotal.toLocaleString("pt-BR",{minimumFractionDigits:2})} • desconto R$ ${discount.toLocaleString("pt-BR",{minimumFractionDigits:2})}`, purchaseItems:cart.map(item=>({id:item.id,productId:item.id,description:item.name,quantity:item.quantity,unitValue:item.price,kind:item.kind})), createdAt:editingSale?.createdAt ?? new Date().toLocaleString("pt-BR"), date:editingSale?.date ?? new Date().toISOString().slice(0,10)
     };
     onSave(sale);
+    if(customerCreditApplied>0&&selectedCustomer){
+      const nextCustomers=customers.map(item=>item.id===selectedCustomer.id?{...item,customerCreditBalance:Math.max(0,(item.customerCreditBalance||0)-customerCreditApplied),customerCreditHistory:[...(item.customerCreditHistory||[]),{id:creditMovementId!,type:"Uso" as const,value:customerCreditApplied,sourceId:sale.id,description:`Crédito utilizado no pedido ${sale.id}`,createdAt:new Date().toISOString()}]}:item);
+      window.dispatchEvent(new CustomEvent("proar:customer-credit-update",{detail:{customers:nextCustomers}}));
+    }
     setCart([]); setDiscount(0); setPayments([]); setCustomer(""); setUnit("Matriz"); setActiveTab("itens"); setEditingSale(null);
     setNotice(editingSale ? `Pedido ${sale.id} atualizado e sincronizado.` : `Venda ${sale.id} finalizada e sincronizada — R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.`);
   };
