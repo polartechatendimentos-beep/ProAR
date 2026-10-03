@@ -1640,6 +1640,7 @@ const moduleStatuses: Record<string, string[]> = {
   "Financeiro": ["Em aberto", "Aguardando aprovação", "Vencida", "Paga parcialmente", "Paga", "Recebida", "Cancelada"],
   "Funcionários": ["Ativo", "Em férias", "Afastado", "Inativo"],
   "Obras": ["Planejamento", "Em andamento", "Pausada", "Aguardando material", "Concluída", "Cancelada"],
+  "Devoluções": ["Solicitada","Aguardando aprovação","Aguardando recebimento","Recebida","Conferida","Crédito/Reembolso realizado","Concluída","Recusada"],
 };
 
 const managementTabs: Record<string, string[]> = {
@@ -1648,6 +1649,7 @@ const managementTabs: Record<string, string[]> = {
   "Financeiro": ["Visão geral", "Contas a pagar", "Contas a receber", "Fluxo de caixa", "Conciliação"],
   "Funcionários": ["Visão geral", "Equipe", "Funções e permissões", "Comissões", "Histórico"],
   "Obras": ["Visão geral", "Planejamento", "Execução", "Perdas", "Financeiro", "Histórico"],
+  "Devoluções": ["Visão geral","Solicitações","Recebimento","Conferência","Financeiro","Histórico"],
 };
 
 const managementFlows: Record<string, { title: string; text: string }[]> = {
@@ -3974,7 +3976,8 @@ export default function Home() {
     const returnedValue=items.reduce((sum,item)=>sum+(item.unitValue||0)*item.quantity,0);
     const returnId=`DEV-${Date.now().toString().slice(-6)}`;
     const returnedItems=items.map(item=>({itemId:item.id,productId:item.productId||item.id,description:item.description,quantity:item.quantity,unitValue:item.unitValue||0}));
-    const returnRecord:ModuleRecord={id:returnId,name:`Devolução • ${sale.id}`,client:sale.client,customerId:sale.customerId,description:`${totalReturn?"Pedido total":"Devolução parcial"} • ${destination}`,createdAt:new Date().toLocaleString("pt-BR"),date:new Date().toISOString().slice(0,10),status:"Devolução registrada",value:returnedValue,operationId:sale.operationId,financialOriginId:sale.financialOriginId,sourceSaleId:sale.id,sourceBudgetId:sale.sourceBudgetId,sourceBudgetRevision:sale.sourceBudgetRevision,returnType:totalReturn?"Total":"Parcial",returnDestination:destination,returnReason:reason,returnStockDestination:stockDestination,returnedValue,returnedItems,stockMovementStatus:"Estornado",financialLifecycleStatus:"Estornado"};
+    const requiresApproval=returnedValue>500;
+    const returnRecord:ModuleRecord={id:returnId,name:`Devolução • ${sale.id}`,client:sale.client,customerId:sale.customerId,description:`${totalReturn?"Pedido total":"Devolução parcial"} • ${destination}`,createdAt:new Date().toLocaleString("pt-BR"),date:new Date().toISOString().slice(0,10),status:requiresApproval?"Aguardando aprovação":"Aguardando recebimento",approvalRequired:requiresApproval,approvalStatus:requiresApproval?"Pendente":"Aprovado",value:returnedValue,operationId:sale.operationId,financialOriginId:sale.financialOriginId,sourceSaleId:sale.id,sourceBudgetId:sale.sourceBudgetId,sourceBudgetRevision:sale.sourceBudgetRevision,returnType:totalReturn?"Total":"Parcial",returnDestination:destination,returnReason:reason,returnStockDestination:stockDestination,returnedValue,returnedItems,stockMovementStatus:"Estornado",financialLifecycleStatus:"Estornado"};
     const updatedCustomers=customerRecords.map(customer=>customer.name===sale.client&&destination==="Crédito do cliente"?{...customer,customerCreditBalance:(customer.customerCreditBalance||0)+returnedValue,customerCreditHistory:[...(customer.customerCreditHistory||[]),{id:`CRED-${returnId}`,type:"Crédito" as const,value:returnedValue,sourceId:returnId,description:`Crédito gerado pela devolução ${returnId}`,createdAt:new Date().toISOString()}]}:customer);
     const updatedModules={...moduleRecords,Vendas:(moduleRecords.Vendas??[]).map(item=>item.id===sale.id?{...item,status:totalReturn?"Devolvido":"Devolução parcial",returnId}:item),Devoluções:[returnRecord,...(moduleRecords.Devoluções??[])]};
     setCustomerRecords(updatedCustomers);setModuleRecords(updatedModules);persistSharedState(updatedCustomers,serviceOrders,updatedModules);
