@@ -268,18 +268,23 @@ export function deriveOperationalActions(
         });
       }
 
-      if (module === "Orçamentos" && /enviado|aguardando|pendente|retorno/i.test(recordText)) {
+      if (module === "Orçamentos" && !/aprovad|recusad|cancelad|convertid/i.test(recordText)) {
         const created = dateOnly(record.createdAt || record.date);
-        const age = created ? daysBetween(created, today) : 0;
-        if (!created || age >= 2) actions.push({
+        const nextContact = dateOnly(record.nextContactAt);
+        const lastContact = dateOnly(record.lastContactAt);
+        const reference = lastContact || created;
+        const age = reference ? daysBetween(reference, today) : 0;
+        const contactOverdue = Boolean(nextContact && nextContact < today);
+        const contactToday = nextContact === today;
+        if (contactOverdue || contactToday || (!nextContact && age >= 2)) actions.push({
           id: `commercial-${recordId}`,
-          title: `Follow-up de orçamento • ${record.name || recordId}`,
-          detail: [record.client, record.status || "Aguardando retorno", created && `${age} dia(s)`].filter(Boolean).join(" • "),
+          title: contactOverdue ? `Retorno comercial atrasado • ${record.name || recordId}` : contactToday ? `Retorno comercial hoje • ${record.name || recordId}` : `Proposta sem próximo contato • ${record.name || recordId}`,
+          detail: [record.client, record.status || "Criado", record.commercialOwner && `Responsável: ${record.commercialOwner}`, nextContact ? `Retorno: ${nextContact}` : reference && `${age} dia(s) sem contato`].filter(Boolean).join(" • "),
           module: "Orçamentos",
-          tone: age >= 7 ? "red" : "amber",
-          priority: age >= 7 ? 1 : 3,
+          tone: contactOverdue || age >= 7 ? "red" : "amber",
+          priority: contactOverdue || age >= 7 ? 1 : 2,
           category: "Comercial",
-          dueDate: created || undefined,
+          dueDate: nextContact || reference || undefined,
           recordId,
         });
       }
