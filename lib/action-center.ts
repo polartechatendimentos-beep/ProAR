@@ -14,23 +14,23 @@ export type OperationalAction = {
 
 type GenericRecord = Record<string, unknown>;
 type WorkflowSuggestion = {
-  id:string; title:string; detail:string; module:string; priority:1|2|3; sourceId:string;
+  id:string; title:string; detail:string; module:string; priority:1|2|3; sourceId:string; nextStep:string;
 };
 
 function deriveWorkflowSuggestions(serviceOrders: GenericRecord[], modules: Record<string, GenericRecord[]>): WorkflowSuggestion[] {
   const items:WorkflowSuggestion[]=[];
   for(const budget of modules.Orçamentos||[]){
     const status=String(budget.status||"");
-    if(/aprovad/i.test(status)&&!/convertid/i.test(status)) items.push({id:`wf-budget-${budget.id}`,title:`Orçamento aprovado aguardando conversão • ${budget.name||budget.id}`,detail:"Converta para venda ou ordem de serviço para continuar o fluxo.",module:"Orçamentos",priority:2,sourceId:String(budget.id||"")});
+    if(/aprovad/i.test(status)&&!/orçamento fechado|orcamento fechado|convertid/i.test(status)) items.push({id:`wf-budget-${budget.id}`,title:`Orçamento aprovado aguardando conversão • ${budget.name||budget.id}`,detail:"Converta para venda ou ordem de serviço para continuar o fluxo.",module:"Orçamentos",priority:2,sourceId:String(budget.id||""),nextStep:"Converter orçamento aprovado em venda ou OS"});
   }
   for(const order of serviceOrders||[]){
-    if(/conclu[ií]d/i.test(String(order.status||""))&&!/^(autorizada|emitida|cancelada)$/i.test(String(order.nfseStatus||"").trim())) items.push({id:`wf-os-fiscal-${order.id}`,title:`OS concluída aguardando faturamento • ${order.id}`,detail:[order.client,"Preparar documento fiscal e financeiro"].filter(Boolean).join(" • "),module:"Fiscal",priority:2,sourceId:String(order.id||"")});
+    if(/conclu[ií]d/i.test(String(order.status||""))&&!/^(autorizada|emitida|cancelada)$/i.test(String(order.nfseStatus||"").trim())) items.push({id:`wf-os-fiscal-${order.id}`,title:`OS concluída aguardando faturamento • ${order.id}`,detail:[order.client,"Preparar documento fiscal e financeiro"].filter(Boolean).join(" • "),module:"Fiscal",priority:2,sourceId:String(order.id||""),nextStep:"Preparar faturamento e documento fiscal"});
   }
   for(const purchase of modules.Compras||[]){
-    if(/recebid|conclu[ií]d/i.test(String(purchase.status||""))&&!purchase.stockMovementId) items.push({id:`wf-purchase-stock-${purchase.id}`,title:`Compra recebida sem entrada de estoque • ${purchase.name||purchase.id}`,detail:"Confirme a entrada física para atualizar estoque e rastreabilidade.",module:"Estoque",priority:1,sourceId:String(purchase.id||"")});
+    if(/recebid|conclu[ií]d/i.test(String(purchase.status||""))&&!purchase.stockMovementId) items.push({id:`wf-purchase-stock-${purchase.id}`,title:`Compra recebida sem entrada de estoque • ${purchase.name||purchase.id}`,detail:"Confirme a entrada física para atualizar estoque e rastreabilidade.",module:"Estoque",priority:1,sourceId:String(purchase.id||""),nextStep:"Confirmar entrada física no estoque"});
   }
   for(const sale of modules.Vendas||[]){
-    if(/confirmad|conclu[ií]d/i.test(String(sale.status||""))&&!sale.financialRecordId) items.push({id:`wf-sale-finance-${sale.id}`,title:`Venda sem vínculo financeiro • ${sale.name||sale.id}`,detail:"Gerar ou vincular o título financeiro da venda.",module:"Financeiro",priority:1,sourceId:String(sale.id||"")});
+    if(/confirmad|conclu[ií]d/i.test(String(sale.status||""))&&!sale.financialRecordId) items.push({id:`wf-sale-finance-${sale.id}`,title:`Venda sem vínculo financeiro • ${sale.name||sale.id}`,detail:"Gerar ou vincular o título financeiro da venda.",module:"Financeiro",priority:1,sourceId:String(sale.id||""),nextStep:"Gerar ou vincular conta a receber"});
   }
   return items;
 }
@@ -268,18 +268,23 @@ export function deriveOperationalActions(
         });
       }
 
-      if (module === "Orçamentos" && /enviado|aguardando|pendente|retorno/i.test(recordText)) {
+      if (module === "Orçamentos" && !/aprovad|recusad|cancelad|orçamento fechado|orcamento fechado|convertid/i.test(recordText)) {
         const created = dateOnly(record.createdAt || record.date);
-        const age = created ? daysBetween(created, today) : 0;
-        if (!created || age >= 2) actions.push({
+        const nextContact = dateOnly(record.nextContactAt);
+        const lastContact = dateOnly(record.lastContactAt);
+        const reference = lastContact || created;
+        const age = reference ? daysBetween(reference, today) : 0;
+        const contactOverdue = Boolean(nextContact && nextContact < today);
+        const contactToday = nextContact === today;
+        if (contactOverdue || contactToday || (!nextContact && age >= 2)) actions.push({
           id: `commercial-${recordId}`,
-          title: `Follow-up de orçamento • ${record.name || recordId}`,
-          detail: [record.client, record.status || "Aguardando retorno", created && `${age} dia(s)`].filter(Boolean).join(" • "),
+          title: contactOverdue ? `Retorno comercial atrasado • ${record.name || recordId}` : contactToday ? `Retorno comercial hoje • ${record.name || recordId}` : `Proposta sem próximo contato • ${record.name || recordId}`,
+          detail: [record.client, record.status || "Criado", record.commercialOwner && `Responsável: ${record.commercialOwner}`, nextContact ? `Retorno: ${nextContact}` : reference && `${age} dia(s) sem contato`].filter(Boolean).join(" • "),
           module: "Orçamentos",
-          tone: age >= 7 ? "red" : "amber",
-          priority: age >= 7 ? 1 : 3,
+          tone: contactOverdue || age >= 7 ? "red" : "amber",
+          priority: contactOverdue || age >= 7 ? 1 : 2,
           category: "Comercial",
-          dueDate: created || undefined,
+          dueDate: nextContact || reference || undefined,
           recordId,
         });
       }
@@ -341,7 +346,24 @@ export function deriveOperationalActions(
 }
 
 export function summarizeOperationalActions(actions: OperationalAction[]) {
-  return actions.reduce((summary, item) => {
+  for (const suggestion of deriveWorkflowSuggestions(serviceOrders, modules)) {
+    actions.push({
+      id:suggestion.id,
+      title:suggestion.title,
+      detail:suggestion.detail,
+      module:suggestion.module,
+      tone:suggestion.priority===1?"red":"amber",
+      priority:suggestion.priority,
+      category:"Operação",
+      recordId:suggestion.sourceId,
+      nextStep:suggestion.nextStep,
+      source:"Fluxo Inteligente",
+    });
+  }
+  const unique=new Map<string,OperationalAction>();
+  for(const action of actions){const key=actionKey(action);const existing=unique.get(key);if(!existing||action.priority<existing.priority)unique.set(key,action);}
+  return [...unique.values()].sort((a,b)=>a.priority-b.priority||(a.dueDate||"9999-99-99").localeCompare(b.dueDate||"9999-99-99"));
+.reduce((summary, item) => {
     summary.total += 1;
     if (item.priority === 1) summary.critical += 1;
     else if (item.priority === 2) summary.attention += 1;

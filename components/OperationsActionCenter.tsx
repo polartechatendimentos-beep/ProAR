@@ -50,7 +50,7 @@ export function OperationsActionCenter({ serviceOrders, modules, onNavigate }: P
     <div className="operations-list">
       {visible.map(item=><article key={item.id} className={`operation-action priority-${item.priority}`}>
         <span className="operation-marker"/>
-        <div className="operation-main"><div className="operation-meta"><b>{item.category}</b><span>{priorityLabel[item.priority]}</span>{item.dueDate&&<time>{item.dueDate}</time>}</div><h3>{item.title}</h3><p>{item.detail}</p><small>{item.module}</small></div>
+        <div className="operation-main"><div className="operation-meta"><b>{item.category}</b><span>{priorityLabel[item.priority]}</span>{item.dueDate&&<time>{item.dueDate}</time>}</div><h3>{item.title}</h3><p>{item.detail}</p>{item.nextStep&&<div className="operation-next-step"><b>Próximo passo</b><span>{item.nextStep}</span></div>}<small>{item.source?`${item.source} • `:""}{item.module}</small></div>
         <button className="primary-btn" onClick={()=>resolve(item)}>Resolver agora <ChevronRight size={14}/></button>
       </article>)}
       {!visible.length&&<div className="linked-empty"><CheckCircle2 size={25}/><h4>Nenhuma ação neste filtro</h4><p>As novas pendências aparecerão automaticamente conforme os dados operacionais.</p></div>}
