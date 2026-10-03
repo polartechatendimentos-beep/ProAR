@@ -12,7 +12,12 @@ export function DashboardWorkspace({ onNavigate, onQuickCreate, serviceOrders, m
   const [technician, setTechnician] = useState("Todos");
   const [status, setStatus] = useState("Todos");
   const [recentModules,setRecentModules]=useState<string[]>([]);
-  useEffect(()=>{try{setRecentModules(JSON.parse(localStorage.getItem("proar-recent-modules")||"[]"));}catch{setRecentModules([])}},[]);
+  useEffect(()=>{try{
+    setRecentModules(JSON.parse(localStorage.getItem("proar-recent-modules")||"[]"));
+    const saved=JSON.parse(localStorage.getItem("proar-dashboard-filters")||"{}");
+    if(saved.period)setPeriod(saved.period); if(saved.technician)setTechnician(saved.technician); if(saved.status)setStatus(saved.status);
+  }catch{setRecentModules([])}},[]);
+  useEffect(()=>{try{localStorage.setItem("proar-dashboard-filters",JSON.stringify({period,technician,status}))}catch{}},[period,technician,status]);
   const navigate=(module:string)=>{try{const next=[module,...recentModules.filter(item=>item!==module)].slice(0,5);setRecentModules(next);localStorage.setItem("proar-recent-modules",JSON.stringify(next));}catch{} onNavigate(module);};
   const today = new Date();
   const todayIso = today.toISOString().slice(0, 10);
