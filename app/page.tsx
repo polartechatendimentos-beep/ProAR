@@ -3561,6 +3561,17 @@ export default function Home() {
   const [syncing, setSyncing] = useState(false);
   const [syncPhase, setSyncPhase] = useState<"idle" | "syncing" | "complete">("idle");
   useEffect(() => {
+    const syncCustomerCredit=(event:Event)=>{
+      const next=(event as CustomEvent<{customers:Customer[]}>).detail?.customers;
+      if(!next)return;
+      setCustomerRecords(next);
+      localStorage.setItem(companyStorageKey(activeCompany.id,"customers"),JSON.stringify(next));
+      persistSharedState(next,serviceOrders,moduleRecords);
+    };
+    window.addEventListener("proar:customer-credit-update",syncCustomerCredit);
+    return()=>window.removeEventListener("proar:customer-credit-update",syncCustomerCredit);
+  },[activeCompany.id,serviceOrders,moduleRecords]);
+  useEffect(() => {
     const navigate = (event: Event) => setCurrent((event as CustomEvent<string>).detail);
     window.addEventListener("proar:navigate", navigate);
     return () => window.removeEventListener("proar:navigate", navigate);
@@ -3950,7 +3961,7 @@ export default function Home() {
     const returnId=`DEV-${Date.now().toString().slice(-6)}`;
     const returnedItems=items.map(item=>({itemId:item.id,productId:item.productId||item.id,description:item.description,quantity:item.quantity,unitValue:item.unitValue||0}));
     const returnRecord:ModuleRecord={id:returnId,name:`Devolução • ${sale.id}`,client:sale.client,customerId:sale.customerId,description:`${totalReturn?"Pedido total":"Devolução parcial"} • ${destination}`,createdAt:new Date().toLocaleString("pt-BR"),date:new Date().toISOString().slice(0,10),status:"Devolução registrada",value:returnedValue,operationId:sale.operationId,financialOriginId:sale.financialOriginId,sourceSaleId:sale.id,sourceBudgetId:sale.sourceBudgetId,sourceBudgetRevision:sale.sourceBudgetRevision,returnType:totalReturn?"Total":"Parcial",returnDestination:destination,returnedValue,returnedItems,stockMovementStatus:"Estornado",financialLifecycleStatus:"Estornado"};
-    const updatedCustomers=customerRecords.map(customer=>customer.name===sale.client&&destination==="Crédito do cliente"?{...customer,customerCreditBalance:(customer.customerCreditBalance||0)+returnedValue}:customer);
+    const updatedCustomers=customerRecords.map(customer=>customer.name===sale.client&&destination==="Crédito do cliente"?{...customer,customerCreditBalance:(customer.customerCreditBalance||0)+returnedValue,customerCreditHistory:[...(customer.customerCreditHistory||[]),{id:`CRED-${returnId}`,type:"Crédito" as const,value:returnedValue,sourceId:returnId,description:`Crédito gerado pela devolução ${returnId}`,createdAt:new Date().toISOString()}]}:customer);
     const updatedModules={...moduleRecords,Vendas:(moduleRecords.Vendas??[]).map(item=>item.id===sale.id?{...item,status:totalReturn?"Devolvido":"Devolução parcial",returnId}:item),Devoluções:[returnRecord,...(moduleRecords.Devoluções??[])]};
     setCustomerRecords(updatedCustomers);setModuleRecords(updatedModules);persistSharedState(updatedCustomers,serviceOrders,updatedModules);
     setSavedMessage(`${returnId} registrada. R$ ${returnedValue.toLocaleString("pt-BR",{minimumFractionDigits:2})} em ${destination.toLowerCase()}.`);window.setTimeout(()=>setSavedMessage(""),4000);
