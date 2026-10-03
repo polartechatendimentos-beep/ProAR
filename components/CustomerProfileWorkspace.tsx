@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Building2, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Edit3, FileText, Filter, History, MapPin, Plus, Save, Search, ShieldCheck, UserRound, Wrench, X } from "lucide-react";
 import "./customer-profile.css";
 import { CustomerStructureLayout } from "./CustomerStructureLayout";
+import { customerHealth } from "@/lib/customer-health";
 
 type AnyRecord = Record<string, unknown>;
 type CustomerRecord = AnyRecord & { id: string; name: string; doc?: string; contact?: string; phone?: string; address?: string; units?: number; status?: string; organizationType?: string; legalName?: string; tradeName?: string; email?: string; zipCode?: string; street?: string; addressNumber?: string; complement?: string; neighborhood?: string; city?: string; state?: string; stateRegistration?: string; municipalRegistration?: string; createdAt?: string; website?: string; segment?: string; size?: string; paymentCondition?: string; priceTable?: string; preferredPaymentMethod?: string; dueDay?: string | number; financialNote?: string };
@@ -85,9 +86,12 @@ export function CustomerProfileWorkspace({ customer, structures, serviceOrders, 
   const equipmentList = equipment.filter(item => Object.entries(equipmentFilters).every(([key, filter]) => filter === "Todos" || value(item, key === "area" ? "secretary" : key, key === "brand" ? "manufacturer" : key).toLowerCase() === filter.toLowerCase()));
   const options = (key: string) => ["Todos", ...Array.from(new Set(equipment.map(item => value(item, key)).filter(item => item !== "—")))];
   const isPublic = /Prefeitura|Órgão Público|Autarquia|Fundação|Entidade Pública/i.test(customer.organizationType ?? "");
+  const customerFinancial=(modules.Financeiro??[]).filter(item=>related(item,customer));
+  const overdueAmount=customerFinancial.filter(item=>/vencid/i.test(String(item.status||""))).reduce((sum,item)=>sum+Math.max(0,Number(item.value||0)-Number(item.settledValue||0)),0);
+  const health=customerHealth({overdueAmount,criticalIssues:allHistory.filter(item=>/crític|rejeitad|erro/i.test(String(item.detail))).length,pmocOverdue:allHistory.some(item=>/PMOC/i.test(item.type)&&/vencid/i.test(String(item.detail))),contractDaysRemaining:undefined,recentRework:serviceOrders.some(order=>order.client===customer.name&&/retrabalho|garantia/i.test(String(order.service)))});
   const tabLabel = isPublic ? "Prefeitura → Secretaria → Unidade → Sala/Ambiente" : "Unidades, áreas e ambientes vinculados ao cliente";
 
-  return <section className="customer-profile-workspace">
+  return <section className="customer-profile-workspace"><div className="operations-summary"><article className={health.status==="critical"?"critical":health.status==="attention"?"attention":""}><ShieldCheck size={19}/><div><small>SAÚDE DO CLIENTE</small><strong>{health.score}/100</strong><span>{health.alerts[0]||"Relacionamento operacional saudável"}</span></div></article></div>
     <header className="customer-profile-header customer-sticky-header"><button className="customer-back" onClick={onBack}><ChevronRight size={16} className="rotate-180"/> Clientes</button><div className="customer-profile-identity"><span>{customer.name.split(" ").map(part => part[0]).slice(0, 2).join("")}</span><div><h2>{customer.name}</h2><p>{value(customer, "doc")} <b className="customer-status-dot">•</b> {value(customer, "status")}</p></div></div><div className="customer-profile-actions"><button className="outline-btn" onClick={() => { setDraft(customer); setDocumentLookup({ loading: false, message: "", kind: "idle" }); }}><X size={14}/> Descartar</button><button className="primary-btn" onClick={saveCustomer} disabled={!canEdit}><Save size={14}/> Salvar</button></div></header>
     <nav className="customer-profile-tabs" aria-label="Abas principais do cliente" role="tablist">{tabs.map(item => <button key={item} id={`customer-tab-${item}`} role="tab" aria-selected={tab === item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}</nav>
 
