@@ -50,33 +50,12 @@ export const RESERVA_MATERIAL_PLANNING:WorkMaterialPlanning={
 const money=(value:number)=>value.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const qty=(value:number,digits=2)=>value.toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:digits});
 
-export function WorkMaterialPlanningPanel({planning,totalHouses,onSave}:{planning?:WorkMaterialPlanning;totalHouses:number;onSave:(next:WorkMaterialPlanning)=>Promise<boolean>|boolean}){
+export function calculateWorkMaterialCost(draft:WorkMaterialPlanning){const baseMeters=draft.environments.reduce((sum,item)=>sum+Math.max(0,Number(item.copperMeters)||0),0);const ppMeters=draft.environments.reduce((sum,item)=>sum+Math.max(0,Number(item.copperMeters)||0)+1,0);const loss=1+Math.max(0,draft.lossPercent||0)/100;const fridge=Math.max(0,draft.remainingFridgeHouses||0);const copperMeters=baseMeters*fridge*loss;const ppTotal=ppMeters*fridge*loss;const qKg=copperMeters*draft.copperQuarterKgPerMeter;const eKg=copperMeters*draft.copperThreeEighthKgPerMeter;const qCopper=qKg*draft.copperKgPrice;const eCopper=eKg*draft.copperKgPrice;const qIns=copperMeters*draft.insulationQuarterPriceMeter;const eIns=copperMeters*draft.insulationThreeEighthPriceMeter;const pp=ppTotal*draft.ppPriceMeter;const exhaustUnits=Math.max(0,draft.remainingExhaustFinishHouses||0);const exhaustPipeHouses=Math.max(0,draft.remainingExhaustPipeHouses||0);const exhaust=draft.exhaustUnitPrice*exhaustUnits;const finish=draft.exhaustFinishUnitPrice*exhaustUnits;const pipeMeters=draft.exhaustPipeMetersPerHouse*exhaustPipeHouses*loss;const pipe=pipeMeters*draft.exhaustPipePriceMeter;return{baseMeters,ppMeters,copperMeters,ppTotal,qKg,eKg,qCopper,eCopper,qIns,eIns,pp,exhaustUnits,exhaustPipeHouses,exhaust,finish,pipeMeters,pipe,total:qCopper+eCopper+qIns+eIns+pp+exhaust+finish+pipe};}\n\nexport function WorkMaterialPlanningPanel({planning,totalHouses,onSave}:{planning?:WorkMaterialPlanning;totalHouses:number;onSave:(next:WorkMaterialPlanning)=>Promise<boolean>|boolean}){
   const [draft,setDraft]=useState<WorkMaterialPlanning>(planning??{...RESERVA_MATERIAL_PLANNING,environments:RESERVA_MATERIAL_PLANNING.environments.map(item=>({...item}))});
   const [saving,setSaving]=useState(false);
   const [notice,setNotice]=useState("");
   useEffect(()=>setDraft(planning??{...RESERVA_MATERIAL_PLANNING,environments:RESERVA_MATERIAL_PLANNING.environments.map(item=>({...item}))}),[planning]);
-  const calc=useMemo(()=>{
-    const baseMeters=draft.environments.reduce((sum,item)=>sum+Math.max(0,Number(item.copperMeters)||0),0);
-    const ppMeters=draft.environments.reduce((sum,item)=>sum+Math.max(0,Number(item.copperMeters)||0)+1,0);
-    const loss=1+Math.max(0,draft.lossPercent||0)/100;
-    const fridge=Math.max(0,draft.remainingFridgeHouses||0);
-    const copperMeters=baseMeters*fridge*loss;
-    const ppTotal=ppMeters*fridge*loss;
-    const qKg=copperMeters*draft.copperQuarterKgPerMeter;
-    const eKg=copperMeters*draft.copperThreeEighthKgPerMeter;
-    const qCopper=qKg*draft.copperKgPrice;
-    const eCopper=eKg*draft.copperKgPrice;
-    const qIns=copperMeters*draft.insulationQuarterPriceMeter;
-    const eIns=copperMeters*draft.insulationThreeEighthPriceMeter;
-    const pp=ppTotal*draft.ppPriceMeter;
-    const exhaustUnits=Math.max(0,draft.remainingExhaustFinishHouses||0);
-    const exhaustPipeHouses=Math.max(0,draft.remainingExhaustPipeHouses||0);
-    const exhaust=draft.exhaustUnitPrice*exhaustUnits;
-    const finish=draft.exhaustFinishUnitPrice*exhaustUnits;
-    const pipeMeters=draft.exhaustPipeMetersPerHouse*exhaustPipeHouses*loss;
-    const pipe=pipeMeters*draft.exhaustPipePriceMeter;
-    return {baseMeters,ppMeters,copperMeters,ppTotal,qKg,eKg,qCopper,eCopper,qIns,eIns,pp,exhaustUnits,exhaustPipeHouses,exhaust,finish,pipeMeters,pipe,total:qCopper+eCopper+qIns+eIns+pp+exhaust+finish+pipe};
-  },[draft]);
+  const calc=useMemo(()=>calculateWorkMaterialCost(draft),[draft]);
   const setNumber=(key:keyof WorkMaterialPlanning,value:string)=>setDraft(current=>({...current,[key]:Math.max(0,Number(value)||0)}));
   const save=async()=>{setSaving(true);setNotice("");try{const ok=await onSave(draft);setNotice(ok?"Planejamento salvo na obra.":"Não foi possível salvar.");}finally{setSaving(false);}};
   return <section className="material-planning">
