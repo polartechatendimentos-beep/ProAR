@@ -12,6 +12,13 @@ export const PROAR_SCHEMA_VERSION = "2026.10.02";
 
 export const MANAGER_MIGRATIONS:ManagerMigration[] = [
   {
+    id:"20261002_manager_receivables",
+    title:"Contas a receber e bloqueio financeiro",
+    status:"prepared",
+    destructive:false,
+    description:"Adiciona contas a receber do SaaS, tolerância de vencimento e bloqueio financeiro automático. A migration permanece preparada até ativação controlada no banco mestre.",
+  },
+  {
     id:"20261002_proar_tenant_database_identity",
     title:"Identidade de banco por tenant",
     status:"prepared",
