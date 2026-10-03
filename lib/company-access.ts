@@ -44,7 +44,7 @@ export async function validateCompanyAccessBySlug(slug?: string | null): Promise
   const normalized=String(slug||"").trim().toLowerCase();
   if (!normalized) return { ok:true };
   if (!supabaseConfigured()) return { ok:false, code:"MANAGER_UNAVAILABLE", reason:"Banco mestre não configurado." };
-  const response=await supabaseRest(`proar_companies?select=id,slug,status,trade_name,trial_expires_at,plan_code,modules&slug=eq.${encodeURIComponent(normalized)}&limit=1`);
+  const response=await supabaseRest(`proar_companies?select=id,slug,status,trade_name,trial_expires_at,plan_code,modules,billing_auto_block,billing_grace_days&slug=eq.${encodeURIComponent(normalized)}&limit=1`);
   if (!response.ok) return { ok:false, code:"MANAGER_UNAVAILABLE", reason:"Não foi possível validar a empresa no ProAR Manager." };
   const rows=await response.json(); const company=rows?.[0];
   if (!company) return { ok:false, code:"COMPANY_NOT_FOUND", reason:"Empresa não cadastrada no ProAR Manager." };
