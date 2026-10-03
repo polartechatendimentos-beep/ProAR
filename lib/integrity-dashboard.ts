@@ -1,4 +1,4 @@
-import type {IntegrityResult} from "./integrity-audit.ts";
+import type {IntegrityResult} from "./integrity-audit";
 export function integrityDashboard(report:IntegrityResult){
  const total=report.checks.length;
  const clean=report.checks.filter(x=>x.status==="OK").length;
