@@ -41,6 +41,7 @@ export function OperationsActionCenter({ serviceOrders, modules, onNavigate }: P
       <div className="operations-health"><CheckCircle2 size={18}/><span><b>{summary.total}</b> ação(ões) identificada(s)</span></div>
     </div>
     <div className="operations-summary">
+      <article className={command.health.status==="critical"?"critical":command.health.status==="attention"?"attention":""}><CheckCircle2 size={19}/><div><small>SAÚDE DA EMPRESA</small><strong>{command.health.score}/100</strong><span>{command.health.factors[0]?.label}: {Math.round(command.health.factors[0]?.score||0)}/100</span></div></article>
       <article className="critical"><ShieldAlert size={19}/><div><small>CRÍTICAS</small><strong>{summary.critical}</strong><span>Exigem ação imediata</span></div></article>
       <article className="attention"><AlertTriangle size={19}/><div><small>ATENÇÃO</small><strong>{summary.attention}</strong><span>Prazo próximo ou risco operacional</span></div></article>
       <article className="follow"><TimerReset size={19}/><div><small>FOLLOW-UP</small><strong>{summary.followUp}</strong><span>Acompanhamento comercial/operacional</span></div></article>
