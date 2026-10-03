@@ -1,6 +1,7 @@
 "use client";
 
 import { EmployeeRoutesTab } from "@/components/EmployeeRoutesTab";
+import { WorkMaterialPlanningPanel, RESERVA_MATERIAL_PLANNING, type WorkMaterialPlanning } from "@/components/WorkMaterialPlanningPanel";
 import "./settings.css";
 import "./multiempresa.css";
 import "./obra-142.css";
@@ -282,7 +283,7 @@ type ExternalObservation = { id: string; author: string; role: string; houseId: 
 type HouseWorkItem = { id: string; block: string; lot: number; kind?: "house" | "common"; name?: string; status: HouseWorkStatus | LegacyHouseWorkStatus; photo?: string; photos?: string[] | HouseStagePhoto[]; note?: string; updatedAt?: string; history: HouseWorkUpdate[]; incidents?: HouseIncident[]; externalObservations?: ExternalObservation[] };
 type WorkBlock = { block: string; houses: number };
 type WorkExternalAccess = { id: string; name: string; role: "Engenheiro" | "Fiscal"; username: string; passwordHash: string; active: boolean; createdAt: string };
-type WorkProject = { id: string; name: string; blocks: WorkBlock[]; commonAreas: string[]; createdAt: string; externalAccess?: WorkExternalAccess[] };
+type WorkProject = { id: string; name: string; blocks: WorkBlock[]; commonAreas: string[]; createdAt: string; externalAccess?: WorkExternalAccess[]; materialPlanning?: WorkMaterialPlanning };
 
 const HOUSE_BLOCKS = [
   { block: "A", houses: 5 }, { block: "B", houses: 24 }, { block: "C1", houses: 16 },
@@ -290,7 +291,7 @@ const HOUSE_BLOCKS = [
   { block: "F", houses: 27 }, { block: "G", houses: 12 }, { block: "H1", houses: 10 },
   { block: "H2", houses: 10 }, { block: "I", houses: 12 },
 ] as const;
-const RESERVA_IMPERIAL: WorkProject = { id: "reserva-imperial", name: "Reserva Imperial", blocks: HOUSE_BLOCKS.map(item => ({...item})), commonAreas: ["Academia", "Salão de Festas", "Área Gourmet", "Administrativo"], createdAt: "2026-08-11T00:00:00.000Z" };
+const RESERVA_IMPERIAL: WorkProject = { id: "reserva-imperial", name: "Reserva Imperial", blocks: HOUSE_BLOCKS.map(item => ({...item})), commonAreas: ["Academia", "Salão de Festas", "Área Gourmet", "Administrativo"], createdAt: "2026-08-11T00:00:00.000Z", materialPlanning: {...RESERVA_MATERIAL_PLANNING, environments: RESERVA_MATERIAL_PLANNING.environments.map(item => ({...item}))} };
 const HOUSE_STATUSES: { name: HouseWorkStatus; color: string }[] = WORK_STATUSES.map(name => ({ name, color: getWorkStatusColor(name) }));
 const HOUSE_STAGE_PHOTOS: Record<HouseWorkStatus, string[]> = {
   "INÍCIO DE OBRA": [],
@@ -1905,7 +1906,7 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
   const [accessNotice, setAccessNotice] = useState<{ tone: "success" | "error" | "info"; text: string } | null>(null);
   useEffect(() => {
     const normalizeProjects = (items: WorkProject[]) => {
-      const normalized = items.length ? items.map(project => project.id === RESERVA_IMPERIAL.id ? {...project,name:"Reserva Imperial",commonAreas:Array.from(new Set([...(project.commonAreas ?? []),...RESERVA_IMPERIAL.commonAreas]))} : project) : [RESERVA_IMPERIAL];
+      const normalized = items.length ? items.map(project => project.id === RESERVA_IMPERIAL.id ? {...project,name:"Reserva Imperial",commonAreas:Array.from(new Set([...(project.commonAreas ?? []),...RESERVA_IMPERIAL.commonAreas])),materialPlanning:project.materialPlanning ?? RESERVA_IMPERIAL.materialPlanning} : project) : [RESERVA_IMPERIAL];
       if (!normalized.some(project => project.id === RESERVA_IMPERIAL.id)) normalized.unshift(RESERVA_IMPERIAL);
       return normalized;
     };
@@ -2296,6 +2297,7 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     {saveState !== "idle" && <div className={`work-save-bar ${saveState}`} role="status"><i/><span>{saveState === "saving" ? "Salvando..." : saveState === "saved" ? "✓ ALTERAÇÃO EFETUADA" : "Não foi possível salvar a alteração"}</span></div>}
     <div className="work-manager-bar"><div><span><Building2 size={17}/></span><label>Obra ativa<select value={activeProject.id} onChange={event=>selectWorkProject(event.target.value)}>{projects.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}</select></label><small>{activeProject.blocks.length} quadra(s) • {activeProject.blocks.reduce((total,item)=>total+item.houses,0)} casas • {activeProject.commonAreas.length} áreas comuns</small></div><div className="work-manager-actions"><button className="outline-btn" onClick={()=>void renameActiveProject()}><Edit3 size={15}/> Alterar obra</button>{activeProject.id!==RESERVA_IMPERIAL.id&&<button className="outline-btn danger" onClick={()=>void deleteActiveProject()}><Trash2 size={15}/> Excluir obra</button>}<button className="outline-btn" onClick={()=>setAccessManagerOpen(true)}><ShieldCheck size={15}/> Engenheiros e Fiscais / Acesso Externo</button><button className="primary-btn" onClick={()=>setWorkManagerOpen(true)}><Plus size={15}/> Cadastrar obra</button></div></div>
     <div className="work-external-access-card"><div><span><ShieldCheck size={19}/></span><div><b>Acessos externos da obra</b><small>{(activeProject.externalAccess ?? []).length ? `${(activeProject.externalAccess ?? []).length} acesso(s) cadastrado(s)` : "Nenhum engenheiro ou fiscal cadastrado"} • permissões restritas a apontamentos</small></div></div><button className="primary-btn" onClick={()=>setAccessManagerOpen(true)}><Plus size={14}/> Adicionar engenheiro ou fiscal</button></div>
+    <WorkMaterialPlanningPanel planning={activeProject.materialPlanning} totalHouses={activeProject.blocks.reduce((total,item)=>total+item.houses,0)} onSave={async materialPlanning=>{const next=projects.map(project=>project.id===activeProject.id?{...project,materialPlanning}:project);return await saveProjectsList(next,"Planejamento de materiais salvo na obra.");}}/>
     <div className="houses-hero"><div><span className="section-kicker"><House size={12}/> CONTROLE DE EXECUÇÃO</span><h2>{activeProject.name}</h2><p>Acompanhamento individual das casas e áreas comuns, com evidências e histórico de execução.</p></div><div className="houses-public-share"><span><MapPin size={18}/></span><div><small>ACESSO DO CLIENTE</small><b>{shareToken ? "Mapa público ativo" : "Criar link de acompanhamento"}</b><em>{shareToken ? "Atualização automática em tempo real" : "O cliente verá somente o andamento da obra"}</em></div><button onClick={refreshWorkMap}><ArrowDownRight size={14}/> Atualizar</button><button onClick={sendWorkMap}><ArrowUpRight size={14}/> Enviar</button><button onClick={sharePublicMap}><MessageCircle size={14}/>{shareToken ? "Link" : "Criar link"}</button>{shareToken && <a href={`/obra/${shareToken}`} target="_blank" rel="noreferrer"><Eye size={14}/> Visualizar</a>}</div><div className="houses-progress"><div><small>PROGRESSO GERAL</small><strong>{completion}%</strong></div><i><b style={{ width: `${completion}%` }}/></i><span>{completed} finalizadas de {houses.length} unidades cadastradas</span></div></div>
     <div className="work-block-overview"><div className="work-block-overview-head"><div><span>PROGRESSO POR QUADRA</span><h3>Visão rápida da execução</h3></div><small>Clique em uma quadra para filtrar as unidades abaixo.</small></div><div className="work-block-summary">{activeProject.blocks.map(({block})=>{const stat=blockProgress(block);return <button key={block} style={{"--block-progress":`${stat.progress}%`} as React.CSSProperties} className={blockFilter===block?"active":""} onClick={()=>setBlockFilter(block)}><div><b>Quadra {block}</b><span>{stat.progress}%</span></div><i><em style={{width:`${stat.progress}%`}}/></i><small>{stat.entries.length} casas • {stat.done} concluídas • {stat.working} em andamento</small></button>})}</div></div>
     <div className="houses-kpis"><article><span><House size={18}/></span><div><small>TOTAL CADASTRADO</small><strong>{houses.length}</strong><em>{activeProject.blocks.length} quadras • {activeProject.commonAreas.length} áreas comuns</em></div></article>{HOUSE_STATUSES.map(status => { const total = houses.filter(house => normalizeHouseStatus(house.status) === status.name).length; return <article key={status.name}><i style={{background:status.color}}/><div><small>{status.name}</small><strong>{total}</strong><em>{Math.round(total / houses.length * 100)}% da obra</em></div></article>; })}</div>
