@@ -1,12 +1,12 @@
-import {deriveOperationalActions,summarizeOperationalActions} from "./action-center.ts";
-import {evaluateDayClose} from "./day-close.ts";
-import {forecastStock} from "./predictive-stock.ts";
-import {integrationCenter,type IntegrationState} from "./integration-center.ts";
-import {companyHealth} from "./company-health.ts";
-import {buildDre,type DreEntry} from "./management-dre.ts";
-import {evaluateGoals,type ManagementGoal} from "./management-goals.ts";
-import {evaluatePreClose} from "./pre-close.ts";
-import type {IntegrityResult} from "./integrity-audit.ts";
+import {deriveOperationalActions,summarizeOperationalActions} from "./action-center";
+import {evaluateDayClose} from "./day-close";
+import {forecastStock} from "./predictive-stock";
+import {integrationCenter,type IntegrationState} from "./integration-center";
+import {companyHealth} from "./company-health";
+import {buildDre,type DreEntry} from "./management-dre";
+import {evaluateGoals,type ManagementGoal} from "./management-goals";
+import {evaluatePreClose} from "./pre-close";
+import type {IntegrityResult} from "./integrity-audit";
 type R=Record<string,unknown>;
 const num=(x:unknown)=>Number(x||0);
 export function buildCommandCenter(serviceOrders:R[],modules:Record<string,R[]>,integrations:IntegrationState[]=[],dreEntries:DreEntry[]=[],goals:ManagementGoal[]=[],integrity:IntegrityResult|null=null){
