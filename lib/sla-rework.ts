@@ -1,0 +1,3 @@
+export type SlaCase={requestedAt:string;scheduledAt?:string;startedAt?:string;completedAt?:string;invoicedAt?:string;paidAt?:string;returnedAt?:string;originalCompletedAt?:string};
+const hours=(a?:string,b?:string)=>a&&b?Math.max(0,(new Date(b).getTime()-new Date(a).getTime())/3600000):undefined;
+export function calculateSla(x:SlaCase){return{requestToScheduleHours:hours(x.requestedAt,x.scheduledAt),scheduleToStartHours:hours(x.scheduledAt,x.startedAt),serviceHours:hours(x.startedAt,x.completedAt),completeToInvoiceHours:hours(x.completedAt,x.invoicedAt),invoiceToPaymentHours:hours(x.invoicedAt,x.paidAt),isRework:Boolean(x.returnedAt&&x.originalCompletedAt),returnAfterHours:hours(x.originalCompletedAt,x.returnedAt)};}
