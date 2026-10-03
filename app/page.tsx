@@ -1280,6 +1280,17 @@ function OrderDetail({ order, customerPhone, company, catalog, contracts, close,
   </div>;
 }
 
+function auditOperationIntegrity(modules:Record<string,ModuleRecord[]>,orders:ServiceOrder[]){
+  const all=Object.values(modules).flat();
+  const issues:{id:string;severity:"Crítica"|"Atenção";message:string;operationId?:string}[]=[];
+  const group=(field:"stockMovementId"|"financialOriginId")=>all.filter(r=>r[field]).reduce<Record<string,ModuleRecord[]>>((acc,r)=>{const key=String(r[field]);(acc[key]??=[]).push(r);return acc},{});
+  Object.entries(group("stockMovementId")).forEach(([id,rows])=>{const physical=rows.filter(r=>r.stockMovementStatus==="Baixado");if(physical.length>1)issues.push({id:`STK-${id}`,severity:"Crítica",message:`Movimentação física duplicada para ${id}.`,operationId:rows[0].operationId})});
+  Object.entries(group("financialOriginId")).forEach(([id,rows])=>{const realized=rows.filter(r=>/Faturado|Recebido/.test(r.financialLifecycleStatus||""));if(realized.length>1)issues.push({id:`FIN-${id}`,severity:"Crítica",message:`Mais de um lançamento realizado para a origem financeira ${id}.`,operationId:rows[0].operationId})});
+  const sales=modules.Vendas??[]; sales.forEach(sale=>{const linked=orders.filter(o=>o.sourceSaleId===sale.id);if(linked.length>1)issues.push({id:`OS-${sale.id}`,severity:"Crítica",message:`${sale.id} possui ${linked.length} OS vinculadas.`,operationId:sale.operationId})});
+  (modules.Devoluções??[]).forEach(ret=>{const sale=sales.find(s=>s.id===ret.sourceSaleId);ret.returnedItems?.forEach(item=>{const sold=sale?.purchaseItems?.find(p=>(p.productId||p.id)===item.productId)?.quantity||0;if(item.quantity>sold)issues.push({id:`DEV-${ret.id}-${item.productId}`,severity:"Crítica",message:`Devolução superior à quantidade vendida: ${item.description}.`,operationId:ret.operationId})})});
+  return issues;
+}
+
 function OperationTrace({record}:{record:ModuleRecord}){
   const links=[record.sourceBudgetId&&`ORC: ${record.sourceBudgetId}`,record.generatedOrderId&&`PED: ${record.generatedOrderId}`,record.sourceSaleId&&`PED: ${record.sourceSaleId}`,record.generatedServiceOrderId&&`OS: ${record.generatedServiceOrderId}`].filter(Boolean);
   if(!record.operationId&&!links.length)return null;
