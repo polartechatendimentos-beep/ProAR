@@ -21,7 +21,7 @@ function deriveWorkflowSuggestions(serviceOrders: GenericRecord[], modules: Reco
   const items:WorkflowSuggestion[]=[];
   for(const budget of modules.Orçamentos||[]){
     const status=String(budget.status||"");
-    if(/aprovad/i.test(status)&&!/convertid/i.test(status)) items.push({id:`wf-budget-${budget.id}`,title:`Orçamento aprovado aguardando conversão • ${budget.name||budget.id}`,detail:"Converta para venda ou ordem de serviço para continuar o fluxo.",module:"Orçamentos",priority:2,sourceId:String(budget.id||""),nextStep:"Converter orçamento aprovado em venda ou OS"});
+    if(/aprovad/i.test(status)&&!/orçamento fechado|orcamento fechado|convertid/i.test(status)) items.push({id:`wf-budget-${budget.id}`,title:`Orçamento aprovado aguardando conversão • ${budget.name||budget.id}`,detail:"Converta para venda ou ordem de serviço para continuar o fluxo.",module:"Orçamentos",priority:2,sourceId:String(budget.id||""),nextStep:"Converter orçamento aprovado em venda ou OS"});
   }
   for(const order of serviceOrders||[]){
     if(/conclu[ií]d/i.test(String(order.status||""))&&!/^(autorizada|emitida|cancelada)$/i.test(String(order.nfseStatus||"").trim())) items.push({id:`wf-os-fiscal-${order.id}`,title:`OS concluída aguardando faturamento • ${order.id}`,detail:[order.client,"Preparar documento fiscal e financeiro"].filter(Boolean).join(" • "),module:"Fiscal",priority:2,sourceId:String(order.id||""),nextStep:"Preparar faturamento e documento fiscal"});
@@ -268,7 +268,7 @@ export function deriveOperationalActions(
         });
       }
 
-      if (module === "Orçamentos" && !/aprovad|recusad|cancelad|convertid/i.test(recordText)) {
+      if (module === "Orçamentos" && !/aprovad|recusad|cancelad|orçamento fechado|orcamento fechado|convertid/i.test(recordText)) {
         const created = dateOnly(record.createdAt || record.date);
         const nextContact = dateOnly(record.nextContactAt);
         const lastContact = dateOnly(record.lastContactAt);
