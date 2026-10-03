@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { AlertTriangle, Bell, CheckCircle2, ChevronRight, Filter, Search, ShieldAlert, TimerReset } from "lucide-react";
 import { deriveOperationalActions, summarizeOperationalActions, type OperationalAction } from "@/lib/action-center";
+import { resolutionPlan } from "@/lib/action-resolution";
 import "./operations-action-center.css";
 
 type Props = {
@@ -27,8 +28,9 @@ export function OperationsActionCenter({ serviceOrders, modules, onNavigate }: P
   );
 
   const resolve = (item: OperationalAction) => {
-    onNavigate(item.module);
-    window.dispatchEvent(new CustomEvent("proar:focus-record",{detail:{module:item.module,recordId:item.recordId,actionId:item.id}}));
+    const plan=resolutionPlan(item);
+    onNavigate(plan.module);
+    window.dispatchEvent(new CustomEvent("proar:focus-record",{detail:{module:plan.module,recordId:plan.recordId,actionId:plan.actionId,resolutionMode:plan.mode,resolutionMessage:plan.message}}));
   };
 
   return <section className="operations-center module-page">
