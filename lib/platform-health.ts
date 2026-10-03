@@ -1,0 +1,2 @@
+export type PlatformMetric={name:string;ok:boolean;detail?:string;critical?:boolean};
+export function platformHealth(metrics:PlatformMetric[]){const critical=metrics.filter(x=>!x.ok&&x.critical).length;const warnings=metrics.filter(x=>!x.ok&&!x.critical).length;const healthy=metrics.filter(x=>x.ok).length;const score=metrics.length?Math.round((healthy/metrics.length)*100):100;return{score,status:critical?"critical":warnings?"attention":"healthy",critical,warnings,healthy,total:metrics.length,metrics};}
