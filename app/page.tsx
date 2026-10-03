@@ -115,6 +115,8 @@ type ServiceOrder = {
   sectorId?: string;
   roomId?: string;
   sourceBudgetId?: string;
+  sourceBudgetRevision?: number;
+  sourceSaleId?: string;
   equipmentIds?: string[];
   equipmentId?: string;
   total?: number;
@@ -579,6 +581,11 @@ type ModuleRecord = {
   commercialHistory?: { id:string; status:string; note:string; owner?:string; createdAt:string }[];
   commercialClosedAt?: string;
   commercialClosedTarget?: "Pedido"|"Ordem de serviço";
+  sourceBudgetId?: string;
+  sourceBudgetRevision?: number;
+  generatedOrderId?: string;
+  generatedServiceOrderId?: string;
+  sourceSaleId?: string;
 };
 
 // Fonte única para os seletores Cliente → Unidade/Filial/Setor. Ela lê os
@@ -3901,14 +3908,16 @@ export default function Home() {
   const convertBudget = (budget: ModuleRecord, target: "Pedido" | "Ordem de serviço") => {
     if (budget.approvalRequired && budget.approvalStatus !== "Aprovado") { setSavedMessage("Este orçamento depende de aprovação por alçada antes da conversão."); window.setTimeout(()=>setSavedMessage(""),3500); return; }
     if (target === "Pedido") {
-      const sale: ModuleRecord = { ...budget, id:`VEN-${Date.now().toString().slice(-6)}`, name:`Pedido • ${budget.name}`, status:"Pedido confirmado", createdAt:new Date().toLocaleString("pt-BR") };
-      const updated = { ...moduleRecords, Vendas:[sale,...(moduleRecords.Vendas ?? [])], Orçamentos:(moduleRecords.Orçamentos ?? []).map(item => item.id === budget.id ? {...item,status:"Orçamento fechado",commercialClosedAt:new Date().toISOString(),commercialClosedTarget:"Pedido"} : item) };
+      const saleId=`VEN-${Date.now().toString().slice(-6)}`;
+      const sale: ModuleRecord = { ...budget, id:saleId, sourceBudgetId:budget.id, sourceBudgetRevision:budget.revision||1, generatedOrderId:undefined, generatedServiceOrderId:undefined, name:`Pedido • ${budget.name}`, status:"Pedido confirmado", createdAt:new Date().toLocaleString("pt-BR") };
+      const updated = { ...moduleRecords, Vendas:[sale,...(moduleRecords.Vendas ?? [])], Orçamentos:(moduleRecords.Orçamentos ?? []).map(item => item.id === budget.id ? {...item,status:"Orçamento fechado",commercialClosedAt:new Date().toISOString(),commercialClosedTarget:"Pedido",generatedOrderId:saleId} : item) };
       setModuleRecords(updated); persistSharedState(customerRecords, serviceOrders, updated); setCurrent("Vendas");
     } else {
       const customer = customerRecords.find(item => item.name === budget.client);
       const budgetStructure = budget.structureId ? (moduleRecords["Unidades e setores"] ?? []).find(item => item.id === budget.structureId && item.client === budget.client) : undefined;
-      const order: ServiceOrder = { id:`#OS-${String(Math.max(15499,...serviceOrders.map(item => Number(item.id.replace(/\D/g,""))||0))+1).padStart(5,"0")}`, client:budget.client, customerId:customer?.id, unit:budgetStructure?.name || budget.unit || "Matriz", structureId:budgetStructure?.id, unitId:budgetStructure?.id, sector:budget.sector, sourceBudgetId:budget.id, service:budget.purchaseItems?.map(item => item.description).join(", ") || budget.name, tech:"Não definido", date:new Date().toISOString().slice(0,10), time:"A definir", address:budgetStructure?.address || customer?.address || "", status:"Aberta", tone:"blue", avatar:budget.client.split(" ").map(item => item[0]).slice(0,2).join(""), catalogItems:budget.purchaseItems?.filter(item => item.kind !== "Custo adicional").map(item => ({ id:item.productId || item.id, name:item.description, kind:item.kind === "Produto" ? "Produto" : "Serviço" })) };
-      const updatedOrders = [order,...serviceOrders]; const updatedModules = { ...moduleRecords, Orçamentos:(moduleRecords.Orçamentos ?? []).map(item => item.id === budget.id ? {...item,status:"Orçamento fechado",commercialClosedAt:new Date().toISOString(),commercialClosedTarget:"Ordem de serviço"} : item) };
+      const serviceOrderId=`#OS-${String(Math.max(15499,...serviceOrders.map(item => Number(item.id.replace(/\D/g,""))||0))+1).padStart(5,"0")}`;
+      const order: ServiceOrder = { id:serviceOrderId, client:budget.client, customerId:customer?.id, unit:budgetStructure?.name || budget.unit || "Matriz", structureId:budgetStructure?.id, unitId:budgetStructure?.id, sector:budget.sector, sourceBudgetId:budget.id, sourceBudgetRevision:budget.revision||1, service:budget.purchaseItems?.map(item => item.description).join(", ") || budget.name, tech:"Não definido", date:new Date().toISOString().slice(0,10), time:"A definir", address:budgetStructure?.address || customer?.address || "", status:"Aberta", tone:"blue", avatar:budget.client.split(" ").map(item => item[0]).slice(0,2).join(""), catalogItems:budget.purchaseItems?.filter(item => item.kind !== "Custo adicional").map(item => ({ id:item.productId || item.id, name:item.description, kind:item.kind === "Produto" ? "Produto" : "Serviço" })) };
+      const updatedOrders = [order,...serviceOrders]; const updatedModules = { ...moduleRecords, Orçamentos:(moduleRecords.Orçamentos ?? []).map(item => item.id === budget.id ? {...item,status:"Orçamento fechado",commercialClosedAt:new Date().toISOString(),commercialClosedTarget:"Ordem de serviço",generatedServiceOrderId:serviceOrderId} : item) };
       setServiceOrders(updatedOrders); setModuleRecords(updatedModules); persistSharedState(customerRecords,updatedOrders,updatedModules); setCurrent("Ordens de serviço");
     }
     setSavedMessage(`Orçamento convertido em ${target}.`); window.setTimeout(() => setSavedMessage(""),2500);
