@@ -6,7 +6,7 @@ test("auth route blocks tenant before credentials when Manager marks company blo
   const source=await readFile(new URL("../app/api/auth/route.ts",import.meta.url),"utf8");
   assert.ok(source.includes("validateCompanyAccessBySlug(resolvedTenant)"));
   assert.ok(source.includes('code:access.code'));
-  assert.ok(source.includes('blocked:access.code==="SYSTEM_BLOCKED"'));
+  assert.ok(source.includes('blocked:["SYSTEM_BLOCKED","FINANCIAL_BLOCKED"].includes(String(access.code))'));
 });
 
 test("active sessions are revoked when Manager access becomes blocked",async()=>{
