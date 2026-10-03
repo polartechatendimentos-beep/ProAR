@@ -1447,7 +1447,7 @@ function BiddingModule({ onOpen }: { onOpen: (tender: Tender) => void }) {
 type SaleItem = { id: string; name: string; code: string; price: number; kind: "Produto" | "Serviço"; unit: string; image?: string };
 type CartItem = SaleItem & { quantity: number };
 
-function SalesPDV({ customers, structures, records, sales, onSave, onDelete }: { customers: Customer[]; structures: ModuleRecord[]; records: ModuleRecord[]; sales: ModuleRecord[]; onSave: (record: ModuleRecord) => void; onDelete: (record: ModuleRecord) => void }) {
+function SalesPDV({ customers, structures, records, sales, onSave, onDelete, onCreateServiceOrder, onReturnSale }: { customers: Customer[]; structures: ModuleRecord[]; records: ModuleRecord[]; sales: ModuleRecord[]; onSave: (record: ModuleRecord) => void; onDelete: (record: ModuleRecord) => void; onCreateServiceOrder:(sale:ModuleRecord)=>void; onReturnSale:(sale:ModuleRecord)=>void }) {
   const [salesView, setSalesView] = useState<"nova" | "historico" | "caixa">("nova");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [search, setSearch] = useState("");
