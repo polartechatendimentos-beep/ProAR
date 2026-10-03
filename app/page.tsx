@@ -117,6 +117,11 @@ type ServiceOrder = {
   sourceBudgetId?: string;
   sourceBudgetRevision?: number;
   sourceSaleId?: string;
+  operationId?: string;
+  stockMovementId?: string;
+  financialOriginId?: string;
+  stockMovementStatus?: "Nenhum"|"Reservado"|"Baixado"|"Estornado";
+  financialLifecycleStatus?: "Nenhum"|"Previsto"|"Faturado"|"Recebido"|"Estornado";
   equipmentIds?: string[];
   equipmentId?: string;
   total?: number;
@@ -274,6 +279,7 @@ type Customer = {
   taxStatus?: string;
   creditLimit?: number;
   balancePosted?: number;
+  customerCreditBalance?: number;
   financialStatus?: "Liberado" | "Alerta" | "Somente à vista" | "Bloqueado";
 };
 
@@ -586,6 +592,16 @@ type ModuleRecord = {
   generatedOrderId?: string;
   generatedServiceOrderId?: string;
   sourceSaleId?: string;
+  operationId?: string;
+  stockMovementId?: string;
+  financialOriginId?: string;
+  stockMovementStatus?: "Nenhum"|"Reservado"|"Baixado"|"Estornado";
+  financialLifecycleStatus?: "Nenhum"|"Previsto"|"Faturado"|"Recebido"|"Estornado";
+  returnId?: string;
+  returnType?: "Parcial"|"Total";
+  returnDestination?: "Reembolso"|"Crédito do cliente";
+  returnedValue?: number;
+  returnedItems?: { itemId:string; productId:string; description:string; quantity:number; unitValue:number }[];
 };
 
 // Fonte única para os seletores Cliente → Unidade/Filial/Setor. Ela lê os
