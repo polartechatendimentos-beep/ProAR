@@ -602,6 +602,8 @@ type ModuleRecord = {
   returnType?: "Parcial"|"Total";
   returnDestination?: "Reembolso"|"Crédito do cliente";
   returnedValue?: number;
+  returnReason?: string;
+  returnStockDestination?: "Estoque principal"|"Veículo"|"Obra"|"Quarentena"|"Produto com defeito";
   returnedItems?: { itemId:string; productId:string; description:string; quantity:number; unitValue:number }[];
   customerCreditApplied?: number;
   customerCreditMovementId?: string;
@@ -3958,11 +3960,13 @@ export default function Home() {
       if(!Number.isFinite(quantity)||quantity<=0||quantity>item.quantity){setSavedMessage("Quantidade de devolução inválida.");return}
       items=[{...item,quantity}];
     }
+    const reason=window.prompt("Informe o motivo da devolução:","Devolução solicitada pelo cliente")?.trim(); if(!reason)return;
+    const stockDestination=(window.prompt("Destino físico dos produtos devolvidos: Estoque principal, Veículo, Obra, Quarentena ou Produto com defeito","Estoque principal")||"Estoque principal") as ModuleRecord["returnStockDestination"];
     const destination=window.confirm("OK = lançar como CRÉDITO DO CLIENTE. Cancelar = registrar REEMBOLSO.")?"Crédito do cliente":"Reembolso";
     const returnedValue=items.reduce((sum,item)=>sum+(item.unitValue||0)*item.quantity,0);
     const returnId=`DEV-${Date.now().toString().slice(-6)}`;
     const returnedItems=items.map(item=>({itemId:item.id,productId:item.productId||item.id,description:item.description,quantity:item.quantity,unitValue:item.unitValue||0}));
-    const returnRecord:ModuleRecord={id:returnId,name:`Devolução • ${sale.id}`,client:sale.client,customerId:sale.customerId,description:`${totalReturn?"Pedido total":"Devolução parcial"} • ${destination}`,createdAt:new Date().toLocaleString("pt-BR"),date:new Date().toISOString().slice(0,10),status:"Devolução registrada",value:returnedValue,operationId:sale.operationId,financialOriginId:sale.financialOriginId,sourceSaleId:sale.id,sourceBudgetId:sale.sourceBudgetId,sourceBudgetRevision:sale.sourceBudgetRevision,returnType:totalReturn?"Total":"Parcial",returnDestination:destination,returnedValue,returnedItems,stockMovementStatus:"Estornado",financialLifecycleStatus:"Estornado"};
+    const returnRecord:ModuleRecord={id:returnId,name:`Devolução • ${sale.id}`,client:sale.client,customerId:sale.customerId,description:`${totalReturn?"Pedido total":"Devolução parcial"} • ${destination}`,createdAt:new Date().toLocaleString("pt-BR"),date:new Date().toISOString().slice(0,10),status:"Devolução registrada",value:returnedValue,operationId:sale.operationId,financialOriginId:sale.financialOriginId,sourceSaleId:sale.id,sourceBudgetId:sale.sourceBudgetId,sourceBudgetRevision:sale.sourceBudgetRevision,returnType:totalReturn?"Total":"Parcial",returnDestination:destination,returnReason:reason,returnStockDestination:stockDestination,returnedValue,returnedItems,stockMovementStatus:"Estornado",financialLifecycleStatus:"Estornado"};
     const updatedCustomers=customerRecords.map(customer=>customer.name===sale.client&&destination==="Crédito do cliente"?{...customer,customerCreditBalance:(customer.customerCreditBalance||0)+returnedValue,customerCreditHistory:[...(customer.customerCreditHistory||[]),{id:`CRED-${returnId}`,type:"Crédito" as const,value:returnedValue,sourceId:returnId,description:`Crédito gerado pela devolução ${returnId}`,createdAt:new Date().toISOString()}]}:customer);
     const updatedModules={...moduleRecords,Vendas:(moduleRecords.Vendas??[]).map(item=>item.id===sale.id?{...item,status:totalReturn?"Devolvido":"Devolução parcial",returnId}:item),Devoluções:[returnRecord,...(moduleRecords.Devoluções??[])]};
     setCustomerRecords(updatedCustomers);setModuleRecords(updatedModules);persistSharedState(updatedCustomers,serviceOrders,updatedModules);
