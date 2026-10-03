@@ -621,7 +621,17 @@ function Header({ title, subtitle, onMenu, searchItems, pendingItems, onSearchSe
   const [pendingOpen,setPendingOpen]=useState(false);
   const [query,setQuery]=useState("");
   useEffect(()=>{ const handler=(event:KeyboardEvent)=>{ if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==="k"){ event.preventDefault(); setSearchOpen(true); setPendingOpen(false); } }; window.addEventListener("keydown",handler); return()=>window.removeEventListener("keydown",handler); },[]);
-  const matches=query.trim().length<2?[]:searchItems.filter(item=>`${item.title} ${item.detail} ${item.module}`.toLowerCase().includes(query.trim().toLowerCase())).slice(0,10);
+  const normalizedQuery=query.trim().toLowerCase();
+  const commandModules:GlobalSearchItem[]=[
+    {id:"cmd-agenda",title:"Abrir agenda",detail:"Comando rápido",module:"Agenda",kind:"Cadastro"},
+    {id:"cmd-os",title:"Abrir ordens de serviço",detail:"Comando rápido",module:"Ordens de serviço",kind:"Cadastro"},
+    {id:"cmd-finance",title:"Abrir financeiro",detail:"Comando rápido",module:"Financeiro",kind:"Cadastro"},
+    {id:"cmd-critical",title:"Ver pendências críticas",detail:"Central de trabalho",module:"Central de pendências",kind:"Cadastro"},
+    {id:"cmd-work",title:"Abrir obras",detail:"Comando rápido",module:"Obras",kind:"Cadastro"},
+  ];
+  const searchable=[...commandModules,...searchItems];
+  const tokens=normalizedQuery.split(/\\s+/).filter(Boolean);
+  const matches=normalizedQuery.length<2?[]:searchable.filter(item=>{const hay=`${item.title} ${item.detail} ${item.module}`.toLowerCase();return tokens.every(token=>hay.includes(token));}).slice(0,10);
   return <header className="topbar topbar-user-only">
     <div className="headline">
       <button className="menu-toggle" aria-label="Abrir menu" onClick={onMenu}><Menu size={20}/></button>
