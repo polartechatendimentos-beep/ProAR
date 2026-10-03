@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, CircleAlert, Database, RefreshCw, ShieldCheck, ServerCog } from "lucide-react";
 import type { IntegrityResult } from "@/lib/integrity-audit";
+import { integrityDashboard } from "@/lib/integrity-dashboard";
 
 export function IntegrityAudit() {
   const [result, setResult] = useState<IntegrityResult | null>(null);
@@ -45,6 +46,7 @@ export function IntegrityAudit() {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
+  const dashboard=result?integrityDashboard(result):null;
   const formatTime = (value: string | null | undefined) => value ? new Date(value).toLocaleString("pt-BR") : "Sem informação";
   return <section className="integrity-page">
     <div className="integrity-hero"><div><span className="integrity-kicker"><ShieldCheck size={14}/> CONTROLES DA EMPRESA</span><h2>Integridade do Sistema</h2><p>Diagnóstico somente leitura para localizar divergências operacionais na base carregada.</p><small><Database size={13}/> Base examinada: {result?.source || "aguardando consulta"} {result ? `• revisão ${result.revision}` : ""}</small></div><button className="primary-btn" onClick={() => void run()} disabled={loading}><RefreshCw size={15} className={loading ? "integrity-spin" : ""}/>{loading ? "Analisando base…" : "Executar diagnóstico"}</button></div>
@@ -52,7 +54,7 @@ export function IntegrityAudit() {
     {loading && !result && <div className="integrity-empty" role="status">Consultando os dados persistidos no banco…</div>}
     {result && <>
       <div className="integrity-meta"><span>Executado em <b>{formatTime(result.checkedAt)}</b></span><span>Snapshot atualizado em <b>{formatTime(result.updatedAt)}</b></span><span>Os registros não foram alterados.</span></div>
-      <div className="integrity-kpis">
+      <div className="integrity-kpis">{dashboard&&<article className={dashboard.status==="critical"?"critical":dashboard.status==="attention"?"attention":"clear"}><span><ShieldCheck size={17}/> ÍNDICE DE INTEGRIDADE</span><strong>{dashboard.score}/100</strong><small>{dashboard.clean} de {dashboard.checks} verificações sem divergência</small></article>}
         <article className={result.totals.critical ? "critical" : "clear"}><span>{result.totals.critical ? <CircleAlert size={17}/> : <CheckCircle2 size={17}/>} CRÍTICO</span><strong>{result.totals.critical}</strong><small>{result.totals.critical ? "Divergências que exigem conferência" : "Nenhuma divergência crítica localizada"}</small></article>
         <article className={result.totals.attention ? "attention" : "clear"}><span>{result.totals.attention ? <AlertTriangle size={17}/> : <CheckCircle2 size={17}/>} ATENÇÃO</span><strong>{result.totals.attention}</strong><small>{result.totals.attention ? "Registros a revisar" : "Nenhum ponto de atenção localizado"}</small></article>
         <article className="clear"><span><CheckCircle2 size={17}/> VERIFICAÇÕES OK</span><strong>{result.totals.ok}</strong><small>Sem divergências encontradas nessas regras</small></article>
