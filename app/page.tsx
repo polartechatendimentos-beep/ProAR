@@ -1929,7 +1929,7 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
           const save = await fetch('/api/work-projects',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({companyId,projects:seed,baseRevision:0})});
           const saved = await save.json(); if(save.ok)setProjectsRevision(Number(saved.state?.revision||1)); setProjects(seed); localStorage.setItem(projectsKey,JSON.stringify(seed));
         }
-      } catch { setProjects(local); setReportNotice("Lista de obras online indisponível. Exibindo cache deste aparelho somente para consulta."); }
+      } catch { setProjects(local); setReportNotice("Obras online indisponíveis. Exibindo a cópia local deste aparelho somente para consulta."); }
       finally { setProjectsReady(true); }
     };
     void loadProjects();
@@ -1953,7 +1953,7 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     const stored=localStorage.getItem(storageKey);const localHouses=(()=>{if(!stored)return createHouses();try{return mergeWorkRows(JSON.parse(stored) as HouseWorkItem[]);}catch{return createHouses();}})();
     if(!navigator.onLine){setHouses(localHouses);setMapOnline(false);setMapLoading(false);setReportNotice("Modo offline: mostrando a cópia deste aparelho.");return;}
     setHouses([]);setMapOnline(true);setMapLoading(true);
-    void fetchServerMap().then(map=>{if(!map) return publishPublicMap(localHouses);}).catch(()=>{setMapOnline(false);setMapLoading(false);setReportNotice("Banco online indisponível. A cópia local não foi enviada nem definida como principal.");});
+    void fetchServerMap().then(map=>{if(!map) return publishPublicMap(localHouses);}).catch(()=>{setMapOnline(false);setMapLoading(false);setReportNotice("Obras online indisponíveis. Exibindo a cópia local deste aparelho somente para consulta.");});
   },[storageKey,companyId,projectsReady,activeProject.id]);
   const persist = async (next: HouseWorkItem[]) => {
     if (!navigator.onLine) { const message="Não foi possível salvar a alteração. Tente novamente."; setSaveState("error"); setSaveError(message); setMapOnline(false); setReportNotice(message); return false; }
@@ -1992,7 +1992,7 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
   const refreshWorkMap = async () => {
     setReportNotice("A atualizar o mapa pelo banco principal...");
     try { await fetchServerMap();localStorage.removeItem(`${shareKey}:pending`);setReportNotice("Banco online carregado. Esta é a versão principal."); }
-    catch { setReportNotice(navigator.onLine?"Banco online indisponível; nenhum dado local foi enviado.":"Dispositivo sem internet. A cópia offline foi mantida."); }
+    catch { setReportNotice(navigator.onLine?"Obras online indisponíveis. Nenhuma alteração local foi enviada.":"Dispositivo sem internet. A cópia offline foi mantida."); }
     window.setTimeout(()=>setReportNotice(""),4500);
   };
   const sendWorkMap = async () => { setReportNotice("A sincronizar com o banco principal..."); try { await fetchServerMap();setReportNotice("Sincronização concluída. O banco online permaneceu como fonte principal."); } catch(error){setReportNotice((error as Error).message);} window.setTimeout(()=>setReportNotice(""),4500); };
