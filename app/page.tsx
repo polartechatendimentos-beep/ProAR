@@ -2231,7 +2231,7 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     return { entries, progress, done: entries.filter(house => normalizeHouseStatus(house.status) === "SERVIÇO CONCLUÍDO").length, working: entries.filter(house => !["INÍCIO DE OBRA", "SERVIÇO CONCLUÍDO"].includes(normalizeHouseStatus(house.status))).length };
   };
   const grouped = [...activeProject.blocks.map(({ block }) => ({ block, houses: visible.filter(house => house.block === block) })),{block:"Áreas Comuns",houses:visible.filter(house=>house.kind === "common")}].filter(group => group.houses.length);
-  const todaySummary=buildWorkTodaySummary(houses,house=>getWorkProgress(house.status));
+  const todaySummary=buildWorkTodaySummary(houses, status => getWorkProgress(status));
   const todayLog=workDailyLog(houses);
   const statusColor = (status: HouseWorkStatus | LegacyHouseWorkStatus) => getWorkStatusColor(status);
   const houseProgress = (status: HouseWorkStatus | LegacyHouseWorkStatus) => getWorkProgress(status);
