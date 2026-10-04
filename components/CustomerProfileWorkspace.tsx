@@ -5,6 +5,7 @@ import { Building2, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Edi
 import "./customer-profile.css";
 import { CustomerStructureLayout } from "./CustomerStructureLayout";
 import { customerHealth } from "@/lib/customer-health";
+import { buildUniversalTimeline, type TimelineEntry } from "@/lib/universal-timeline";
 
 type AnyRecord = Record<string, unknown>;
 type CustomerRecord = AnyRecord & { id: string; name: string; doc?: string; contact?: string; phone?: string; address?: string; units?: number; status?: string; organizationType?: string; legalName?: string; tradeName?: string; email?: string; zipCode?: string; street?: string; addressNumber?: string; complement?: string; neighborhood?: string; city?: string; state?: string; stateRegistration?: string; municipalRegistration?: string; createdAt?: string; website?: string; segment?: string; size?: string; paymentCondition?: string; priceTable?: string; preferredPaymentMethod?: string; dueDay?: string | number; financialNote?: string };
@@ -34,7 +35,7 @@ export function CustomerProfileWorkspace({ customer, structures, serviceOrders, 
   const allHistory = useMemo(() => {
     const orders = serviceOrders.filter(order => order.client === customer.name).flatMap(order => [{ id: order.id, date: order.date, type: "OS", title: `${order.id} criada`, detail: `${order.unit} → ${order.service}`, record: order }, ...(order.timeline ?? []).map(event => ({ id: `${order.id}-${String(event.id)}`, date: String(event.createdAt ?? order.date), type: "OS", title: String(event.status ?? "Atualização da OS"), detail: String(event.internalNote ?? event.customerNote ?? order.service), record: order }))]);
     const records = Object.entries(modules).flatMap(([module, list]) => list.filter(item => related(item, customer)).map(item => ({ id: item.id, date: String(item.date ?? item.createdAt ?? ""), type: module, title: `${module} • ${item.name}`, detail: String(item.description ?? item.status ?? "Registro cadastrado"), record: item })));
-    return [...orders, ...records].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    const entries:TimelineEntry[]=[...orders,...records].map(item=>({id:`${item.type}-${String(item.id)}`,at:String(item.date||new Date(0).toISOString()),module:item.type,entityType:item.type,entityId:String(item.id),action:item.title,summary:item.detail,actor:String((item.record as AnyRecord)?.updatedBy??(item.record as AnyRecord)?.createdBy??""),correlationId:String((item.record as AnyRecord)?.correlationId??"")||undefined})); return buildUniversalTimeline(entries,{}).map(item=>({id:item.entityId,date:item.at,type:item.module,title:item.action,detail:item.summary,record:{actor:item.actor,correlationId:item.correlationId}}));
   }, [customer, modules, serviceOrders]);
   const filteredHistory = allHistory.filter(item => historyFilter === "Todos" || item.type.toLowerCase().includes(historyFilter.toLowerCase()) || (historyFilter === "Alterações cadastrais" && item.type === "Cadastro"));
   const updateDraft = (key: string, next: unknown) => setDraft(current => ({ ...current, [key]: next }));
