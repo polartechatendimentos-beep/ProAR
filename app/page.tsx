@@ -69,6 +69,8 @@ import { auditMatches, diffAuditRecord } from "@/lib/audit-utils";
 import { buildWorkTodaySummary, workDailyLog } from "@/lib/work-operations";
 import type {EmployeeComplianceDoc,EmployeeAsset} from "@/lib/employee-management";
 import { allowedMobileDiscount, receiptText, whatsappReceiptUrl } from "@/lib/mobile-sales";
+import { barcodeScannerSupported, openRearCamera, scanBarcodeFromVideo } from "@/lib/mobile-barcode";
+import { createMobilePaymentIntent, paymentStatusLabel } from "@/lib/mobile-payments";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type NavItem = { icon: IconType; name: string; badge?: string };
@@ -1353,6 +1355,9 @@ function SalesPDV({ customers, structures, records, sales, onSave, onDelete }: {
   const [fullScreen, setFullScreen] = useState(false);
   const [mobileOsLink,setMobileOsLink]=useState("");
   const [scannerOpen,setScannerOpen]=useState(false);
+  const scannerVideoRef=useRef<HTMLVideoElement>(null);
+  const [scannerNotice,setScannerNotice]=useState("");
+  const [paymentNotice,setPaymentNotice]=useState("");
   const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
   const [editingSale, setEditingSale] = useState<ModuleRecord | null>(null);
   const pdvRef = useRef<HTMLElement>(null);
@@ -1362,6 +1367,8 @@ function SalesPDV({ customers, structures, records, sales, onSave, onDelete }: {
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const mobileSale = typeof window !== "undefined" && (window.location.pathname==="/mobile" || window.location.pathname.startsWith("/mobile/"));
   const effectiveDiscount = mobileSale ? allowedMobileDiscount(discount,subtotal,5,false) : discount;
+  const startMobileScan=async()=>{if(!scannerVideoRef.current)return;if(!barcodeScannerSupported()){setScannerNotice("Leitura automática não suportada neste navegador. Use o campo de busca/código.");searchRef.current?.focus();return}try{const stop=await openRearCamera(scannerVideoRef.current);setScannerNotice("Aponte a câmera para o código.");const timer=window.setInterval(async()=>{const hit=await scanBarcodeFromVideo(scannerVideoRef.current!);if(hit){setSearch(hit.value);setScannerNotice(`Código ${hit.value} identificado.`);window.clearInterval(timer);stop();setScannerOpen(false);searchRef.current?.focus()}},450);window.setTimeout(()=>{window.clearInterval(timer);stop()},20000)}catch{setScannerNotice("Não foi possível acessar a câmera. Verifique a permissão do aparelho.")}};
+  const prepareMobilePayment=()=>{try{const intent=createMobilePaymentIntent(editingSale?.id||`VENDA-${Date.now()}`,total,payment==="PIX"?"PIX":payment==="Dinheiro"?"Dinheiro":"Cartão");setPaymentNotice(paymentStatusLabel(intent.status))}catch(error){setPaymentNotice(error instanceof Error?error.message:"Não foi possível preparar o pagamento.")}};
   const total = Math.max(0, subtotal - effectiveDiscount);
   const paidTotal = payments.reduce((sum, entry) => sum + Math.max(0, entry.amount || 0), 0);
   const hasCashPayment = payments.some(entry => entry.method === "Dinheiro" && entry.amount > 0);
@@ -1464,7 +1471,7 @@ function SalesPDV({ customers, structures, records, sales, onSave, onDelete }: {
     <div className="sales-top"><h2>Vendas</h2><button className="primary-btn" onClick={()=>{setSalesView("nova");searchRef.current?.focus();}}><Plus size={15}/> Nova venda</button></div>
     <nav className="sales-mode-tabs"><button className={salesView === "nova" ? "active" : ""} onClick={()=>setSalesView("nova")}>Nova venda</button><button className={salesView === "historico" ? "active" : ""} onClick={()=>setSalesView("historico")}>Histórico</button><button className={salesView === "caixa" ? "active" : ""} onClick={()=>setSalesView("caixa")}>Caixa</button></nav>
     {salesView === "historico" ? <CommercialRecordsManager title="Vendas" records={sales} onEdit={editSavedSale} onDelete={onDelete}/> : salesView === "caixa" ? <div className="panel pdv-cash-panel"><h3>Caixa</h3><p>Acompanhe as vendas confirmadas e os recebimentos do turno.</p><strong>R$ {sales.filter(item=>item.status !== "Cancelada").reduce((sum,item)=>sum+(item.value??0),0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div> : <>
-    <div className="pdv-command">{mobileSale&&<div className="pdv-mobile-actions"><button onClick={()=>setScannerOpen(v=>!v)}><ScanBarcode size={15}/> Ler código</button><label>Vincular OS<input value={mobileOsLink} onChange={e=>setMobileOsLink(e.target.value)} placeholder="OS-0001"/></label>{cart.length>0&&<button onClick={()=>{const txt=receiptText({id:editingSale?.id||"VENDA",customer:customer||"Consumidor final",total,payment,items:cart.map(i=>({name:i.name,quantity:i.quantity}))});window.open(whatsappReceiptUrl(selectedCustomer?.phone||"",txt),"_blank","noopener,noreferrer")}}><MessageCircle size={15}/> Comprovante</button>}</div>}{scannerOpen&&<div className="pdv-mobile-scanner"><Camera size={18}/><b>Leitor por câmera</b><small>Use a câmera do aparelho quando disponível ou digite/escaneie o código no campo de busca.</small><button onClick={()=>{setScannerOpen(false);searchRef.current?.focus()}}>Abrir busca de código</button></div>}
+    <div className="pdv-command">{mobileSale&&<div className="pdv-mobile-actions"><button onClick={()=>setScannerOpen(v=>!v)}><ScanBarcode size={15}/> Ler código</button><label>Vincular OS<input value={mobileOsLink} onChange={e=>setMobileOsLink(e.target.value)} placeholder="OS-0001"/></label>{cart.length>0&&<button onClick={()=>{const txt=receiptText({id:editingSale?.id||"VENDA",customer:customer||"Consumidor final",total,payment,items:cart.map(i=>({name:i.name,quantity:i.quantity}))});window.open(whatsappReceiptUrl(selectedCustomer?.phone||"",txt),"_blank","noopener,noreferrer")}}><MessageCircle size={15}/> Comprovante</button>}</div>}{scannerOpen&&<div className="pdv-mobile-scanner"><Camera size={18}/><b>Leitor por câmera</b><video ref={scannerVideoRef} playsInline muted/><small>{scannerNotice||"Aponte a câmera para EAN, UPC, Code 128 ou QR."}</small><button onClick={startMobileScan}>Iniciar câmera</button><button onClick={()=>{setScannerOpen(false);searchRef.current?.focus()}}>Busca manual</button></div>}
       <div><span className="section-kicker"><ShoppingBag size={12}/> VENDA RÁPIDA</span><h2>PDV ProAR</h2><p>Produtos e serviços em um fluxo direto, sem campos desnecessários.</p></div>
       <div className="pdv-shortcuts"><button onClick={toggleFullScreen}><Grid2X2 size={14}/>{fullScreen ? "Sair da tela cheia" : "Maximizar PDV"}</button><button onClick={() => setShortcutsOpen(true)}><Keyboard size={14}/><kbd>F1</kbd> Atalhos</button><span>Caixa aberto</span></div>
     </div>
