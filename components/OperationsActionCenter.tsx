@@ -5,6 +5,7 @@ import { AlertTriangle, Bell, CheckCircle2, ChevronRight, Filter, Search, Shield
 import { deriveOperationalActions, summarizeOperationalActions, type OperationalAction } from "@/lib/action-center";
 import { resolutionPlan } from "@/lib/action-resolution";
 import { buildCommandCenter } from "@/lib/command-center";
+import { deriveExceptionCenter } from "@/lib/exception-derivation";
 import "./operations-action-center.css";
 
 type Props = {
@@ -23,6 +24,7 @@ export function OperationsActionCenter({ serviceOrders, modules, onNavigate }: P
   const actions=useMemo(()=>deriveOperationalActions(serviceOrders,modules),[serviceOrders,modules]);
   const summary=useMemo(()=>summarizeOperationalActions(actions),[actions]);
   const command=useMemo(()=>buildCommandCenter(serviceOrders,modules),[serviceOrders,modules]);
+  const exceptions=useMemo(()=>deriveExceptionCenter(serviceOrders,modules),[serviceOrders,modules]);
   const visible=actions.filter(item =>
     (category==="Todas" || item.category===category) &&
     (priority==="Todas" || String(item.priority)===priority) &&
@@ -53,7 +55,7 @@ export function OperationsActionCenter({ serviceOrders, modules, onNavigate }: P
       <label className="status-filter"><select value={priority} onChange={e=>setPriority(e.target.value)}><option>Todas</option><option value="1">Crítica</option><option value="2">Atenção</option><option value="3">Follow-up</option></select></label>
     </div>
     <div className="panel" style={{marginBottom:16}}><div className="panel-head"><div><span className="section-kicker">FECHAMENTO E INTEGRIDADE</span><h2>{command.preClose.canClose?"Dia pronto para fechamento":"Fechamento com pendências"}</h2><p>{command.dayClose.canClose?"Todas as verificações automáticas estão consistentes.":`${command.preClose.blockers.length} verificação(ões) precisam de atenção antes do fechamento.`}</p></div><button className="outline-btn compact" onClick={()=>onNavigate("Financeiro")}>{command.dayClose.canClose?"Revisar fechamento":"Resolver pendências"}</button></div>{!command.dayClose.canClose&&<div className="workday-list">{command.dayClose.checks.filter(x=>!x.ok).map(x=><button key={x.key} onClick={()=>onNavigate(x.module)}><i/><span><b>{x.label}</b><small>{x.count} ocorrência(s){x.amount?` • R$ ${Math.abs(x.amount).toLocaleString("pt-BR",{minimumFractionDigits:2})}`:""}</small></span><ChevronRight size={15}/></button>)}</div>}</div>
-    <div className="operations-list">
+    <div className="panel" style={{marginBottom:16}}><div className="panel-head"><div><span className="section-kicker">CENTRO DE EXCEÇÕES</span><h2>{exceptions.length?`${exceptions.length} exceção(ões) operacional(is)`:"Operação sem exceções críticas"}</h2><p>Fiscal, financeiro, estoque, comercial e vínculos que precisam de intervenção.</p></div></div>{exceptions.length>0&&<div className="workday-list">{exceptions.slice(0,8).map(item=><button key={item.id} onClick={()=>onNavigate(item.area)}><i/><span><b>{item.title}</b><small>{item.detail} • {item.recommendedAction}</small></span><ChevronRight size={15}/></button>)}</div>}</div><div className="operations-list">
       {visible.map(item=><article key={item.id} className={`operation-action priority-${item.priority}`}>
         <span className="operation-marker"/>
         <div className="operation-main"><div className="operation-meta"><b>{item.category}</b><span>{priorityLabel[item.priority]}</span>{item.dueDate&&<time>{item.dueDate}</time>}</div><h3>{item.title}</h3><p>{item.detail}</p><small>{item.module}</small></div>
