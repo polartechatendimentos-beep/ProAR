@@ -13,6 +13,8 @@ export function proxy(request: NextRequest) {
   const host = normalizeHost(request.headers.get("host"));
   const domain = rootDomain();
   const pathname = request.nextUrl.pathname;
+  const mobilePath = pathname === "/mobile" || pathname.startsWith("/mobile/");
+  const effectivePathname = mobilePath ? (pathname.slice(7) || "/") : pathname;
 
   if ((host === domain || host === `www.${domain}`) && !pathname.startsWith("/api/") && !pathname.startsWith("/_next/") && pathname !== "/favicon.ico" && pathname !== "/termos" && pathname !== "/privacidade" && pathname !== "/robots.txt" && pathname !== "/sitemap.xml" && pathname !== "/.well-known/security.txt") {
     if (pathname !== "/site") { const url = request.nextUrl.clone(); url.pathname = "/site"; return NextResponse.rewrite(url); }
@@ -25,11 +27,13 @@ export function proxy(request: NextRequest) {
   }
 
   const mobileHost = host.startsWith("mobile.");
+  const mobileExperience = mobileHost || mobilePath;
   const tenantHost = mobileHost ? host.replace(/^mobile\\./, "") : host;
   const tenant = tenantSlugFromHost(tenantHost, domain);
   const headers = new Headers(request.headers);
   if (tenant) headers.set("x-proar-tenant", tenant); else headers.delete("x-proar-tenant");
-  if (mobileHost) { headers.set("x-proar-experience","mobile"); headers.set("x-proar-mobile-tenant",tenant||"default"); }
+  if (mobileExperience) { headers.set("x-proar-experience","mobile"); headers.set("x-proar-mobile-tenant",tenant||"default"); }
+  if (mobilePath) { const url=request.nextUrl.clone(); url.pathname=effectivePathname; const rewritten=NextResponse.rewrite(url,{request:{headers}}); rewritten.cookies.set("proar-experience","mobile",{sameSite:"lax",secure:true,path:"/"}); rewritten.cookies.set("proar-mobile-tenant",tenant||"default",{sameSite:"lax",secure:true,path:"/"}); return withPublicSecurity(rewritten); }
 
   // Todo tenant possui uma porta de entrada pública. Os aliases renderizam a mesma
   // tela de autenticação da raiz sem depender de cookie ou sessão pré-existente.
@@ -40,7 +44,7 @@ export function proxy(request: NextRequest) {
   }
 
   const response = NextResponse.next({ request: { headers } });
-  if (mobileHost) { response.cookies.set("proar-experience","mobile",{sameSite:"lax",secure:true,path:"/"}); response.cookies.set("proar-mobile-tenant",tenant||"default",{sameSite:"lax",secure:true,path:"/"}); }
+  if (mobileExperience) { response.cookies.set("proar-experience","mobile",{sameSite:"lax",secure:true,path:"/"}); response.cookies.set("proar-mobile-tenant",tenant||"default",{sameSite:"lax",secure:true,path:"/"}); }
   if (tenant && pathname === "/") return withPublicSecurity(response);
   return response;
 }
