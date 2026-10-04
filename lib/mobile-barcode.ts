@@ -1,0 +1,5 @@
+export type BarcodeScanResult={value:string;format?:string};
+type Detector=new(options?:{formats?:string[]} )=>{detect(source:ImageBitmapSource):Promise<Array<{rawValue:string;format?:string}>>};
+export function barcodeScannerSupported(){return typeof window!=="undefined"&&"BarcodeDetector" in window&&Boolean(navigator.mediaDevices?.getUserMedia)}
+export async function scanBarcodeFromVideo(video:HTMLVideoElement):Promise<BarcodeScanResult|null>{const Ctor=(window as unknown as {BarcodeDetector?:Detector}).BarcodeDetector;if(!Ctor)return null;const detector=new Ctor({formats:["ean_13","ean_8","code_128","qr_code","upc_a","upc_e"]});const found=await detector.detect(video);return found[0]?.rawValue?{value:found[0].rawValue,format:found[0].format}:null}
+export async function openRearCamera(video:HTMLVideoElement){if(!navigator.mediaDevices?.getUserMedia)throw new Error("Câmera não disponível neste aparelho.");const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false});video.srcObject=stream;await video.play();return()=>stream.getTracks().forEach(t=>t.stop())}
