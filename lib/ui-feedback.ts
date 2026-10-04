@@ -51,7 +51,7 @@ export function notifyFeedback(input: FeedbackMessage | string) {
       ...payload,
       message:safeMessage,
       detail:safeDetail,
-      id:payload.id ?? `feedback-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+      id:payload.id ?? (/sistema bloqueado/i.test(safeMessage) ? "system-blocked" : /obras online indisponíveis|lista de obras online indisponível|banco online indisponível/i.test(safeMessage) ? "works-online-unavailable" : `feedback-${Date.now()}-${Math.random().toString(36).slice(2,8)}`),
       tone,
       title:payload.title ?? defaultTitle[tone],
       duration:payload.duration ?? (tone==="error" ? 6500 : tone==="warning" ? 5200 : 3600),

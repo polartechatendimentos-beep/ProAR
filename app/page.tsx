@@ -23,6 +23,8 @@ import "./operational-refresh.css";
 import "./google-calendar.css";
 import "./usability-hardening.css";
 import "./fiscal-workspace.css";
+import "./responsive-hardening.css";
+import { ConnectivityBanner } from "@/components/ResponsivePrimitives";
 
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
@@ -63,6 +65,7 @@ import { CURRENT_PROAR_RELEASE, PROAR_RELEASES, type ReleaseNoteType } from "@/l
 import { ActivityCenter } from "@/components/ActivityCenter";
 import { DiagnosticManagementDashboard } from "@/components/DiagnosticManagementDashboard";
 import { auditMatches, diffAuditRecord } from "@/lib/audit-utils";
+import { buildWorkTodaySummary, workDailyLog } from "@/lib/work-operations";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type NavItem = { icon: IconType; name: string; badge?: string };
@@ -1927,7 +1930,7 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
           const save = await fetch('/api/work-projects',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({companyId,projects:seed,baseRevision:0})});
           const saved = await save.json(); if(save.ok)setProjectsRevision(Number(saved.state?.revision||1)); setProjects(seed); localStorage.setItem(projectsKey,JSON.stringify(seed));
         }
-      } catch { setProjects(local); setReportNotice("Lista de obras online indisponível. Exibindo cache deste aparelho somente para consulta."); }
+      } catch { setProjects(local); setReportNotice("Obras online indisponíveis. Exibindo a cópia local deste aparelho somente para consulta."); }
       finally { setProjectsReady(true); }
     };
     void loadProjects();
@@ -1951,7 +1954,7 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     const stored=localStorage.getItem(storageKey);const localHouses=(()=>{if(!stored)return createHouses();try{return mergeWorkRows(JSON.parse(stored) as HouseWorkItem[]);}catch{return createHouses();}})();
     if(!navigator.onLine){setHouses(localHouses);setMapOnline(false);setMapLoading(false);setReportNotice("Modo offline: mostrando a cópia deste aparelho.");return;}
     setHouses([]);setMapOnline(true);setMapLoading(true);
-    void fetchServerMap().then(map=>{if(!map) return publishPublicMap(localHouses);}).catch(()=>{setMapOnline(false);setMapLoading(false);setReportNotice("Banco online indisponível. A cópia local não foi enviada nem definida como principal.");});
+    void fetchServerMap().then(map=>{if(!map) return publishPublicMap(localHouses);}).catch(()=>{setMapOnline(false);setMapLoading(false);setReportNotice("Obras online indisponíveis. Exibindo a cópia local deste aparelho somente para consulta.");});
   },[storageKey,companyId,projectsReady,activeProject.id]);
   const persist = async (next: HouseWorkItem[]) => {
     if (!navigator.onLine) { const message="Não foi possível salvar a alteração. Tente novamente."; setSaveState("error"); setSaveError(message); setMapOnline(false); setReportNotice(message); return false; }
@@ -1990,7 +1993,7 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
   const refreshWorkMap = async () => {
     setReportNotice("A atualizar o mapa pelo banco principal...");
     try { await fetchServerMap();localStorage.removeItem(`${shareKey}:pending`);setReportNotice("Banco online carregado. Esta é a versão principal."); }
-    catch { setReportNotice(navigator.onLine?"Banco online indisponível; nenhum dado local foi enviado.":"Dispositivo sem internet. A cópia offline foi mantida."); }
+    catch { setReportNotice(navigator.onLine?"Obras online indisponíveis. Nenhuma alteração local foi enviada.":"Dispositivo sem internet. A cópia offline foi mantida."); }
     window.setTimeout(()=>setReportNotice(""),4500);
   };
   const sendWorkMap = async () => { setReportNotice("A sincronizar com o banco principal..."); try { await fetchServerMap();setReportNotice("Sincronização concluída. O banco online permaneceu como fonte principal."); } catch(error){setReportNotice((error as Error).message);} window.setTimeout(()=>setReportNotice(""),4500); };
@@ -2228,6 +2231,8 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     return { entries, progress, done: entries.filter(house => normalizeHouseStatus(house.status) === "SERVIÇO CONCLUÍDO").length, working: entries.filter(house => !["INÍCIO DE OBRA", "SERVIÇO CONCLUÍDO"].includes(normalizeHouseStatus(house.status))).length };
   };
   const grouped = [...activeProject.blocks.map(({ block }) => ({ block, houses: visible.filter(house => house.block === block) })),{block:"Áreas Comuns",houses:visible.filter(house=>house.kind === "common")}].filter(group => group.houses.length);
+  const todaySummary=buildWorkTodaySummary(houses, status => getWorkProgress(status));
+  const todayLog=workDailyLog(houses);
   const statusColor = (status: HouseWorkStatus | LegacyHouseWorkStatus) => getWorkStatusColor(status);
   const houseProgress = (status: HouseWorkStatus | LegacyHouseWorkStatus) => getWorkProgress(status);
   const createWorkReport = async (selectedHouses: HouseWorkItem[], reportTitle: string) => {
@@ -2298,6 +2303,7 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     <div className="work-manager-bar"><div><span><Building2 size={17}/></span><label>Obra ativa<select value={activeProject.id} onChange={event=>selectWorkProject(event.target.value)}>{projects.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}</select></label><small>{activeProject.blocks.length} quadra(s) • {activeProject.blocks.reduce((total,item)=>total+item.houses,0)} casas • {activeProject.commonAreas.length} áreas comuns</small></div><div className="work-manager-actions"><button className="outline-btn" onClick={()=>void renameActiveProject()}><Edit3 size={15}/> Alterar obra</button>{activeProject.id!==RESERVA_IMPERIAL.id&&<button className="outline-btn danger" onClick={()=>void deleteActiveProject()}><Trash2 size={15}/> Excluir obra</button>}<button className="outline-btn" onClick={()=>setAccessManagerOpen(true)}><ShieldCheck size={15}/> Engenheiros e Fiscais / Acesso Externo</button><button className="primary-btn" onClick={()=>setWorkManagerOpen(true)}><Plus size={15}/> Cadastrar obra</button></div></div>
     <div className="work-external-access-card"><div><span><ShieldCheck size={19}/></span><div><b>Acessos externos da obra</b><small>{(activeProject.externalAccess ?? []).length ? `${(activeProject.externalAccess ?? []).length} acesso(s) cadastrado(s)` : "Nenhum engenheiro ou fiscal cadastrado"} • permissões restritas a apontamentos</small></div></div><button className="primary-btn" onClick={()=>setAccessManagerOpen(true)}><Plus size={14}/> Adicionar engenheiro ou fiscal</button></div>
     <WorkMaterialPlanningPanel planning={activeProject.materialPlanning} totalHouses={activeProject.blocks.reduce((total,item)=>total+item.houses,0)} onSave={async materialPlanning=>{const next=projects.map(project=>project.id===activeProject.id?{...project,materialPlanning}:project);return await saveProjectsList(next,"Planejamento de materiais salvo na obra.");}}/>
+    <section className="work-today-panel"><header><div><span>PAINEL HOJE</span><h3>Operação da obra</h3></div><b>{todaySummary.completed}/{todaySummary.total} concluídas</b></header><div className="work-today-kpis"><button onClick={()=>setStatusFilter("Todos")}><small>EM ANDAMENTO</small><strong>{todaySummary.inProgress}</strong></button><button onClick={()=>setStatusFilter("INÍCIO DE OBRA")}><small>NÃO INICIADAS</small><strong>{todaySummary.notStarted}</strong></button><button className={todaySummary.incidents?"warning":""}><small>OCORRÊNCIAS</small><strong>{todaySummary.incidents}</strong></button><button className={todaySummary.stale?"warning":""}><small>SEM ATUALIZAÇÃO +7 DIAS</small><strong>{todaySummary.stale}</strong></button></div><div className="work-next-actions"><b>Próximas ações</b>{todaySummary.nextActions.slice(0,4).map(item=><button key={item.status} onClick={()=>setStatusFilter(normalizeHouseStatus(item.status))}><span>{normalizeHouseStatus(item.status)}</span><strong>{item.count}</strong><ChevronRight size={14}/></button>)}</div><footer><span><History size={13}/> {todayLog.length} atualização(ões) registrada(s) hoje</span><button onClick={()=>issueWorkReport(houses, `Diário de obra — ${activeProject.name}`)}><FileText size={13}/> Diário da obra</button></footer></section>
     <div className="houses-hero"><div><span className="section-kicker"><House size={12}/> CONTROLE DE EXECUÇÃO</span><h2>{activeProject.name}</h2><p>Acompanhamento individual das casas e áreas comuns, com evidências e histórico de execução.</p></div><div className="houses-public-share"><span><MapPin size={18}/></span><div><small>ACESSO DO CLIENTE</small><b>{shareToken ? "Mapa público ativo" : "Criar link de acompanhamento"}</b><em>{shareToken ? "Atualização automática em tempo real" : "O cliente verá somente o andamento da obra"}</em></div><button onClick={refreshWorkMap}><ArrowDownRight size={14}/> Atualizar</button><button onClick={sendWorkMap}><ArrowUpRight size={14}/> Enviar</button><button onClick={sharePublicMap}><MessageCircle size={14}/>{shareToken ? "Link" : "Criar link"}</button>{shareToken && <a href={`/obra/${shareToken}`} target="_blank" rel="noreferrer"><Eye size={14}/> Visualizar</a>}</div><div className="houses-progress"><div><small>PROGRESSO GERAL</small><strong>{completion}%</strong></div><i><b style={{ width: `${completion}%` }}/></i><span>{completed} finalizadas de {houses.length} unidades cadastradas</span></div></div>
     <div className="work-block-overview"><div className="work-block-overview-head"><div><span>PROGRESSO POR QUADRA</span><h3>Visão rápida da execução</h3></div><small>Clique em uma quadra para filtrar as unidades abaixo.</small></div><div className="work-block-summary">{activeProject.blocks.map(({block})=>{const stat=blockProgress(block);return <button key={block} style={{"--block-progress":`${stat.progress}%`} as React.CSSProperties} className={blockFilter===block?"active":""} onClick={()=>setBlockFilter(block)}><div><b>Quadra {block}</b><span>{stat.progress}%</span></div><i><em style={{width:`${stat.progress}%`}}/></i><small>{stat.entries.length} casas • {stat.done} concluídas • {stat.working} em andamento</small></button>})}</div></div>
     <div className="houses-kpis"><article><span><House size={18}/></span><div><small>TOTAL CADASTRADO</small><strong>{houses.length}</strong><em>{activeProject.blocks.length} quadras • {activeProject.commonAreas.length} áreas comuns</em></div></article>{HOUSE_STATUSES.map(status => { const total = houses.filter(house => normalizeHouseStatus(house.status) === status.name).length; return <article key={status.name}><i style={{background:status.color}}/><div><small>{status.name}</small><strong>{total}</strong><em>{Math.round(total / houses.length * 100)}% da obra</em></div></article>; })}</div>
@@ -4376,7 +4382,7 @@ export default function Home() {
   if (checkingSession) return <div className="session-loading" data-testid="proar-boot-loading"><div className="brand-mark brand-logo"><img src="/icon.png" alt="ProAR"/></div><p>A carregar o ProAR...</p><small>{bootRunId}</small></div>;
   if (bootError && !authenticatedUser) return <main className="session-boot-error" data-testid="proar-boot-error"><section><AlertTriangle size={28}/><h2>Não foi possível carregar a sessão</h2><p>{bootError}</p><small>Código de execução: {bootRunId}</small><div><button type="button" className="primary-btn" onClick={()=>setBootAttempt(value=>value+1)}>Tentar novamente</button><button type="button" className="outline-btn" onClick={()=>{localStorage.removeItem("proar-offline-session");setBootError("");}}>Entrar novamente</button><button type="button" className="outline-btn" onClick={()=>window.location.reload()}>Recarregar aplicação</button></div></section></main>;
   if (!authenticatedUser) return <div data-testid="proar-login-screen"><LoginScreen onLogin={handleLogin}/></div>;
-  return <div className="app-shell">
+  return <div className="app-shell"><ConnectivityBanner/>
     <div data-testid="proar-sidebar"><Sidebar current={current} setCurrent={setCurrent} open={menuOpen} close={() => setMenuOpen(false)} permissions={authenticatedUser.permissions} role={authenticatedUser.role}/></div>
     <main className="main">
       <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNew={openNew} searchItems={globalSearchItems} pendingItems={pendingItems} onSearchSelect={openGlobalSearch} onPendingSelect={openPending} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onSwitchUser={logout} online={online} syncing={syncing} onPull={() => void pullFromDatabase()} onPush={() => void pushToDatabase()}/>

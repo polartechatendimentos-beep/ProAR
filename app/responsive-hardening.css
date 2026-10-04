@@ -1,0 +1,83 @@
+/* ProAR responsive hardening — final cascade for phone/tablet */
+:root{--proar-mobile-nav-space:0px}
+html,body{max-width:100%;overflow-x:hidden}
+.app-shell,.main,.page-content,.panel,.module-page,.module-content{min-width:0;max-width:100%}
+img,video,canvas,iframe{max-width:100%}
+.table-wrap,.material-table,.fiscal-list-panel,.profile-table{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.modal-backdrop,.service-picker-layer{padding:max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left))}
+@media(max-width:1024px){
+ :root{--proar-mobile-nav-space:92px}
+ .main{width:100%;margin-left:0!important}
+ .page-content{width:100%;padding:14px 14px calc(var(--proar-mobile-nav-space) + env(safe-area-inset-bottom))!important}
+ .topbar{min-height:68px;height:auto!important;padding:10px 14px!important;gap:8px}
+ .headline{min-width:0}.headline>div{min-width:0}.headline h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .top-actions{gap:7px}.top-actions .global-search{display:none!important}.top-actions .icon-btn{width:42px;height:42px;flex:none}
+ .module-toolbar,.panel-head,.management-hero,.customer-card-title{align-items:stretch!important;gap:9px!important}
+ .module-toolbar{flex-wrap:wrap}.module-toolbar>*{min-width:0}
+ .modal,.service-picker,.customer-structure-screen .modal-card{width:min(100%,760px)!important;max-height:calc(100dvh - 20px)!important}
+ .table-wrap table,.fiscal-list-panel table,.material-table table{min-width:680px}
+ .pdv-operational-grid-modern .pdv-layout{grid-template-columns:minmax(0,1fr)!important}
+ .pdv-operational-grid-modern .pdv-cart{position:static!important}
+ .pdv-workspace,.pdv-cart{min-height:auto!important}
+ .pdv-catalog{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+ .pdv-shortcuts kbd,.pdv-tabs kbd,.pdv-search kbd,.finish-sale kbd{display:none!important}
+ .customer-structure-grid,.structure-master-detail,.finance-management-grid,.fiscal-grid,.material-planning-grid{grid-template-columns:1fr!important}
+}
+@media(max-width:767px){
+ :root{--proar-mobile-nav-space:104px}
+ body{overscroll-behavior-y:none}
+ .page-content{padding:10px 10px calc(var(--proar-mobile-nav-space) + env(safe-area-inset-bottom))!important}
+ .topbar{position:sticky!important;top:0!important;min-height:64px!important;padding:8px 10px!important}
+ .menu-toggle,.icon-btn{min-width:44px;min-height:44px}
+ .top-actions>.primary-btn{width:44px!important;height:44px!important;padding:0!important}
+ button,.primary-btn,.outline-btn,.filter-btn{min-height:44px}
+ input,select,textarea{font-size:16px!important}
+ .module-toolbar>.primary-btn,.module-toolbar>.outline-btn{width:100%;justify-content:center}
+ .pdv-page{width:100%;max-width:none!important;margin:0!important}
+ .pdv-command{margin:0 0 8px!important;align-items:center!important}
+ .pdv-command .section-kicker,.pdv-command p{display:none!important}
+ .pdv-command h2{font-size:18px!important;margin:0!important}
+ .pdv-shortcuts{margin-left:auto}.pdv-shortcuts>button{display:none!important}.pdv-shortcuts>span{padding:7px 9px!important;font-size:11px!important}
+ .pdv-tabs{width:100%!important;display:grid!important;grid-template-columns:repeat(3,1fr)!important;overflow:visible!important;margin-bottom:8px!important}
+ .pdv-tabs button{justify-content:center!important;padding:0 7px!important;min-width:0!important;font-size:12px!important}
+ .pdv-context{display:grid!important;grid-template-columns:1fr!important;padding:9px!important;gap:8px!important}
+ .pdv-top-total{grid-row:1!important;min-height:68px!important;align-items:flex-start!important;padding:10px 13px!important}
+ .pdv-top-total small{font-size:10px!important}.pdv-top-total strong{font-size:26px!important}
+ .pdv-context>label{display:none!important}
+ .pdv-layout{display:flex!important;flex-direction:column!important;gap:8px!important}
+ .pdv-workspace{order:1!important;padding:9px!important}
+ .pdv-cart{order:2!important}
+ .pdv-search{position:sticky;top:72px;z-index:6;height:52px!important;padding:0 12px!important}
+ .pdv-search input{font-size:16px!important;min-width:0}
+ .pdv-catalog{grid-template-columns:1fr!important;gap:7px!important;margin-top:8px!important}
+ .pdv-catalog>button{min-height:68px!important;padding:9px 10px!important;grid-template-columns:38px minmax(0,1fr) auto!important}
+ .pdv-catalog strong{font-size:13px!important;line-height:1.25!important}.pdv-catalog small{font-size:10px!important}.pdv-catalog>button>b{font-size:12px!important}
+ .pdv-cart-head{height:auto!important;min-height:52px!important}.pdv-cart-items{max-height:38dvh!important}
+ .pdv-cart-items article strong{font-size:13px!important}.pdv-cart-items article small,.pdv-cart-items article span{font-size:11px!important}
+ .quantity button{width:36px!important;height:36px!important}
+ .pdv-summary{position:sticky!important;bottom:calc(var(--proar-mobile-nav-space) - 8px);z-index:8;padding:10px 12px!important;box-shadow:0 -10px 28px rgba(0,0,0,.2)}
+ .pdv-summary>div strong{font-size:24px!important}.pdv-summary p,.pdv-summary>small{font-size:11px!important}
+ .finish-sale{height:52px!important;font-size:14px!important}
+ .modal-backdrop,.service-picker-layer{align-items:end!important;padding:0!important}
+ .modal,.service-picker,.customer-structure-screen .modal-card{width:100%!important;max-width:none!important;max-height:92dvh!important;border-radius:18px 18px 0 0!important;padding-bottom:env(safe-area-inset-bottom)}
+ .service-picker-grid{grid-template-columns:1fr!important;padding:10px!important}
+ .service-picker>footer{position:sticky;bottom:0;gap:8px;flex-direction:column;align-items:stretch!important}
+ .service-picker>footer>div{display:grid!important;grid-template-columns:1fr 1fr}.service-picker>footer button{width:100%}
+ .customer-profile-tabs,.structure-detail-tabs,.management-tabs,.periods{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+ .customer-profile-tabs::-webkit-scrollbar,.structure-detail-tabs::-webkit-scrollbar,.management-tabs::-webkit-scrollbar,.periods::-webkit-scrollbar{display:none}
+ .order-overview,.fiscal-kpis,.material-planning-kpis,.os-cost-grid,.os-margin-summary{grid-template-columns:1fr!important}
+ .material-planning-grid,.material-environments,.material-exhaust,.material-summary{margin-left:0!important;margin-right:0!important}
+ .save-toast{left:10px!important;right:10px!important;top:auto!important;bottom:calc(var(--proar-mobile-nav-space) + 8px)!important}
+}
+@media(min-width:768px) and (max-width:1199px){
+ .page-content{padding:16px 18px 34px!important}
+ .pdv-operational-grid-modern .pdv-layout{grid-template-columns:minmax(0,1.25fr) minmax(320px,.75fr)!important;align-items:start!important}
+ .pdv-operational-grid-modern .pdv-cart{position:sticky!important;top:84px!important;max-height:calc(100dvh - 100px);overflow:auto}
+ .pdv-catalog{grid-template-columns:1fr!important}
+ .customer-structure-grid{grid-template-columns:minmax(210px,30%) minmax(0,70%)!important}
+ .structure-summary-panel{grid-column:1/-1!important}
+}
+
+/* Shared responsive operation primitives */
+.proar-connectivity-banner{position:fixed;z-index:1600;left:50%;top:max(8px,env(safe-area-inset-top));transform:translateX(-50%);display:flex;align-items:center;gap:9px;max-width:min(560px,calc(100vw - 20px));padding:9px 12px;border:1px solid #e2a83a;border-radius:11px;background:#fff7df;color:#7b5100;box-shadow:0 12px 35px rgba(0,0,0,.2)}.proar-connectivity-banner span{display:flex;flex-direction:column}.proar-connectivity-banner b{font-size:12px}.proar-connectivity-banner small{font-size:10px;line-height:1.3}.proar-responsive-table{max-width:100%;overflow:auto;-webkit-overflow-scrolling:touch}.proar-touch-tabs{display:flex;gap:6px;max-width:100%;overflow-x:auto;scrollbar-width:none}.proar-touch-tabs::-webkit-scrollbar{display:none}.proar-sticky-action{position:sticky;z-index:25;bottom:0;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px;border-top:1px solid var(--line,#dfe7f1);background:rgba(255,255,255,.94);backdrop-filter:blur(14px)}.proar-sticky-action nav{display:flex;gap:8px}
+@media(max-width:767px){.proar-connectivity-banner{top:auto;bottom:calc(var(--proar-mobile-nav-space) + 8px)}.proar-sticky-action{bottom:calc(var(--proar-mobile-nav-space) - 8px);margin-inline:-10px;padding:9px 10px calc(9px + env(safe-area-inset-bottom))}.proar-sticky-action nav{flex:1}.proar-sticky-action nav>*{flex:1;min-height:48px}.proar-sticky-action>div{min-width:0}.proar-touch-tabs>*{flex:none;min-height:44px}}

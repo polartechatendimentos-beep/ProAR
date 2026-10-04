@@ -1,0 +1,26 @@
+import assert from "node:assert/strict";
+import {evaluateDayClose} from "../lib/day-close.ts";
+import {cashFlowForecast} from "../lib/cash-flow-forecast.ts";
+import {capacityPlan} from "../lib/capacity-planning.ts";
+import {buildDre,profitabilityBySource} from "../lib/management-dre.ts";
+import {summarizeCostCenters} from "../lib/cost-centers.ts";
+import {evaluateGoals} from "../lib/management-goals.ts";
+import {companyHealth} from "../lib/company-health.ts";
+import {resolutionPlan} from "../lib/action-resolution.ts";
+import {buildCommandCenter} from "../lib/command-center.ts";
+
+assert.equal(evaluateDayClose({openOs:0,paymentsWithoutSettlement:1,fiscalPending:0,stockDivergences:0,refundsPending:0}).canClose,false);
+const cf=cashFlowForecast([{id:"1",date:"2026-10-04",amount:1000,direction:"in",status:"confirmed",source:"finance"},{id:"2",date:"2026-10-05",amount:300,direction:"out",status:"projected",source:"purchase"}],"2026-10-03",[7])[0];
+assert.equal(cf.total,700);
+assert.equal(capacityPlan([{technicianId:"T1",availableMinutes:480,scheduledMinutes:420,soldUnscheduledMinutes:120}])[0].status,"overbooked");
+const dre=buildDre([{id:"r",date:"2026-10-01",kind:"revenue",category:"Serviço",amount:1000},{id:"c",date:"2026-10-01",kind:"cost",category:"Material",amount:400}]);
+assert.equal(dre.result,600);
+assert.equal(profitabilityBySource([{id:"r",date:"2026-10-01",kind:"revenue",category:"Serviço",amount:1000,sourceType:"OS",sourceId:"1"},{id:"c",date:"2026-10-01",kind:"cost",category:"Material",amount:200,sourceType:"OS",sourceId:"1"}])[0].result,800);
+assert.equal(summarizeCostCenters([{id:"v",name:"Veículo",type:"vehicle",active:true}],[{costCenterId:"v",amount:120}])[0].total,120);
+assert.equal(evaluateGoals([{id:"g",name:"Faturamento",target:100,actual:50,projected:110}])[0].status,"on-track");
+assert.equal(companyHealth({cashCoverage:1,overdueRatio:.1,margin:30,stockRisk:.1,lateOsRatio:.1,fiscalIssues:0,contractRisk:0,reworkRatio:0,integrationIssues:0}).factors.length,9);
+assert.equal(resolutionPlan({id:"a",module:"Financeiro",category:"Financeiro",priority:1}).mode,"confirm");
+const command=buildCommandCenter([{id:"OS1",status:"Concluída",nfseStatus:"Pendente"}],{Produtos:[{id:"P1",name:"Cobre",stockCurrent:2,stockReserved:1,stockMin:5,scheduledDemand:3}],Financeiro:[]});
+assert.equal(command.dayClose.canClose,false);
+assert.equal(command.stockForecast[0].status,"critical");
+console.log("management-consolidation.test.mjs: ok");

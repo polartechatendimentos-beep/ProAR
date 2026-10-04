@@ -13,7 +13,7 @@
     "validate:fast": "npm run typecheck && npm run lint && npm test",
     "validate": "npm run validate:fast && npm run build",
     "check": "npm run validate",
-    "test": "node --experimental-strip-types tests/run.mjs",
+    "test": "node --experimental-strip-types --experimental-specifier-resolution=node tests/run.mjs",
     "lint": "eslint app components lib",
     "db:generate": "drizzle-kit generate",
     "test:contracts": "node --experimental-strip-types tests/module-contracts.test.mjs"
