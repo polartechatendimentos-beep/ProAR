@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Camera, Check, ChevronRight, Clock3, FileText, History, ImagePlus, MapPin, Plus, Save, Sparkles, Wrench, X } from "lucide-react";
 import { improveTechnicalText } from "@/lib/text-assist";
+import { mobileChecklist, checklistProgress } from "@/lib/mobile-service-checklists";
 import { CustomerSearchSelect } from "@/components/CustomerSearchSelect";
 import { HvacDiagnosticWorkspace } from "@/components/HvacDiagnosticWorkspace";
 import "./service-order-workspace.css";
@@ -146,6 +147,9 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
   const totalCost = materialCost + laborCost + travelCost + outsourcedCost + taxCost + commissionCost;
   const grossMargin = total - totalCost;
   const marginPercent = total > 0 ? (grossMargin / total) * 100 : 0;
+  const guidedChecklist = mobileChecklist(String(draft.service || ""));
+  const guidedDone = (draft.mobileChecklist as Record<string,boolean>) || {};
+  const guidedProgress = checklistProgress(guidedChecklist,guidedDone);
   const closeChecks = [
     { key:"diagnosis", label:"Diagnóstico técnico", ok:Boolean(String(draft.diagnosis || "").trim()) },
     { key:"executedService", label:"Serviço executado", ok:Boolean(String(draft.executedService || "").trim()) },
@@ -164,7 +168,7 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
   };
   const save = async () => {
     if (!canEdit || saving) return;
-    if (/conclu[ií]da/i.test(draft.status) && !closeReady) {
+    if (/conclu[ií]da/i.test(draft.status) && (!closeReady || !guidedProgress.ready)) {
       setNotice("Fechamento bloqueado: complete os itens obrigatórios do checklist.");
       setActiveTab("Resumo");
       return;
@@ -203,7 +207,7 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
   };
   const history = Array.isArray(draft.timeline) ? draft.timeline as RecordItem[] : [];
 
-  return <section className="os-workspace" aria-label={`Área de trabalho da ${draft.id}`}>
+  return <section className="os-workspace" aria-label={`Área de trabalho da ${draft.id}`}><div className="mobile-guided-checklist"><header><b>Checklist técnico</b><span>{guidedProgress.completed}/{guidedProgress.total} • {guidedProgress.percent}%</span></header><div>{guidedChecklist.map(item=><label key={item.key}><input type="checkbox" checked={Boolean(guidedDone[item.key])} disabled={!canEdit} onChange={e=>setField("mobileChecklist",{...guidedDone,[item.key]:e.target.checked})}/><span>{item.label}</span></label>)}</div>{!guidedProgress.ready&&<small>Complete os itens obrigatórios antes de concluir a OS.</small>}</div>
     <header className="os-workspace-header">
       <div className="os-title-block"><button className="os-icon-button" onClick={() => onClose?.()} aria-label="Voltar"><X size={17}/></button><div><span className="os-kicker">ORDEM DE SERVIÇO</span><h2>{draft.id}</h2><p>{selectedCustomerName || "Cliente não informado"}</p></div></div>
       <div className="os-header-actions"><span className={`os-status ${draft.tone || "blue"}`}><i/> {draft.status}</span><button className="os-primary-button" disabled={!canEdit || saving} onClick={() => void save()}><Save size={15}/> {saving ? "Salvando..." : "Salvar"}</button></div>
