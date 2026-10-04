@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { readSession } from "./proar-auth";
+import { readSession } from "./proar-auth.ts";
 
 type ProarSession = NonNullable<ReturnType<typeof readSession>>;
 
@@ -70,4 +70,4 @@ export function sessionCompany(session: ProarSession, requested?: unknown) {
   return { ok: true as const, companyId };
 }
 
-export { ROLE_PERMISSION_PRESETS, rolePermissionPreset } from "./role-permissions";
+export { ROLE_PERMISSION_PRESETS, rolePermissionPreset } from "./role-permissions.ts";
