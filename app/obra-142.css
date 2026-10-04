@@ -66,3 +66,26 @@
  .block-report-actions{grid-template-columns:1fr}
  .house-photo-grid,.house-history-photos{grid-template-columns:1fr 1fr}
 }
+
+/* Controle de execução — foco em velocidade no campo */
+.house-mini-progress{display:flex;align-items:center;gap:7px}.house-mini-progress>i{display:block;flex:1;height:5px;border-radius:99px;background:#e4edf5;overflow:hidden}.house-mini-progress>i b{display:block;height:100%;border-radius:inherit;background:var(--house-color)}.house-mini-progress small{font-size:6px;font-weight:850;color:var(--house-color)}
+@media(max-width:767px){
+ .work-block-overview{order:0;padding:10px!important;border-radius:13px!important}
+ .work-block-overview-head{align-items:flex-start!important;gap:5px!important}.work-block-overview-head h3{font-size:16px!important}.work-block-overview-head span,.work-block-overview-head small{font-size:9px!important}
+ .work-block-summary{display:flex!important;gap:8px!important;overflow-x:auto!important;scroll-snap-type:x proximity;padding-bottom:4px!important}
+ .work-block-summary button{flex:0 0 min(76vw,280px)!important;min-height:82px!important;padding:10px!important;scroll-snap-align:start}
+ .work-block-summary button b{font-size:12px!important}.work-block-summary button span{font-size:14px!important}.work-block-summary button small{font-size:9px!important}
+ .houses-public-share{display:grid!important;grid-template-columns:42px minmax(0,1fr)!important;width:100%;gap:8px!important;padding:10px!important}
+ .houses-public-share>span{width:42px!important;height:42px!important}.houses-public-share>div{min-width:0}.houses-public-share small{font-size:8px!important}.houses-public-share b{font-size:11px!important}.houses-public-share em{font-size:9px!important}
+ .houses-public-share>button,.houses-public-share>a{min-height:42px!important;justify-content:center!important;font-size:9px!important}
+ .houses-public-share>button:nth-of-type(1){grid-column:1/2}.houses-public-share>button:nth-of-type(2){grid-column:2/3}
+ .houses-public-share>button:nth-of-type(3),.houses-public-share>a{grid-column:1/-1}
+ .houses-toolbar{position:sticky!important;top:64px!important;z-index:20!important;box-shadow:0 10px 24px rgba(0,0,0,.14)!important}
+ .houses-toolbar>span{order:-1;align-self:flex-end}
+ .house-mini-progress>i{height:7px}.house-mini-progress small{font-size:10px}
+ .house-grid article>footer button::after{font-size:9px;font-weight:800}
+ .house-grid article>footer button:nth-child(1)::after{content:" Atualizar"}.house-grid article>footer button:nth-child(2)::after{content:" Histórico"}.house-grid article>footer button:nth-child(3)::after{content:" PDF"}.house-grid article>footer button:nth-child(4)::after{content:" WhatsApp"}
+ .work-external-access-card{display:grid!important;grid-template-columns:1fr!important;gap:10px!important;padding:12px!important}
+ .work-external-access-card>div{align-items:flex-start!important}.work-external-access-card b{font-size:12px!important}.work-external-access-card small{font-size:9px!important;line-height:1.4}
+ .work-external-access-card>button{width:100%!important;min-height:46px!important}
+}
