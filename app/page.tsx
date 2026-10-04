@@ -24,6 +24,7 @@ import "./google-calendar.css";
 import "./usability-hardening.css";
 import "./fiscal-workspace.css";
 import "./responsive-hardening.css";
+import { ConnectivityBanner } from "@/components/ResponsivePrimitives";
 
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
@@ -4377,7 +4378,7 @@ export default function Home() {
   if (checkingSession) return <div className="session-loading" data-testid="proar-boot-loading"><div className="brand-mark brand-logo"><img src="/icon.png" alt="ProAR"/></div><p>A carregar o ProAR...</p><small>{bootRunId}</small></div>;
   if (bootError && !authenticatedUser) return <main className="session-boot-error" data-testid="proar-boot-error"><section><AlertTriangle size={28}/><h2>Não foi possível carregar a sessão</h2><p>{bootError}</p><small>Código de execução: {bootRunId}</small><div><button type="button" className="primary-btn" onClick={()=>setBootAttempt(value=>value+1)}>Tentar novamente</button><button type="button" className="outline-btn" onClick={()=>{localStorage.removeItem("proar-offline-session");setBootError("");}}>Entrar novamente</button><button type="button" className="outline-btn" onClick={()=>window.location.reload()}>Recarregar aplicação</button></div></section></main>;
   if (!authenticatedUser) return <div data-testid="proar-login-screen"><LoginScreen onLogin={handleLogin}/></div>;
-  return <div className="app-shell">
+  return <div className="app-shell"><ConnectivityBanner/>
     <div data-testid="proar-sidebar"><Sidebar current={current} setCurrent={setCurrent} open={menuOpen} close={() => setMenuOpen(false)} permissions={authenticatedUser.permissions} role={authenticatedUser.role}/></div>
     <main className="main">
       <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNew={openNew} searchItems={globalSearchItems} pendingItems={pendingItems} onSearchSelect={openGlobalSearch} onPendingSelect={openPending} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onSwitchUser={logout} online={online} syncing={syncing} onPull={() => void pullFromDatabase()} onPush={() => void pushToDatabase()}/>
