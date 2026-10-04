@@ -7,6 +7,7 @@ type Summary = Omit<WorkRoute,"points"> & {pointCount:number;imprecisePoints:num
 const date = (value?:string) => value ? new Date(value).toLocaleString("pt-BR") : "Em andamento";
 export function EmployeeRoutesTab({employeeId,employeeName,plannedOrders=[]}:{employeeId:string;employeeName:string;plannedOrders?:{id:string;client?:string;date?:string;time?:string}[]}) {
  const [clock]=useState(()=>Date.now());
+ const [month,setMonth]=useState(()=>new Date().toISOString().slice(0,7));
  const [from,setFrom]=useState(()=>new Date(Date.now()-30*86400000).toISOString().slice(0,10));
  const [to,setTo]=useState(()=>new Date().toISOString().slice(0,10));
  const [routes,setRoutes]=useState<Summary[]>([]),[detail,setDetail]=useState<WorkRoute|null>(null),[error,setError]=useState(""),[loading,setLoading]=useState(false),[page,setPage]=useState(0);
