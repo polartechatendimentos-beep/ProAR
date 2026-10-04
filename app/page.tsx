@@ -4392,8 +4392,9 @@ export default function Home() {
   if (!authenticatedUser) return <div data-testid="proar-login-screen"><LoginScreen onLogin={handleLogin}/></div>;
   const mobileOperationalModules = new Set(["Painel inicial","Agenda","Ordens de serviço","Clientes","Obras","Funcionários","Equipamentos"]);
   const mobileSubdomain = typeof document !== "undefined" && document.cookie.includes("proar-experience=mobile");
+  const mobilePathExperience = typeof window !== "undefined" && (window.location.pathname==="/mobile" || window.location.pathname.startsWith("/mobile/"));
   const mobileViewport = typeof window !== "undefined" && window.matchMedia("(max-width: 1024px)").matches;
-  const mobileExperience = mobileSubdomain || mobileViewport;
+  const mobileExperience = mobileSubdomain || mobilePathExperience || mobileViewport;
   const mobileBlocked = mobileExperience && !mobileOperationalModules.has(current);
   return <div className={`app-shell ${mobileExperience?"mobile-operation-policy mobile-dedicated-experience":""}`}><ConnectivityBanner/>
     <div data-testid="proar-sidebar"><Sidebar current={current} setCurrent={setCurrent} open={menuOpen} close={() => setMenuOpen(false)} permissions={authenticatedUser.permissions} role={authenticatedUser.role}/></div>
