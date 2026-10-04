@@ -4397,8 +4397,9 @@ export default function Home() {
   const mobileViewport = typeof window !== "undefined" && window.matchMedia("(max-width: 1024px)").matches;
   const mobileExperience = mobileSubdomain || mobilePathExperience || mobileViewport;
   const mobileManager = Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.role === "Gerência" || authenticatedUser.permissions?.includes("*") || authenticatedUser.permissions?.includes("rotas.visualizar"));
-  const mobileTechnicianModules = new Set(["Painel inicial","Agenda","Ordens de serviço","Clientes","Equipamentos","Estoque"]);
-  const mobileAllowedModules = mobileManager ? mobileOperationalModules : mobileTechnicianModules;
+  const mobileTechnicianModules = new Set(["Painel inicial","Agenda","Ordens de serviço","Clientes","Equipamentos","Estoque","Vendas"]);
+  const mobileManagerModules = new Set([...mobileOperationalModules,"Vendas","Estoque"]);
+  const mobileAllowedModules = mobileManager ? mobileManagerModules : mobileTechnicianModules;
   const mobileBlocked = mobileExperience && !mobileAllowedModules.has(current);
   return <div className={`app-shell ${mobileExperience?"mobile-operation-policy mobile-dedicated-experience":""}`}><ConnectivityBanner/>
     <div data-testid="proar-sidebar"><Sidebar current={current} setCurrent={setCurrent} open={menuOpen} close={() => setMenuOpen(false)} permissions={authenticatedUser.permissions} role={authenticatedUser.role}/></div>
