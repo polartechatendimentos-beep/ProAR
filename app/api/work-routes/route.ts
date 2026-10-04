@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     if (text.length > 64000) return reply({ error: "Lote GPS muito grande." }, 413);
     let command: RouteCommand;
     try { command = JSON.parse(text); } catch { throw new RouteError("JSON inválido."); }
-    if (!["start", "points", "checkin", "checkout", "finish"].includes(command.action)) throw new RouteError("Operação de rota inválida.");
+    if (!["start", "pause", "resume", "points", "checkin", "checkout", "finish"].includes(command.action)) throw new RouteError("Operação de rota inválida.");
     const context = await routeContext(session);
     if (!context.actor) throw new RouteError("Vincule este usuário a um funcionário ativo antes de iniciar rotas.", 403);
     if (context.employee?.mobileAccessEnabled === false) throw new RouteError("Acesso ao App Mobile desativado para este funcionário.", 403);
