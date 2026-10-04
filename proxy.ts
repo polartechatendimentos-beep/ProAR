@@ -24,9 +24,12 @@ export function proxy(request: NextRequest) {
     if (pathname !== "/manager") { const url = request.nextUrl.clone(); url.pathname = "/manager"; return withPublicSecurity(NextResponse.rewrite(url)); }
   }
 
-  const tenant = tenantSlugFromHost(host, domain);
+  const mobileHost = host.startsWith("mobile.");
+  const tenantHost = mobileHost ? host.replace(/^mobile\\./, "") : host;
+  const tenant = tenantSlugFromHost(tenantHost, domain);
   const headers = new Headers(request.headers);
   if (tenant) headers.set("x-proar-tenant", tenant); else headers.delete("x-proar-tenant");
+  if (mobileHost) { headers.set("x-proar-experience","mobile"); headers.set("x-proar-mobile-tenant",tenant||"default"); }
 
   // Todo tenant possui uma porta de entrada pública. Os aliases renderizam a mesma
   // tela de autenticação da raiz sem depender de cookie ou sessão pré-existente.
@@ -37,6 +40,7 @@ export function proxy(request: NextRequest) {
   }
 
   const response = NextResponse.next({ request: { headers } });
+  if (mobileHost) { response.cookies.set("proar-experience","mobile",{sameSite:"lax",secure:true,path:"/"}); response.cookies.set("proar-mobile-tenant",tenant||"default",{sameSite:"lax",secure:true,path:"/"}); }
   if (tenant && pathname === "/") return withPublicSecurity(response);
   return response;
 }
