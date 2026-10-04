@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 export type GpsPoint = { id: string; capturedAt: string; receivedAt: string; latitude: number; longitude: number; accuracy: number; reliable: boolean; osId?: string };
 export type RouteStop = { id: string; osId: string; customer: string; address: string; arrivedAt: string; departedAt?: string; latitude: number; longitude: number; accuracy: number };
-export type WorkRoute = { id: string; employeeId: string; employeeName: string; startedAt: string; endedAt?: string; status: "active" | "completed"; consentAt: string; consentVersion: "1"; expiresAt: string; distanceKm: number; points: GpsPoint[]; stops: RouteStop[]; events: { id: string; type: string; at: string; actor: string; fingerprint?: string }[]; closedReason?: string };
+export type WorkRoute = { id: string; employeeId: string; employeeName: string; startedAt: string; endedAt?: string; status: "active" | "paused" | "completed"; consentAt: string; consentVersion: "1"; expiresAt: string; distanceKm: number; points: GpsPoint[]; stops: RouteStop[]; events: { id: string; type: string; at: string; actor: string; fingerprint?: string }[]; closedReason?: string };
 export type RouteDay = { companyId: string; employeeId: string; date: string; _revision: number; routes: WorkRoute[] };
 export type RouteActor = { employeeId: string; employeeName: string; username: string };
-export type RouteCommand = { action: "start" | "points" | "checkin" | "checkout" | "finish"; requestId: string; routeId?: string; consent?: boolean; points?: { id: string; capturedAt: string; latitude: number; longitude: number; accuracy: number }[]; osId?: string; reason?: string };
+export type RouteCommand = { action: "start" | "pause" | "resume" | "points" | "checkin" | "checkout" | "finish"; requestId: string; routeId?: string; consent?: boolean; points?: { id: string; capturedAt: string; latitude: number; longitude: number; accuracy: number }[]; osId?: string; reason?: string };
 export class RouteError extends Error { status: number; constructor(message: string, status = 400) { super(message); this.status = status; } }
 export function workDate(now: string) { return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(now)); }
 export function routeDayKey(company: string, employee: string, date: string) { return `${routeCompanyPrefix(company)}${date}:${Buffer.from(employee).toString("hex")}`; }
@@ -37,9 +37,13 @@ export function applyRouteCommand(day: RouteDay, command: RouteCommand, actor: R
     if (!route) throw new RouteError("Rota não encontrada para este colaborador.", 404);
     const replay = route.events.find(event => event.id === command.requestId);
     if (replay) { if (replay.type !== command.action || (replay.fingerprint && replay.fingerprint !== fingerprint)) throw new RouteError("Chave já usada em outra operação.", 409); return day; }
-    if (route.status !== "active") { if (command.action === "finish") return day; throw new RouteError("A coleta desta rota foi encerrada.", 409); }
-    if (!["points", "checkin", "checkout", "finish"].includes(command.action)) throw new RouteError("Operação inválida.");
+    if (route.status === "completed") { if (command.action === "finish") return day; throw new RouteError("A jornada foi encerrada.", 409); }
+    if (route.status === "paused" && !["resume","finish"].includes(command.action)) throw new RouteError("Jornada em pausa. Registre o retorno antes de continuar.",409);
+    if (route.status === "active" && command.action === "resume") throw new RouteError("A jornada já está ativa.",409);
+    if (!["pause","resume","points", "checkin", "checkout", "finish"].includes(command.action)) throw new RouteError("Operação inválida.");
     if (!["finish", "points"].includes(command.action) && Date.parse(now) > Date.parse(route.expiresAt)) throw new RouteError("Jornada expirada. Encerre a rota e inicie uma nova.", 409);
+    if (command.action === "pause") { route.status="paused"; route.events.push({id:command.requestId,type:"pause",at:now,actor:actor.username,fingerprint}); next._revision+=1; return next; }
+    if (command.action === "resume") { route.status="active"; route.events.push({id:command.requestId,type:"resume",at:now,actor:actor.username,fingerprint}); next._revision+=1; return next; }
     if (command.action === "points" || command.action === "checkin") {
       if (!command.points?.length || command.points.length > 50) throw new RouteError("Envie de 1 a 50 pontos GPS.");
       for (const input of command.points) {
