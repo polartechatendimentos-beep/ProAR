@@ -1,0 +1,4 @@
+export type MobilePaymentIntent={saleId:string;amount:number;method:"PIX"|"Cartão"|"Dinheiro";status:"Pendente"|"Aguardando pagamento"|"Pago"|"Falhou";provider?:string;externalReference:string};
+export function createMobilePaymentIntent(saleId:string,amount:number,method:MobilePaymentIntent["method"]):MobilePaymentIntent{if(!saleId||amount<=0)throw new Error("Venda e valor são obrigatórios.");return{saleId,amount,method,status:method==="PIX"?"Aguardando pagamento":"Pendente",provider:method==="PIX"?"Mercado Pago":undefined,externalReference:`PROAR-${saleId}`}}
+export function canFinalizePaidSale(intent:MobilePaymentIntent,allowPending=false){return intent.method==="Dinheiro"||intent.status==="Pago"||allowPending}
+export function paymentStatusLabel(status:MobilePaymentIntent["status"]){return status==="Pago"?"Pagamento confirmado":status==="Aguardando pagamento"?"Aguardando confirmação do PIX":status}
