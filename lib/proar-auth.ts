@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { verifyPassword } from "./password";
-import { requiredSecret } from "./security-env";
+import { verifyPassword } from "./password.ts";
+import { requiredSecret } from "./security-env.ts";
 
 type ProARUser = {
   username: string;
