@@ -25,6 +25,7 @@ import "./usability-hardening.css";
 import "./fiscal-workspace.css";
 import "./responsive-hardening.css";
 import { ConnectivityBanner } from "@/components/ResponsivePrimitives";
+import { MobileToday } from "@/components/MobileToday";
 
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
