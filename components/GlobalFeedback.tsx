@@ -11,6 +11,7 @@ const iconFor = (tone: FeedbackTone) => tone === "success" ? CheckCircle2 : tone
 export function GlobalFeedback() {
   const [items,setItems]=useState<Toast[]>([]);
   const timers=useRef(new Map<string,number>());
+  const recent=useRef(new Map<string,number>());
 
   const remove=(id:string)=>{
     const timer=timers.current.get(id);
@@ -23,6 +24,13 @@ export function GlobalFeedback() {
     const handler=(event:Event)=>{
       const input=(event as CustomEvent<FeedbackMessage>).detail;
       if(!input?.message) return;
+      const normalized=input.message.toLocaleLowerCase("pt-BR").replace(/[^a-z0-9á-ú]+/gi," ").trim();
+      const semantic=/sistema bloqueado/.test(normalized)?"system-blocked":/obras|banco online|lista de obras/.test(normalized)&&/indisponível|offline|não foi enviada/.test(normalized)?"works-online-unavailable":`${input.tone??"info"}:${normalized}`;
+      const now=Date.now();
+      const last=recent.current.get(semantic)??0;
+      if(now-last<5000) return;
+      recent.current.set(semantic,now);
+      for(const [key,time] of recent.current) if(now-time>30000) recent.current.delete(key);
       const toast:Toast={
         id:input.id ?? `feedback-${Date.now()}`,
         message:input.message,
