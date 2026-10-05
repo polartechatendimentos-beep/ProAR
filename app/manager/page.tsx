@@ -8,24 +8,26 @@ type Company={
   id:string;trade_name?:string;legal_name?:string;responsible_name?:string;cnpj?:string;cpf?:string;email?:string;
   status:string;plan_code?:string;trial_expires_at?:string;slug?:string;last_seen_at?:string;last_manager_check_at?:string;
   auto_registered?:boolean;modules?:string[];billing_enabled?:boolean;monthly_fee_cents?:number;billing_day?:number;
-  billing_issue_lead_days?:number;billing_method?:"pix"|"boleto";billing_auto_block?:boolean;billing_email?:string;
+  billing_issue_lead_days?:number;billing_method?:"pix"|"boleto"|"card";billing_auto_block?:boolean;billing_email?:string;
   access_block_source?:string|null;suspended_reason?:string|null;
   tenant?:{companyId:string;slug:string;role:"primary-pilot"|"customer";environment:"pilot"|"production";isolation:string;databaseName:string;projectName:string}
 };
 type Instance={company_id:string;provider?:string;project_name?:string;api_url?:string;provisioning_status?:string;provisioning_error?:string;last_health_at?:string};
 type ManagerSummary={total:number;active:number;blocked:number;billingBlocked:number;manualBlocked:number;trials:number;expiringTrials:number;readyDatabases:number;databaseErrors:number;pendingDatabases:number;staleHealth:number};
 type BillingSummary={openCount:number;openCents:number;overdueCount:number;overdueCents:number;paidThisMonthCount:number;paidThisMonthCents:number;mrrCents:number};
-type Receivable={id:string;company_id:string;reference_month:string;description:string;amount_cents:number;due_date:string;status:"pending"|"paid"|"canceled"|"refunded";payment_method:"pix"|"boleto"|"manual";provider_status?:string;payment_url?:string;pix_qr_code?:string;boleto_digitable_line?:string;paid_at?:string};
+type Receivable={id:string;company_id:string;reference_month:string;description:string;amount_cents:number;due_date:string;status:"pending"|"paid"|"canceled"|"refunded";payment_method:"pix"|"boleto"|"card"|"manual";provider_status?:string;payment_url?:string;pix_qr_code?:string;boleto_digitable_line?:string;paid_at?:string};
 type AuditRow={id?:string|number;company_id?:string;action?:string;actor?:string;details?:Record<string,unknown>;created_at?:string};
 type PlatformInfo={appVersion:string;releaseDate:string;releaseTitle:string;schemaVersion:string;channel:string;migrations:{id:string;title:string;status:string;destructive:boolean;description:string}[]};
 type ManagerPlan={code:string;name:string;description:string;modules:string[];limits:{users:number;serviceOrdersPerMonth:number;storageGb:number;aiCallsPerMonth:number}};
-type BillingDraft={enabled:boolean;monthlyFee:string;billingDay:string;leadDays:string;method:"pix"|"boleto";autoBlock:boolean;email:string};
+type ModuleEntitlement={company_id:string;module_name:string;enabled:boolean;monthly_price_cents:number;plan_code?:string};
+type BillingDraft={enabled:boolean;billingDay:string;leadDays:string;method:"pix"|"boleto"|"card";autoBlock:boolean;email:string};
+type ModuleDraft=Record<string,{enabled:boolean;price:string}>;
 
 const money=(cents=0)=>(Number(cents||0)/100).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const date=(value?:string)=>value?new Date(value.length===10?`${value}T12:00:00`:value).toLocaleDateString("pt-BR"):"—";
 const dateTime=(value?:string)=>value?new Date(value).toLocaleString("pt-BR"):"—";
 
-function blankBilling():BillingDraft{return{enabled:false,monthlyFee:"0,00",billingDay:"10",leadDays:"7",method:"pix",autoBlock:true,email:""}}
+function blankBilling():BillingDraft{return{enabled:false,billingDay:"10",leadDays:"7",method:"pix",autoBlock:true,email:""}}
 
 export default function ManagerPage(){
   const[authenticated,setAuthenticated]=useState<boolean|null>(null);
@@ -35,6 +37,8 @@ export default function ManagerPage(){
   const[companies,setCompanies]=useState<Company[]>([]);
   const[instances,setInstances]=useState<Instance[]>([]);
   const[receivables,setReceivables]=useState<Receivable[]>([]);
+  const[entitlements,setEntitlements]=useState<ModuleEntitlement[]>([]);
+  const[moduleCatalog,setModuleCatalog]=useState<string[]>([]);
   const[error,setError]=useState("");
   const[notice,setNotice]=useState("");
   const[loading,setLoading]=useState(false);
@@ -47,6 +51,7 @@ export default function ManagerPage(){
   const[selectedCompanyId,setSelectedCompanyId]=useState("");
   const[detailTab,setDetailTab]=useState("Visão Geral");
   const[billingDraft,setBillingDraft]=useState<BillingDraft>(blankBilling());
+  const[moduleDraft,setModuleDraft]=useState<ModuleDraft>({});
 
   const check=async()=>{
     try{
@@ -70,6 +75,8 @@ export default function ManagerPage(){
       setAudit(companiesJson.audit||[]);
       setPlatform(companiesJson.platform||null);
       setPlans(companiesJson.plans||[]);
+      setEntitlements(companiesJson.entitlements||[]);
+      setModuleCatalog(companiesJson.moduleCatalog||[]);
 
       const billingResponse=await fetch("/api/manager/billing",{cache:"no-store"}).catch(()=>null);
       if(billingResponse?.ok){
@@ -101,19 +108,31 @@ export default function ManagerPage(){
   const selectedCompany=companies.find(c=>c.id===selectedCompanyId)||null;
   const selectedInstance=selectedCompany?map[selectedCompany.id]:undefined;
   const selectedReceivables=receivables.filter(row=>row.company_id===selectedCompanyId);
+  const selectedEntitlements=entitlements.filter(row=>row.company_id===selectedCompanyId);
+  const moduleTotalCents=Object.values(moduleDraft).filter(item=>item.enabled).reduce((sum,item)=>{
+    const value=Number(item.price.replace(/\./g,"").replace(",","."));
+    return sum+(Number.isFinite(value)?Math.max(0,Math.round(value*100)):0);
+  },0);
 
   useEffect(()=>{
-    if(!selectedCompany){setBillingDraft(blankBilling());return}
+    if(!selectedCompany){setBillingDraft(blankBilling());setModuleDraft({});return}
     setBillingDraft({
       enabled:Boolean(selectedCompany.billing_enabled),
-      monthlyFee:(Number(selectedCompany.monthly_fee_cents||0)/100).toFixed(2).replace(".",","),
       billingDay:String(selectedCompany.billing_day||10),
       leadDays:String(selectedCompany.billing_issue_lead_days??7),
-      method:selectedCompany.billing_method==="boleto"?"boleto":"pix",
+      method:selectedCompany.billing_method==="boleto"?"boleto":selectedCompany.billing_method==="card"?"card":"pix",
       autoBlock:selectedCompany.billing_auto_block!==false,
       email:selectedCompany.billing_email||selectedCompany.email||"",
     });
-  },[selectedCompanyId,selectedCompany?.updated_at,selectedCompany?.billing_enabled,selectedCompany?.monthly_fee_cents,selectedCompany?.billing_day,selectedCompany?.billing_method]);
+    const entitlementMap=new Map(selectedEntitlements.map(item=>[item.module_name,item]));
+    const modules=moduleCatalog.length?moduleCatalog:Array.from(new Set([...(selectedCompany.modules||[]),...selectedEntitlements.map(item=>item.module_name)]));
+    setModuleDraft(Object.fromEntries(modules.map(moduleName=>{
+      const item=entitlementMap.get(moduleName);
+      const enabled=item?item.enabled:(selectedCompany.modules||[]).includes(moduleName);
+      const price=(Number(item?.monthly_price_cents||0)/100).toFixed(2).replace(".",",");
+      return [moduleName,{enabled,price}];
+    })));
+  },[selectedCompanyId,selectedCompany?.billing_enabled,selectedCompany?.billing_day,selectedCompany?.billing_method,selectedCompany?.plan_code,entitlements,moduleCatalog]);
 
   const patch=async(companyId:string,body:Record<string,unknown>)=>{
     setNotice("");
@@ -133,15 +152,18 @@ export default function ManagerPage(){
 
   const saveBilling=async()=>{
     if(!selectedCompany)return;
-    const normalized=Number(billingDraft.monthlyFee.replace(/\./g,"").replace(",","."));
+    const moduleEntitlements=Object.entries(moduleDraft).map(([moduleName,item])=>{
+      const value=Number(item.price.replace(/\./g,"").replace(",","."));
+      return {moduleName,enabled:item.enabled,monthlyPriceCents:Number.isFinite(value)?Math.max(0,Math.round(value*100)):0};
+    });
     await patch(selectedCompany.id,{
       billingEnabled:billingDraft.enabled,
-      monthlyFeeCents:Number.isFinite(normalized)?Math.max(0,Math.round(normalized*100)):0,
       billingDay:Math.max(1,Math.min(28,Number(billingDraft.billingDay||10))),
       billingIssueLeadDays:Math.max(0,Math.min(20,Number(billingDraft.leadDays||7))),
       billingMethod:billingDraft.method,
       billingAutoBlock:billingDraft.autoBlock,
       billingEmail:billingDraft.email,
+      moduleEntitlements,
     });
   };
 
@@ -203,7 +225,7 @@ export default function ManagerPage(){
             <dl>
               <div><dt>Plano</dt><dd>{c.plan_code||"trial"}</dd></div>
               <div><dt>Mensalidade</dt><dd>{c.billing_enabled?money(c.monthly_fee_cents):"Desativada"}</dd></div>
-              <div><dt>Vencimento</dt><dd>{c.billing_enabled?`Dia ${c.billing_day||10} • ${c.billing_method==="boleto"?"Boleto":"Pix"}`:"—"}</dd></div>
+              <div><dt>Vencimento</dt><dd>{c.billing_enabled?`Dia ${c.billing_day||10} • ${c.billing_method==="boleto"?"Boleto":c.billing_method==="card"?"Cartão":"Pix"}`:"—"}</dd></div>
               <div><dt>Trial</dt><dd>{expires?expires.toLocaleDateString("pt-BR"):"—"}</dd></div>
               <div><dt>Tenant</dt><dd>{c.tenant?.role==="primary-pilot"?"Tenant 1 • Piloto":"Cliente locatário"}</dd></div>
               <div><dt>Banco</dt><dd>{c.tenant?.databaseName||"—"}</dd></div>
@@ -230,7 +252,7 @@ export default function ManagerPage(){
         <div className="manager-table-wrap"><table className="manager-table"><thead><tr><th>Empresa</th><th>Referência</th><th>Vencimento</th><th>Valor</th><th>Forma</th><th>Status</th><th>Ações</th></tr></thead><tbody>
           {receivables.slice(0,80).map(row=>{const overdue=row.status==="pending"&&row.due_date<new Date().toISOString().slice(0,10);return <tr key={row.id}>
             <td><button className="manager-link-button" onClick={()=>{setSelectedCompanyId(row.company_id);setDetailTab("Cobrança")}}>{companyMap[row.company_id]?.trade_name||companyMap[row.company_id]?.legal_name||row.company_id}</button></td>
-            <td>{date(row.reference_month)}</td><td>{date(row.due_date)}</td><td>{money(row.amount_cents)}</td><td>{row.payment_method==="boleto"?"Boleto":row.payment_method==="pix"?"Pix":"Manual"}</td>
+            <td>{date(row.reference_month)}</td><td>{date(row.due_date)}</td><td>{money(row.amount_cents)}</td><td>{row.payment_method==="boleto"?"Boleto":row.payment_method==="pix"?"Pix":row.payment_method==="card"?"Cartão":"Manual"}</td>
             <td><span className={`manager-payment-status ${overdue?"overdue":row.status}`}>{overdue?"VENCIDA":row.status==="paid"?"PAGA":row.status==="pending"?"EM ABERTO":row.status.toUpperCase()}</span></td>
             <td><div className="manager-row-actions">
               {row.payment_url&&<a href={row.payment_url} target="_blank" rel="noreferrer"><ExternalLink size={14}/> Abrir</a>}
@@ -282,12 +304,20 @@ export default function ManagerPage(){
           {detailTab==="Cobrança"&&<div className="manager-detail-tab">
             <div className="manager-billing-form">
               <label className="manager-check"><input type="checkbox" checked={billingDraft.enabled} onChange={e=>setBillingDraft(v=>({...v,enabled:e.target.checked}))}/><span>Ativar cobrança recorrente</span></label>
-              <label>Mensalidade (R$)<input inputMode="decimal" value={billingDraft.monthlyFee} onChange={e=>setBillingDraft(v=>({...v,monthlyFee:e.target.value}))}/></label>
+              <label>Mensalidade calculada<input value={money(moduleTotalCents)} readOnly /></label>
               <label>Dia do vencimento<input type="number" min="1" max="28" value={billingDraft.billingDay} onChange={e=>setBillingDraft(v=>({...v,billingDay:e.target.value}))}/></label>
               <label>Gerar quantos dias antes<input type="number" min="0" max="20" value={billingDraft.leadDays} onChange={e=>setBillingDraft(v=>({...v,leadDays:e.target.value}))}/></label>
-              <label>Forma<select value={billingDraft.method} onChange={e=>setBillingDraft(v=>({...v,method:e.target.value==="boleto"?"boleto":"pix"}))}><option value="pix">Pix</option><option value="boleto">Boleto</option></select></label>
+              <label>Forma<select value={billingDraft.method} onChange={e=>setBillingDraft(v=>({...v,method:e.target.value==="boleto"?"boleto":e.target.value==="card"?"card":"pix"}))}><option value="pix">Pix</option><option value="boleto">Boleto</option><option value="card">Cartão de crédito</option></select></label>
               <label>E-mail financeiro<input type="email" value={billingDraft.email} onChange={e=>setBillingDraft(v=>({...v,email:e.target.value}))}/></label>
               <label className="manager-check"><input type="checkbox" checked={billingDraft.autoBlock} onChange={e=>setBillingDraft(v=>({...v,autoBlock:e.target.checked}))}/><span>Bloquear automaticamente após vencimento</span></label>
+            </div>
+            <div className="manager-module-pricing">
+              <header><div><b>Módulos contratados</b><span>O total da mensalidade é a soma dos módulos habilitados.</span></div><strong>{money(moduleTotalCents)}</strong></header>
+              <div>{Object.entries(moduleDraft).map(([moduleName,item])=><label key={moduleName} className={item.enabled?"enabled":""}>
+                <input type="checkbox" checked={item.enabled} onChange={e=>setModuleDraft(current=>({...current,[moduleName]:{...current[moduleName],enabled:e.target.checked}}))}/>
+                <span>{moduleName}</span>
+                <input className="module-price" inputMode="decimal" value={item.price} disabled={!item.enabled} onChange={e=>setModuleDraft(current=>({...current,[moduleName]:{...current[moduleName],price:e.target.value}}))}/>
+              </label>)}</div>
             </div>
             <div className="manager-inline-actions"><button onClick={()=>void saveBilling()}>Salvar cobrança</button><button onClick={()=>void billingAction({action:"issue-current",companyId:selectedCompany.id})}>Gerar mensalidade atual</button><button onClick={()=>void billingAction({action:"sync-access",companyId:selectedCompany.id})}>Revalidar acesso</button></div>
             <div className="manager-mini-receivables">{selectedReceivables.slice(0,8).map(row=><article key={row.id}><div><b>{row.description}</b><span>{date(row.due_date)} • {money(row.amount_cents)}</span></div><em>{row.status==="paid"?"PAGA":row.status==="pending"?"EM ABERTO":row.status.toUpperCase()}</em></article>)}{!selectedReceivables.length&&<div className="manager-empty">Nenhuma mensalidade desta empresa.</div>}</div>
