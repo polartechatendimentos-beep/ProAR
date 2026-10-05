@@ -103,7 +103,7 @@ export default function PaymentPage(){
     return()=>{cancelled=true;cardFormRef.current?.unmount?.();cardFormRef.current=null};
   },[data?.receivable.id,data?.receivable.status,data?.receivable.paymentMethod,data?.mercadoPago.publicKey]);
 
-  const submitCard=async(form:Record<string,string|number>)=>{
+  async function submitCard(form:Record<string,string|number>){
     setProcessing(true);setError("");
     try{
       const response=await fetch(`/api/billing/public/${encodeURIComponent(token)}`,{
