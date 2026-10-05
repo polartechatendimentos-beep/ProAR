@@ -20,6 +20,7 @@ export async function GET(_request:NextRequest,{params}:{params:Promise<{token:s
         paymentMethod:receivable.payment_method,
         paymentUrl:receivable.payment_url,
         pixQrCode:receivable.pix_qr_code,
+        pixQrCodeBase64:receivable.pix_qr_code_base64,
         boletoDigitableLine:receivable.boleto_digitable_line,
         providerStatus:receivable.provider_status,
       },
