@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
         ? await validateCompanyAccessBySlug(PRIMARY_COMPANY_SLUG)
         : await validateCompanyAccess(user.companyId);
     if (!access.ok) {
-      const response = NextResponse.json({ authenticated: false, code: access.code, blocked:["SYSTEM_BLOCKED","FINANCIAL_BLOCKED"].includes(String(access.code)), error: access.reason }, { status: 403 });
+      const response = NextResponse.json({ authenticated: false, code: access.code, blocked:["SYSTEM_BLOCKED","FINANCIAL_BLOCKED"].includes(String(access.code)), maintenance:access.code==="MAINTENANCE_MODE", error: access.reason }, { status: 403 });
       response.cookies.set(COOKIE_NAME, "", { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 0 });
       return response;
     }
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
   if (resolvedTenant && supabaseConfigured()) {
     const access = await validateCompanyAccessBySlug(resolvedTenant);
     if (!access.ok) {
-      return NextResponse.json({ code:access.code, error:access.reason, blocked:["SYSTEM_BLOCKED","FINANCIAL_BLOCKED"].includes(String(access.code)) }, { status:403 });
+      return NextResponse.json({ code:access.code, error:access.reason, blocked:["SYSTEM_BLOCKED","FINANCIAL_BLOCKED"].includes(String(access.code)), maintenance:access.code==="MAINTENANCE_MODE" }, { status:403 });
     }
   }
   const isConfiguredTiago = String(username).trim().toLocaleLowerCase("pt-BR") === "tiago.viana" && Boolean(process.env.PROAR_POLARTECH_TIAGO_PASSWORD) && safeEqual(String(password), String(process.env.PROAR_POLARTECH_TIAGO_PASSWORD));
