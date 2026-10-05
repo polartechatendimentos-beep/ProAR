@@ -330,6 +330,55 @@ export async function reconcileMercadoPagoOrder(order:Record<string,unknown>,act
   return {updated:true,paid,companyId:receivable.company_id,receivableId:receivable.id};
 }
 
+
+export async function getReceivableById(receivableId:string) {
+  const response=await supabaseRest(`proar_manager_receivables?select=*&id=eq.${encodeURIComponent(receivableId)}&limit=1`);
+  if (!response.ok) throw new Error("Não foi possível consultar a mensalidade.");
+  const rows=await response.json();
+  const receivable=rows?.[0] as ManagerReceivable|undefined;
+  if (!receivable) throw new Error("Mensalidade não encontrada.");
+  return receivable;
+}
+
+export async function markReceivablePaidManually(receivableId:string,actor:string) {
+  const receivable=await getReceivableById(receivableId);
+  if (receivable.status==="paid") {
+    await syncCompanyBillingAccess(receivable.company_id,actor);
+    return receivable;
+  }
+  if (receivable.status==="canceled") throw new Error("Mensalidade cancelada não pode ser baixada sem reativação.");
+  const paidAt=new Date().toISOString();
+  await supabaseRest(`proar_manager_receivables?id=eq.${encodeURIComponent(receivable.id)}`,{
+    method:"PATCH",
+    headers:{Prefer:"return=minimal"},
+    body:JSON.stringify({status:"paid",payment_method:"manual",provider_status:"manual:paid",paid_at:paidAt,updated_at:paidAt}),
+  });
+  await audit(receivable.company_id,"BILLING_PAID_MANUAL",actor,{receivableId:receivable.id,amountCents:receivable.amount_cents});
+  await syncCompanyBillingAccess(receivable.company_id,actor);
+  return {...receivable,status:"paid" as const,payment_method:"manual" as const,provider_status:"manual:paid",paid_at:paidAt};
+}
+
+export async function cancelReceivable(receivableId:string,actor:string) {
+  const receivable=await getReceivableById(receivableId);
+  if (receivable.status==="paid") throw new Error("Mensalidade paga não pode ser cancelada. Use estorno quando aplicável.");
+  const canceledAt=new Date().toISOString();
+  await supabaseRest(`proar_manager_receivables?id=eq.${encodeURIComponent(receivable.id)}`,{
+    method:"PATCH",
+    headers:{Prefer:"return=minimal"},
+    body:JSON.stringify({status:"canceled",canceled_at:canceledAt,updated_at:canceledAt}),
+  });
+  await audit(receivable.company_id,"BILLING_CANCELED",actor,{receivableId:receivable.id});
+  await syncCompanyBillingAccess(receivable.company_id,actor);
+  return {...receivable,status:"canceled" as const,canceled_at:canceledAt};
+}
+
+export async function issueCurrentMonth(companyId:string,actor:string) {
+  const company=await getBillingCompany(companyId);
+  if (!company.billing_enabled) throw new Error("Ative a cobrança recorrente desta empresa antes de gerar a mensalidade.");
+  const reference=monthStart(saoPauloYmd());
+  return ensureMonthlyReceivable(company,reference,actor);
+}
+
 export async function runManagerBillingCycle(actor="system-cron") {
   const response=await supabaseRest("proar_companies?select=*&order=created_at.asc");
   if (!response.ok) throw new Error("Falha ao consultar empresas para faturamento.");
