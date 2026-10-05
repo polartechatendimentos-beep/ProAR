@@ -44,7 +44,15 @@ export function proxy(request: NextRequest) {
   }
 
   const response = NextResponse.next({ request: { headers } });
-  if (mobileExperience) { response.cookies.set("proar-experience","mobile",{sameSite:"lax",secure:true,path:"/"}); response.cookies.set("proar-mobile-tenant",tenant||"default",{sameSite:"lax",secure:true,path:"/"}); }
+  if (mobileExperience) {
+    response.cookies.set("proar-experience","mobile",{sameSite:"lax",secure:true,path:"/"});
+    response.cookies.set("proar-mobile-tenant",tenant||"default",{sameSite:"lax",secure:true,path:"/"});
+  } else if (request.cookies.get("proar-experience")?.value === "mobile") {
+    // /mobile is an interface mode, not a permanent account preference.
+    // Clear stale cookies when the same browser returns to the full tenant ERP.
+    response.cookies.set("proar-experience","",{sameSite:"lax",secure:true,path:"/",maxAge:0});
+    response.cookies.set("proar-mobile-tenant","",{sameSite:"lax",secure:true,path:"/",maxAge:0});
+  }
   if (tenant && pathname === "/") return withPublicSecurity(response);
   return response;
 }
