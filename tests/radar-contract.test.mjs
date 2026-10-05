@@ -1,0 +1,3 @@
+import test from "node:test";import assert from "node:assert/strict";
+test("radar UI and API share radius/search contract",async()=>{const fs=await import("node:fs/promises");const api=await fs.readFile(new URL("../app/api/licitacoes/route.ts",import.meta.url),"utf8");assert.match(api,/raio_km/);assert.match(api,/Math\.min\(1000/);assert.match(api,/termo/);});
+test("radar never renders missing public value as zero",async()=>{const fs=await import("node:fs/promises");const page=await fs.readFile(new URL("../app/page.tsx",import.meta.url),"utf8");assert.match(page,/Valor não informado/);assert.doesNotMatch(page,/valorTotalEstimado\?\?0/);});
