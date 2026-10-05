@@ -4,12 +4,14 @@ import { hasPermission, type Permission } from "../../../lib/permissions";
 import { resolveTenantDb, tenantHeaders } from "../../../lib/tenant-rest";
 import { databaseFetch, commitNeonOperationalState, PRIMARY_DATABASE_URL } from "../../../lib/supabase-rest";
 import { applyOperationalCommand, independentOperationalRows, OperationError, type ErpState, type OperationalCommand } from "../../../lib/operational-ledger";
-import {guardOperationalCommand,inferRuleContext} from "../../../lib/command-guard";
+import {CommandGuardError,guardOperationalCommand,inferRuleContext} from "../../../lib/command-guard";
 
 export async function POST(request: NextRequest) {
   const session = readSession(request.cookies.get("proar_session")?.value);
   if (!session) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
   try {
+    const contentLength=Number(request.headers.get("content-length")||0);
+    if(contentLength>262144)return NextResponse.json({error:"Operação muito grande. Divida a alteração em etapas menores."},{status:413});
     const command = await request.json() as OperationalCommand;
     guardOperationalCommand(inferRuleContext(command as unknown as Record<string,unknown>));
     const company = session.companyId || process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
@@ -44,7 +46,7 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({ error: "Outro usuário alterou a base. Atualize e tente novamente." }, { status: 409 });
   } catch (error) {
-    if (error instanceof OperationError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof OperationError || error instanceof CommandGuardError) return NextResponse.json({ error: error.message, code: "code" in error ? error.code : "OPERATION_REJECTED" }, { status: error.status });
     return NextResponse.json({ error: "Não foi possível confirmar a operação no banco." }, { status: 503 });
   }
 }
