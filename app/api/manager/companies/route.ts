@@ -5,8 +5,8 @@ import { resumeTenantProvisioning } from "../../../../lib/tenant-provisioning";
 import { tenantIdentity } from "../../../../lib/tenant-identity";
 import { resolveTenantDb, tenantHeaders } from "../../../../lib/tenant-rest";
 import { managerPlatformInfo } from "../../../../lib/manager-platform";
-import { MANAGER_PLANS, managerPlan } from "../../../../lib/manager-plans";
-import { getBillingCompany, syncCompanyBillingAccess } from "../../../../lib/manager-billing";
+import { ALL_MANAGER_MODULES, MANAGER_PLANS, managerPlan } from "../../../../lib/manager-plans";
+import { getBillingCompany, setCompanyModuleEntitlements, syncCompanyBillingAccess, syncPlanEntitlements } from "../../../../lib/manager-billing";
 
 const isAdmin = (request: NextRequest) => readManagerSession(request);
 
@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
   const companies = await supabaseRest("proar_companies?select=*&order=created_at.desc");
   const instances = await supabaseRest("proar_tenant_instances?select=*&order=created_at.desc");
   const audit = await supabaseRest("proar_manager_audit?select=*&order=created_at.desc&limit=60");
+  const entitlementsResponse = await supabaseRest("proar_manager_module_entitlements?select=*&order=module_name.asc").catch(()=>null);
   if (!companies.ok) return NextResponse.json({ error: "Falha ao consultar empresas." }, { status: 502 });
   const companyRows = await companies.json();
   const instanceRows = instances.ok ? await instances.json() : [];
@@ -32,6 +33,7 @@ export async function GET(request: NextRequest) {
     }),
   }));
   const auditRows = audit.ok ? await audit.json() : [];
+  const entitlementRows = entitlementsResponse?.ok ? await entitlementsResponse.json() : [];
   const now = Date.now();
   const summary = {
     total: enrichedCompanies.length,
@@ -53,7 +55,7 @@ export async function GET(request: NextRequest) {
       return now - new Date(String(instance.last_health_at)).getTime() > 24 * 60 * 60 * 1000;
     }).length,
   };
-  return NextResponse.json({ companies: enrichedCompanies, instances: instanceRows, audit: auditRows, summary, platform: managerPlatformInfo(), plans: MANAGER_PLANS });
+  return NextResponse.json({ companies: enrichedCompanies, instances: instanceRows, audit: auditRows, entitlements: entitlementRows, moduleCatalog: ALL_MANAGER_MODULES, summary, platform: managerPlatformInfo(), plans: MANAGER_PLANS });
 }
 
 export async function PATCH(request: NextRequest) {
@@ -156,7 +158,7 @@ export async function PATCH(request: NextRequest) {
   if (typeof body.monthlyFeeCents === "number" && Number.isFinite(body.monthlyFeeCents)) patch.monthly_fee_cents = Math.max(0,Math.round(body.monthlyFeeCents));
   if (typeof body.billingDay === "number" && Number.isInteger(body.billingDay)) patch.billing_day = Math.max(1,Math.min(28,body.billingDay));
   if (typeof body.billingIssueLeadDays === "number" && Number.isInteger(body.billingIssueLeadDays)) patch.billing_issue_lead_days = Math.max(0,Math.min(20,body.billingIssueLeadDays));
-  if (body.billingMethod === "pix" || body.billingMethod === "boleto") patch.billing_method = body.billingMethod;
+  if (body.billingMethod === "pix" || body.billingMethod === "boleto" || body.billingMethod === "card") patch.billing_method = body.billingMethod;
   if (typeof body.billingAutoBlock === "boolean") patch.billing_auto_block = body.billingAutoBlock;
   if (typeof body.billingEmail === "string") patch.billing_email = body.billingEmail.trim().slice(0,160) || null;
 
@@ -172,6 +174,18 @@ export async function PATCH(request: NextRequest) {
     headers:{Prefer:"return=minimal"},
     body:JSON.stringify({company_id:companyId,action:"MANAGER_UPDATE",actor:user.username,details:patch}),
   });
+
+  if (Array.isArray(body.moduleEntitlements)) {
+    const planCode=String(body.planCode || patch.plan_code || current?.plan_code || "trial");
+    await setCompanyModuleEntitlements(companyId,body.moduleEntitlements.map((item:Record<string,unknown>)=>({
+      moduleName:String(item.moduleName||"").trim(),
+      enabled:Boolean(item.enabled),
+      monthlyPriceCents:Math.max(0,Math.round(Number(item.monthlyPriceCents)||0)),
+    })).filter((item:{moduleName:string})=>ALL_MANAGER_MODULES.includes(item.moduleName)),planCode,user.username);
+  } else if (typeof body.planCode === "string") {
+    const plan=managerPlan(body.planCode);
+    await syncPlanEntitlements(companyId,plan.code,plan.modules,user.username);
+  }
 
   const touchesBilling = ["billingEnabled","monthlyFeeCents","billingDay","billingIssueLeadDays","billingMethod","billingAutoBlock","billingEmail","status","planCode","extendTrialDays"].some(key=>Object.prototype.hasOwnProperty.call(body,key));
   let access = null;
