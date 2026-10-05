@@ -54,7 +54,6 @@ export type ManagerReceivable = {
   paid_at?:string | null;
   created_at?:string;
   updated_at?:string;
-  metadata?:Record<string,unknown>;
 };
 
 const money = (cents:number) => (cents/100).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
@@ -198,7 +197,6 @@ export async function issueReceivable(receivable:ManagerReceivable,company:Billi
       pix_qr_code:info.qrCode || null,
       pix_qr_code_base64:info.qrCodeBase64 || null,
       boleto_digitable_line:info.digitableLine || null,
-      metadata:{lastProviderSyncAt:new Date().toISOString()},
       updated_at:new Date().toISOString(),
     };
     await supabaseRest(`proar_manager_receivables?id=eq.${encodeURIComponent(receivable.id)}`,{
@@ -213,10 +211,10 @@ export async function issueReceivable(receivable:ManagerReceivable,company:Billi
     await supabaseRest(`proar_manager_receivables?id=eq.${encodeURIComponent(receivable.id)}`,{
       method:"PATCH",
       headers:{Prefer:"return=minimal"},
-      body:JSON.stringify({provider_status:"issuance_error",metadata:{issuanceError:message,failedAt:new Date().toISOString()},updated_at:new Date().toISOString()}),
+      body:JSON.stringify({provider_status:"issuance_error",updated_at:new Date().toISOString()}),
     }).catch(()=>null);
     await audit(company.id,"BILLING_ISSUE_FAILED",actor,{receivableId:receivable.id,error:message});
-    return {...receivable,provider_status:"issuance_error",metadata:{issuanceError:message}};
+    return {...receivable,provider_status:"issuance_error"};
   }
 }
 
@@ -243,7 +241,6 @@ export async function ensureMonthlyReceivable(company:BillingCompany,referenceMo
     external_reference:`proar-manager:${company.id}:${referenceMonth.slice(0,7)}`,
     idempotency_key:randomUUID(),
     provider_status:"pending_issuance",
-    metadata:{planCode:company.plan_code||null,createdBy:actor},
     updated_at:new Date().toISOString(),
   };
   const inserted=await supabaseRest("proar_manager_receivables",{
