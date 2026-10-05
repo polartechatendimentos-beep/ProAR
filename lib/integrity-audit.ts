@@ -43,6 +43,8 @@ export function auditOperationalIntegrity(state: StateData, checkedAt = new Date
   const equipment = rows(modules.Equipamentos);
   const structures = rows(modules["Unidades e setores"]);
   const budgets = rows(modules.Orçamentos);
+  const sales = rows(modules.Vendas);
+  const fiscal = [...rows(modules.Fiscal),...rows(modules["Central Fiscal"]),...rows(modules["Documentos fiscais"])];
   const findings: IntegrityFinding[] = [];
 
   const origins = new Map<string, RecordData[]>();
@@ -155,6 +157,43 @@ export function auditOperationalIntegrity(state: StateData, checkedAt = new Date
     if (converted && !orders.some(order => text(order.id) === text(budget.serviceOrderId || budget.convertedOrderId) || text(order.sourceBudgetId) === text(budget.id))) push(findings, "Orçamentos convertidos sem OS", "Atenção", budget, text(budget.name) || `Orçamento ${text(budget.id)}`, "O orçamento está marcado como convertido, mas não foi localizada uma OS vinculada.");
   }
 
+  // End-to-end source-chain reconciliation. Read-only: findings never mutate business data.
+  const orderById=new Map(orders.map(item=>[text(item.id),item]));
+  const saleById=new Map(sales.map(item=>[text(item.id),item]));
+  const budgetById=new Map(budgets.map(item=>[text(item.id),item]));
+  for(const sale of sales){
+    const budgetId=text(sale.budgetId||sale.sourceBudgetId);
+    if(budgetId&&!budgetById.has(budgetId)) push(findings,"Vendas com orçamento de origem inválido","Atenção",sale,text(sale.name)||`Venda ${text(sale.id)}`,`O orçamento de origem ${budgetId} não foi localizado.`);
+    const orderId=text(sale.serviceOrderId||sale.orderId);
+    if(orderId&&!orderById.has(orderId)) push(findings,"Vendas com OS de origem inválida","Crítico",sale,text(sale.name)||`Venda ${text(sale.id)}`,`A OS vinculada ${orderId} não foi localizada.`);
+  }
+  for(const order of orders){
+    const budgetId=text(order.sourceBudgetId||order.budgetId);
+    if(budgetId&&!budgetById.has(budgetId)) push(findings,"OS com orçamento de origem inválido","Atenção",order,`OS ${text(order.id)}`,`O orçamento de origem ${budgetId} não foi localizado.`);
+    const saleId=text(order.saleId||order.sourceSaleId);
+    if(saleId&&!saleById.has(saleId)) push(findings,"OS com venda de origem inválida","Atenção",order,`OS ${text(order.id)}`,`A venda de origem ${saleId} não foi localizada.`);
+  }
+  const fiscalOrigins=new Map<string,RecordData[]>();
+  for(const doc of fiscal){
+    const sourceId=text(doc.serviceOrderId||doc.saleId||doc.orderId||doc.sourceId);
+    if(!sourceId) continue;
+    const kind=text(doc.serviceOrderId)?"os":text(doc.saleId)?"sale":text(doc.orderId)?"order":normalized(doc.sourceType)||"source";
+    const key=`${kind}:${sourceId}`;
+    fiscalOrigins.set(key,[...(fiscalOrigins.get(key)||[]),doc]);
+    if(kind==="os"&&!orderById.has(sourceId)) push(findings,"Documentos fiscais com origem inválida","Crítico",doc,text(doc.name)||`Documento fiscal ${text(doc.id)}`,`A OS de origem ${sourceId} não existe.`);
+    if(kind==="sale"&&!saleById.has(sourceId)) push(findings,"Documentos fiscais com origem inválida","Crítico",doc,text(doc.name)||`Documento fiscal ${text(doc.id)}`,`A venda de origem ${sourceId} não existe.`);
+  }
+  for(const [key,docs] of fiscalOrigins) {
+    const authorized=docs.filter(doc=>/autorizad|emitid|aprovad/i.test(text(doc.status)));
+    if(authorized.length>1) for(const doc of authorized) push(findings,"Documentos fiscais autorizados duplicados","Crítico",doc,text(doc.name)||`Documento fiscal ${text(doc.id)}`,`Mais de um documento fiscal autorizado usa a mesma origem (${key}). Revise antes de nova emissão.`);
+  }
+  for(const order of orders){
+    if(!/conclu[ií]da/i.test(text(order.status))) continue;
+    const fiscalStatus=text(order.nfseStatus||order.fiscalStatus);
+    const explicitlyRequired=order.fiscalRequired===true||/pendente|validando|transmitindo|processando|autorizad|emitid|rejeitad/i.test(fiscalStatus);
+    if(explicitlyRequired&&!fiscal.some(doc=>text(doc.serviceOrderId)===text(order.id))&&!/autorizad|emitid/i.test(fiscalStatus)) push(findings,"OS concluídas com fiscal pendente","Atenção",order,`OS ${text(order.id)} sem documento fiscal concluído`,"A OS indica fluxo fiscal, mas ainda não há documento fiscal autorizado/vinculado.");
+  }
+
   for (const title of finance) {
     const history = rows(title.settlementHistory);
     const reversals = rows(title.reversalHistory);
@@ -171,7 +210,7 @@ export function auditOperationalIntegrity(state: StateData, checkedAt = new Date
     for (const reversal of reversals) if (!financialBook.some(movement => text(movement.id) === `REV-${text(title.id)}-${text(reversal.id)}`)) push(findings, "Estornos sem compensação no razão", "Crítico", title, text(title.name) || `Título ${text(title.id)}`, `O estorno ${text(reversal.id)} não tem movimento compensatório no razão financeiro.`);
   }
 
-  const names = ["OS com cliente inválido", "OS sem vínculo estável de cliente", "OS com estrutura inválida", "OS em estrutura de outro cliente", "OS com equipamento inválido", "Orçamentos com cliente inválido", "Orçamentos sem vínculo estável de cliente", "Títulos financeiros duplicados", "Compras a prazo sem título", "Títulos sem origem", "Estoque divergente do livro", "Produtos sem livro de movimentos", "Produtos com saldo negativo", "OS concluídas sem saída de estoque", "Equipamentos sem cliente válido", "Equipamentos com estrutura inválida", "Equipamentos em estrutura de outro cliente", "Estruturas órfãs", "CPF/CNPJ duplicados", "Orçamentos convertidos sem OS", "Saldo legado sem baixas detalhadas", "Saldo financeiro divergente das baixas", "Baixas sem movimento no razão", "Estornos sem compensação no razão"];
+  const names = ["OS com cliente inválido", "OS sem vínculo estável de cliente", "OS com estrutura inválida", "OS em estrutura de outro cliente", "OS com equipamento inválido", "Orçamentos com cliente inválido", "Orçamentos sem vínculo estável de cliente", "Títulos financeiros duplicados", "Compras a prazo sem título", "Títulos sem origem", "Estoque divergente do livro", "Produtos sem livro de movimentos", "Produtos com saldo negativo", "OS concluídas sem saída de estoque", "Equipamentos sem cliente válido", "Equipamentos com estrutura inválida", "Equipamentos em estrutura de outro cliente", "Estruturas órfãs", "CPF/CNPJ duplicados", "Orçamentos convertidos sem OS", "Saldo legado sem baixas detalhadas", "Saldo financeiro divergente das baixas", "Baixas sem movimento no razão", "Estornos sem compensação no razão", "Vendas com orçamento de origem inválido", "Vendas com OS de origem inválida", "OS com orçamento de origem inválido", "OS com venda de origem inválida", "Documentos fiscais com origem inválida", "Documentos fiscais autorizados duplicados", "OS concluídas com fiscal pendente"];
   const checks = names.map(name => resultOf(name, findings));
   const critical = findings.filter(item => item.severity === "Crítico").length;
   const attention = findings.filter(item => item.severity === "Atenção").length;
