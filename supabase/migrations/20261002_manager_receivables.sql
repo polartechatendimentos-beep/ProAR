@@ -3,7 +3,7 @@
 
 alter table public.proar_companies
   add column if not exists billing_auto_block boolean not null default true,
-  add column if not exists billing_grace_days integer not null default 5 check (billing_grace_days between 0 and 90);
+  add column if not exists billing_grace_days integer not null default 0 check (billing_grace_days between 0 and 90);
 
 create table if not exists public.proar_manager_receivables (
   id uuid primary key default gen_random_uuid(),
