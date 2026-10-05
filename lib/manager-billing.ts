@@ -26,7 +26,7 @@ export type BillingCompany = {
   monthly_fee_cents?:number;
   billing_day?:number;
   billing_issue_lead_days?:number;
-  billing_method?:"pix"|"boleto";
+  billing_method?:"pix"|"boleto"|"card";
   billing_auto_block?:boolean;
   access_block_source?:string | null;
   suspended_reason?:string | null;
@@ -40,11 +40,12 @@ export type ManagerReceivable = {
   amount_cents:number;
   due_date:string;
   status:"pending"|"paid"|"canceled"|"refunded";
-  payment_method:"pix"|"boleto"|"manual";
+  payment_method:"pix"|"boleto"|"card"|"manual";
   provider:string;
   provider_order_id?:string | null;
   provider_transaction_id?:string | null;
   provider_status?:string | null;
+  public_token?:string;
   external_reference:string;
   idempotency_key:string;
   payment_url?:string | null;
@@ -52,6 +53,16 @@ export type ManagerReceivable = {
   pix_qr_code_base64?:string | null;
   boleto_digitable_line?:string | null;
   paid_at?:string | null;
+  created_at?:string;
+  updated_at?:string;
+};
+
+export type ManagerModuleEntitlement = {
+  company_id:string;
+  module_name:string;
+  enabled:boolean;
+  monthly_price_cents:number;
+  plan_code?:string|null;
   created_at?:string;
   updated_at?:string;
 };
@@ -109,7 +120,7 @@ export function billingReferenceCandidates(company:BillingCompany, now=new Date(
   return [...new Set(result)];
 }
 
-function expiryDaysForOrder(due:string, method:"pix"|"boleto") {
+function expiryDaysForOrder(due:string, method:"pix"|"boleto"|"card") {
   const today=saoPauloYmd();
   const distance=daysBetween(today,due);
   if (distance>0) return Math.max(method==="boleto"?1:1,Math.min(30,distance));
@@ -144,6 +155,57 @@ async function audit(companyId:string,action:string,actor:string,details:Record<
   }).catch(()=>null);
 }
 
+export async function listCompanyModuleEntitlements(companyId:string) {
+  try {
+    const response=await supabaseRest(`proar_manager_module_entitlements?select=*&company_id=eq.${encodeURIComponent(companyId)}&order=module_name.asc`);
+    if (!response.ok) return [] as ManagerModuleEntitlement[];
+    return await response.json() as ManagerModuleEntitlement[];
+  } catch {
+    return [] as ManagerModuleEntitlement[];
+  }
+}
+
+export async function setCompanyModuleEntitlements(companyId:string,entitlements:{moduleName:string;enabled:boolean;monthlyPriceCents:number}[],planCode:string,actor:string) {
+  const now=new Date().toISOString();
+  for (const item of entitlements) {
+    await supabaseRest("proar_manager_module_entitlements?on_conflict=company_id,module_name",{
+      method:"POST",
+      headers:{Prefer:"resolution=merge-duplicates,return=minimal"},
+      body:JSON.stringify({
+        company_id:companyId,
+        module_name:item.moduleName,
+        enabled:Boolean(item.enabled),
+        monthly_price_cents:Math.max(0,Math.round(Number(item.monthlyPriceCents)||0)),
+        plan_code:planCode,
+        updated_at:now,
+      }),
+    });
+  }
+  const saved=await listCompanyModuleEntitlements(companyId);
+  const enabled=saved.filter(item=>item.enabled);
+  const monthlyFeeCents=enabled.reduce((sum,item)=>sum+Number(item.monthly_price_cents||0),0);
+  const modules=enabled.map(item=>item.module_name);
+  await supabaseRest(`proar_companies?id=eq.${encodeURIComponent(companyId)}`,{
+    method:"PATCH",
+    headers:{Prefer:"return=minimal"},
+    body:JSON.stringify({modules,monthly_fee_cents:monthlyFeeCents,updated_at:now}),
+  });
+  await audit(companyId,"MODULE_ENTITLEMENTS_UPDATED",actor,{planCode,modules,monthlyFeeCents});
+  return {entitlements:saved,modules,monthlyFeeCents};
+}
+
+export async function syncPlanEntitlements(companyId:string,planCode:string,planModules:string[],actor:string) {
+  const existing=await listCompanyModuleEntitlements(companyId);
+  const existingMap=new Map(existing.map(item=>[item.module_name,item]));
+  const known=new Set([...existing.map(item=>item.module_name),...planModules]);
+  const next=[...known].map(moduleName=>({
+    moduleName,
+    enabled:planModules.includes(moduleName),
+    monthlyPriceCents:Number(existingMap.get(moduleName)?.monthly_price_cents||0),
+  }));
+  return setCompanyModuleEntitlements(companyId,next,planCode,actor);
+}
+
 export async function getBillingCompany(companyId:string) {
   const response=await supabaseRest(`proar_companies?select=*&id=eq.${encodeURIComponent(companyId)}&limit=1`);
   if (!response.ok) throw new Error("Não foi possível consultar a empresa.");
@@ -151,6 +213,13 @@ export async function getBillingCompany(companyId:string) {
   const company=rows?.[0] as BillingCompany|undefined;
   if (!company) throw new Error("Empresa não encontrada.");
   return company;
+}
+
+export async function getReceivableByPublicToken(publicToken:string) {
+  const response=await supabaseRest(`proar_manager_receivables?select=*&public_token=eq.${encodeURIComponent(publicToken)}&limit=1`);
+  if (!response.ok) throw new Error("Não foi possível consultar a cobrança.");
+  const rows=await response.json();
+  return (rows?.[0] || null) as ManagerReceivable|null;
 }
 
 export async function getReceivableByExternalReference(externalReference:string) {
@@ -179,6 +248,16 @@ export async function issueReceivable(receivable:ManagerReceivable,company:Billi
     });
     return {...receivable,provider_status:"configuration_required"};
   }
+  if (receivable.payment_method==="card") {
+    const base=(process.env.PROAR_MANAGER_BASE_URL || "https://manager.proar.online").replace(/\/$/,"");
+    const paymentUrl=receivable.public_token?`${base}/pagamento/${receivable.public_token}`:"";
+    await supabaseRest(`proar_manager_receivables?id=eq.${encodeURIComponent(receivable.id)}`,{
+      method:"PATCH",
+      headers:{Prefer:"return=minimal"},
+      body:JSON.stringify({provider_status:"awaiting_card",payment_url:paymentUrl||null,updated_at:new Date().toISOString()}),
+    });
+    return {...receivable,provider_status:"awaiting_card",payment_url:paymentUrl};
+  }
   if (receivable.provider_order_id && !regenerate) return receivable;
   const idempotencyKey = regenerate ? randomUUID() : receivable.idempotency_key;
   try {
@@ -187,7 +266,7 @@ export async function issueReceivable(receivable:ManagerReceivable,company:Billi
       externalReference:receivable.external_reference,
       payerEmail:String(company.billing_email || company.email || ""),
       description:receivable.description,
-      expirationDays:expiryDaysForOrder(receivable.due_date,receivable.payment_method==="boleto"?"boleto":"pix"),
+      expirationDays:expiryDaysForOrder(receivable.due_date,receivable.payment_method==="boleto"?"boleto":receivable.payment_method==="card"?"card":"pix"),
       payer:payerFromCompany(company),
       payment:receivable.payment_method==="boleto"?{kind:"boleto"}:{kind:"pix"},
     },idempotencyKey);
@@ -230,7 +309,7 @@ export async function ensureMonthlyReceivable(company:BillingCompany,referenceMo
   if (existing) return issueReceivable(existing,company,actor,false);
 
   const billingDay=Math.max(1,Math.min(28,Number(company.billing_day||10)));
-  const method=company.billing_method==="boleto"?"boleto":"pix";
+  const method=company.billing_method==="boleto"?"boleto":company.billing_method==="card"?"card":"pix";
   const amountCents=Math.round(Number(company.monthly_fee_cents||0));
   const referenceLabel=`${referenceMonth.slice(5,7)}/${referenceMonth.slice(0,4)}`;
   const record={
@@ -294,6 +373,51 @@ export async function syncCompanyBillingAccess(companyId:string,actor="system-bi
     }
   }
   return {blocked:company.status!=="active",overdueCount:overdue.length};
+}
+
+export async function payReceivableByCard(input:{
+  publicToken:string;
+  cardToken:string;
+  paymentMethodId:string;
+  installments:number;
+  payerEmail:string;
+  identificationType:string;
+  identificationNumber:string;
+}) {
+  const receivable=await getReceivableByPublicToken(input.publicToken);
+  if (!receivable) throw new Error("Cobrança não encontrada.");
+  if (receivable.status==="paid") return {alreadyPaid:true,receivable};
+  if (receivable.status!=="pending") throw new Error("Esta cobrança não está disponível para pagamento.");
+  if (receivable.payment_method!=="card") throw new Error("Esta cobrança não está configurada para cartão.");
+  const company=await getBillingCompany(receivable.company_id);
+  const order=await createMercadoPagoOrder({
+    amount:receivable.amount_cents/100,
+    externalReference:receivable.external_reference,
+    payerEmail:String(input.payerEmail||company.billing_email||company.email||""),
+    description:receivable.description,
+    payer:{
+      ...payerFromCompany(company),
+      identification:{type:input.identificationType==="CNPJ"?"CNPJ":"CPF",number:input.identificationNumber},
+    },
+    payment:{
+      kind:"credit_card",
+      paymentMethodId:String(input.paymentMethodId||""),
+      token:String(input.cardToken||""),
+      installments:Math.max(1,Math.min(12,Number(input.installments)||1)),
+    },
+  },randomUUID());
+  const info=mercadoPagoOrderPaymentInfo(order);
+  await supabaseRest(`proar_manager_receivables?id=eq.${encodeURIComponent(receivable.id)}`,{
+    method:"PATCH",
+    headers:{Prefer:"return=minimal"},
+    body:JSON.stringify({
+      provider_order_id:info.orderId,
+      provider_transaction_id:info.transactionId||null,
+      provider_status:`${info.status}:${info.statusDetail}`,
+      updated_at:new Date().toISOString(),
+    }),
+  });
+  return reconcileMercadoPagoOrder(order,"card-checkout");
 }
 
 export async function reconcileMercadoPagoOrder(order:Record<string,unknown>,actor="mercado-pago-webhook") {
