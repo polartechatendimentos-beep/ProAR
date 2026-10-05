@@ -271,7 +271,7 @@ export async function issueReceivable(receivable:ManagerReceivable,company:Billi
       externalReference:receivable.external_reference,
       payerEmail:String(company.billing_email || company.email || ""),
       description:receivable.description,
-      expirationDays:expiryDaysForOrder(receivable.due_date,receivable.payment_method==="boleto"?"boleto":receivable.payment_method==="card"?"card":"pix"),
+      expirationDays:expiryDaysForOrder(receivable.due_date,receivable.payment_method==="boleto"?"boleto":"pix"),
       payer:payerFromCompany(company),
       payment:receivable.payment_method==="boleto"?{kind:"boleto"}:{kind:"pix"},
     },idempotencyKey);
