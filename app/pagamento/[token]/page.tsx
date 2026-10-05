@@ -66,6 +66,29 @@ export default function PaymentPage(){
     finally{setLoading(false)}
   };
 
+  async function submitCard(form:Record<string,string|number>){
+    setProcessing(true);setError("");
+    try{
+      const response=await fetch(`/api/billing/public/${encodeURIComponent(token)}`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          cardToken:String(form.token||""),
+          paymentMethodId:String(form.paymentMethodId||""),
+          installments:Number(form.installments||1),
+          payerEmail:String(form.cardholderEmail||data?.company.email||""),
+          identificationType:String(form.identificationType||"CPF"),
+          identificationNumber:String(form.identificationNumber||""),
+        }),
+      });
+      const json=await response.json();
+      if(!response.ok)throw new Error(json.error||"Pagamento não aprovado.");
+      setSuccess("Pagamento processado. A liberação do ProAR será atualizada automaticamente.");
+      await load();
+    }catch(e){setError(e instanceof Error?e.message:"Não foi possível processar o cartão.")}
+    finally{setProcessing(false)}
+  }
+
   useEffect(()=>{if(token)void load()},[token]);
 
   useEffect(()=>{
@@ -103,28 +126,7 @@ export default function PaymentPage(){
     return()=>{cancelled=true;cardFormRef.current?.unmount?.();cardFormRef.current=null};
   },[data?.receivable.id,data?.receivable.status,data?.receivable.paymentMethod,data?.mercadoPago.publicKey]);
 
-  async function submitCard(form:Record<string,string|number>){
-    setProcessing(true);setError("");
-    try{
-      const response=await fetch(`/api/billing/public/${encodeURIComponent(token)}`,{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          cardToken:String(form.token||""),
-          paymentMethodId:String(form.paymentMethodId||""),
-          installments:Number(form.installments||1),
-          payerEmail:String(form.cardholderEmail||data?.company.email||""),
-          identificationType:String(form.identificationType||"CPF"),
-          identificationNumber:String(form.identificationNumber||""),
-        }),
-      });
-      const json=await response.json();
-      if(!response.ok)throw new Error(json.error||"Pagamento não aprovado.");
-      setSuccess("Pagamento processado. A liberação do ProAR será atualizada automaticamente.");
-      await load();
-    }catch(e){setError(e instanceof Error?e.message:"Não foi possível processar o cartão.")}
-    finally{setProcessing(false)}
-  };
+
 
   const copy=async(value?:string)=>{
     if(!value)return;
