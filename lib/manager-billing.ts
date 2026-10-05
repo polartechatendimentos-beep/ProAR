@@ -69,6 +69,11 @@ export type ManagerModuleEntitlement = {
 
 const money = (cents:number) => (cents/100).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const pad = (value:number) => String(value).padStart(2,"0");
+function safeExternalReference(companyId:string,referenceMonth:string){
+  const company=companyId.replace(/[^A-Za-z0-9_-]/g,"_").slice(0,42);
+  const month=referenceMonth.slice(0,7).replace("-","");
+  return `proar_${company}_${month}`.slice(0,64);
+}
 
 function saoPauloYmd(date=new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA",{
@@ -321,7 +326,7 @@ export async function ensureMonthlyReceivable(company:BillingCompany,referenceMo
     status:"pending",
     payment_method:method,
     provider:"mercado_pago",
-    external_reference:`proar-manager:${company.id}:${referenceMonth.slice(0,7)}`,
+    external_reference:safeExternalReference(company.id,referenceMonth),
     idempotency_key:randomUUID(),
     provider_status:"pending_issuance",
     updated_at:new Date().toISOString(),
