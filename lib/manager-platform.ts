@@ -12,6 +12,13 @@ export const PROAR_SCHEMA_VERSION = "2026.10.02";
 
 export const MANAGER_MIGRATIONS:ManagerMigration[] = [
   {
+    id:"20261005_manager_control_center",
+    title:"Centro Operacional SaaS",
+    status:"prepared",
+    destructive:false,
+    description:"Adiciona modo manutenção, feature flags, domínio, suporte, limites, metadados de backup e central de incidentes por tenant.",
+  },
+  {
     id:"20261002_manager_receivables",
     title:"Contas a receber e bloqueio financeiro",
     status:"prepared",
