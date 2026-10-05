@@ -45,6 +45,7 @@ async function authenticateLegacyEmployee(username: string, password: string) {
 export async function GET(request: NextRequest) {
   const user = readSession(request.cookies.get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.json({ authenticated: false }, { status: 401 });
+  let entitledModules = user.entitledModules;
   if (user.companyId) {
     const access = user.companySlug
       ? await validateCompanyAccessBySlug(user.companySlug)
@@ -56,8 +57,9 @@ export async function GET(request: NextRequest) {
       response.cookies.set(COOKIE_NAME, "", { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 0 });
       return response;
     }
+    if (Array.isArray(access.company?.modules)) entitledModules = access.company?.modules as string[];
   }
-  return NextResponse.json({ authenticated: true, ...user });
+  return NextResponse.json({ authenticated: true, ...user, entitledModules });
 }
 
 export async function POST(request: NextRequest) {
@@ -74,12 +76,17 @@ export async function POST(request: NextRequest) {
   if (validateManagerCredentials(String(username), String(password)) || isConfiguredTiago) {
     let companyId = PRIMARY_COMPANY_ID;
     let companySlug = resolvedTenant || PRIMARY_COMPANY_SLUG;
+    let entitledModules: string[] | undefined;
     if (resolvedTenant && resolvedTenant !== PRIMARY_COMPANY_SLUG && supabaseConfigured()) {
-      const tenantResponse = await supabaseRest(`proar_companies?select=id,slug,status&slug=eq.${encodeURIComponent(resolvedTenant)}&limit=1`);
+      const tenantResponse = await supabaseRest(`proar_companies?select=id,slug,status,modules&slug=eq.${encodeURIComponent(resolvedTenant)}&limit=1`);
       const tenantRows = tenantResponse.ok ? await tenantResponse.json() : [];
-      if (tenantRows[0]?.status === "active") { companyId = String(tenantRows[0].id); companySlug = String(tenantRows[0].slug || resolvedTenant); }
+      if (tenantRows[0]?.status === "active") {
+        companyId = String(tenantRows[0].id);
+        companySlug = String(tenantRows[0].slug || resolvedTenant);
+        entitledModules = Array.isArray(tenantRows[0].modules) ? tenantRows[0].modules : undefined;
+      }
     }
-    const claims = { username: String(username), displayName: "Tiago Viana", role: "Administrador", permissions: ["*"], companyId, companySlug };
+    const claims = { username: String(username), displayName: "Tiago Viana", role: "Administrador", permissions: ["*"], companyId, companySlug, entitledModules };
     const response = NextResponse.json({ authenticated: true, ...claims });
     response.cookies.set(COOKIE_NAME, createSessionForUser(claims), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 });
     return response;
@@ -115,7 +122,7 @@ export async function POST(request: NextRequest) {
         }
         const isTiagoAdministrator = String(user.username).toLowerCase() === "tiago.viana" && String(user.role) === "Administrador";
         const permissions = String(user.role) === "Administrador" || isTiagoAdministrator ? ["*"] : (Array.isArray(user.permissions) ? user.permissions : []);
-        const claims = { username: user.username, displayName: user.display_name, role: user.role, permissions, companyId: company.id, companySlug: company.slug, trialExpiresAt: company.trial_expires_at };
+        const claims = { username: user.username, displayName: user.display_name, role: user.role, permissions, companyId: company.id, companySlug: company.slug, trialExpiresAt: company.trial_expires_at, entitledModules:Array.isArray(company.modules)?company.modules:undefined };
         const response = NextResponse.json({ authenticated: true, ...claims, mustChangePassword: user.must_change_password, company: { id: company.id, slug: company.slug, tradeName: company.trade_name, modules: company.modules } });
         response.cookies.set(COOKIE_NAME, createSessionForUser(claims), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 }); return response;
       }

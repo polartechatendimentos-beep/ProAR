@@ -15,3 +15,68 @@
 
 /* Manager mobile hardening */
 @media(max-width:700px){.manager-shell{padding:12px!important}.manager-header{gap:12px}.manager-actions{display:grid!important;grid-template-columns:1fr 1fr}.manager-actions>*{min-width:0;width:100%}.manager-summary{grid-template-columns:1fr 1fr!important;gap:8px}.manager-company{padding:12px}.manager-company dl{grid-template-columns:1fr!important}.manager-company footer{display:grid!important;grid-template-columns:1fr 1fr}.manager-company footer>*{width:100%;min-height:44px}.manager-detail-layer{align-items:end;padding:0}.manager-detail{width:100%!important;max-height:92dvh!important;border-radius:18px 18px 0 0!important;padding:14px 12px calc(14px + env(safe-area-inset-bottom))}.manager-detail-tabs{flex-wrap:nowrap!important;overflow-x:auto}.manager-detail-tabs button{white-space:nowrap;min-height:40px}.manager-health-row{min-height:54px}}
+
+
+.manager-notice{margin-bottom:14px;padding:11px 13px;border:1px solid #92d8aa;border-radius:10px;background:#effbf3;color:#176233;font-size:12px;font-weight:700}
+.manager-panel-head-inline{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.manager-panel-head-inline>button,.manager-inline-actions button,.manager-row-actions button,.manager-row-actions a{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;padding:0 11px;border:1px solid #cbd8e5;border-radius:8px;background:#fff;color:#2b4b68;font-size:11px;font-weight:800;text-decoration:none;cursor:pointer}
+.manager-billing-overview{margin-bottom:18px}
+.manager-warning{display:flex;align-items:flex-start;gap:9px;margin-bottom:14px;padding:12px;border:1px solid #f0d68b;border-radius:11px;background:#fff9e9;color:#7d5b05;font-size:12px;line-height:1.45}
+.manager-billing-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.manager-billing-kpis article{display:flex;align-items:center;gap:11px;padding:15px;border:1px solid #dce6ef;border-radius:12px;background:#fbfdff}
+.manager-billing-kpis article.danger{border-color:#efb4bb;background:#fff7f8}
+.manager-billing-kpis article svg{flex:0 0 auto;color:#1768df}
+.manager-billing-kpis article.danger svg{color:#bd303d}
+.manager-billing-kpis b{display:block;font-size:18px;color:#153d63}
+.manager-billing-kpis span{display:block;margin-top:2px;font-size:10px;color:#71859a}
+.manager-receivables-panel{margin-top:18px}
+.manager-table-wrap{overflow:auto;border:1px solid #e1e8ef;border-radius:12px}
+.manager-table{width:100%;border-collapse:collapse;min-width:980px;background:#fff}
+.manager-table th,.manager-table td{padding:11px 12px;border-bottom:1px solid #e8eef4;text-align:left;font-size:11px;vertical-align:middle}
+.manager-table th{background:#f6f9fc;color:#61768a;font-size:10px;text-transform:uppercase;letter-spacing:.04em}
+.manager-table tbody tr:last-child td{border-bottom:0}
+.manager-link-button{border:0;background:transparent;color:#1768df;font-weight:800;cursor:pointer;padding:0;text-align:left}
+.manager-payment-status{display:inline-flex;align-items:center;padding:4px 7px;border-radius:999px;background:#eef4fa;color:#4b657d;font-size:9px;font-weight:900;letter-spacing:.04em}
+.manager-payment-status.paid{background:#e8f8ee;color:#17723a}
+.manager-payment-status.overdue{background:#fdebed;color:#a42632}
+.manager-payment-status.canceled,.manager-payment-status.refunded{background:#f2f0f4;color:#65546f}
+.manager-row-actions{display:flex;flex-wrap:wrap;gap:6px}
+.manager-row-actions button,.manager-row-actions a{min-height:30px;padding:0 8px}
+.manager-row-actions .danger,.manager-inline-actions .danger{border-color:#efb4bb;background:#fff2f3;color:#ad2634}
+.manager-inline-actions .success{border-color:#a8dcba;background:#f1fbf5;color:#17643a}
+.manager-billing-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.manager-billing-form label{display:grid;gap:6px;color:#61768a;font-size:10px;font-weight:800}
+.manager-billing-form input,.manager-billing-form select{height:40px;padding:0 10px;border:1px solid #d2dde8;border-radius:8px;background:#fff;color:#233f59;outline:none}
+.manager-billing-form input:focus,.manager-billing-form select:focus{border-color:#428dff;box-shadow:0 0 0 3px rgba(66,141,255,.1)}
+.manager-billing-form .manager-check{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid #e0e8f0;border-radius:9px;background:#fafcff}
+.manager-billing-form .manager-check input{width:16px;height:16px;padding:0}
+.manager-inline-actions{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.manager-mini-receivables{display:grid;gap:7px;margin-top:14px}
+.manager-mini-receivables article{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 11px;border:1px solid #e1e8ef;border-radius:9px;background:#fbfdff}
+.manager-mini-receivables article b{display:block;font-size:11px}
+.manager-mini-receivables article span{display:block;margin-top:2px;font-size:10px;color:#77899a}
+.manager-mini-receivables article em{font-style:normal;font-size:9px;font-weight:900;color:#557088}
+.manager-platform p{margin:4px 0 0;font-size:10px;color:#7b8ea1;line-height:1.4}
+@media(max-width:1000px){
+  .manager-billing-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .manager-billing-form{grid-template-columns:1fr}
+  .manager-panel-head-inline{flex-direction:column}
+}
+@media(max-width:640px){
+  .manager-billing-kpis{grid-template-columns:1fr}
+  .manager-row-actions{min-width:250px}
+}
+
+
+.manager-module-pricing{margin:14px 0;padding:14px;border:1px solid #dce6ef;border-radius:12px;background:#fbfdff}
+.manager-module-pricing>header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.manager-module-pricing>header b{display:block;font-size:12px;color:#173d61}
+.manager-module-pricing>header span{display:block;margin-top:2px;font-size:10px;color:#75889a}
+.manager-module-pricing>header strong{font-size:18px;color:#1768df}
+.manager-module-pricing>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.manager-module-pricing label{display:grid;grid-template-columns:18px 1fr 108px;align-items:center;gap:8px;padding:8px 9px;border:1px solid #e2e9f0;border-radius:8px;background:#fff;font-size:10px;color:#6b7f92}
+.manager-module-pricing label.enabled{border-color:#b9d3f3;background:#f7fbff;color:#234b70}
+.manager-module-pricing label>input:first-child{width:15px;height:15px}
+.manager-module-pricing .module-price{height:32px;padding:0 8px;border:1px solid #d6e0e9;border-radius:7px;text-align:right}
+.manager-module-pricing .module-price:disabled{background:#f2f5f8;color:#9aa8b5}
+@media(max-width:860px){.manager-module-pricing>div{grid-template-columns:1fr}}

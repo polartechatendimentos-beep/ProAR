@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { supabaseConfigured, supabaseRest } from "../../../../lib/supabase-rest";
 import { hashPassword } from "../../../../lib/password";
+import { runManagerBillingCycle } from "../../../../lib/manager-billing";
 
 function safeEqual(left: string, right: string) {
   const a = Buffer.from(left); const b = Buffer.from(right);
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest) {
   if (!supabaseConfigured()) return NextResponse.json({ error: "Banco mestre não configurado." }, { status: 503 });
   try {
     const polartech = await ensurePolartech();
-    const response = await supabaseRest("proar_companies?select=id,slug,status,plan_code,trial_expires_at&order=created_at.asc");
+    const response = await supabaseRest("proar_companies?select=id,slug,status,plan_code,trial_expires_at,access_block_source&order=created_at.asc");
     if (!response.ok) throw new Error("Falha ao consultar empresas.");
     const companies = await response.json();
     const now = new Date();
@@ -81,15 +82,23 @@ export async function GET(request: NextRequest) {
       checked += 1;
       const expiredTrial = company.plan_code === "trial" && company.trial_expires_at && new Date(company.trial_expires_at).getTime() < now.getTime();
       const patch: Record<string, unknown> = { last_manager_check_at: now.toISOString(), updated_at: now.toISOString() };
-      if (expiredTrial && company.status === "active") {
+      if (expiredTrial && company.access_block_source !== "manual" && (company.status === "active" || company.access_block_source === "billing")) {
         patch.status = "blocked";
+        patch.access_block_source = "trial";
+        patch.access_blocked_at = now.toISOString();
         patch.suspended_reason = "Período de teste encerrado automaticamente pelo ProAR Manager.";
         blocked += 1;
+      } else if (!expiredTrial && company.status !== "active" && company.access_block_source === "trial") {
+        patch.status = "active";
+        patch.access_block_source = null;
+        patch.access_blocked_at = null;
+        patch.suspended_reason = null;
       }
       await supabaseRest(`proar_companies?id=eq.${encodeURIComponent(company.id)}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify(patch) });
     }
-    await supabaseRest("proar_manager_audit", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ company_id: polartech.id, action: "DAILY_COMPANY_ACCESS_CHECK", actor: "system-cron", details: { checked, blocked, at: now.toISOString() } }) });
-    return NextResponse.json({ ok: true, checked, blocked, polartech: polartech.id, checkedAt: now.toISOString() });
+    const billing = await runManagerBillingCycle("system-cron");
+    await supabaseRest("proar_manager_audit", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ company_id: polartech.id, action: "DAILY_COMPANY_ACCESS_CHECK", actor: "system-cron", details: { checked, blocked, billing, at: now.toISOString() } }) });
+    return NextResponse.json({ ok: true, checked, blocked, billing, polartech: polartech.id, checkedAt: now.toISOString() });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Falha na verificação diária." }, { status: 500 });
   }
