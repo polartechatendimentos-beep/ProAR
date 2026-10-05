@@ -8,9 +8,16 @@ export type ManagerMigration = {
   description:string;
 };
 
-export const PROAR_SCHEMA_VERSION = "2026.10.02";
+export const PROAR_SCHEMA_VERSION = "2026.10.05";
 
 export const MANAGER_MIGRATIONS:ManagerMigration[] = [
+  {
+    id:"20261005_manager_billing_mercado_pago",
+    title:"Cobrança recorrente do ProAR Manager",
+    status:"prepared",
+    destructive:false,
+    description:"Adiciona mensalidades, contas a receber, Pix/boleto via Mercado Pago, origem de bloqueio e liberação automática após pagamento confirmado.",
+  },
   {
     id:"20261002_proar_tenant_database_identity",
     title:"Identidade de banco por tenant",
