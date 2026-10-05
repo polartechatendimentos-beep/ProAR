@@ -228,7 +228,7 @@ export default function ManagerPage(){
               <div><dt>Vencimento</dt><dd>{c.billing_enabled?`Dia ${c.billing_day||10} • ${c.billing_method==="boleto"?"Boleto":c.billing_method==="card"?"Cartão":"Pix"}`:"—"}</dd></div>
               <div><dt>Trial</dt><dd>{expires?expires.toLocaleDateString("pt-BR"):"—"}</dd></div>
               <div><dt>Tenant</dt><dd>{c.tenant?.role==="primary-pilot"?"Tenant 1 • Piloto":"Cliente locatário"}</dd></div>
-              <div><dt>Banco</dt><dd>{c.tenant?.databaseName||"—"}</dd></div>
+              <div><dt>Banco lógico</dt><dd>{c.tenant?.databaseName||"—"}</dd></div><div><dt>Isolamento</dt><dd>{c.tenant?.isolation==="dedicated-project"?"Projeto/Banco dedicado":c.tenant?.isolation||"—"}</dd></div>
               <div><dt>Provisionamento</dt><dd>{inst?.provisioning_status||"não provisionado"}</dd></div><div><dt>Saúde do banco</dt><dd>{dateTime(inst?.last_health_at)}</dd></div>
               <div><dt>Último uso</dt><dd>{dateTime(c.last_seen_at)}</dd></div>
             </dl>
