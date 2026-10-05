@@ -4,6 +4,7 @@ import { hasPermission } from "../../../lib/permissions";
 import { resolveTenantDb, tenantHeaders } from "../../../lib/tenant-rest";
 import { databaseFetch, PRIMARY_DATABASE_URL } from "../../../lib/supabase-rest";
 import { auditOperationalIntegrity } from "../../../lib/integrity-audit";
+import {integrityPendings} from "../../../lib/integrity-pendings";
 
 export async function GET(request: NextRequest) {
   const session = readSession(request.cookies.get("proar_session")?.value);
@@ -23,7 +24,8 @@ export async function GET(request: NextRequest) {
     const records = await response.json() as { payload?: Record<string, unknown> }[];
     const state = records[0]?.payload;
     if (!state || typeof state !== "object") return NextResponse.json({ error: "A base operacional ainda não possui um snapshot disponível para diagnóstico." }, { status: 409 });
-    return NextResponse.json(auditOperationalIntegrity(state), { headers: { "Cache-Control": "no-store, max-age=0" } });
+    const report=auditOperationalIntegrity(state);
+    return NextResponse.json({...report,pendings:integrityPendings(report)}, { headers: { "Cache-Control": "no-store, max-age=0" } });
   } catch {
     return NextResponse.json({ error: "Não foi possível executar o diagnóstico da base operacional." }, { status: 503 });
   }
