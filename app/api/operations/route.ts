@@ -4,12 +4,14 @@ import { hasPermission, type Permission } from "../../../lib/permissions";
 import { resolveTenantDb, tenantHeaders } from "../../../lib/tenant-rest";
 import { databaseFetch, commitNeonOperationalState, PRIMARY_DATABASE_URL } from "../../../lib/supabase-rest";
 import { applyOperationalCommand, independentOperationalRows, OperationError, type ErpState, type OperationalCommand } from "../../../lib/operational-ledger";
+import {guardOperationalCommand,inferRuleContext} from "../../../lib/command-guard";
 
 export async function POST(request: NextRequest) {
   const session = readSession(request.cookies.get("proar_session")?.value);
   if (!session) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
   try {
     const command = await request.json() as OperationalCommand;
+    guardOperationalCommand(inferRuleContext(command as unknown as Record<string,unknown>));
     const company = session.companyId || process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
     const db = await resolveTenantDb(session.companyId);
     if (!db.url || !db.key) throw new Error("Banco indisponível");
