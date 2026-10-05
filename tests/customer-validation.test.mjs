@@ -1,0 +1,4 @@
+import test from "node:test";import assert from "node:assert/strict";import {validateCpf,validateCnpj,validateCustomer,findDuplicateCustomers} from "../lib/customer-validation.ts";
+test("customer document validators reject obvious invalid data",()=>{assert.equal(validateCpf("111.111.111-11"),false);assert.equal(validateCnpj("11.111.111/1111-11"),false)});
+test("customer validation blocks invalid document and warns credit setup",()=>{const r=validateCustomer({name:"Cliente",doc:"123",allowCredit:true,creditLimit:0});assert.equal(r.valid,false);assert.ok(r.issues.some(x=>x.code==="CREDIT_LIMIT_MISSING"))});
+test("customer duplicate detection uses normalized document email and phone",()=>{const r=findDuplicateCustomers({id:"2",doc:"12.345.678/0001-95",email:"A@B.COM"},[{id:"1",name:"A",doc:"12345678000195",email:"a@b.com"}]);assert.equal(r.length,1);assert.equal(r[0].sameDocument,true)});
