@@ -229,7 +229,7 @@ export default function ManagerPage(){
               <div><dt>Trial</dt><dd>{expires?expires.toLocaleDateString("pt-BR"):"—"}</dd></div>
               <div><dt>Tenant</dt><dd>{c.tenant?.role==="primary-pilot"?"Tenant 1 • Piloto":"Cliente locatário"}</dd></div>
               <div><dt>Banco</dt><dd>{c.tenant?.databaseName||"—"}</dd></div>
-              <div><dt>Provisionamento</dt><dd>{inst?.provisioning_status||"não provisionado"}</dd></div>
+              <div><dt>Provisionamento</dt><dd>{inst?.provisioning_status||"não provisionado"}</dd></div><div><dt>Saúde do banco</dt><dd>{dateTime(inst?.last_health_at)}</dd></div>
               <div><dt>Último uso</dt><dd>{dateTime(c.last_seen_at)}</dd></div>
             </dl>
             {c.suspended_reason&&c.status!=="active"&&<div className="manager-alert compact">{c.suspended_reason}</div>}
