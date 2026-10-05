@@ -8,7 +8,9 @@ alter table public.proar_companies
   add column if not exists billing_issue_lead_days smallint not null default 7,
   add column if not exists billing_method text not null default 'pix',
   add column if not exists billing_auto_block boolean not null default true,
-  add column if not exists billing_email text;
+  add column if not exists billing_email text,
+  add column if not exists access_block_source text,
+  add column if not exists access_blocked_at timestamptz;
 
 alter table public.proar_companies
   drop constraint if exists proar_companies_monthly_fee_nonnegative;
@@ -46,12 +48,15 @@ create table if not exists public.proar_manager_receivables (
   payment_method text not null default 'pix'
     check (payment_method in ('pix','boleto','manual')),
   provider text not null default 'mercado_pago',
-  provider_payment_id text,
+  provider_order_id text,
+  provider_transaction_id text,
   provider_status text,
   external_reference text not null unique,
   idempotency_key text not null unique,
   payment_url text,
   pix_qr_code text,
+  pix_qr_code_base64 text,
+  boleto_digitable_line text,
   paid_at timestamptz,
   canceled_at timestamptz,
   metadata jsonb not null default '{}'::jsonb,
@@ -67,3 +72,10 @@ create index if not exists proar_manager_receivables_status_due_idx
   on public.proar_manager_receivables(status, due_date);
 
 alter table public.proar_manager_receivables enable row level security;
+
+
+alter table public.proar_companies
+  drop constraint if exists proar_companies_access_block_source_check;
+alter table public.proar_companies
+  add constraint proar_companies_access_block_source_check
+  check (access_block_source is null or access_block_source in ('manual','trial','billing'));
