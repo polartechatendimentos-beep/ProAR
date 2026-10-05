@@ -66,3 +66,17 @@
   .manager-billing-kpis{grid-template-columns:1fr}
   .manager-row-actions{min-width:250px}
 }
+
+
+.manager-module-pricing{margin:14px 0;padding:14px;border:1px solid #dce6ef;border-radius:12px;background:#fbfdff}
+.manager-module-pricing>header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.manager-module-pricing>header b{display:block;font-size:12px;color:#173d61}
+.manager-module-pricing>header span{display:block;margin-top:2px;font-size:10px;color:#75889a}
+.manager-module-pricing>header strong{font-size:18px;color:#1768df}
+.manager-module-pricing>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.manager-module-pricing label{display:grid;grid-template-columns:18px 1fr 108px;align-items:center;gap:8px;padding:8px 9px;border:1px solid #e2e9f0;border-radius:8px;background:#fff;font-size:10px;color:#6b7f92}
+.manager-module-pricing label.enabled{border-color:#b9d3f3;background:#f7fbff;color:#234b70}
+.manager-module-pricing label>input:first-child{width:15px;height:15px}
+.manager-module-pricing .module-price{height:32px;padding:0 8px;border:1px solid #d6e0e9;border-radius:7px;text-align:right}
+.manager-module-pricing .module-price:disabled{background:#f2f5f8;color:#9aa8b5}
+@media(max-width:860px){.manager-module-pricing>div{grid-template-columns:1fr}}
