@@ -161,9 +161,13 @@ export async function getReceivableByExternalReference(externalReference:string)
 }
 
 export async function listManagerReceivables(limit=120) {
-  const response=await supabaseRest(`proar_manager_receivables?select=*&order=due_date.desc&limit=${Math.max(1,Math.min(500,limit))}`);
-  if (!response.ok) return [] as ManagerReceivable[];
-  return await response.json() as ManagerReceivable[];
+  try {
+    const response=await supabaseRest(`proar_manager_receivables?select=*&order=due_date.desc&limit=${Math.max(1,Math.min(500,limit))}`);
+    if (!response.ok) return [] as ManagerReceivable[];
+    return await response.json() as ManagerReceivable[];
+  } catch {
+    return [] as ManagerReceivable[];
+  }
 }
 
 export async function issueReceivable(receivable:ManagerReceivable,company:BillingCompany,actor:string,regenerate=false) {
