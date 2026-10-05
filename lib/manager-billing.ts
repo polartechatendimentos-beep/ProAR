@@ -24,7 +24,7 @@ export function receivableStatus(receivable:ManagerReceivable, now=new Date()) {
 
 export function financialAccessState(company:BillingCompany, receivables:ManagerReceivable[], now=new Date()) {
   const autoBlock = company.billing_auto_block !== false;
-  const graceDays = Math.max(0, Math.min(Number(company.billing_grace_days ?? 5), 90));
+  const graceDays = Math.max(0, Math.min(Number(company.billing_grace_days ?? 0), 90));
   const overdue = receivables
     .filter(item => item.status !== "paid" && item.status !== "cancelled")
     .map(item => ({...item,due:new Date(item.due_date)}))
