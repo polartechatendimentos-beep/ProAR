@@ -3788,8 +3788,13 @@ export default function Home() {
         if (activeCompany.status === "Bloqueada") throw new Error("blocked");
         if (!navigator.onLine) throw new Error("offline");
         const response = await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { cache: "no-store" });
-        if (!response.ok) throw new Error();
-        const { state } = await response.json();
+        const sharedResult=await response.json().catch(()=>({}));
+        if (!response.ok) {
+          const error=new Error(typeof sharedResult.error==="string"?sharedResult.error:"Não foi possível carregar a base compartilhada.");
+          (error as Error & {code?:string}).code=typeof sharedResult.code==="string"?sharedResult.code:undefined;
+          throw error;
+        }
+        const { state } = sharedResult;
         if (state) {
           setStateRevision(Number(state._revision || 0));
           setServiceOrders(state.serviceOrders ?? []);
@@ -3819,7 +3824,8 @@ export default function Home() {
         setServiceOrders(localState.serviceOrders);
         setCustomerRecords(localState.customers);
         setModuleRecords(localState.moduleRecords);
-      } catch {
+      } catch (error) {
+        const errorCode=String((error as Error & {code?:string})?.code||"");
         const localOrders = readCompanyStorage(activeCompany.id, "service-orders", []) as ServiceOrder[];
         const localCustomers = readCompanyStorage(activeCompany.id, "customers", []) as Customer[];
         const localModules = mergeImportedServices(readCompanyStorage(activeCompany.id, "module-records", {}) as Record<string, ModuleRecord[]>);
@@ -3830,7 +3836,9 @@ export default function Home() {
         setLastSuccessfulSyncAt(cachedAt);
         if (navigator.onLine) {
           setDatabaseMode("degraded");
-          setSavedMessage(`Modo contingência ativado. Exibindo a última cópia sincronizada${cachedAt ? ` em ${new Date(cachedAt).toLocaleString("pt-BR")}` : ""}. O banco será testado novamente automaticamente.`);
+          setSavedMessage(errorCode==="PROAR-DB-004"
+            ? `Limite de uso do banco excedido. Modo contingência ativo${cachedAt ? ` com dados sincronizados em ${new Date(cachedAt).toLocaleString("pt-BR")}` : ""}.`
+            : `Modo contingência ativado. Exibindo a última cópia sincronizada${cachedAt ? ` em ${new Date(cachedAt).toLocaleString("pt-BR")}` : ""}. O banco será testado novamente automaticamente.`);
         } else {
           setDatabaseMode("offline");
           setSavedMessage(`Sem internet. Exibindo dados deste aparelho${cachedAt ? ` sincronizados em ${new Date(cachedAt).toLocaleString("pt-BR")}` : ""}.`);
@@ -3882,7 +3890,12 @@ export default function Home() {
     setSyncing(true); setSyncPhase("syncing");
     try {
       const response = await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}&refresh=${Date.now()}`, { cache: "no-store" });
-      const result = await response.json(); if (!response.ok || !result.state) throw new Error();
+      const result = await response.json().catch(()=>({}));
+      if (!response.ok || !result.state) {
+        const error=new Error(typeof result.error==="string"?result.error:"Não foi possível atualizar os dados.");
+        (error as Error & {code?:string}).code=typeof result.code==="string"?result.code:undefined;
+        throw error;
+      }
       const nextCustomers = result.state.customers ?? []; const nextOrders = result.state.serviceOrders ?? []; const nextModules = mergeImportedServices(result.state.moduleRecords ?? {});
       setStateRevision(Number(result.state._revision||0));
       setCustomerRecords(nextCustomers); setServiceOrders(nextOrders); setModuleRecords(nextModules);
@@ -3893,13 +3906,16 @@ export default function Home() {
       setDatabaseMode("online");
       setSyncPhase("complete");
       window.setTimeout(() => setSyncPhase("idle"), 1000);
-    } catch {
+    } catch (error) {
       setSyncPhase("idle");
+      const errorCode=String((error as Error & {code?:string})?.code||"");
       const cachedAt=localStorage.getItem(companyStorageKey(activeCompany.id,"last-successful-sync"))||lastSuccessfulSyncAt;
       setLastSuccessfulSyncAt(cachedAt);
       setDatabaseMode(navigator.onLine?"degraded":"offline");
       setSavedMessage(navigator.onLine
-        ? `Banco temporariamente indisponível. Modo contingência ativo${cachedAt?` com dados de ${new Date(cachedAt).toLocaleString("pt-BR")}`:""}.`
+        ? errorCode==="PROAR-DB-004"
+          ? `Limite de uso do banco excedido. Modo contingência ativo${cachedAt?` com dados de ${new Date(cachedAt).toLocaleString("pt-BR")}`:""}.`
+          : `Banco temporariamente indisponível. Modo contingência ativo${cachedAt?` com dados de ${new Date(cachedAt).toLocaleString("pt-BR")}`:""}.`
         : "Sem internet. Os dados deste aparelho foram mantidos.");
     }
     finally { setSyncing(false); }
@@ -4682,7 +4698,7 @@ export default function Home() {
       {syncPhase !== "idle" && <div className={`sync-progress ${syncPhase}`} role="status" aria-label={syncPhase === "complete" ? "Dados atualizados" : "Sincronizando dados"}><i/></div>}
       {databaseMode !== "online" && <div className={`database-contingency ${databaseMode}`} role="status">
         <AlertTriangle size={16}/>
-        <div><strong>{databaseMode === "degraded" ? "Modo contingência" : "Modo offline"}</strong><span>{databaseMode === "degraded" ? "Banco temporariamente indisponível. A última cópia sincronizada permanece visível e as gravações críticas aguardam reconexão." : "Sem conexão com a internet. Os dados armazenados neste aparelho permanecem disponíveis."}</span></div>
+        <div><strong>{databaseMode === "degraded" ? "Modo contingência" : "Modo offline"}</strong><span>{databaseMode === "degraded" ? "Banco indisponível no provedor. A última cópia sincronizada permanece visível e as gravações críticas aguardam reconexão." : "Sem conexão com a internet. Os dados armazenados neste aparelho permanecem disponíveis."}</span></div>
         {lastSuccessfulSyncAt && <small>Última sincronização: {new Date(lastSuccessfulSyncAt).toLocaleString("pt-BR")}</small>}
         {online && <button type="button" onClick={()=>void pullFromDatabase()} disabled={syncing}><RefreshCw size={14}/> Testar novamente</button>}
       </div>}
