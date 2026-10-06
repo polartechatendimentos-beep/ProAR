@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission, sessionCompany } from "../../../lib/permissions";
 import { resolveTenantDb, tenantHeaders } from "../../../lib/tenant-rest";
-import { databaseFetch, supabaseRest } from "../../../lib/supabase-rest";
+import { databaseFetch, databaseRuntimeConfig, supabaseRest } from "../../../lib/supabase-rest";
 import { probeDatabase } from "../../../lib/database-resilience";
 import { classifyProarError, proarError } from "../../../lib/system-errors";
 import { recordSystemIncident } from "../../../lib/system-observability";
@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
   const scope = sessionCompany(access.session);
   if (!scope.ok) return NextResponse.json({ error: scope.error }, { status: scope.status });
 
+  const dbRuntime=databaseRuntimeConfig();
   let database:HealthService = {
     id:"database",
     label:"Banco de dados",
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
       database={
         ...database,
         message:`Banco do tenant indisponível (${db.provisioningStatus || "não provisionado"}).`,
-        metadata:{provider:db.provider,projectName:db.projectName,source:db.source},
+        metadata:{provider:db.provider,projectName:db.projectName,source:db.source,runtime:dbRuntime},
       };
     }else{
       const probe=await probeDatabase(()=>databaseFetch(
@@ -75,7 +76,7 @@ export async function GET(request: NextRequest) {
           : failure?.userMessage || "Banco indisponível após novas tentativas. O modo de contingência deve preservar a última cópia sincronizada.",
         latencyMs:probe.latencyMs,
         attempts:probe.attempts,
-        metadata:{provider:db.provider,projectName:db.projectName,source:db.source,httpStatus:probe.status},
+        metadata:{provider:db.provider,projectName:db.projectName,source:db.source,httpStatus:probe.status,runtime:dbRuntime},
       };
 
       void supabaseRest("proar_health_snapshots",{
@@ -132,6 +133,8 @@ export async function GET(request: NextRequest) {
       state:"ok",
       message:`Versão ${CURRENT_PROAR_RELEASE.version} carregada no ambiente ${process.env.VERCEL_ENV || process.env.NODE_ENV || "desconhecido"}.`,
       metadata:{
+        databaseProvider:dbRuntime.resolvedProvider,
+        databaseProviderFallback:dbRuntime.autoFallback,
         commit:process.env.VERCEL_GIT_COMMIT_SHA || null,
         deploymentId:process.env.VERCEL_DEPLOYMENT_ID || null,
         region:process.env.VERCEL_REGION || null,
