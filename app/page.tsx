@@ -1231,35 +1231,83 @@ function CommercialRecordsManager({ title, records, onConvert, onDelete, onEdit 
 }
 
 function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert, onDelete, onCreateCustomer, onCreateStructure }: { customers: Customer[]; structures: ModuleRecord[]; catalog: ModuleRecord[]; budgets: ModuleRecord[]; onSave: (record: ModuleRecord) => void; onConvert: (record: ModuleRecord, target: "Pedido" | "Ordem de serviço") => void; onDelete: (record: ModuleRecord) => void; onCreateCustomer: (draft: CustomerDraft) => Customer | null; onCreateStructure: (draft: StructureDraft & { client: string }) => ModuleRecord | null }) {
+  const [tab,setTab]=useState<"novo"|"lista">("novo");
   const [cart, setCart] = useState<PurchaseItem[]>([]);
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState<"Todos" | "Produto" | "Serviço">("Todos");
   const [customer, setCustomer] = useState("");
-  const [customerSearch, setCustomerSearch] = useState("");
-  const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [unit, setUnit] = useState("");
   const [validity, setValidity] = useState(7);
   const [priceTable, setPriceTable] = useState("Padrão");
+  const [reference, setReference] = useState("");
+  const [seller, setSeller] = useState("");
   const [discount, setDiscount] = useState(0);
   const [surcharge, setSurcharge] = useState(0);
   const [payment, setPayment] = useState("PIX");
   const [observations, setObservations] = useState("");
   const [notice, setNotice] = useState("");
   const [quickCreate, setQuickCreate] = useState<"customer" | "structure" | null>(null);
+
   const items = catalog.filter(item => (item.kind === "Produto" || item.kind === "Serviço") && item.status !== "Inativo" && (kindFilter === "Todos" || item.kind === kindFilter) && `${item.name} ${item.id} ${item.category}`.toLowerCase().includes(search.toLowerCase()));
-  const productsTotal = cart.filter(item => item.kind === "Produto").reduce((sum, item) => sum + item.quantity * item.unitValue, 0);
-  const servicesTotal = cart.filter(item => item.kind === "Serviço").reduce((sum, item) => sum + item.quantity * item.unitValue, 0);
-  const additionalCosts = cart.filter(item => item.kind === "Custo adicional").reduce((sum, item) => sum + item.quantity * item.unitValue, 0);
+  const itemTotal=(item:PurchaseItem)=>item.quantity*item.unitValue*(1-Math.min(100,Math.max(0,item.discountPercent??0))/100);
+  const productsTotal = cart.filter(item => item.kind === "Produto").reduce((sum, item) => sum + itemTotal(item), 0);
+  const servicesTotal = cart.filter(item => item.kind === "Serviço").reduce((sum, item) => sum + itemTotal(item), 0);
+  const additionalCosts = cart.filter(item => item.kind === "Custo adicional").reduce((sum, item) => sum + itemTotal(item), 0);
   const subtotal = productsTotal + servicesTotal + additionalCosts;
   const total = Math.max(0, subtotal - discount + surcharge);
-  const add = (record: ModuleRecord) => setCart(current => { const existing = current.find(item => item.productId === record.id); return existing ? current.map(item => item.productId === record.id ? { ...item, quantity: item.quantity + 1 } : item) : [...current, { id:`ORC-ITEM-${Date.now()}-${current.length}`, productId:record.id, description:record.name, quantity:1, unitValue:record.value ?? 0, kind:record.kind }]; });
+
+  const add = (record: ModuleRecord) => {
+    setCart(current => {
+      const existing = current.find(item => item.productId === record.id);
+      if(existing) return current.map(item => item.productId === record.id ? { ...item, quantity: item.quantity + 1 } : item);
+      return [...current, {
+        id:`ORC-ITEM-${Date.now()}-${current.length}`,
+        productId:record.id,
+        description:record.name,
+        quantity:1,
+        unitValue:record.value ?? 0,
+        kind:record.kind,
+        unitOfMeasure:record.unitOfMeasure || (record.kind==="Serviço"?"SV":"UN"),
+        discountPercent:0,
+      }];
+    });
+    setSearch("");
+  };
   const update = (id: string, changes: Partial<PurchaseItem>) => setCart(current => current.map(item => item.id === id ? { ...item, ...changes } : item).filter(item => item.quantity > 0));
-  const save = () => {
+  const clearDraft=()=>{setCart([]);setDiscount(0);setSurcharge(0);setObservations("");setUnit("");setReference("");setSearch("");};
+
+  const save = (status:"Em elaboração"|"Enviado") => {
     if (!customer || !cart.length) { setNotice("Selecione o cliente e adicione pelo menos um produto ou serviço."); return; }
     const validUntil = new Date(); validUntil.setDate(validUntil.getDate() + validity);
-    const record: ModuleRecord = { id:`ORC-${Date.now().toString().slice(-6)}`, name:`Orçamento • ${customer}`, client:customer, unit:selectedBudgetStructure?.name || "", structureId:selectedBudgetStructure?.id, sector:/secretaria|setor|departamento|diretoria|órgão|area|área/i.test(`${selectedBudgetStructure?.category ?? ""} ${selectedBudgetStructure?.hierarchyLevel ?? ""}`) ? selectedBudgetStructure?.name : undefined, description:`Tabela: ${priceTable} • Condição: ${payment}${observations ? ` • ${observations}` : ""}`, createdAt:new Date().toLocaleString("pt-BR"), date:new Date().toISOString().slice(0,10), endDate:validUntil.toISOString().slice(0,10), status:"Em elaboração", value:total, subtotal, discount, discountPercent: subtotal > 0 ? (discount / subtotal) * 100 : 0, category:"Produtos e serviços", purchaseItems:cart, paymentMethod:payment };
-    onSave(record); setCart([]); setDiscount(0); setSurcharge(0); setObservations(""); setUnit(""); setNotice(`${record.id} salvo com sucesso.`);
+    const record: ModuleRecord = {
+      id:`ORC-${Date.now().toString().slice(-6)}`,
+      name:`Orçamento • ${customer}`,
+      client:customer,
+      unit:selectedBudgetStructure?.name || "",
+      structureId:selectedBudgetStructure?.id,
+      sector:/secretaria|setor|departamento|diretoria|órgão|area|área/i.test(`${selectedBudgetStructure?.category ?? ""} ${selectedBudgetStructure?.hierarchyLevel ?? ""}`) ? selectedBudgetStructure?.name : undefined,
+      description:`Tabela: ${priceTable} • Condição: ${payment}${reference ? ` • Ref.: ${reference}` : ""}${seller ? ` • Vendedor: ${seller}` : ""}${observations ? ` • ${observations}` : ""}`,
+      createdAt:new Date().toLocaleString("pt-BR"),
+      date:new Date().toISOString().slice(0,10),
+      endDate:validUntil.toISOString().slice(0,10),
+      status,
+      value:total,
+      subtotal,
+      discount,
+      discountPercent: subtotal > 0 ? (discount / subtotal) * 100 : 0,
+      surcharge,
+      reference,
+      seller,
+      category:"Produtos e serviços",
+      purchaseItems:cart,
+      paymentMethod:payment,
+    };
+    onSave(record);
+    clearDraft();
+    setNotice(status==="Em elaboração" ? `${record.id} salvo como rascunho.` : `${record.id} finalizado e salvo com sucesso.`);
+    if(status==="Enviado") setTab("lista");
   };
+
   const customerUnits = customer ? customerStructures(customer, customers, structures) : [];
   const selectedBudgetStructure = customerUnits.find(item => item.id === unit);
   const budgetStructureLabel = (item: ModuleRecord) => {
@@ -1277,7 +1325,65 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
   useEffect(() => {
     if (customer && !customerUnits.some(item => item.id === unit)) setUnit(customerUnits[0]?.id ?? "");
   }, [customer, customerUnits, unit]);
-  return <section className="budget-pdv"><CommercialRecordsManager title="Orçamentos" records={budgets} onConvert={onConvert} onDelete={onDelete}/><div className="budget-pdv-hero"><div><span className="section-kicker"><FileText size={12}/> ORÇAMENTO RÁPIDO</span><h2>Orçamento no formato PDV</h2><p>Adicione produtos e serviços, calcule os valores e converta sem redigitação.</p></div><div><div className="budget-context-row"><div className="budget-customer-field"><span className="budget-field-label">Cliente</span><CustomerSearchSelect customers={customers} value={customer} onChange={value => { setCustomer(value); setUnit(""); }} />{customer && <small className="budget-customer-selected"><CheckCircle2 size={11}/> Cliente selecionado</small>}</div><button type="button" className="budget-quick-trigger" onClick={() => setQuickCreate("customer")}><Plus size={13}/> Novo cliente</button></div>{customer && <div className="budget-context-row"><label>Órgão / Diretoria / Unidade / Setor<select value={unit} onChange={event => setUnit(event.target.value)}><option value="">Selecione a estrutura vinculada</option>{customerUnits.map(item => <option key={item.id} value={item.id}>{budgetStructureLabel(item)} • {item.category || "Unidade"}</option>)}</select></label><button type="button" className="budget-quick-trigger" onClick={() => setQuickCreate("structure")}><Plus size={13}/> Nova estrutura</button></div>}{!customer && <button type="button" className="budget-quick-link" onClick={() => setQuickCreate("customer")}><Plus size={13}/> Cadastre o cliente sem sair do orçamento</button>}<label>Validade<select value={validity} onChange={event => setValidity(Number(event.target.value))}><option value={7}>7 dias</option><option value={15}>15 dias</option><option value={30}>30 dias</option><option value={60}>60 dias</option></select></label></div></div>{notice && <div className="pdv-notice"><CheckCircle2 size={15}/>{notice}<button onClick={() => setNotice("")}><X size={13}/></button></div>}<div className="budget-pdv-layout"><div className="budget-catalog panel"><div className="budget-search"><label><Search size={17}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Pesquisar produto ou serviço..."/></label><div>{(["Todos","Produto","Serviço"] as const).map(kind => <button className={kindFilter === kind ? "active" : ""} key={kind} onClick={() => setKindFilter(kind)}>{kind}</button>)}</div></div><div className="budget-catalog-grid">{items.map(item => <button key={item.id} onClick={() => add(item)}><span className={`budget-catalog-thumb ${item.kind === "Produto" ? "product" : "service"}`}>{item.catalogImage?<img src={item.catalogImage} alt={item.name}/>:item.kind === "Produto" ? <Package size={17}/> : <Wrench size={17}/>}</span><div><small>{item.id} • {item.kind}</small><b>{item.name}</b><em>{item.category || "Sem categoria"}</em></div><strong>R$ {(item.value ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong><Plus size={15}/></button>)}</div>{!items.length && <div className="linked-empty"><Search size={20}/><h4>Nenhum item encontrado</h4></div>}</div><aside className="budget-cart panel"><header><div><ShoppingCart size={17}/><span><b>Itens do orçamento</b><small>{cart.length} cadastro(s)</small></span></div>{cart.length > 0 && <button onClick={() => setCart([])}><Trash2 size={13}/> Limpar</button>}</header><div className="budget-cart-list">{cart.map(item => <article key={item.id}><div><small>{item.kind}</small><b>{item.description}</b><input type="number" min="0" step="0.01" value={item.unitValue} onChange={event => update(item.id,{unitValue:Number(event.target.value)})}/></div><label>Qtd.<input type="number" min="0.001" step="0.001" value={item.quantity} onChange={event => update(item.id,{quantity:Number(event.target.value)})}/></label><strong>R$ {(item.quantity*item.unitValue).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong><button onClick={() => setCart(current => current.filter(record => record.id !== item.id))}><Trash2 size={13}/></button></article>)}{!cart.length && <div className="pdv-empty"><ShoppingCart size={26}/><strong>Orçamento vazio</strong><p>Selecione produtos ou serviços no catálogo.</p></div>}</div><div className="budget-totals"><label>Forma de pagamento<select value={payment} onChange={event => setPayment(event.target.value)}>{["PIX","Dinheiro","Cartão de crédito","Cartão de débito","Boleto","Transferência","A combinar"].map(item => <option key={item}>{item}</option>)}</select></label><label>Desconto<input type="number" min="0" max={subtotal} value={discount || ""} onChange={event => setDiscount(Number(event.target.value))} placeholder="R$ 0,00"/></label><label className="wide">Observações<textarea value={observations} onChange={event => setObservations(event.target.value)} placeholder="Prazo, garantia e condições..."/></label><p><span>Subtotal</span><b>R$ {subtotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></p><div><span>TOTAL</span><strong>R$ {total.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div><button className="primary-btn" disabled={!customer || !cart.length} onClick={save}><CheckCircle2 size={16}/> Salvar orçamento</button></div></aside></div><div className="budget-saved panel"><header><div><span className="section-kicker"><History size={12}/> ORÇAMENTOS SALVOS</span><h3>Conversão rápida</h3></div><small>{budgets.length} orçamento(s)</small></header>{budgets.length ? <div>{budgets.map(record => <article key={record.id}><span><b>{record.id}</b><strong>{record.client}</strong><small>{record.purchaseItems?.length ?? 0} item(ns) • {record.endDate ? `Válido até ${new Date(`${record.endDate}T12:00:00`).toLocaleDateString("pt-BR")}` : record.createdAt}</small></span><em>{record.status}</em><b>R$ {(record.value ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</b><select aria-label={`Status do orçamento ${record.id}`} value={record.status || "Em elaboração"} onChange={event=>onSave({...record,status:event.target.value,changeReason:`Status comercial atualizado para ${event.target.value}`})}>{["Em elaboração","Enviado","Aguardando retorno","Em negociação","Aprovado","Perdido","Cancelado"].map(status=><option key={status}>{status}</option>)}</select><button onClick={() => onConvert(record,"Pedido")} disabled={!/Aprovado|Em negociação|Enviado|Aguardando retorno/i.test(record.status||"")}><ShoppingBag size={14}/> Converter em venda</button><button onClick={() => onConvert(record,"Ordem de serviço")} disabled={!/Aprovado|Em negociação|Enviado|Aguardando retorno/i.test(record.status||"")}><ClipboardList size={14}/> Converter em OS</button><button className="danger" onClick={() => onDelete(record)}><Trash2 size={14}/></button></article>)}</div> : <div className="linked-empty"><FileText size={22}/><h4>Nenhum orçamento salvo</h4></div>}</div><BudgetQuickCreateDrawer open={Boolean(quickCreate)} mode={quickCreate ?? "customer"} customerName={customer} customers={customers} structures={structures} onClose={() => setQuickCreate(null)} onCreateCustomer={created => { const result = onCreateCustomer(created); if (result) { setCustomer(result.name); setUnit(""); setNotice("Cliente criado e selecionado no orçamento."); } return result; }} onCreateStructure={created => { const result = onCreateStructure(created); if (result) { setUnit(result.id); setNotice("Estrutura criada e selecionada no orçamento."); } return result; }} /></section>;
+
+  return <section className="budget-pdv budget-workspace">
+    <nav className="budget-workspace-tabs" aria-label="Áreas do orçamento">
+      <button className={tab==="novo"?"active":""} onClick={()=>setTab("novo")}><Plus size={15}/> Novo orçamento</button>
+      <button className={tab==="lista"?"active":""} onClick={()=>setTab("lista")}><FileText size={15}/> Orçamentos <span>{budgets.length}</span></button>
+    </nav>
+
+    {tab==="novo" ? <>
+      <section className="budget-order-head panel">
+        <header><div><span className="section-kicker"><FileText size={12}/> ORÇAMENTO</span><h2>Novo orçamento</h2><p>Monte a proposta comercial em uma única tela, com itens, condições e totais.</p></div><span className="budget-draft-chip">Rascunho</span></header>
+        <div className="budget-order-fields">
+          <div className="budget-customer-field budget-field-wide"><span className="budget-field-label">Cliente</span><CustomerSearchSelect customers={customers} value={customer} onChange={value => { setCustomer(value); setUnit(""); }} />{customer && <small className="budget-customer-selected"><CheckCircle2 size={11}/> Cliente selecionado</small>}</div>
+          <label>Validade<select value={validity} onChange={event => setValidity(Number(event.target.value))}><option value={7}>7 dias</option><option value={15}>15 dias</option><option value={30}>30 dias</option><option value={60}>60 dias</option></select></label>
+          <label>Tabela de preços<select value={priceTable} onChange={event=>setPriceTable(event.target.value)}><option>Padrão</option><option>Promocional</option><option>Contrato</option><option>Licitação</option></select></label>
+          <label>Referência<input value={reference} onChange={event=>setReference(event.target.value)} placeholder="Ref. comercial, obra ou pedido"/></label>
+          <label>Vendedor<input value={seller} onChange={event=>setSeller(event.target.value)} placeholder="Responsável comercial"/></label>
+          {customer ? <label className="budget-field-wide">Órgão / Diretoria / Unidade / Setor<select value={unit} onChange={event => setUnit(event.target.value)}><option value="">Selecione a estrutura vinculada</option>{customerUnits.map(item => <option key={item.id} value={item.id}>{budgetStructureLabel(item)} • {item.category || "Unidade"}</option>)}</select></label> : <div className="budget-field-wide budget-no-customer"><span>Selecione um cliente para carregar unidades e setores vinculados.</span></div>}
+          <div className="budget-head-actions"><button type="button" className="budget-quick-trigger" onClick={() => setQuickCreate("customer")}><Plus size={13}/> Novo cliente</button>{customer&&<button type="button" className="budget-quick-trigger" onClick={() => setQuickCreate("structure")}><Plus size={13}/> Nova estrutura</button>}</div>
+        </div>
+      </section>
+
+      {notice && <div className="pdv-notice"><CheckCircle2 size={15}/>{notice}<button onClick={() => setNotice("")}><X size={13}/></button></div>}
+
+      <section className="budget-item-entry panel">
+        <header><div><span className="section-kicker"><ShoppingCart size={12}/> ITENS DO ORÇAMENTO</span><h3>Adicionar produto ou serviço</h3></div><div className="budget-kind-tabs">{(["Todos","Produto","Serviço"] as const).map(kind => <button className={kindFilter === kind ? "active" : ""} key={kind} onClick={() => setKindFilter(kind)}>{kind}</button>)}</div></header>
+        <div className="budget-item-command">
+          <label className="budget-item-search"><span>Código / descrição</span><div><Search size={16}/><input value={search} onChange={event=>setSearch(event.target.value)} placeholder="Digite código, produto ou serviço..."/></div>{search.trim()&&<div className="budget-item-results">{items.slice(0,8).map(item=><button key={item.id} onClick={()=>add(item)}><span className={item.kind==="Produto"?"product":"service"}>{item.kind==="Produto"?<Package size={15}/>:<Wrench size={15}/>}</span><div><b>{item.name}</b><small>{item.id} • {item.category || item.kind}</small></div><strong>R$ {(item.value??0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong><Plus size={14}/></button>)}{!items.length&&<small className="budget-item-no-result">Nenhum item encontrado.</small>}</div>}</label>
+          <button className="budget-add-first" disabled={!items.length} onClick={()=>items[0]&&add(items[0])}><Plus size={15}/> Adicionar</button>
+          <button className="budget-clear-search" onClick={()=>setSearch("")}>Limpar</button>
+        </div>
+      </section>
+
+      <section className="budget-line-items panel">
+        <div className="budget-line-table-wrap"><table><thead><tr><th>CÓDIGO</th><th>DESCRIÇÃO</th><th>QTD.</th><th>UN.</th><th>VALOR UNIT.</th><th>DESC. %</th><th>TOTAL</th><th></th></tr></thead><tbody>{cart.map(item=><tr key={item.id}><td><b>{item.productId||item.id}</b><small>{item.kind}</small></td><td><strong>{item.description}</strong></td><td><input aria-label={`Quantidade ${item.description}`} type="number" min="0.001" step="0.001" value={item.quantity} onChange={event=>update(item.id,{quantity:Number(event.target.value)})}/></td><td><input aria-label={`Unidade ${item.description}`} value={item.unitOfMeasure||""} onChange={event=>update(item.id,{unitOfMeasure:event.target.value.toUpperCase().slice(0,6)})}/></td><td><input aria-label={`Valor unitário ${item.description}`} type="number" min="0" step="0.01" value={item.unitValue} onChange={event=>update(item.id,{unitValue:Number(event.target.value)})}/></td><td><input aria-label={`Desconto ${item.description}`} type="number" min="0" max="100" step="0.01" value={item.discountPercent??0} onChange={event=>update(item.id,{discountPercent:Math.min(100,Math.max(0,Number(event.target.value)))})}/></td><td><strong>R$ {itemTotal(item).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></td><td><button title="Remover item" onClick={()=>setCart(current=>current.filter(record=>record.id!==item.id))}><Trash2 size={14}/></button></td></tr>)}</tbody></table></div>
+        {!cart.length&&<div className="budget-lines-empty"><div><Plus size={24}/></div><b>Nenhum item adicionado</b><p>Use a busca acima para localizar produtos e serviços.</p></div>}
+      </section>
+
+      <section className="budget-finish panel">
+        <div className="budget-condition-fields">
+          <label>Forma de pagamento<select value={payment} onChange={event => setPayment(event.target.value)}>{["PIX","Dinheiro","Cartão de crédito","Cartão de débito","Boleto","Transferência","A combinar"].map(item => <option key={item}>{item}</option>)}</select></label>
+          <label>Desconto geral<input type="number" min="0" max={subtotal} step="0.01" value={discount || ""} onChange={event => setDiscount(Math.max(0,Number(event.target.value)))} placeholder="R$ 0,00"/></label>
+          <label>Acréscimo<input type="number" min="0" step="0.01" value={surcharge || ""} onChange={event => setSurcharge(Math.max(0,Number(event.target.value)))} placeholder="R$ 0,00"/></label>
+          <label className="wide">Observações<textarea value={observations} onChange={event => setObservations(event.target.value)} placeholder="Prazo, garantia, condições comerciais e observações do orçamento..."/></label>
+        </div>
+        <div className="budget-summary-bar">
+          <div><small>SUBTOTAL</small><b>R$ {subtotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></div>
+          <div><small>DESCONTO</small><b>- R$ {discount.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></div>
+          <div><small>ACRÉSCIMO</small><b>R$ {surcharge.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></div>
+          <div className="budget-grand-total"><small>TOTAL DO ORÇAMENTO</small><strong>R$ {total.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div>
+          <div className="budget-final-actions"><button className="outline-btn" disabled={!customer||!cart.length} onClick={()=>save("Em elaboração")}><Save size={15}/> Salvar rascunho</button><button className="primary-btn" disabled={!customer||!cart.length} onClick={()=>save("Enviado")}><CheckCircle2 size={16}/> Finalizar orçamento</button></div>
+        </div>
+      </section>
+    </> : <>
+      <CommercialRecordsManager title="Orçamentos" records={budgets} onConvert={onConvert} onDelete={onDelete}/>
+      <div className="budget-saved panel"><header><div><span className="section-kicker"><History size={12}/> ACOMPANHAMENTO COMERCIAL</span><h3>Orçamentos salvos</h3></div><small>{budgets.length} orçamento(s)</small></header>{budgets.length ? <div>{budgets.map(record => <article key={record.id}><span><b>{record.id}</b><strong>{record.client}</strong><small>{record.purchaseItems?.length ?? 0} item(ns) • {record.reference ? `Ref. ${record.reference} • ` : ""}{record.endDate ? `Válido até ${new Date(`${record.endDate}T12:00:00`).toLocaleDateString("pt-BR")}` : record.createdAt}</small></span><em>{record.status}</em><b>R$ {(record.value ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</b><select aria-label={`Status do orçamento ${record.id}`} value={record.status || "Em elaboração"} onChange={event=>onSave({...record,status:event.target.value,changeReason:`Status comercial atualizado para ${event.target.value}`})}>{["Em elaboração","Enviado","Aguardando retorno","Em negociação","Aprovado","Perdido","Cancelado"].map(status=><option key={status}>{status}</option>)}</select><button onClick={() => onConvert(record,"Pedido")} disabled={!/Aprovado|Em negociação|Enviado|Aguardando retorno/i.test(record.status||"")}><ShoppingBag size={14}/> Converter em venda</button><button onClick={() => onConvert(record,"Ordem de serviço")} disabled={!/Aprovado|Em negociação|Enviado|Aguardando retorno/i.test(record.status||"")}><ClipboardList size={14}/> Converter em OS</button><button className="danger" onClick={() => onDelete(record)}><Trash2 size={14}/></button></article>)}</div> : <div className="linked-empty"><FileText size={22}/><h4>Nenhum orçamento salvo</h4></div>}</div>
+    </>}
+
+    <BudgetQuickCreateDrawer open={Boolean(quickCreate)} mode={quickCreate ?? "customer"} customerName={customer} customers={customers} structures={structures} onClose={() => setQuickCreate(null)} onCreateCustomer={created => { const result = onCreateCustomer(created); if (result) { setCustomer(result.name); setUnit(""); setNotice("Cliente criado e selecionado no orçamento."); } return result; }} onCreateStructure={created => { const result = onCreateStructure(created); if (result) { setUnit(result.id); setNotice("Estrutura criada e selecionada no orçamento."); } return result; }} />
+  </section>;
 }
 
 type TenderDocument = { sequencialDocumento?: number; tipoDocumentoNome?: string; titulo?: string; dataPublicacaoPncp?: string; url?: string; uri?: string };
