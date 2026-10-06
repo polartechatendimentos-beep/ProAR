@@ -6,6 +6,7 @@ import { hashPassword, verifyPassword } from "../../../lib/password";
 import { tenantSlugFromHost } from "../../../lib/tenant-host";
 import { validateCompanyAccess, validateCompanyAccessBySlug } from "../../../lib/company-access";
 import { validateManagerCredentials } from "../../../lib/manager-auth";
+import { classifyProarError } from "../../../lib/system-errors";
 const COOKIE_NAME = "proar_session";
 const PRIMARY_COMPANY_ID = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
 const PRIMARY_COMPANY_SLUG = (process.env.PROAR_PRIMARY_COMPANY_SLUG || "polartech").trim().toLowerCase();
@@ -147,15 +148,17 @@ export async function POST(request: NextRequest) {
   try {
     return await handlePostAuth(request);
   } catch (error) {
+    const descriptor=classifyProarError(error);
     console.error("AUTH_POST_FAILED", {
       name:error instanceof Error ? error.name : "Error",
       message:error instanceof Error ? error.message : String(error),
+      code:descriptor.code,
     });
     return NextResponse.json(
       {
         authenticated:false,
-        code:"AUTH_INTERNAL_ERROR",
-        error:"Não foi possível concluir a autenticação agora. Tente novamente em alguns instantes.",
+        code:descriptor.code,
+        error:descriptor.userMessage,
       },
       { status:500 },
     );
