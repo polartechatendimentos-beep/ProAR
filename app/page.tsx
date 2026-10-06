@@ -24,6 +24,7 @@ import "./google-calendar.css";
 import "./usability-hardening.css";
 import "./fiscal-workspace.css";
 import "./responsive-hardening.css";
+import "./resilience-status.css";
 import { ConnectivityBanner } from "@/components/ResponsivePrimitives";
 import { MobileToday } from "@/components/MobileToday";
 
@@ -3656,6 +3657,8 @@ export default function Home() {
   const [stateRevision, setStateRevision] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [syncPhase, setSyncPhase] = useState<"idle" | "syncing" | "complete">("idle");
+  const [databaseMode, setDatabaseMode] = useState<"online" | "degraded" | "offline">("online");
+  const [lastSuccessfulSyncAt, setLastSuccessfulSyncAt] = useState("");
   useEffect(() => {
     const navigate = (event: Event) => setCurrent((event as CustomEvent<string>).detail);
     window.addEventListener("proar:navigate", navigate);
@@ -3714,7 +3717,7 @@ export default function Home() {
   useEffect(() => {
     setOnline(navigator.onLine);
     const onOnline = () => setOnline(true);
-    const onOffline = () => setOnline(false);
+    const onOffline = () => { setOnline(false); setDatabaseMode("offline"); };
     window.addEventListener("online", onOnline); window.addEventListener("offline", onOffline);
     const runId = `BOOT-${new Date().toISOString().replace(/\\D/g,"").slice(0,14)}-${Math.random().toString(36).slice(2,7).toUpperCase()}`;
     setBootRunId(runId); setBootError(""); setCheckingSession(true);
@@ -3800,6 +3803,10 @@ export default function Home() {
           localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(state.serviceOrders ?? []));
           localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(state.customers ?? []));
           localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(migratedModules));
+          const syncedAt=new Date().toISOString();
+          localStorage.setItem(companyStorageKey(activeCompany.id, "last-successful-sync"), syncedAt);
+          setLastSuccessfulSyncAt(syncedAt);
+          setDatabaseMode("online");
           return;
         }
         const localState = {
@@ -3813,13 +3820,21 @@ export default function Home() {
         setCustomerRecords(localState.customers);
         setModuleRecords(localState.moduleRecords);
       } catch {
-        if (navigator.onLine) { setSavedMessage("Banco online indisponível. Nenhuma cópia local foi enviada ou definida como principal."); return; }
         const localOrders = readCompanyStorage(activeCompany.id, "service-orders", []) as ServiceOrder[];
         const localCustomers = readCompanyStorage(activeCompany.id, "customers", []) as Customer[];
         const localModules = mergeImportedServices(readCompanyStorage(activeCompany.id, "module-records", {}) as Record<string, ModuleRecord[]>);
+        const cachedAt = localStorage.getItem(companyStorageKey(activeCompany.id, "last-successful-sync")) || "";
         setServiceOrders(localOrders);
         setCustomerRecords(localCustomers);
         setModuleRecords({ ...localModules, Funcionários: localModules.Funcionários?.length ? localModules.Funcionários : [tiagoEmployee] });
+        setLastSuccessfulSyncAt(cachedAt);
+        if (navigator.onLine) {
+          setDatabaseMode("degraded");
+          setSavedMessage(`Modo contingência ativado. Exibindo a última cópia sincronizada${cachedAt ? ` em ${new Date(cachedAt).toLocaleString("pt-BR")}` : ""}. O banco será testado novamente automaticamente.`);
+        } else {
+          setDatabaseMode("offline");
+          setSavedMessage(`Sem internet. Exibindo dados deste aparelho${cachedAt ? ` sincronizados em ${new Date(cachedAt).toLocaleString("pt-BR")}` : ""}.`);
+        }
       }
     };
     loadSharedState();
@@ -3837,6 +3852,10 @@ export default function Home() {
     setSavedMessage("");
   }, [savedMessage]);
   const persistSharedState = (nextCustomers: Customer[], nextOrders: ServiceOrder[], nextModules: Record<string, ModuleRecord[]>) => {
+    if (databaseMode === "degraded") {
+      setSavedMessage("Modo contingência: alterações estão temporariamente bloqueadas até o banco voltar a responder.");
+      return;
+    }
     localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(nextCustomers));
     localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(nextOrders));
     localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(nextModules));
@@ -3868,9 +3887,21 @@ export default function Home() {
       setStateRevision(Number(result.state._revision||0));
       setCustomerRecords(nextCustomers); setServiceOrders(nextOrders); setModuleRecords(nextModules);
       localStorage.setItem(companyStorageKey(activeCompany.id,"customers"),JSON.stringify(nextCustomers)); localStorage.setItem(companyStorageKey(activeCompany.id,"service-orders"),JSON.stringify(nextOrders)); localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(nextModules));
+      const syncedAt=new Date().toISOString();
+      localStorage.setItem(companyStorageKey(activeCompany.id,"last-successful-sync"),syncedAt);
+      setLastSuccessfulSyncAt(syncedAt);
+      setDatabaseMode("online");
       setSyncPhase("complete");
       window.setTimeout(() => setSyncPhase("idle"), 1000);
-    } catch { setSyncPhase("idle"); setSavedMessage("Não foi possível atualizar os dados. Os dados deste aparelho foram mantidos."); }
+    } catch {
+      setSyncPhase("idle");
+      const cachedAt=localStorage.getItem(companyStorageKey(activeCompany.id,"last-successful-sync"))||lastSuccessfulSyncAt;
+      setLastSuccessfulSyncAt(cachedAt);
+      setDatabaseMode(navigator.onLine?"degraded":"offline");
+      setSavedMessage(navigator.onLine
+        ? `Banco temporariamente indisponível. Modo contingência ativo${cachedAt?` com dados de ${new Date(cachedAt).toLocaleString("pt-BR")}`:""}.`
+        : "Sem internet. Os dados deste aparelho foram mantidos.");
+    }
     finally { setSyncing(false); }
   };
   const pushToDatabase = async () => {
@@ -4649,6 +4680,12 @@ export default function Home() {
     <main className="main">
       <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNew={openNew} searchItems={globalSearchItems} pendingItems={pendingItems} onSearchSelect={openGlobalSearch} onPendingSelect={openPending} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onSwitchUser={logout} online={online} syncing={syncing} onPull={() => void pullFromDatabase()} onPush={() => void pushToDatabase()}/>
       {syncPhase !== "idle" && <div className={`sync-progress ${syncPhase}`} role="status" aria-label={syncPhase === "complete" ? "Dados atualizados" : "Sincronizando dados"}><i/></div>}
+      {databaseMode !== "online" && <div className={`database-contingency ${databaseMode}`} role="status">
+        <AlertTriangle size={16}/>
+        <div><strong>{databaseMode === "degraded" ? "Modo contingência" : "Modo offline"}</strong><span>{databaseMode === "degraded" ? "Banco temporariamente indisponível. A última cópia sincronizada permanece visível e as gravações críticas aguardam reconexão." : "Sem conexão com a internet. Os dados armazenados neste aparelho permanecem disponíveis."}</span></div>
+        {lastSuccessfulSyncAt && <small>Última sincronização: {new Date(lastSuccessfulSyncAt).toLocaleString("pt-BR")}</small>}
+        {online && <button type="button" onClick={()=>void pullFromDatabase()} disabled={syncing}><RefreshCw size={14}/> Testar novamente</button>}
+      </div>}
       
       <div className="company-context"><Building2 size={13}/><span>{activeCompany.tradeName}</span><small>{activeCompany.cnpj || "CNPJ pendente"} • {activeCompany.city}/{activeCompany.state}</small></div>
       {current === "PMOC e conformidade" && !planBlocked ? <TechnicalCompliancePanel plans={(moduleRecords.PMOC ?? []) as any} fluids={(moduleRecords.Refrigerantes ?? []) as any} documents={(moduleRecords["Documentação / Habilitação"] ?? []) as any} onSave={(module,record)=>saveConfirmedModuleRecord(module,record)} onDelete={(module,record)=>deleteModuleRecord(module,record as ModuleRecord)}/> : null}
