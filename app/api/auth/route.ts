@@ -53,23 +53,35 @@ export async function GET(request: NextRequest) {
         ? await validateCompanyAccessBySlug(PRIMARY_COMPANY_SLUG)
         : await validateCompanyAccess(user.companyId);
     if (!access.ok) {
-      const response = NextResponse.json({ authenticated: false, code: access.code, blocked:access.code==="SYSTEM_BLOCKED", error: access.reason }, { status: 403 });
-      response.cookies.set(COOKIE_NAME, "", { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 0 });
-      return response;
+      const primaryTenant = user.companyId === PRIMARY_COMPANY_ID || user.companySlug === PRIMARY_COMPANY_SLUG;
+      if (!(primaryTenant && access.code === "MANAGER_UNAVAILABLE")) {
+        const status = access.code === "MANAGER_UNAVAILABLE" ? 503 : 403;
+        const response = NextResponse.json({ authenticated: false, code: access.code, blocked:access.code==="SYSTEM_BLOCKED", error: access.reason }, { status });
+        response.cookies.set(COOKIE_NAME, "", { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 0 });
+        return response;
+      }
+      console.warn("AUTH_PRIMARY_MANAGER_UNAVAILABLE", { companyId:user.companyId, companySlug:user.companySlug });
     }
     if (Array.isArray(access.company?.modules)) entitledModules = access.company?.modules as string[];
   }
   return NextResponse.json({ authenticated: true, ...user, entitledModules });
 }
 
-export async function POST(request: NextRequest) {
+async function handlePostAuth(request: NextRequest) {
   const { username = "", password = "", tenant = "" } = await request.json();
   const hostTenant = tenantSlugFromHost(request.headers.get("host"));
   const resolvedTenant = hostTenant || String(tenant || "").trim().toLowerCase();
   if (resolvedTenant && supabaseConfigured()) {
     const access = await validateCompanyAccessBySlug(resolvedTenant);
     if (!access.ok) {
-      return NextResponse.json({ code:access.code, error:access.reason, blocked:access.code==="SYSTEM_BLOCKED" }, { status:403 });
+      const primaryTenant = resolvedTenant === PRIMARY_COMPANY_SLUG;
+      if (!(primaryTenant && access.code === "MANAGER_UNAVAILABLE")) {
+        return NextResponse.json(
+          { code:access.code, error:access.reason, blocked:access.code==="SYSTEM_BLOCKED" },
+          { status:access.code === "MANAGER_UNAVAILABLE" ? 503 : 403 },
+        );
+      }
+      console.warn("AUTH_PRIMARY_MANAGER_UNAVAILABLE", { tenant:resolvedTenant });
     }
   }
   const isConfiguredTiago = String(username).trim().toLocaleLowerCase("pt-BR") === "tiago.viana" && Boolean(process.env.PROAR_POLARTECH_TIAGO_PASSWORD) && safeEqual(String(password), String(process.env.PROAR_POLARTECH_TIAGO_PASSWORD));
@@ -129,6 +141,25 @@ export async function POST(request: NextRequest) {
     }
   }
   return NextResponse.json({ error: "Utilizador ou senha inválidos." }, { status: 401 });
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    return await handlePostAuth(request);
+  } catch (error) {
+    console.error("AUTH_POST_FAILED", {
+      name:error instanceof Error ? error.name : "Error",
+      message:error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(
+      {
+        authenticated:false,
+        code:"AUTH_INTERNAL_ERROR",
+        error:"Não foi possível concluir a autenticação agora. Tente novamente em alguns instantes.",
+      },
+      { status:500 },
+    );
+  }
 }
 
 export async function DELETE() { const response = NextResponse.json({ authenticated: false }); response.cookies.set(COOKIE_NAME, "", { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 0 }); return response; }
