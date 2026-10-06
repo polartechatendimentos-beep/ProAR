@@ -3,7 +3,7 @@ import { requirePermission, sessionCompany } from "../../../lib/permissions";
 import { resolveTenantDb, tenantHeaders } from "../../../lib/tenant-rest";
 import { databaseFetch, supabaseRest } from "../../../lib/supabase-rest";
 import { probeDatabase } from "../../../lib/database-resilience";
-import { proarError } from "../../../lib/system-errors";
+import { classifyProarError, proarError } from "../../../lib/system-errors";
 import { recordSystemIncident } from "../../../lib/system-observability";
 import { CURRENT_PROAR_RELEASE } from "../../../lib/release-notes";
 
@@ -64,14 +64,15 @@ export async function GET(request: NextRequest) {
         {headers:tenantHeaders(db.key),cache:"no-store"},
       ));
       const slow=probe.ok && probe.latencyMs>2500;
+      const failure=probe.ok?null:classifyProarError(probe.detail,probe.status);
       database={
         id:"database",
         label:"Banco de dados",
         state:probe.ok?(slow?"warning":"ok"):"error",
-        code:probe.ok?(slow?proarError("PROAR-DB-002").code:undefined):proarError("PROAR-DB-003").code,
+        code:probe.ok?(slow?proarError("PROAR-DB-002").code:undefined):failure?.code,
         message:probe.ok
           ? `${db.dedicated?"Banco dedicado":"Banco principal"} acessível${slow?" com latência elevada":""}.`
-          : "Banco indisponível após novas tentativas. O modo de contingência deve preservar a última cópia sincronizada.",
+          : failure?.userMessage || "Banco indisponível após novas tentativas. O modo de contingência deve preservar a última cópia sincronizada.",
         latencyMs:probe.latencyMs,
         attempts:probe.attempts,
         metadata:{provider:db.provider,projectName:db.projectName,source:db.source,httpStatus:probe.status},
@@ -97,7 +98,7 @@ export async function GET(request: NextRequest) {
           companyId:scope.companyId,
           module:"Saúde do Sistema",
           operation:"Health check do banco",
-          code:"PROAR-DB-003",
+          code:failure?.code || "PROAR-DB-003",
           error:probe.detail,
           route:"/api/system-health",
           metadata:{latencyMs:probe.latencyMs,attempts:probe.attempts,provider:db.provider,projectName:db.projectName},
@@ -105,17 +106,18 @@ export async function GET(request: NextRequest) {
       }
     }
   }catch(error){
+    const descriptor=classifyProarError(error);
     database={
       ...database,
       state:"error",
-      message:"Banco indisponível ou excedeu o tempo de resposta.",
-      code:proarError("PROAR-DB-003").code,
+      message:descriptor.userMessage,
+      code:descriptor.code,
     };
     void recordSystemIncident({
       companyId:scope.companyId,
       module:"Saúde do Sistema",
       operation:"Resolver banco do tenant",
-      code:"PROAR-DB-003",
+      code:descriptor.code,
       error,
       route:"/api/system-health",
     });
