@@ -110,3 +110,9 @@
 @media(max-width:560px){
   .manager-deployment-grid{grid-template-columns:1fr}
 }
+
+.manager-recovery-controls{display:flex;gap:12px;align-items:end;justify-content:space-between;margin:10px 0 12px}
+.manager-recovery-controls label{display:flex;flex-direction:column;gap:6px;min-width:280px;font-size:11px;color:#89a0b8}
+.manager-recovery-controls select{min-height:38px;border:1px solid #1d3857;background:#061524;color:#f8fafc;border-radius:9px;padding:0 10px}
+.manager-recovery-controls span{font-size:11px;color:#7890aa}
+@media(max-width:700px){.manager-recovery-controls{align-items:stretch;flex-direction:column}.manager-recovery-controls label{min-width:0}}
