@@ -25,3 +25,8 @@ test("database unavailable has stable user-safe error code",()=>{
   assert.equal(classifyProarError("connection terminated").code,"PROAR-DB-003");
   assert.equal(proarError("PROAR-DB-003").severity,"critical");
 });
+
+test("provider quota exhaustion is distinct from a transient outage",()=>{
+  assert.equal(classifyProarError("Server error (HTTP status 402): Your account or project has exceeded the quota.").code,"PROAR-DB-004");
+  assert.equal(classifyProarError("quota exceeded",402).severity,"critical");
+});
