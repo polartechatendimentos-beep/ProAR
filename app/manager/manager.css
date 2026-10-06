@@ -80,3 +80,33 @@
 .manager-module-pricing .module-price{height:32px;padding:0 8px;border:1px solid #d6e0e9;border-radius:7px;text-align:right}
 .manager-module-pricing .module-price:disabled{background:#f2f5f8;color:#9aa8b5}
 @media(max-width:860px){.manager-module-pricing>div{grid-template-columns:1fr}}
+
+
+/* Saúde operacional, incidentes e rollback */
+.manager-summary article.danger{border-color:rgba(239,68,68,.38);box-shadow:inset 0 0 0 1px rgba(239,68,68,.08)}
+.manager-health{display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:.02em;white-space:nowrap}
+.manager-health.ok{background:rgba(16,185,129,.12);color:#34d399;border:1px solid rgba(16,185,129,.24)}
+.manager-health.warning{background:rgba(245,158,11,.12);color:#fbbf24;border:1px solid rgba(245,158,11,.24)}
+.manager-health.error{background:rgba(239,68,68,.12);color:#fb7185;border:1px solid rgba(239,68,68,.25)}
+.manager-operations-overview,.manager-observability-panel,.manager-deployment-panel{overflow:hidden}
+.manager-operations-table td{vertical-align:middle}
+.manager-cell-detail{display:block;margin-top:3px;color:#7890aa;font-size:10px}
+.manager-observability-panel code{font-size:11px;color:#93c5fd;background:rgba(37,99,235,.1);padding:3px 6px;border-radius:6px}
+.manager-deployment-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px}
+.manager-deployment-grid>div{border:1px solid #17304c;background:#071729;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:5px}
+.manager-deployment-grid small{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#6f89a5}
+.manager-deployment-grid b{font-size:13px;overflow-wrap:anywhere}
+.manager-rollback-form{display:grid;grid-template-columns:minmax(180px,.8fr) minmax(260px,1.5fr) auto;gap:10px;align-items:end;margin-top:12px}
+.manager-rollback-form label{display:flex;flex-direction:column;gap:6px;font-size:11px;color:#89a0b8}
+.manager-rollback-form input{min-height:38px;border:1px solid #1d3857;background:#061524;color:#f8fafc;border-radius:9px;padding:0 10px;outline:none}
+.manager-rollback-form input:focus{border-color:#2878d4}
+.manager-rollback-form button{min-height:38px}
+.manager-rollback-form button:disabled{opacity:.5;cursor:not-allowed}
+.manager-deployment-note{display:block;margin-top:10px;color:#7890aa}
+@media(max-width:900px){
+  .manager-deployment-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .manager-rollback-form{grid-template-columns:1fr}
+}
+@media(max-width:560px){
+  .manager-deployment-grid{grid-template-columns:1fr}
+}
