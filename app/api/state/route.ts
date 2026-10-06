@@ -196,7 +196,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ saved: true, state: confirmed, dedicatedDatabase: db.dedicated, canonicalCompanyId: company });
   } catch (error) {
     if (error instanceof OperationError) return NextResponse.json({ error: error.message }, { status: error.status });
-    const company=safeCompany(request.nextUrl.searchParams.get("company"))||PRIMARY_COMPANY_ID;
+    const company=companyKey(request,session);
     void recordSystemIncident({companyId:company,module:"Sincronização",operation:"Gravar estado operacional",error,route:"/api/state"});
     return NextResponse.json({ error: "Não foi possível sincronizar os dados.", code:"PROAR-DB-003" }, { status: 503 });
   }
