@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { masterDatabaseConfig, neonEnabled, databaseFetch } from "../../../../lib/supabase-rest";
 import { probeDatabase } from "../../../../lib/database-resilience";
-import { proarError } from "../../../../lib/system-errors";
+import { classifyProarError, proarError } from "../../../../lib/system-errors";
 
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
@@ -25,6 +25,7 @@ export async function GET(){
     {cache:"no-store"},
   ));
   const slow=probe.ok&&probe.latencyMs>2500;
+  const failure=probe.ok?null:classifyProarError(probe.detail,probe.status);
   return NextResponse.json({
     ok:probe.ok,
     provider,
@@ -32,8 +33,8 @@ export async function GET(){
     latencyMs:probe.latencyMs,
     attempts:probe.attempts,
     httpStatus:probe.status||null,
-    code:probe.ok?(slow?proarError("PROAR-DB-002").code:null):proarError("PROAR-DB-003").code,
-    message:probe.ok?(slow?"Banco acessível com latência elevada.":"Banco acessível."):"Banco principal não respondeu após novas tentativas.",
+    code:probe.ok?(slow?proarError("PROAR-DB-002").code:null):failure?.code,
+    message:probe.ok?(slow?"Banco acessível com latência elevada.":"Banco acessível."):(failure?.userMessage||"Banco principal não respondeu após novas tentativas."),
     checkedAt:probe.checkedAt,
   },{status:probe.ok?200:503,headers:{"Cache-Control":"no-store"}});
 }
