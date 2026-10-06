@@ -1,12 +1,19 @@
 "use client";
-import {MobileRouteControls} from "./MobileRouteControls";
-import {MobileToday} from "./MobileToday";
+
 import Home from "@/app/page";
 import {useEffect} from "react";
 
-// /mobile is only another interface over the same ProAR domain data.
-// It never owns a second OS, stock, finance or customer database.
+// /mobile uses the same authenticated domain data as the desktop ProAR,
+// but the visual shell is intentionally different and optimized for touch.
 export function ProARMobile(){
- useEffect(()=>{document.documentElement.dataset.proarExperience="mobile";return()=>{delete document.documentElement.dataset.proarExperience}},[]);
- return <div className="proar-mobile-entry"><MobileRouteControls/><Home/></div>;
+  useEffect(()=>{
+    document.documentElement.dataset.proarExperience="mobile";
+    document.body.classList.add("proar-mobile-route");
+    return()=>{
+      delete document.documentElement.dataset.proarExperience;
+      document.body.classList.remove("proar-mobile-route");
+    };
+  },[]);
+
+  return <div className="proar-mobile-entry"><Home/></div>;
 }
