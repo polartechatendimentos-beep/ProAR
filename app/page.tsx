@@ -2070,6 +2070,38 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
     };
     void loadProjects();
   },[projectsKey,selectedProjectKey,companyId]);
+
+  useEffect(() => {
+    if (!projectsReady || !activeProject.id || typeof navigator === "undefined" || !navigator.onLine) return;
+    let cancelled = false;
+    const loadExternalAccess = async () => {
+      try {
+        const response = await fetch(
+          `/api/work-external-access?company=${encodeURIComponent(companyId)}&workId=${encodeURIComponent(activeProject.id)}&refresh=${Date.now()}`,
+          { cache:"no-store" },
+        );
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || `Falha ao consultar acessos (HTTP ${response.status}).`);
+        if (cancelled) return;
+        const externalAccess = Array.isArray(result.externalAccess) ? result.externalAccess as WorkExternalAccess[] : [];
+        setProjects(current => {
+          const next = current.map(project => project.id === activeProject.id ? { ...project, externalAccess } : project);
+          localStorage.setItem(projectsKey, JSON.stringify(next));
+          return next;
+        });
+      } catch (error) {
+        if (!cancelled) {
+          setAccessNotice({
+            tone:"error",
+            text:error instanceof Error ? error.message : "Não foi possível carregar os acessos externos desta obra.",
+          });
+        }
+      }
+    };
+    void loadExternalAccess();
+    return () => { cancelled = true; };
+  },[projectsReady,activeProject.id,companyId,projectsKey]);
+
   const mergeWorkRows = (rows: HouseWorkItem[]) => { const byId=new Map(rows.map(item=>[item.id,item])); return createHouses().map(item=>byId.get(item.id)??item); };
   const applyServerMap = (map: { houses?: HouseWorkItem[]; token?: string; revision?: number }) => { const authoritative=mergeWorkRows(map.houses??[]); setHouses(authoritative); localStorage.setItem(storageKey,JSON.stringify(authoritative)); setServerRevision(Number(map.revision||0)); setMapOnline(true); setMapLoading(false); if(map.token){setShareToken(map.token);localStorage.setItem(shareKey,map.token);} return authoritative; };
   const fetchServerMap = async () => { if(!navigator.onLine) throw new Error("offline"); const response=await fetch(`/api/public-work-map?company=${encodeURIComponent(companyId)}&work=${encodeURIComponent(activeProject.id)}&refresh=${Date.now()}`,{cache:"no-store"}); const result=await response.json(); if(!response.ok) throw new Error(result.error||"Falha no banco online"); if(result.map?.houses?.length) applyServerMap(result.map); return result.map as {houses?:HouseWorkItem[];token?:string;revision?:number}|null; };
@@ -2226,44 +2258,34 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
       | { action:"external_access_add"; workId:string; access:WorkExternalAccess }
       | { action:"external_access_toggle"; workId:string; accessId:string; active:boolean },
   ) => {
-    let baseProjects = projects;
-    let revision = projectsRevision;
+    const response = await fetch("/api/work-external-access", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ companyId, ...payload }),
+    });
+    const result = await response.json().catch(() => ({}));
 
-    const send = async () => {
-      const response = await fetch("/api/work-projects", {
-        method:"PATCH",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ companyId, baseRevision:revision, ...payload }),
-      });
-      const result = await response.json().catch(() => ({}));
-      return { response, result };
-    };
-
-    let attempt = await send();
-    if (attempt.response.status === 409 && attempt.result.code === "WORK_PROJECTS_REVISION_CONFLICT") {
-      const latest = await loadLatestProjectsForExternalAccess();
-      baseProjects = latest.projects;
-      revision = latest.revision;
-      attempt = await send();
+    if (!response.ok) {
+      const message = result.error || `Não foi possível salvar o acesso externo (HTTP ${response.status}).`;
+      throw new Error(result.code ? `${message} • ${result.code}` : message);
     }
 
-    if (!attempt.response.ok) {
-      const message = attempt.result.error || `Não foi possível salvar o acesso externo (HTTP ${attempt.response.status}).`;
-      throw new Error(attempt.result.code ? `${message} (${attempt.result.code})` : message);
-    }
-
-    const externalAccess = Array.isArray(attempt.result.externalAccess)
-      ? attempt.result.externalAccess as WorkExternalAccess[]
+    const externalAccess = Array.isArray(result.externalAccess)
+      ? result.externalAccess as WorkExternalAccess[]
       : [];
-    const savedRevision = Number(attempt.result.revision ?? revision);
-    applyExternalAccessState(baseProjects, externalAccess, savedRevision);
-    return { externalAccess, revision:savedRevision };
+
+    const next = projects.map(project =>
+      project.id === activeProject.id ? { ...project, externalAccess } : project,
+    );
+    setProjects(next);
+    localStorage.setItem(projectsKey, JSON.stringify(next));
+    return { externalAccess, revision:Number(result.revision || 0) };
   };
 
   const saveExternalAccess = async () => {
     if (accessSaving) return;
     const name = newAccessName.trim();
-    const username = newAccessUsername.trim().toLocaleLowerCase("pt-BR");
+    const username = newAccessUsername.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").replace(/\s+/g, ".");
     if (!name || !username || newAccessPassword.length < 6) {
       setAccessNotice({ tone:"error", text:"Informe nome, usuário e senha com pelo menos 6 caracteres." });
       return;

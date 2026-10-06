@@ -424,3 +424,329 @@ html[data-proar-experience="mobile"] .orders-panel tbody td:nth-child(n+5):not(:
  }
 }
 
+/* Obras — correção final de composição e acesso externo.
+   Mantido neste arquivo porque ele é o último stylesheet importado pelo app/page.tsx. */
+.app-shell .houses-app{
+  width:100%!important;
+  max-width:1500px!important;
+  min-width:0!important;
+  margin:0 auto!important;
+}
+.app-shell .houses-app .work-manager-bar{
+  display:grid!important;
+  grid-template-columns:minmax(300px,1fr) auto!important;
+  align-items:center!important;
+  gap:14px!important;
+  min-width:0!important;
+}
+.app-shell .houses-app .work-manager-bar>div:first-child{
+  display:grid!important;
+  grid-template-columns:38px minmax(190px,280px) minmax(0,1fr)!important;
+  align-items:center!important;
+  min-width:0!important;
+}
+.app-shell .houses-app .work-manager-bar>div:first-child>span{
+  grid-column:1!important;
+  grid-row:1/3!important;
+}
+.app-shell .houses-app .work-manager-bar>div:first-child>label{
+  grid-column:2!important;
+  min-width:0!important;
+}
+.app-shell .houses-app .work-manager-bar>div:first-child>small{
+  grid-column:3!important;
+  min-width:0!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+}
+.app-shell .houses-app .work-manager-actions{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+  flex-wrap:wrap!important;
+  gap:7px!important;
+  min-width:0!important;
+}
+.app-shell .houses-app .work-manager-actions button{
+  min-height:40px!important;
+  white-space:nowrap!important;
+}
+.app-shell .houses-app .work-external-access-card{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto!important;
+  align-items:center!important;
+  gap:14px!important;
+  min-width:0!important;
+  padding:14px 16px!important;
+}
+.app-shell .houses-app .work-external-access-card>div{
+  min-width:0!important;
+}
+.app-shell .houses-app .work-external-access-card>div>div{
+  min-width:0!important;
+}
+.app-shell .houses-app .work-external-access-card b{
+  color:#e8f3fc!important;
+  font-size:11px!important;
+}
+.app-shell .houses-app .work-external-access-card small{
+  color:#7895ae!important;
+  font-size:9px!important;
+  line-height:1.4!important;
+}
+.app-shell .houses-app .work-external-access-card>button{
+  min-height:42px!important;
+}
+
+/* O bloco de execução deixa de usar 3 colunas apertadas.
+   Título e progresso ficam na primeira linha; acesso público ocupa a largura total abaixo. */
+.app-shell .houses-app .houses-hero{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) minmax(240px,310px)!important;
+  grid-template-areas:
+    "intro progress"
+    "share share"!important;
+  align-items:center!important;
+  gap:18px 24px!important;
+  min-width:0!important;
+  padding:22px!important;
+}
+.app-shell .houses-app .houses-hero>div:first-child{
+  grid-area:intro!important;
+  min-width:0!important;
+}
+.app-shell .houses-app .houses-progress{
+  grid-area:progress!important;
+  width:100%!important;
+  min-width:0!important;
+  padding:0!important;
+}
+.app-shell .houses-app .houses-progress>div{
+  gap:12px!important;
+}
+.app-shell .houses-app .houses-progress small{
+  font-size:8px!important;
+}
+.app-shell .houses-app .houses-progress strong{
+  flex:none!important;
+  font-size:28px!important;
+}
+.app-shell .houses-app .houses-progress>span{
+  font-size:9px!important;
+  line-height:1.35!important;
+}
+.app-shell .houses-app .houses-public-share{
+  grid-area:share!important;
+  display:grid!important;
+  grid-template-columns:42px minmax(220px,1fr) repeat(4,max-content)!important;
+  align-items:center!important;
+  gap:8px!important;
+  width:100%!important;
+  min-width:0!important;
+  margin:0!important;
+  padding:10px 12px!important;
+  border:1px solid #1e4566!important;
+  border-radius:13px!important;
+  background:#0a2138!important;
+  color:#dceaf6!important;
+  box-shadow:none!important;
+}
+.app-shell .houses-app .houses-public-share>span{
+  display:grid!important;
+  place-items:center!important;
+  width:40px!important;
+  height:40px!important;
+  border-radius:10px!important;
+  background:#0d3151!important;
+  color:#65c9f2!important;
+}
+.app-shell .houses-app .houses-public-share>div{
+  min-width:0!important;
+  overflow:hidden!important;
+}
+.app-shell .houses-app .houses-public-share small,
+.app-shell .houses-app .houses-public-share b,
+.app-shell .houses-app .houses-public-share em{
+  display:block!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+}
+.app-shell .houses-app .houses-public-share small{
+  color:#67c9f2!important;
+  font-size:7px!important;
+  font-weight:900!important;
+  letter-spacing:.08em!important;
+}
+.app-shell .houses-app .houses-public-share b{
+  margin-top:2px!important;
+  color:#eef8ff!important;
+  font-size:10px!important;
+}
+.app-shell .houses-app .houses-public-share em{
+  margin-top:2px!important;
+  color:#7290aa!important;
+  font-size:8px!important;
+  font-style:normal!important;
+}
+.app-shell .houses-app .houses-public-share>button,
+.app-shell .houses-app .houses-public-share>a{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:5px!important;
+  min-width:78px!important;
+  min-height:36px!important;
+  padding:0 9px!important;
+  border:1px solid #245071!important;
+  border-radius:8px!important;
+  background:#0c2a45!important;
+  color:#bde6fa!important;
+  font-size:8px!important;
+  font-weight:850!important;
+  text-decoration:none!important;
+  white-space:nowrap!important;
+}
+.app-shell .houses-app .houses-public-share>button:hover,
+.app-shell .houses-app .houses-public-share>a:hover{
+  border-color:#2d88c8!important;
+  background:#103758!important;
+  color:#fff!important;
+}
+
+/* Modal de Engenheiros/Fiscais: formulário previsível e rodapé sempre acessível. */
+.app-shell .external-access-modal{
+  width:min(780px,calc(100vw - 32px))!important;
+  max-width:780px!important;
+  max-height:min(760px,calc(100dvh - 32px))!important;
+  display:grid!important;
+  grid-template-rows:auto minmax(0,1fr) auto!important;
+  overflow:hidden!important;
+}
+.app-shell .external-access-modal .work-register-body{
+  min-height:0!important;
+  max-height:none!important;
+  overflow-y:auto!important;
+  overflow-x:hidden!important;
+  padding:16px!important;
+}
+.app-shell .external-access-modal .external-access-form{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+  gap:12px!important;
+}
+.app-shell .external-access-modal .external-access-form>label{
+  min-width:0!important;
+}
+.app-shell .external-access-modal .external-access-form input,
+.app-shell .external-access-modal .external-access-form select{
+  width:100%!important;
+  min-width:0!important;
+  min-height:44px!important;
+  box-sizing:border-box!important;
+  font-size:13px!important;
+}
+.app-shell .external-access-modal .external-access-submit{
+  grid-column:1/-1!important;
+  width:max-content!important;
+  min-width:190px!important;
+  min-height:44px!important;
+}
+.app-shell .external-access-modal .external-access-notice{
+  grid-column:1/-1!important;
+  width:100%!important;
+  box-sizing:border-box!important;
+}
+.app-shell .external-access-modal .external-access-list{
+  max-height:220px!important;
+  overflow:auto!important;
+}
+.app-shell .external-access-modal .modal-actions{
+  position:relative!important;
+  inset:auto!important;
+  z-index:3!important;
+  min-height:64px!important;
+  padding:11px 16px calc(11px + env(safe-area-inset-bottom))!important;
+  border-top:1px solid #173650!important;
+  background:#071525!important;
+}
+.app-shell .external-access-modal .modal-actions .primary-btn{
+  min-width:120px!important;
+  min-height:42px!important;
+}
+
+@media(max-width:1280px){
+  .app-shell .houses-app .work-manager-bar{
+    grid-template-columns:1fr!important;
+    align-items:stretch!important;
+  }
+  .app-shell .houses-app .work-manager-actions{
+    justify-content:flex-start!important;
+  }
+}
+@media(max-width:900px){
+  .app-shell .houses-app .houses-hero{
+    grid-template-columns:1fr!important;
+    grid-template-areas:"intro" "progress" "share"!important;
+  }
+  .app-shell .houses-app .houses-public-share{
+    grid-template-columns:42px minmax(0,1fr) repeat(2,minmax(100px,1fr))!important;
+  }
+  .app-shell .houses-app .houses-public-share>button:nth-of-type(n+3),
+  .app-shell .houses-app .houses-public-share>a{
+    grid-column:auto!important;
+  }
+  .app-shell .houses-app .work-external-access-card{
+    grid-template-columns:1fr!important;
+  }
+  .app-shell .houses-app .work-external-access-card>button{
+    width:100%!important;
+  }
+}
+@media(max-width:680px){
+  .app-shell .houses-app .work-manager-bar>div:first-child{
+    grid-template-columns:38px minmax(0,1fr)!important;
+  }
+  .app-shell .houses-app .work-manager-bar>div:first-child>small{
+    grid-column:1/-1!important;
+    white-space:normal!important;
+  }
+  .app-shell .houses-app .work-manager-actions{
+    display:grid!important;
+    grid-template-columns:1fr!important;
+  }
+  .app-shell .houses-app .work-manager-actions button{
+    width:100%!important;
+  }
+  .app-shell .houses-app .houses-hero{
+    padding:15px!important;
+  }
+  .app-shell .houses-app .houses-public-share{
+    grid-template-columns:42px minmax(0,1fr)!important;
+  }
+  .app-shell .houses-app .houses-public-share>button,
+  .app-shell .houses-app .houses-public-share>a{
+    grid-column:1/-1!important;
+    width:100%!important;
+    min-height:42px!important;
+  }
+  .app-shell .external-access-modal{
+    width:100%!important;
+    max-width:none!important;
+    max-height:94dvh!important;
+    align-self:end!important;
+    border-radius:18px 18px 0 0!important;
+  }
+  .app-shell .external-access-modal .external-access-form{
+    grid-template-columns:1fr!important;
+  }
+  .app-shell .external-access-modal .external-access-submit{
+    grid-column:1!important;
+    width:100%!important;
+  }
+  .app-shell .external-access-modal .modal-actions .primary-btn{
+    width:100%!important;
+  }
+}
+
