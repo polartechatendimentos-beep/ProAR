@@ -10,7 +10,8 @@ type Company={
   auto_registered?:boolean;modules?:string[];billing_enabled?:boolean;monthly_fee_cents?:number;billing_day?:number;
   billing_issue_lead_days?:number;billing_method?:"pix"|"boleto"|"card";billing_auto_block?:boolean;billing_email?:string;
   access_block_source?:string|null;suspended_reason?:string|null;
-  tenant?:{companyId:string;slug:string;role:"primary-pilot"|"customer";environment:"pilot"|"production";isolation:string;databaseName:string;projectName:string}
+  tenant?:{companyId:string;slug:string;role:"primary-pilot"|"customer";environment:"pilot"|"production";isolation:string;databaseName:string;projectName:string};
+  readiness?:{ready:boolean;score:number;blocking:string[];checks:{id:string;label:string;ok:boolean;blocking:boolean;detail:string}[]}
 };
 type Instance={company_id:string;provider?:string;project_name?:string;api_url?:string;provisioning_status?:string;provisioning_error?:string;last_health_at?:string};
 type ManagerSummary={total:number;active:number;blocked:number;billingBlocked:number;manualBlocked:number;trials:number;expiringTrials:number;readyDatabases:number;databaseErrors:number;pendingDatabases:number;staleHealth:number;openCriticalIncidents?:number;recentIncidents?:number};
@@ -293,7 +294,7 @@ export default function ManagerPage(){
               <div><dt>Tenant</dt><dd>{c.tenant?.role==="primary-pilot"?"Tenant 1 • Piloto":"Cliente locatário"}</dd></div>
               <div><dt>Banco lógico</dt><dd>{c.tenant?.databaseName||"—"}</dd></div><div><dt>Isolamento</dt><dd>{c.tenant?.isolation==="dedicated-project"?"Projeto/Banco dedicado":c.tenant?.isolation||"—"}</dd></div>
               <div><dt>Provisionamento</dt><dd>{inst?.provisioning_status||"não provisionado"}</dd></div><div><dt>Saúde do banco</dt><dd>{dateTime(inst?.last_health_at)}</dd></div>
-              <div><dt>Último uso</dt><dd>{dateTime(c.last_seen_at)}</dd></div>
+              <div><dt>Prontidão</dt><dd><span className={c.readiness?.ready?"manager-health ok":"manager-health warning"}>{c.readiness?.score??0}%</span></dd></div><div><dt>Último uso</dt><dd>{dateTime(c.last_seen_at)}</dd></div>
             </dl>
             {c.suspended_reason&&c.status!=="active"&&<div className="manager-alert compact">{c.suspended_reason}</div>}
             {inst?.provisioning_error&&<div className="manager-alert compact">{inst.provisioning_error}</div>}
