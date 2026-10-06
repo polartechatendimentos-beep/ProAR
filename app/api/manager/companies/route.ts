@@ -8,6 +8,8 @@ import { managerPlatformInfo } from "../../../../lib/manager-platform";
 import { ALL_MANAGER_MODULES, MANAGER_PLANS, managerPlan } from "../../../../lib/manager-plans";
 import { getBillingCompany, setCompanyModuleEntitlements, syncCompanyBillingAccess, syncPlanEntitlements } from "../../../../lib/manager-billing";
 import { tenantReadiness } from "../../../../lib/tenant-readiness";
+import { classifyProarError } from "../../../../lib/system-errors";
+import { recordSystemIncident } from "../../../../lib/system-observability";
 
 const isAdmin = (request: NextRequest) => readManagerSession(request);
 
@@ -106,9 +108,12 @@ export async function PATCH(request: NextRequest) {
       await supabaseRest(`proar_tenant_instances?company_id=eq.${encodeURIComponent(companyId)}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ last_health_at:checkedAt, provisioning_error:null, updated_at:checkedAt }) });
       return NextResponse.json({ healthy:true, checkedAt, source:db.source, provider:db.provider, projectName:db.projectName });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Falha ao consultar o banco do tenant.";
+      const descriptor=classifyProarError(error);
+      const technical=error instanceof Error ? error.message : "Falha ao consultar o banco do tenant.";
+      const message=descriptor.code==="PROAR-DB-004" ? "Cota do banco excedida no provedor. Regularize o limite antes de retomar as operações online." : descriptor.userMessage;
       await supabaseRest(`proar_tenant_instances?company_id=eq.${encodeURIComponent(companyId)}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ provisioning_error:message, updated_at:new Date().toISOString() }) }).catch(()=>null);
-      return NextResponse.json({ error:message }, { status:502 });
+      void recordSystemIncident({companyId,module:"ProAR Manager",operation:"Verificar banco do tenant",error:technical,code:descriptor.code,route:"/api/manager/companies"});
+      return NextResponse.json({ error:message, code:descriptor.code }, { status:503 });
     }
   }
 
