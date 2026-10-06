@@ -57,8 +57,9 @@ export async function POST(request:NextRequest){
 
     const currentRevision=Number(current.payload?._revision||0);
     const restored={...snapshot.payload,_revision:currentRevision+1,_updatedAt:new Date().toISOString(),_companyId:companyId,_restoredFromSnapshot:snapshotId,_restoredBy:user.username};
+    const revisionFilter=current.payload?._revision===undefined?"payload->>_revision=is.null":"payload->>_revision=eq."+currentRevision;
     const response=current.payload
-      ? await rest(current.db,`proar_state?id=eq.${encodeURIComponent(current.id)}&payload->>_revision=eq.${currentRevision}&select=payload`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify({payload:restored,updated_at:new Date().toISOString()})})
+      ? await rest(current.db,`proar_state?id=eq.${encodeURIComponent(current.id)}&${revisionFilter}&select=payload`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify({payload:restored,updated_at:new Date().toISOString()})})
       : await rest(current.db,"proar_state?on_conflict=id&select=payload",{method:"POST",headers:{Prefer:"resolution=ignore-duplicates,return=representation"},body:JSON.stringify({id:current.id,payload:restored,updated_at:new Date().toISOString()})});
     if(!response.ok)return NextResponse.json({error:"O estado mudou durante a restauração. Nada foi sobrescrito."},{status:409});
 
