@@ -40,7 +40,7 @@ const permissionFor: Record<string, string> = {
   Financeiro: "financeiro.editar", "Contas financeiras": "financeiro.editar",
   Produtos: "estoque.editar", Estoque: "estoque.editar", Compras: "compras.editar",
   Equipamentos: "equipamentos.editar", "Unidades e setores": "clientes.editar",
-  Funcionários: "configuracoes.editar", Certames: "licitacoes.editar", Empenhos: "licitacoes.editar", "Radar Licitações": "licitacoes.editar", "Cofre Licitações": "licitacoes.editar",
+  Funcionários: "configuracoes.editar", Certames: "licitacoes.editar", Empenhos: "licitacoes.editar", "Radar Licitações": "licitacoes.editar", "Cofre Licitações": "licitacoes.editar", "Agenda Licitações": "licitacoes.editar", "Dossiê Órgãos": "licitacoes.editar", "Contratos Públicos": "licitacoes.editar",
   Obras: "obras.editar", Orçamentos: "comercial.editar", Vendas: "comercial.editar", Serviços: "catalogo.editar", Fornecedores: "compras.editar", "Conciliações": "financeiro.conciliar", Lembretes: "os.editar", Aprovações: "aprovacoes.aprovar",
 };
 export const defaultFinancialAccounts = () => [
@@ -399,7 +399,7 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
   }
   const next = structuredClone(state);
   const modules = next.moduleRecords ||= {};
-  const module = ["settle", "reverse", "cancel", "dates"].includes(command.action) ? "Financeiro" : command.action === "receive" ? "Compras" : command.action === "account" ? "Contas financeiras" : ["stock","stock-transfer"].includes(command.action) ? "Estoque" : command.action === "reconcile" ? "Conciliações" : command.action === "approval-decide" ? "Aprovações" : command.action === "tender-status" ? "Radar Licitações" : command.action === "tender-vault" ? "Cofre Licitações" : "";
+  const module = ["settle", "reverse", "cancel", "dates"].includes(command.action) ? "Financeiro" : command.action === "receive" ? "Compras" : command.action === "account" ? "Contas financeiras" : ["stock","stock-transfer"].includes(command.action) ? "Estoque" : command.action === "reconcile" ? "Conciliações" : command.action === "approval-decide" ? "Aprovações" : command.action === "tender-status" ? "Radar Licitações" : command.action === "tender-vault" ? "Cofre Licitações" : command.action === "tender-agenda" ? "Agenda Licitações" : command.action === "tender-agency" ? "Dossiê Órgãos" : command.action === "public-contract" ? "Contratos Públicos" : "";
   if (!module) throw new OperationError("Operação desconhecida.");
   const records = modules[module] ||= [];
   const record = records.find(item => item.id === command.recordId);
@@ -454,6 +454,20 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
       const name=String(data.name||"").trim(); if(!name) throw new OperationError("Nome do documento é obrigatório.");
       records.push({id:operationId,name,category:data.category||"A classificar",validUntil:data.validUntil||"",issuer:data.issuer||"",status:data.status||"Vence em breve",createdAt:now});
       break;
+    }
+    case "tender-agenda": {
+      requireAction(actor,"licitacoes.editar"); const name=String(data.name||"").trim(); const date=String(data.date||"").trim();
+      if(!name||!date||Number.isNaN(Date.parse(date))) throw new OperationError("Evento de licitação exige nome e data válidos.");
+      records.push({id:operationId,name,date,tenderId:data.tenderId||"",kind:data.kind||"Prazo",status:"Pendente",createdAt:now}); break;
+    }
+    case "tender-agency": {
+      requireAction(actor,"licitacoes.editar"); const agencyId=String(data.agencyId||command.recordId||"").trim(); if(!agencyId)throw new OperationError("Órgão é obrigatório.");
+      const current=records.find(item=>item.id===agencyId); const event={id:operationId,tenderId:data.tenderId||"",result:data.result||"Analisado",winner:data.winner||"",winningPrice:data.winningPrice,createdAt:now};
+      if(current){current.history=[...list(current.history),event];current.updatedAt=now}else records.push({id:agencyId,name:data.agencyName||"Órgão público",history:[event],createdAt:now,updatedAt:now}); break;
+    }
+    case "public-contract": {
+      requireAction(actor,"licitacoes.editar"); const tenderId=String(data.tenderId||"").trim(); if(!tenderId)throw new OperationError("Contrato público exige certame de origem.");
+      records.push({id:operationId,tenderId,name:data.name||"Contrato/Ata",contracted:Number(data.contracted||0),committed:0,executed:0,invoiced:0,received:0,status:"Ativo",createdAt:now}); break;
     }
     case "stock-transfer":
       requireAction(actor, "estoque.editar");
