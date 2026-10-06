@@ -36,14 +36,45 @@ export async function commitNeonOperationalState(stateId: string, expectedRevisi
 const supabaseBaseUrl = () =>
   (process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://tnjkdurifalrdnttsova.supabase.co").replace(/\/$/, "");
 const supabaseServiceKey = () => process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY;
-const databaseProvider = () => (process.env.PROAR_DATABASE_PROVIDER ?? "supabase").toLowerCase();
-export const neonEnabled = () => databaseProvider() === "neon";
 export const PRIMARY_DATABASE_URL = "neon://proar-primary";
 const neonDatabaseUrl = () =>
   process.env.PROAR_NEON_DATABASE_URL ??
   process.env.PROAR_NEON_POSTGRES_URL ??
   process.env.PROAR_NEON_POSTGRES_URL_NON_POOLING ??
   process.env.PROAR_NEON_DATABASE_URL_UNPOOLED;
+
+function explicitDatabaseProvider() {
+  const configured=String(process.env.PROAR_DATABASE_PROVIDER||"").trim().toLowerCase();
+  return configured==="neon"||configured==="supabase" ? configured : "";
+}
+
+/**
+ * Resolve the primary provider defensively.
+ * This prevents production from going "offline" when the database URL exists
+ * but PROAR_DATABASE_PROVIDER was omitted or left pointing to an unconfigured provider.
+ */
+export function databaseProvider() {
+  const explicit=explicitDatabaseProvider();
+  const hasNeon=Boolean(neonDatabaseUrl());
+  const hasSupabase=Boolean(supabaseBaseUrl()&&supabaseServiceKey());
+  if(explicit==="neon") return hasNeon ? "neon" : hasSupabase ? "supabase" : "neon";
+  if(explicit==="supabase") return hasSupabase ? "supabase" : hasNeon ? "neon" : "supabase";
+  if(hasNeon) return "neon";
+  return "supabase";
+}
+export const neonEnabled = () => databaseProvider() === "neon";
+
+export function databaseRuntimeConfig() {
+  const explicit=explicitDatabaseProvider();
+  const resolved=databaseProvider();
+  return {
+    explicitProvider:explicit||null,
+    resolvedProvider:resolved,
+    neonConfigured:Boolean(neonDatabaseUrl()),
+    supabaseConfigured:Boolean(supabaseBaseUrl()&&supabaseServiceKey()),
+    autoFallback:Boolean(explicit&&explicit!==resolved),
+  };
+}
 
 export function supabaseConfigured() {
   if (databaseProvider() === "neon") return Boolean(neonDatabaseUrl());
