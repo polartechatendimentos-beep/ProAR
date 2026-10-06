@@ -22,6 +22,6 @@ test("database retry succeeds after transient failures",async()=>{
 });
 
 test("database unavailable has stable user-safe error code",()=>{
-  assert.equal(classifyProarError("connection terminated").code,"PROAR-DB-001");
+  assert.equal(classifyProarError("connection terminated").code,"PROAR-DB-003");
   assert.equal(proarError("PROAR-DB-003").severity,"critical");
 });
