@@ -52,6 +52,15 @@ jobs:
           grep -qi "ProAR" /tmp/proar-home.html
           STATUS=$(curl -sS -o /tmp/auth.json -w "%{http_code}" http://127.0.0.1:3000/api/auth)
           echo "$STATUS" | grep -Eq "^(200|401|403)$"
+          node -e 'JSON.parse(require("fs").readFileSync("/tmp/auth.json","utf8"))'
+
+          POST_STATUS=$(curl -sS -D /tmp/auth-post.headers -o /tmp/auth-post.json -w "%{http_code}" \
+            -X POST http://127.0.0.1:3000/api/auth \
+            -H "Content-Type: application/json" \
+            --data '{"username":"__proar_runtime_smoke_invalid__","password":"invalid-smoke-password","tenant":""}')
+          echo "$POST_STATUS" | grep -Eq "^(401|403|500|503)$"
+          grep -qi "^content-type: application/json" /tmp/auth-post.headers
+          node -e 'const body=JSON.parse(require("fs").readFileSync("/tmp/auth-post.json","utf8")); if(!body || typeof body!=="object") process.exit(1); if(typeof body.error!=="string") process.exit(1)'
       - name: Upload runtime diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -61,5 +70,7 @@ jobs:
             /tmp/proar-next.log
             /tmp/proar-home.html
             /tmp/auth.json
+            /tmp/auth-post.json
+            /tmp/auth-post.headers
           if-no-files-found: ignore
           retention-days: 7
