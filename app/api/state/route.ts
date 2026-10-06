@@ -6,6 +6,9 @@ import { tenantHeaders } from "../../../lib/tenant-rest";
 
 import { hasPermission, type Permission } from "../../../lib/permissions";
 import { prepareOperationalState, independentOperationalRows, OperationError } from "../../../lib/operational-ledger";
+import { createStateSnapshot } from "../../../lib/state-snapshots";
+import { recordSystemIncident } from "../../../lib/system-observability";
+import { classifyProarError } from "../../../lib/system-errors";
 
 function stateRest(db: { url: string; key: string }, path: string, init: RequestInit = {}) {
   return databaseFetch(`${db.url}/rest/v1/${path}`, {
@@ -141,7 +144,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ state: consolidated, dedicatedDatabase: false, canonicalCompanyId: company, recoveredLegacyStates: states.length });
     }
     return NextResponse.json({ state: merged, dedicatedDatabase: false, canonicalCompanyId: company });
-  } catch { return NextResponse.json({ error: "Não foi possível carregar a base compartilhada." }, { status: 503 }); }
+  } catch (error) {
+    const descriptor=classifyProarError(error);
+    const company=companyKey(request,session);
+    void recordSystemIncident({companyId:company,module:"Sincronização",operation:"Carregar estado operacional",error,code:descriptor.code,route:"/api/state"});
+    return NextResponse.json({ error: descriptor.userMessage, code:descriptor.code }, { status: 503 });
+  }
 }
 
 export async function PUT(request: NextRequest) {
@@ -157,6 +165,13 @@ export async function PUT(request: NextRequest) {
     const validated = prepareOperationalState(current || null, cleanBody, { username: session.username, displayName: session.displayName, can: permission => hasPermission(session, permission as Permission) });
     const payload = { ...validated, _revision: currentRevision + 1, _updatedAt: new Date().toISOString(), _companyId: company };
     const updatedAt = new Date().toISOString();
+    if (current) {
+      const previousUpdatedAt=Date.parse(String(current._updatedAt||""));
+      const checkpointDue=currentRevision%10===0 || !Number.isFinite(previousUpdatedAt) || Date.now()-previousUpdatedAt>60*60*1000;
+      if(checkpointDue) {
+        await createStateSnapshot({companyId:company,stateId:id,payload:current,reason:"automatic-checkpoint",createdBy:session.username}).catch(()=>false);
+      }
+    }
     let response: Response;
     if (db.url === PRIMARY_DATABASE_URL) {
       const confirmed = await commitNeonOperationalState(id, current ? currentRevision : null, payload, independentOperationalRows(company, payload, current));
@@ -187,6 +202,9 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ saved: true, state: confirmed, dedicatedDatabase: db.dedicated, canonicalCompanyId: company });
   } catch (error) {
     if (error instanceof OperationError) return NextResponse.json({ error: error.message }, { status: error.status });
-    return NextResponse.json({ error: "Não foi possível sincronizar os dados." }, { status: 503 });
+    const company=companyKey(request,session);
+    const descriptor=classifyProarError(error);
+    void recordSystemIncident({companyId:company,module:"Sincronização",operation:"Gravar estado operacional",error,code:descriptor.code,route:"/api/state"});
+    return NextResponse.json({ error: descriptor.userMessage, code:descriptor.code }, { status: 503 });
   }
 }

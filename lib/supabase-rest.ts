@@ -1,4 +1,5 @@
 import { neon } from "@neondatabase/serverless";
+import { isReadOnlyRequest, resilientDatabaseFetch, retryDatabaseOperation } from "./database-resilience";
 
 /** Conditional write and normalized ERP records in one PostgreSQL statement.
  * Uses the existing proar_state schema; no destructive migration is necessary.
@@ -57,9 +58,13 @@ export function masterDatabaseConfig() {
 /** Routes for dedicated Supabase tenants keep their original HTTP connection. */
 export async function databaseFetch(input: string, init: RequestInit = {}): Promise<Response> {
   if (input.startsWith(`${PRIMARY_DATABASE_URL}/rest/v1/`)) {
-    return supabaseRest(input.slice(`${PRIMARY_DATABASE_URL}/rest/v1/`.length), init) as Promise<Response>;
+    const path=input.slice(`${PRIMARY_DATABASE_URL}/rest/v1/`.length);
+    return retryDatabaseOperation(
+      () => supabaseRest(path, init) as Promise<Response>,
+      { enabled:isReadOnlyRequest(init), attempts:3, baseDelayMs:120 },
+    );
   }
-  return fetch(input, init);
+  return resilientDatabaseFetch(input, init, { attempts:3, baseDelayMs:120, timeoutMs:6500 });
 }
 
 class NeonResponse {
@@ -209,10 +214,15 @@ async function neonRest(path: string, init: RequestInit) {
 }
 
 export async function supabaseRest(path: string, init: RequestInit = {}) {
-  if (databaseProvider() === "neon") return neonRest(path, init);
+  if (databaseProvider() === "neon") {
+    return retryDatabaseOperation(
+      () => neonRest(path, init),
+      { enabled:isReadOnlyRequest(init), attempts:3, baseDelayMs:120 },
+    );
+  }
   const key = supabaseServiceKey();
   if (!supabaseBaseUrl() || !key) throw new Error("Supabase não configurado");
-  return fetch(`${supabaseBaseUrl()}/rest/v1/${path}`, {
+  return resilientDatabaseFetch(`${supabaseBaseUrl()}/rest/v1/${path}`, {
     ...init,
     headers: {
       apikey: key,
@@ -221,5 +231,5 @@ export async function supabaseRest(path: string, init: RequestInit = {}) {
       ...init.headers,
     },
     cache: "no-store",
-  });
+  }, { attempts:3, baseDelayMs:120, timeoutMs:6500 });
 }

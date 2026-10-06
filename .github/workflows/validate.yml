@@ -50,6 +50,8 @@ jobs:
           done
           test "$READY" = "1"
           grep -qi "ProAR" /tmp/proar-home.html
+          curl -fsS http://127.0.0.1:3000/api/health > /tmp/proar-health.json
+          node -e 'const h=JSON.parse(require("fs").readFileSync("/tmp/proar-health.json","utf8")); if(h.ok!==true||h.service!=="ProAR") process.exit(1)'
           STATUS=$(curl -sS -o /tmp/auth.json -w "%{http_code}" http://127.0.0.1:3000/api/auth)
           echo "$STATUS" | grep -Eq "^(200|401|403)$"
           node -e 'JSON.parse(require("fs").readFileSync("/tmp/auth.json","utf8"))'
@@ -61,6 +63,23 @@ jobs:
           echo "$POST_STATUS" | grep -Eq "^(401|403|500|503)$"
           grep -qi "^content-type: application/json" /tmp/auth-post.headers
           node -e 'const body=JSON.parse(require("fs").readFileSync("/tmp/auth-post.json","utf8")); if(!body || typeof body!=="object") process.exit(1); if(typeof body.error!=="string") process.exit(1)'
+      - name: Production database probe
+        if: always()
+        continue-on-error: true
+        run: |
+          echo "Checking public production DB probe through existing safe endpoint..."
+          STATUS=$(curl -sS --max-time 15 -o /tmp/proar-prod-db.json -w "%{http_code}" "https://polartech.proar.online/api/trial/company?slug=polartech" || true)
+          echo "HTTP=$STATUS"
+          cat /tmp/proar-prod-db.json 2>/dev/null || true
+          echo
+          case "$STATUS" in
+            200) echo "PROD_DB_PROBE=reachable_company_found" ;;
+            404) echo "PROD_DB_PROBE=reachable_company_missing" ;;
+            503) echo "PROD_DB_PROBE=database_or_configuration_unavailable" ;;
+            000) echo "PROD_DB_PROBE=network_or_dns_failure" ;;
+            *) echo "PROD_DB_PROBE=unexpected_http_$STATUS" ;;
+          esac
+
       - name: Upload runtime diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -69,6 +88,7 @@ jobs:
           path: |
             /tmp/proar-next.log
             /tmp/proar-home.html
+            /tmp/proar-health.json
             /tmp/auth.json
             /tmp/auth-post.json
             /tmp/auth-post.headers
