@@ -40,7 +40,7 @@ const permissionFor: Record<string, string> = {
   Financeiro: "financeiro.editar", "Contas financeiras": "financeiro.editar",
   Produtos: "estoque.editar", Estoque: "estoque.editar", Compras: "compras.editar",
   Equipamentos: "equipamentos.editar", "Unidades e setores": "clientes.editar",
-  Funcionários: "configuracoes.editar", Certames: "licitacoes.editar", Empenhos: "licitacoes.editar",
+  Funcionários: "configuracoes.editar", Certames: "licitacoes.editar", Empenhos: "licitacoes.editar", "Radar Licitações": "licitacoes.editar", "Cofre Licitações": "licitacoes.editar",
   Obras: "obras.editar", Orçamentos: "comercial.editar", Vendas: "comercial.editar", Serviços: "catalogo.editar", Fornecedores: "compras.editar", "Conciliações": "financeiro.conciliar", Lembretes: "os.editar", Aprovações: "aprovacoes.aprovar",
 };
 export const defaultFinancialAccounts = () => [
@@ -399,7 +399,7 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
   }
   const next = structuredClone(state);
   const modules = next.moduleRecords ||= {};
-  const module = ["settle", "reverse", "cancel", "dates"].includes(command.action) ? "Financeiro" : command.action === "receive" ? "Compras" : command.action === "account" ? "Contas financeiras" : ["stock","stock-transfer"].includes(command.action) ? "Estoque" : command.action === "reconcile" ? "Conciliações" : command.action === "approval-decide" ? "Aprovações" : "";
+  const module = ["settle", "reverse", "cancel", "dates"].includes(command.action) ? "Financeiro" : command.action === "receive" ? "Compras" : command.action === "account" ? "Contas financeiras" : ["stock","stock-transfer"].includes(command.action) ? "Estoque" : command.action === "reconcile" ? "Conciliações" : command.action === "approval-decide" ? "Aprovações" : command.action === "tender-status" ? "Radar Licitações" : command.action === "tender-vault" ? "Cofre Licitações" : "";
   if (!module) throw new OperationError("Operação desconhecida.");
   const records = modules[module] ||= [];
   const record = records.find(item => item.id === command.recordId);
