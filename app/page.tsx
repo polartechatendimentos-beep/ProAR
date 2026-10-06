@@ -2892,10 +2892,32 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password, tenant }),
       });
-      const result = await response.json();
-      if (!response.ok) { if (result.code === "SYSTEM_BLOCKED" || result.blocked === true) setBlockedMessage("Sistema bloqueado. Entre em contato com a equipe da ProAR."); throw new Error(result.error || "Não foi possível entrar."); }
+      const raw = await response.text();
+      let result: Record<string, unknown> = {};
+      if (raw) {
+        try { result = JSON.parse(raw) as Record<string, unknown>; }
+        catch {
+          throw new Error(response.ok
+            ? "A autenticação retornou uma resposta inválida."
+            : `O servidor de autenticação respondeu com erro HTTP ${response.status}.`);
+        }
+      }
+      if (!response.ok) {
+        if (result.code === "SYSTEM_BLOCKED" || result.blocked === true) setBlockedMessage("Sistema bloqueado. Entre em contato com a equipe da ProAR.");
+        throw new Error(typeof result.error === "string" ? result.error : `Não foi possível entrar (HTTP ${response.status}).`);
+      }
+      if (result.authenticated !== true) throw new Error("A autenticação não foi confirmada pelo servidor.");
       if (result.mustChangePassword && tenant) { window.location.href = `/trocar-senha`; return; }
-      onLogin({ username: result.username, displayName: result.displayName, role: result.role, permissions: result.permissions, companyId: result.companyId, companySlug: result.companySlug, trialExpiresAt: result.trialExpiresAt, entitledModules: result.entitledModules });
+      onLogin({
+        username:String(result.username || ""),
+        displayName:String(result.displayName || result.username || ""),
+        role:typeof result.role === "string" ? result.role : undefined,
+        permissions:Array.isArray(result.permissions) ? result.permissions as string[] : undefined,
+        companyId:typeof result.companyId === "string" ? result.companyId : undefined,
+        companySlug:typeof result.companySlug === "string" ? result.companySlug : undefined,
+        trialExpiresAt:typeof result.trialExpiresAt === "string" ? result.trialExpiresAt : undefined,
+        entitledModules:Array.isArray(result.entitledModules) ? result.entitledModules as string[] : undefined,
+      });
     } catch (loginError) {
       setError(friendlyErrorMessage(loginError, { fallback:"Não foi possível entrar. Verifique os dados e tente novamente." }));
     } finally {
