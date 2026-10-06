@@ -84,6 +84,26 @@ async function readState(db: { url: string; key: string }, id: string) {
   return rows[0]?.payload ?? null;
 }
 
+async function readStateHead(db: { url: string; key: string }, ids: string[]) {
+  let latest = "";
+  for (const id of Array.from(new Set(ids.filter(Boolean)))) {
+    const response = await stateRest(db, `proar_state?id=eq.${encodeURIComponent(id)}&select=updated_at`);
+    if (!response.ok) continue;
+    const rows = await response.json() as { updated_at?: string }[];
+    const value = String(rows[0]?.updated_at || "");
+    if (value && (!latest || new Date(value).getTime() > new Date(latest).getTime())) latest = value;
+  }
+  return latest;
+}
+
+function databaseFailure(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  if (/quota|exceeded|http status 402|\b402\b/i.test(message)) {
+    return { code:"DATABASE_QUOTA_EXCEEDED", error:"Banco online temporariamente indisponível por limite do provedor." };
+  }
+  return { code:"DATABASE_UNAVAILABLE", error:"Não foi possível carregar a base compartilhada." };
+}
+
 async function readOperationalStates(db: { url: string; key: string }) {
   const response = await stateRest(db, "proar_state?select=payload&limit=200");
   if (!response.ok) return [] as StatePayload[];
@@ -118,11 +138,22 @@ export async function GET(request: NextRequest) {
         const state = await readState(db, candidate);
         if (state) states.push(state);
       }
-      return NextResponse.json({ state: mergeStates(states), dedicatedDatabase: false, canonicalCompanyId: company, recoveredLegacyStates: states.length });
+      return NextResponse.json({
+        state: mergeStates(states),
+        dedicatedDatabase: false,
+        canonicalCompanyId: company,
+        recoveredLegacyStates: states.length,
+        databaseUpdatedAt: await readStateHead(db, candidates),
+      });
     }
     if (session.companyId || db.dedicated) {
       const state = await readState(db, id);
-      return NextResponse.json({ state, dedicatedDatabase: db.dedicated, canonicalCompanyId: company });
+      return NextResponse.json({
+        state,
+        dedicatedDatabase: db.dedicated,
+        canonicalCompanyId: company,
+        databaseUpdatedAt: await readStateHead(db, [id]),
+      });
     }
 
     // Recuperação compatível de instalações legadas: alguns aparelhos gravavam em IDs diferentes.
@@ -138,10 +169,14 @@ export async function GET(request: NextRequest) {
       const revision = Math.max(...states.map(state => Number(state._revision || 0)), 0) + 1;
       const consolidated = { ...merged, _revision: revision, _updatedAt: new Date().toISOString(), _companyId: company, _legacyMerged: true };
       await writeState(db, id, consolidated);
-      return NextResponse.json({ state: consolidated, dedicatedDatabase: false, canonicalCompanyId: company, recoveredLegacyStates: states.length });
+      return NextResponse.json({ state: consolidated, dedicatedDatabase: false, canonicalCompanyId: company, recoveredLegacyStates: states.length, databaseUpdatedAt:new Date().toISOString() });
     }
-    return NextResponse.json({ state: merged, dedicatedDatabase: false, canonicalCompanyId: company });
-  } catch { return NextResponse.json({ error: "Não foi possível carregar a base compartilhada." }, { status: 503 }); }
+    return NextResponse.json({ state: merged, dedicatedDatabase: false, canonicalCompanyId: company, databaseUpdatedAt:await readStateHead(db,candidates) });
+  } catch (error) {
+    const failure=databaseFailure(error);
+    console.error("STATE_GET_FAILED",{code:failure.code,message:error instanceof Error?error.message:String(error)});
+    return NextResponse.json(failure,{status:503});
+  }
 }
 
 export async function PUT(request: NextRequest) {
@@ -161,7 +196,7 @@ export async function PUT(request: NextRequest) {
     if (db.url === PRIMARY_DATABASE_URL) {
       const confirmed = await commitNeonOperationalState(id, current ? currentRevision : null, payload, independentOperationalRows(company, payload, current));
       if (!confirmed) return NextResponse.json({ error: "A base online foi alterada durante esta gravação.", conflict: true, state: await readState(db, id) }, { status: 409 });
-      return NextResponse.json({ saved: true, state: confirmed, dedicatedDatabase: db.dedicated, canonicalCompanyId: company, transactionalRecords: true });
+      return NextResponse.json({ saved: true, state: confirmed, dedicatedDatabase: db.dedicated, canonicalCompanyId: company, transactionalRecords: true, databaseUpdatedAt:updatedAt });
     }
     if (current) {
       const revisionFilter = current._revision === undefined ? "payload->>_revision=is.null" : `payload->>_revision=eq.${currentRevision}`;
@@ -184,9 +219,11 @@ export async function PUT(request: NextRequest) {
       const latest = await readState(db, id);
       return NextResponse.json({ error: "A base online foi alterada durante esta gravação.", conflict: true, state: latest }, { status: 409 });
     }
-    return NextResponse.json({ saved: true, state: confirmed, dedicatedDatabase: db.dedicated, canonicalCompanyId: company });
+    return NextResponse.json({ saved: true, state: confirmed, dedicatedDatabase: db.dedicated, canonicalCompanyId: company, databaseUpdatedAt:updatedAt });
   } catch (error) {
     if (error instanceof OperationError) return NextResponse.json({ error: error.message }, { status: error.status });
-    return NextResponse.json({ error: "Não foi possível sincronizar os dados." }, { status: 503 });
+    const failure=databaseFailure(error);
+    console.error("STATE_PUT_FAILED",{code:failure.code,message:error instanceof Error?error.message:String(error)});
+    return NextResponse.json({ ...failure, error:failure.code==="DATABASE_QUOTA_EXCEEDED" ? "Banco online temporariamente indisponível por limite do provedor. A alteração pode permanecer na fila local." : "Não foi possível sincronizar os dados." }, { status: 503 });
   }
 }
