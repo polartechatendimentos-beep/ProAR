@@ -13,10 +13,12 @@ type Company={
   tenant?:{companyId:string;slug:string;role:"primary-pilot"|"customer";environment:"pilot"|"production";isolation:string;databaseName:string;projectName:string}
 };
 type Instance={company_id:string;provider?:string;project_name?:string;api_url?:string;provisioning_status?:string;provisioning_error?:string;last_health_at?:string};
-type ManagerSummary={total:number;active:number;blocked:number;billingBlocked:number;manualBlocked:number;trials:number;expiringTrials:number;readyDatabases:number;databaseErrors:number;pendingDatabases:number;staleHealth:number};
+type ManagerSummary={total:number;active:number;blocked:number;billingBlocked:number;manualBlocked:number;trials:number;expiringTrials:number;readyDatabases:number;databaseErrors:number;pendingDatabases:number;staleHealth:number;openCriticalIncidents?:number;recentIncidents?:number};
 type BillingSummary={openCount:number;openCents:number;overdueCount:number;overdueCents:number;paidThisMonthCount:number;paidThisMonthCents:number;mrrCents:number};
 type Receivable={id:string;company_id:string;reference_month:string;description:string;amount_cents:number;due_date:string;status:"pending"|"paid"|"canceled"|"refunded";payment_method:"pix"|"boleto"|"card"|"manual";provider_status?:string;payment_url?:string;pix_qr_code?:string;boleto_digitable_line?:string;paid_at?:string};
 type AuditRow={id?:string|number;company_id?:string;action?:string;actor?:string;details?:Record<string,unknown>;created_at?:string};
+type Incident={id:string;company_id?:string;module:string;operation:string;code:string;severity:"info"|"warning"|"error"|"critical";user_message?:string;technical_message?:string;request_id?:string;route?:string;resolved_at?:string;created_at?:string};
+type DeploymentSafety={environment?:string;currentCommit?:string;currentDeploymentId?:string;rollbackConfigured?:boolean;canaryRequired?:boolean;productionGate?:string};
 type PlatformInfo={appVersion:string;releaseDate:string;releaseTitle:string;schemaVersion:string;channel:string;migrations:{id:string;title:string;status:string;destructive:boolean;description:string}[]};
 type ManagerPlan={code:string;name:string;description:string;modules:string[];limits:{users:number;serviceOrdersPerMonth:number;storageGb:number;aiCallsPerMonth:number}};
 type ModuleEntitlement={company_id:string;module_name:string;enabled:boolean;monthly_price_cents:number;plan_code?:string};
@@ -46,6 +48,10 @@ export default function ManagerPage(){
   const[billingSummary,setBillingSummary]=useState<BillingSummary|null>(null);
   const[mercadoPagoReady,setMercadoPagoReady]=useState(false);
   const[audit,setAudit]=useState<AuditRow[]>([]);
+  const[incidents,setIncidents]=useState<Incident[]>([]);
+  const[deploymentSafety,setDeploymentSafety]=useState<DeploymentSafety|null>(null);
+  const[rollbackDeploymentId,setRollbackDeploymentId]=useState("");
+  const[rollbackReason,setRollbackReason]=useState("Rollback de emergência pelo ProAR Manager");
   const[platform,setPlatform]=useState<PlatformInfo|null>(null);
   const[plans,setPlans]=useState<ManagerPlan[]>([]);
   const[selectedCompanyId,setSelectedCompanyId]=useState("");
@@ -73,10 +79,14 @@ export default function ManagerPage(){
       setInstances(companiesJson.instances||[]);
       setSummary(companiesJson.summary||null);
       setAudit(companiesJson.audit||[]);
+      setIncidents(companiesJson.incidents||[]);
       setPlatform(companiesJson.platform||null);
       setPlans(companiesJson.plans||[]);
       setEntitlements(companiesJson.entitlements||[]);
       setModuleCatalog(companiesJson.moduleCatalog||[]);
+
+      const deploymentResponse=await fetch("/api/manager/deployment-safety",{cache:"no-store"}).catch(()=>null);
+      if(deploymentResponse?.ok)setDeploymentSafety(await deploymentResponse.json());else setDeploymentSafety(null);
 
       const billingResponse=await fetch("/api/manager/billing",{cache:"no-store"}).catch(()=>null);
       if(billingResponse?.ok){
@@ -149,6 +159,17 @@ export default function ManagerPage(){
     if(!r.ok){setError(j.error||"Falha na operação financeira.");return false}
     setNotice("Operação financeira concluída.");await load();return true;
   };
+  const rollbackDeployment=async()=>{
+    const deploymentId=rollbackDeploymentId.trim();
+    if(!deploymentId){setError("Informe o deployment anterior que deve voltar para produção.");return}
+    if(!window.confirm("Confirmar rollback da produção para "+deploymentId+"? Essa ação altera imediatamente o tráfego de produção."))return;
+    setError("");setNotice("");
+    const r=await fetch("/api/manager/deployment-safety",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({deploymentId,reason:rollbackReason})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok){setError(j.error||"Não foi possível solicitar o rollback.");return}
+    setNotice("Rollback solicitado para "+deploymentId+". Valide a saúde da produção antes de continuar alterações.");
+    await load();
+  };
 
   const saveBilling=async()=>{
     if(!selectedCompany)return;
@@ -204,7 +225,49 @@ export default function ManagerPage(){
         <article><b>{summary?.expiringTrials??0}</b><span>Trials vencendo</span></article>
         <article><b>{summary?.databaseErrors??0}</b><span>Bancos com erro</span></article>
         <article><b>{summary?.staleHealth??0}</b><span>Health check vencido</span></article>
+        <article className={(summary?.openCriticalIncidents||0)>0?"danger":""}><b>{summary?.openCriticalIncidents??0}</b><span>Incidentes críticos</span></article>
+        <article><b>{summary?.recentIncidents??0}</b><span>Incidentes em 24h</span></article>
       </div>
+
+      <section className="manager-panel manager-operations-overview">
+        <div className="panel-head manager-panel-head-inline"><div><h2>Operação das Empresas</h2><p>Status consolidado de banco, acesso, versão, atividade e incidentes dos tenants.</p></div><button onClick={()=>void load()}><RefreshCw size={15}/> Atualizar saúde</button></div>
+        <div className="manager-table-wrap"><table className="manager-table manager-operations-table"><thead><tr><th>Empresa</th><th>Acesso</th><th>Banco</th><th>Último health</th><th>Última atividade</th><th>Incidentes</th><th>Ação</th></tr></thead><tbody>
+          {companies.map(company=>{const inst=map[company.id];const companyIncidents=incidents.filter(item=>item.company_id===company.id&&!item.resolved_at);const critical=companyIncidents.filter(item=>item.severity==="critical").length;const bankState=inst?.provisioning_error?"Erro":inst?.provisioning_status==="ready"?"Online":inst?.provisioning_status||"Pendente";return <tr key={"ops-"+company.id}>
+            <td><button className="manager-link-button" onClick={()=>{setSelectedCompanyId(company.id);setDetailTab("Visão Geral")}}>{company.trade_name||company.legal_name}</button></td>
+            <td><span className={company.status==="active"?"manager-health ok":"manager-health error"}>{company.status==="active"?"Liberado":"Bloqueado"}</span></td>
+            <td><span className={bankState==="Online"?"manager-health ok":bankState==="Erro"?"manager-health error":"manager-health warning"}>{bankState}</span></td>
+            <td>{dateTime(inst?.last_health_at)}</td>
+            <td>{dateTime(company.last_seen_at)}</td>
+            <td><span className={critical?"manager-health error":companyIncidents.length?"manager-health warning":"manager-health ok"}>{critical?critical+" crítico(s)":companyIncidents.length?companyIncidents.length+" aberto(s)":"Sem incidentes"}</span></td>
+            <td><button onClick={()=>void patch(company.id,{checkTenantHealth:true})}>Testar banco</button></td>
+          </tr>})}
+          {!companies.length&&<tr><td colSpan={7}>Nenhuma empresa cadastrada.</td></tr>}
+        </tbody></table></div>
+      </section>
+
+      <section className="manager-panel manager-observability-panel">
+        <div className="panel-head"><div><h2>Central de Erros</h2><p>Códigos PROAR, módulo, operação, horário e causa técnica sem expor segredos ao usuário final.</p></div></div>
+        <div className="manager-table-wrap"><table className="manager-table"><thead><tr><th>Horário</th><th>Empresa</th><th>Código</th><th>Módulo / operação</th><th>Severidade</th><th>Mensagem</th></tr></thead><tbody>
+          {incidents.slice(0,30).map(item=><tr key={item.id}><td>{dateTime(item.created_at)}</td><td>{companyMap[item.company_id||""]?.trade_name||item.company_id||"Plataforma"}</td><td><code>{item.code}</code></td><td>{item.module}<small className="manager-cell-detail">{item.operation}</small></td><td><span className={"manager-health "+(item.severity==="critical"||item.severity==="error"?"error":item.severity==="warning"?"warning":"ok")}>{item.severity}</span></td><td>{item.user_message||"Falha registrada"}{item.request_id&&<small className="manager-cell-detail">Request: {item.request_id}</small>}</td></tr>)}
+          {!incidents.length&&<tr><td colSpan={6}>Nenhum incidente registrado.</td></tr>}
+        </tbody></table></div>
+      </section>
+
+      <section className="manager-panel manager-deployment-panel">
+        <div className="panel-head"><div><h2>Publicação segura e rollback</h2><p>Produção somente após quality gate. O rollback aponta o tráfego para um deployment anterior sem alterar o banco.</p></div></div>
+        <div className="manager-deployment-grid">
+          <div><small>Ambiente</small><b>{deploymentSafety?.environment||"—"}</b></div>
+          <div><small>Commit atual</small><b>{deploymentSafety?.currentCommit?.slice(0,12)||"—"}</b></div>
+          <div><small>Deployment atual</small><b>{deploymentSafety?.currentDeploymentId||"—"}</b></div>
+          <div><small>Rollback</small><b>{deploymentSafety?.rollbackConfigured?"Configurado":"Configuração pendente"}</b></div>
+        </div>
+        <div className="manager-rollback-form">
+          <label>Deployment anterior<input value={rollbackDeploymentId} onChange={e=>setRollbackDeploymentId(e.target.value)} placeholder="dpl_..."/></label>
+          <label>Motivo<input value={rollbackReason} onChange={e=>setRollbackReason(e.target.value)} maxLength={180}/></label>
+          <button className="danger" disabled={!deploymentSafety?.rollbackConfigured} onClick={()=>void rollbackDeployment()}>Executar rollback</button>
+        </div>
+        <small className="manager-deployment-note">Gate: {deploymentSafety?.productionGate||"CI + build + runtime smoke + health check"}. O banco não é revertido junto com a aplicação.</small>
+      </section>
 
       <section className="manager-panel manager-billing-overview">
         <div className="panel-head manager-panel-head-inline"><div><h2>Financeiro do ProAR Manager</h2><p>Mensalidades das empresas locatárias, separado do financeiro operacional de cada tenant.</p></div><button onClick={()=>void billingAction({action:"run-cycle"})}><RefreshCw size={15}/> Executar ciclo agora</button></div>
