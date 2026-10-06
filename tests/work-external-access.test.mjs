@@ -66,17 +66,21 @@ test("external access toggle updates only the requested credential",()=>{
   assert.equal(result.externalAccess[1].active,false);
 });
 
-test("engineer/fiscal screen uses targeted persistence and safe modal layout",async()=>{
+test("engineer/fiscal screen uses independent persistence and final responsive layout",async()=>{
   const page=await readFile(new URL("../app/page.tsx",import.meta.url),"utf8");
-  const route=await readFile(new URL("../app/api/work-projects/route.ts",import.meta.url),"utf8");
-  const css=await readFile(new URL("../app/obra-142.css",import.meta.url),"utf8");
-  assert.ok(page.includes('method:"PATCH"'));
+  const route=await readFile(new URL("../app/api/work-external-access/route.ts",import.meta.url),"utf8");
+  const css=await readFile(new URL("../app/responsive-hardening.css",import.meta.url),"utf8");
+  assert.ok(page.includes('fetch("/api/work-external-access"'));
+  assert.ok(page.includes('/api/work-external-access?company='));
+  assert.ok(page.includes('method:"POST"'));
   assert.ok(page.includes('action:"external_access_add"'));
-  assert.ok(page.includes("WORK_PROJECTS_REVISION_CONFLICT"));
-  assert.ok(route.includes("mutateWorkExternalAccess"));
+  assert.ok(route.includes("work-access-"));
+  assert.ok(route.includes("legacyAccess"));
   assert.ok(route.includes("WORK_EXTERNAL_ACCESS_SAVE_FAILED"));
-  assert.ok(css.includes("grid-template-rows:auto minmax(0,1fr) auto"));
-  assert.ok(css.includes(".external-access-modal .modal-actions"));
+  assert.ok(css.includes("grid-template-areas:"));
+  assert.ok(css.includes('"intro progress"'));
+  assert.ok(css.includes('"share share"'));
+  assert.ok(css.includes(".app-shell .external-access-modal .modal-actions"));
 });
 
 console.log("work-external-access.test.mjs: ok");
