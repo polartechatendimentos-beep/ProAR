@@ -6,6 +6,8 @@ import { tenantHeaders } from "../../../lib/tenant-rest";
 
 import { hasPermission, type Permission } from "../../../lib/permissions";
 import { prepareOperationalState, independentOperationalRows, OperationError } from "../../../lib/operational-ledger";
+import { createStateSnapshot } from "../../../lib/state-snapshots";
+import { recordSystemIncident } from "../../../lib/system-observability";
 
 function stateRest(db: { url: string; key: string }, path: string, init: RequestInit = {}) {
   return databaseFetch(`${db.url}/rest/v1/${path}`, {
@@ -157,6 +159,13 @@ export async function PUT(request: NextRequest) {
     const validated = prepareOperationalState(current || null, cleanBody, { username: session.username, displayName: session.displayName, can: permission => hasPermission(session, permission as Permission) });
     const payload = { ...validated, _revision: currentRevision + 1, _updatedAt: new Date().toISOString(), _companyId: company };
     const updatedAt = new Date().toISOString();
+    if (current) {
+      const previousUpdatedAt=Date.parse(String(current._updatedAt||""));
+      const checkpointDue=currentRevision%10===0 || !Number.isFinite(previousUpdatedAt) || Date.now()-previousUpdatedAt>60*60*1000;
+      if(checkpointDue) {
+        await createStateSnapshot({companyId:company,stateId:id,payload:current,reason:"automatic-checkpoint",createdBy:session.username}).catch(()=>false);
+      }
+    }
     let response: Response;
     if (db.url === PRIMARY_DATABASE_URL) {
       const confirmed = await commitNeonOperationalState(id, current ? currentRevision : null, payload, independentOperationalRows(company, payload, current));
@@ -187,6 +196,8 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ saved: true, state: confirmed, dedicatedDatabase: db.dedicated, canonicalCompanyId: company });
   } catch (error) {
     if (error instanceof OperationError) return NextResponse.json({ error: error.message }, { status: error.status });
-    return NextResponse.json({ error: "Não foi possível sincronizar os dados." }, { status: 503 });
+    const company=safeCompany(request.nextUrl.searchParams.get("company"))||PRIMARY_COMPANY_ID;
+    void recordSystemIncident({companyId:company,module:"Sincronização",operation:"Gravar estado operacional",error,route:"/api/state"});
+    return NextResponse.json({ error: "Não foi possível sincronizar os dados.", code:"PROAR-DB-003" }, { status: 503 });
   }
 }
