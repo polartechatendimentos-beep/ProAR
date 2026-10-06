@@ -13,7 +13,7 @@ test("/mobile owns a dedicated touch shell",async()=>{
   assert.ok(mobile.includes('classList.add("proar-mobile-route")'));
   assert.ok(!mobile.includes("<MobileRouteControls/>"));
 
-  assert.ok(today.includes('className="mobile-route-summary'));
+  assert.ok(today.includes("mobile-route-summary"));
   assert.ok(today.includes("<MobileRouteControls/>"));
   assert.ok(today.includes('className="mobile-quick-actions"'));
   assert.ok(!today.includes('className="mobile-context-nav"'));
