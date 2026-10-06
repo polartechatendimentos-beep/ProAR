@@ -8,9 +8,16 @@ export type ManagerMigration = {
   description:string;
 };
 
-export const PROAR_SCHEMA_VERSION = "2026.10.05";
+export const PROAR_SCHEMA_VERSION = "2026.10.06";
 
 export const MANAGER_MIGRATIONS:ManagerMigration[] = [
+  {
+    id:"20261006_proar_observability",
+    title:"Observabilidade e saúde operacional",
+    status:"prepared",
+    destructive:false,
+    description:"Adiciona incidentes estruturados e snapshots de saúde para Central de Erros, contingência e operação dos tenants.",
+  },
   {
     id:"20261005_manager_billing_mercado_pago",
     title:"Cobrança recorrente do ProAR Manager",
