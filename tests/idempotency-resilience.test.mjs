@@ -6,7 +6,7 @@ import { idempotencyKey, assertSingleEffect } from "../lib/transaction-engine.ts
 const actor={username:"admin",displayName:"Admin",can:()=>true};
 
 test("same operational command is replayed without duplicating stock effect",()=>{
-  const state={customers:[],serviceOrders:[],moduleRecords:{Estoque:[]}};
+  const state={customers:[],serviceOrders:[],moduleRecords:{Estoque:[],Produtos:[{id:"P1",name:"Filtro",stockCurrent:0}]}};
   const command={idempotencyKey:"idem_stock_0001",action:"stock",data:{movementType:"Entrada",productId:"P1",quantity:2,reason:"Teste"}};
   const first=applyOperationalCommand(state,command,actor,"2026-10-06T15:00:00-03:00");
   const second=applyOperationalCommand(first.state,command,actor,"2026-10-06T15:00:01-03:00");
