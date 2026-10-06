@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readManagerSession } from "../../../../../lib/manager-auth";
-import { recordSystemIncident } from "../../../../../lib/system-observability";
+import { readManagerSession } from "../../../../lib/manager-auth";
+import { recordSystemIncident } from "../../../../lib/system-observability";
 
 export const runtime = "nodejs";
 
