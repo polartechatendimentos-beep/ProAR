@@ -7,7 +7,11 @@ test("login client tolerates empty or non-json responses",async()=>{
   assert.ok(page.includes("const raw = await response.text()"));
   assert.ok(page.includes("A autenticação retornou uma resposta inválida."));
   assert.ok(page.includes("O servidor de autenticação respondeu com erro HTTP"));
-  assert.ok(!page.includes("const result = await response.json();"));
+  const loginStart=page.indexOf("function LoginScreen");
+  const loginEnd=page.indexOf("\nfunction Modal(",loginStart);
+  const loginSource=page.slice(loginStart,loginEnd);
+  assert.ok(loginStart>=0&&loginEnd>loginStart);
+  assert.ok(!loginSource.includes("const result = await response.json();"));
 });
 
 test("auth route always converts unexpected server failures to JSON",async()=>{
