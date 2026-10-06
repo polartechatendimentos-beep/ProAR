@@ -441,6 +441,20 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
       requireAction(actor, data.movementType === "Ajuste" ? "estoque.ajustar" : "estoque.editar");
       records.push({ id: operationId, name: `${data.movementType} de estoque`, productId: data.productId, quantity: data.quantity, movementType: data.movementType, destinationType: data.destinationType || "Estoque central", destinationId: data.destinationId || "", destinationName: data.destinationName || "", changeReason: data.reason, description: data.reason, createdAt: now });
       break;
+    case "tender-status": {
+      requireAction(actor, "licitacoes.editar");
+      const tenderId=String(data.tenderId||command.recordId||"").trim(); const status=String(data.status||"").trim();
+      if(!tenderId||!status) throw new OperationError("Certame e etapa são obrigatórios.");
+      const current=records.find(item=>item.id===tenderId); const history={id:operationId,status,createdAt:now,actor:actor.displayName||actor.username};
+      if(current){current.status=status;current.updatedAt=now;current.history=[...list(current.history),history];}else records.push({id:tenderId,status,sourcePortal:data.sourcePortal||"",object:data.object||"",history:[history],createdAt:now,updatedAt:now});
+      break;
+    }
+    case "tender-vault": {
+      requireAction(actor, "licitacoes.editar");
+      const name=String(data.name||"").trim(); if(!name) throw new OperationError("Nome do documento é obrigatório.");
+      records.push({id:operationId,name,category:data.category||"A classificar",validUntil:data.validUntil||"",issuer:data.issuer||"",status:data.status||"Vence em breve",createdAt:now});
+      break;
+    }
     case "stock-transfer":
       requireAction(actor, "estoque.editar");
       if (!(Number(data.quantity) > 0) || !String(data.sourceType || "").trim() || !String(data.destinationType || "").trim()) throw new OperationError("Transferência exige quantidade, origem e destino.");
