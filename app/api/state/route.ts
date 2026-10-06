@@ -8,6 +8,7 @@ import { hasPermission, type Permission } from "../../../lib/permissions";
 import { prepareOperationalState, independentOperationalRows, OperationError } from "../../../lib/operational-ledger";
 import { createStateSnapshot } from "../../../lib/state-snapshots";
 import { recordSystemIncident } from "../../../lib/system-observability";
+import { classifyProarError } from "../../../lib/system-errors";
 
 function stateRest(db: { url: string; key: string }, path: string, init: RequestInit = {}) {
   return databaseFetch(`${db.url}/rest/v1/${path}`, {
@@ -143,7 +144,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ state: consolidated, dedicatedDatabase: false, canonicalCompanyId: company, recoveredLegacyStates: states.length });
     }
     return NextResponse.json({ state: merged, dedicatedDatabase: false, canonicalCompanyId: company });
-  } catch { return NextResponse.json({ error: "Não foi possível carregar a base compartilhada." }, { status: 503 }); }
+  } catch (error) {
+    const descriptor=classifyProarError(error);
+    const company=companyKey(request,session);
+    void recordSystemIncident({companyId:company,module:"Sincronização",operation:"Carregar estado operacional",error,code:descriptor.code,route:"/api/state"});
+    return NextResponse.json({ error: descriptor.userMessage, code:descriptor.code }, { status: 503 });
+  }
 }
 
 export async function PUT(request: NextRequest) {
@@ -197,7 +203,8 @@ export async function PUT(request: NextRequest) {
   } catch (error) {
     if (error instanceof OperationError) return NextResponse.json({ error: error.message }, { status: error.status });
     const company=companyKey(request,session);
-    void recordSystemIncident({companyId:company,module:"Sincronização",operation:"Gravar estado operacional",error,route:"/api/state"});
-    return NextResponse.json({ error: "Não foi possível sincronizar os dados.", code:"PROAR-DB-003" }, { status: 503 });
+    const descriptor=classifyProarError(error);
+    void recordSystemIncident({companyId:company,module:"Sincronização",operation:"Gravar estado operacional",error,code:descriptor.code,route:"/api/state"});
+    return NextResponse.json({ error: descriptor.userMessage, code:descriptor.code }, { status: 503 });
   }
 }
