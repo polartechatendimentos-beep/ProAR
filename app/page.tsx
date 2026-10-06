@@ -459,6 +459,9 @@ type ModuleRecord = {
   discount?: number;
   discountPercent?: number;
   subtotal?: number;
+  surcharge?: number;
+  reference?: string;
+  seller?: string;
   approvalRequired?: boolean;
   approvalStatus?: "Pendente" | "Aprovado" | "Rejeitado";
   approvalDecidedAt?: string;
@@ -620,6 +623,8 @@ type PurchaseItem = {
   productId?: string;
   registerProduct?: boolean;
   kind?: "Produto" | "Serviço" | "Custo adicional";
+  unitOfMeasure?: string;
+  discountPercent?: number;
 };
 
 type PurchaseInstallment = { number: string; dueDate: string; value: number };
