@@ -20,6 +20,7 @@ type Receivable={id:string;company_id:string;reference_month:string;description:
 type AuditRow={id?:string|number;company_id?:string;action?:string;actor?:string;details?:Record<string,unknown>;created_at?:string};
 type Incident={id:string;company_id?:string;module:string;operation:string;code:string;severity:"info"|"warning"|"error"|"critical";user_message?:string;technical_message?:string;request_id?:string;route?:string;resolved_at?:string;created_at?:string};
 type DeploymentSafety={environment?:string;currentCommit?:string;currentDeploymentId?:string;rollbackConfigured?:boolean;canaryRequired?:boolean;productionGate?:string};
+type StateSnapshot={id:number;company_id:string;state_id:string;revision:number;reason:string;created_by?:string;created_at:string};
 type PlatformInfo={appVersion:string;releaseDate:string;releaseTitle:string;schemaVersion:string;channel:string;migrations:{id:string;title:string;status:string;destructive:boolean;description:string}[]};
 type ManagerPlan={code:string;name:string;description:string;modules:string[];limits:{users:number;serviceOrdersPerMonth:number;storageGb:number;aiCallsPerMonth:number}};
 type ModuleEntitlement={company_id:string;module_name:string;enabled:boolean;monthly_price_cents:number;plan_code?:string};
@@ -53,6 +54,9 @@ export default function ManagerPage(){
   const[deploymentSafety,setDeploymentSafety]=useState<DeploymentSafety|null>(null);
   const[rollbackDeploymentId,setRollbackDeploymentId]=useState("");
   const[rollbackReason,setRollbackReason]=useState("Rollback de emergência pelo ProAR Manager");
+  const[recoveryCompanyId,setRecoveryCompanyId]=useState("");
+  const[snapshots,setSnapshots]=useState<StateSnapshot[]>([]);
+  const[recoveryLoading,setRecoveryLoading]=useState(false);
   const[platform,setPlatform]=useState<PlatformInfo|null>(null);
   const[plans,setPlans]=useState<ManagerPlan[]>([]);
   const[selectedCompanyId,setSelectedCompanyId]=useState("");
@@ -171,6 +175,44 @@ export default function ManagerPage(){
     setNotice("Rollback solicitado para "+deploymentId+". Valide a saúde da produção antes de continuar alterações.");
     await load();
   };
+  const loadRecovery=async(companyId:string)=>{
+    setRecoveryCompanyId(companyId);setSnapshots([]);
+    if(!companyId)return;
+    setRecoveryLoading(true);
+    try{
+      const r=await fetch("/api/manager/recovery?companyId="+encodeURIComponent(companyId),{cache:"no-store"});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(j.error||"Falha ao carregar backups.");
+      setSnapshots(j.snapshots||[]);
+    }catch(e){setError(e instanceof Error?e.message:"Falha ao carregar backups.");}
+    finally{setRecoveryLoading(false)}
+  };
+  const createRecoverySnapshot=async()=>{
+    if(!recoveryCompanyId){setError("Selecione a empresa para gerar o backup.");return}
+    setRecoveryLoading(true);setError("");
+    try{
+      const r=await fetch("/api/manager/recovery",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"snapshot",companyId:recoveryCompanyId})});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(j.error||"Falha ao criar backup.");
+      setSnapshots(j.snapshots||[]);setNotice("Backup operacional criado com sucesso.");
+    }catch(e){setError(e instanceof Error?e.message:"Falha ao criar backup.");}
+    finally{setRecoveryLoading(false)}
+  };
+  const restoreRecoverySnapshot=async(snapshot:StateSnapshot)=>{
+    const company=companyMap[snapshot.company_id];
+    const label=company?.trade_name||company?.legal_name||snapshot.company_id;
+    if(!window.confirm("Restaurar "+label+" para a revisão "+snapshot.revision+"? O estado atual será salvo automaticamente antes da restauração."))return;
+    const confirmation="RESTORE "+snapshot.id;
+    setRecoveryLoading(true);setError("");
+    try{
+      const r=await fetch("/api/manager/recovery",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"restore",companyId:snapshot.company_id,snapshotId:snapshot.id,confirmation})});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(j.error||"Falha ao restaurar backup.");
+      setNotice("Snapshot restaurado com segurança. Uma cópia do estado anterior foi preservada.");
+      await loadRecovery(snapshot.company_id);
+    }catch(e){setError(e instanceof Error?e.message:"Falha ao restaurar backup.");}
+    finally{setRecoveryLoading(false)}
+  };
 
   const saveBilling=async()=>{
     if(!selectedCompany)return;
@@ -268,6 +310,18 @@ export default function ManagerPage(){
           <button className="danger" disabled={!deploymentSafety?.rollbackConfigured} onClick={()=>void rollbackDeployment()}>Executar rollback</button>
         </div>
         <small className="manager-deployment-note">Gate: {deploymentSafety?.productionGate||"CI + build + runtime smoke + health check"}. O banco não é revertido junto com a aplicação.</small>
+      </section>
+
+      <section className="manager-panel manager-recovery-panel">
+        <div className="panel-head manager-panel-head-inline"><div><h2>Centro de Recuperação e Backup</h2><p>Snapshots seguros do estado operacional. Antes de qualquer restauração, o estado atual é preservado automaticamente.</p></div><button disabled={!recoveryCompanyId||recoveryLoading} onClick={()=>void createRecoverySnapshot()}>Criar backup agora</button></div>
+        <div className="manager-recovery-controls">
+          <label>Empresa<select value={recoveryCompanyId} onChange={e=>void loadRecovery(e.target.value)}><option value="">Selecione...</option>{companies.map(company=><option key={"recovery-"+company.id} value={company.id}>{company.trade_name||company.legal_name}</option>)}</select></label>
+          <span>{recoveryLoading?"Processando...":snapshots.length?snapshots.length+" snapshot(s) localizado(s)":"Selecione uma empresa para consultar os backups."}</span>
+        </div>
+        {recoveryCompanyId&&<div className="manager-table-wrap"><table className="manager-table"><thead><tr><th>Data</th><th>Revisão</th><th>Origem</th><th>Criado por</th><th>Ação</th></tr></thead><tbody>
+          {snapshots.slice(0,15).map(snapshot=><tr key={"snapshot-"+snapshot.id}><td>{dateTime(snapshot.created_at)}</td><td>{snapshot.revision}</td><td>{snapshot.reason}</td><td>{snapshot.created_by||"Sistema"}</td><td><button className="danger" disabled={recoveryLoading} onClick={()=>void restoreRecoverySnapshot(snapshot)}>Restaurar</button></td></tr>)}
+          {!snapshots.length&&!recoveryLoading&&<tr><td colSpan={5}>Nenhum snapshot disponível para esta empresa.</td></tr>}
+        </tbody></table></div>}
       </section>
 
       <section className="manager-panel manager-billing-overview">
