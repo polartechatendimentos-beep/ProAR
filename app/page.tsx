@@ -689,14 +689,16 @@ function Sidebar({ current, setCurrent, open, close, permissions, role, entitled
       <footer><span>Histórico de melhorias do ProAR</span><button type="button" className="primary-btn" onClick={()=>setVersionOpen(false)}>Entendi</button></footer>
     </section></div>}
     <nav className="mobile-nav" aria-label="Navegação rápida">{(
-      /t[eé]cnico/i.test(role || "") ? [
+      /administrador|ger[eê]ncia/i.test(role || "") ? [
+        {name:"Painel inicial",label:"Início",icon:LayoutDashboard},{name:"Agenda",label:"Agenda",icon:CalendarDays},{name:"Ordens de serviço",label:"Ordens",icon:ClipboardList},{name:"Obras",label:"Obras",icon:Building2},{name:"Clientes",label:"Clientes",icon:UsersRound}
+      ] : /t[eé]cnico/i.test(role || "") ? [
         {name:"Agenda",label:"Agenda",icon:CalendarDays},{name:"Ordens de serviço",label:"Ordens",icon:ClipboardList},{name:"Equipamentos",label:"Equip.",icon:Boxes},{name:"PMOC e conformidade",label:"PMOC",icon:ShieldCheck},{name:"Painel inicial",label:"Início",icon:MoreHorizontal}
       ] : /finance/i.test(role || "") ? [
         {name:"Painel inicial",label:"Início",icon:LayoutDashboard},{name:"Financeiro",label:"Financeiro",icon:WalletCards},{name:"Fiscal",label:"Fiscal",icon:ReceiptText},{name:"Compras",label:"Compras",icon:ShoppingCart},{name:"Central de pendências",label:"Pendências",icon:MoreHorizontal}
       ] : /vendedor/i.test(role || "") ? [
         {name:"Painel inicial",label:"Início",icon:LayoutDashboard},{name:"Clientes",label:"Clientes",icon:UsersRound},{name:"Orçamentos",label:"Orç.",icon:FileText},{name:"Vendas",label:"Vendas",icon:ShoppingBag},{name:"Central de pendências",label:"Pendências",icon:MoreHorizontal}
       ] : [
-        {name:"Painel inicial",label:"Início",icon:LayoutDashboard},{name:"Agenda",label:"Agenda",icon:CalendarDays},{name:"Ordens de serviço",label:"Ordens",icon:ClipboardList},{name:"Clientes",label:"Clientes",icon:UsersRound},{name:"Configurações",label:"Mais",icon:MoreHorizontal}
+        {name:"Painel inicial",label:"Início",icon:LayoutDashboard},{name:"Agenda",label:"Agenda",icon:CalendarDays},{name:"Ordens de serviço",label:"Ordens",icon:ClipboardList},{name:"Clientes",label:"Clientes",icon:UsersRound},{name:"Obras",label:"Obras",icon:Building2}
       ]
     ).filter(item=>allowed(item.name)).slice(0,5).map(({name,label,icon:Icon})=><button key={name} className={current === name ? "active" : ""} onClick={() => setCurrent(name)}><Icon size={18}/><span>{label}</span></button>)}</nav>
   </>;
