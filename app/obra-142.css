@@ -92,3 +92,153 @@
 
 .work-today-panel{border:1px solid #dbe7f3;border-radius:14px;background:#fff;padding:14px;box-shadow:0 8px 24px rgba(28,60,90,.05)}.work-today-panel>header{display:flex;align-items:center;justify-content:space-between;gap:12px}.work-today-panel>header span{font-size:8px;font-weight:900;letter-spacing:.12em;color:#1696dc}.work-today-panel>header h3{margin:3px 0 0;font-size:18px}.work-today-panel>header>b{font-size:12px;color:#657a8f}.work-today-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}.work-today-kpis button{border:1px solid #e1eaf3;border-radius:10px;background:#f8fbfe;text-align:left;padding:10px}.work-today-kpis button.warning{border-color:#f0c58d;background:#fff8eb}.work-today-kpis small{display:block;font-size:7px;font-weight:900;color:#72869a}.work-today-kpis strong{display:block;margin-top:3px;font-size:21px;color:#183a5b}.work-next-actions{display:flex;align-items:center;gap:7px;margin-top:11px;overflow-x:auto}.work-next-actions>b{font-size:9px;white-space:nowrap}.work-next-actions button{display:flex;align-items:center;gap:6px;min-height:34px;padding:0 9px;border:1px solid #dce8f3;border-radius:9px;background:#fff;white-space:nowrap;font-size:8px;font-weight:800}.work-next-actions button strong{color:#1688db;font-size:12px}.work-today-panel>footer{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:11px;padding-top:10px;border-top:1px solid #edf2f7}.work-today-panel>footer span,.work-today-panel>footer button{display:flex;align-items:center;gap:6px;font-size:8px;font-weight:800}.work-today-panel>footer button{min-height:36px;padding:0 10px;border:1px solid #dce8f3;border-radius:9px;background:#fff}
 @media(max-width:767px){.work-today-panel{padding:11px}.work-today-panel>header h3{font-size:16px}.work-today-panel>header>b{font-size:10px}.work-today-kpis{grid-template-columns:1fr 1fr}.work-today-kpis button{min-height:64px}.work-today-kpis small{font-size:8px}.work-today-kpis strong{font-size:22px}.work-next-actions{margin-inline:-11px;padding:0 11px;scroll-snap-type:x proximity}.work-next-actions>b{display:none}.work-next-actions button{flex:0 0 auto;min-height:42px;font-size:9px;scroll-snap-align:start}.work-today-panel>footer{align-items:stretch;flex-direction:column}.work-today-panel>footer span{font-size:9px}.work-today-panel>footer button{width:100%;justify-content:center;min-height:44px;font-size:10px}}
+
+/* Obras — acesso externo de engenheiros e fiscais
+   Modal com corpo rolável e rodapé sempre visível, evitando corte do botão Concluir. */
+.external-access-modal{
+  width:min(900px,calc(100vw - 48px))!important;
+  max-height:min(820px,calc(100dvh - 40px))!important;
+  display:grid!important;
+  grid-template-rows:auto minmax(0,1fr) auto!important;
+  overflow:hidden!important;
+}
+.external-access-modal .modal-head{
+  position:relative!important;
+  top:auto!important;
+  min-width:0!important;
+}
+.external-access-modal .modal-head>div{min-width:0!important}
+.external-access-modal .modal-head p{
+  max-width:760px!important;
+  margin:6px 0 0!important;
+  line-height:1.5!important;
+}
+.external-access-modal .work-register-body{
+  min-height:0!important;
+  max-height:none!important;
+  overflow-y:auto!important;
+  overscroll-behavior:contain!important;
+  padding:18px 20px!important;
+  gap:14px!important;
+}
+.external-access-modal .work-config-section{
+  min-width:0!important;
+  padding:14px!important;
+}
+.external-access-modal .external-access-form{
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:12px 14px!important;
+  align-items:end!important;
+}
+.external-access-modal .external-access-form>label{
+  min-width:0!important;
+  width:100%!important;
+}
+.external-access-modal .external-access-form input,
+.external-access-modal .external-access-form select{
+  width:100%!important;
+  min-width:0!important;
+  min-height:42px!important;
+  box-sizing:border-box!important;
+}
+.external-access-modal .external-access-submit{
+  grid-column:1!important;
+  justify-self:start!important;
+  width:auto!important;
+  min-width:180px!important;
+  min-height:42px!important;
+  padding-inline:16px!important;
+}
+.external-access-modal .external-access-notice{
+  grid-column:1/-1!important;
+  width:100%!important;
+  box-sizing:border-box!important;
+  margin:0!important;
+  padding:10px 12px!important;
+  border:1px solid currentColor!important;
+  border-radius:9px!important;
+  font-size:10px!important;
+  font-weight:750!important;
+  line-height:1.4!important;
+}
+.external-access-modal .external-access-notice.info{
+  color:#60a5fa!important;
+  background:rgba(37,99,235,.10)!important;
+}
+.external-access-modal .external-access-notice.success{
+  color:#34d399!important;
+  background:rgba(16,185,129,.10)!important;
+}
+.external-access-modal .external-access-notice.error{
+  color:#fb7185!important;
+  background:rgba(225,29,72,.12)!important;
+}
+.external-access-modal .external-access-list{
+  max-height:230px!important;
+  overflow-y:auto!important;
+  overscroll-behavior:contain!important;
+  padding-right:2px!important;
+}
+.external-access-modal .external-access-list article{
+  min-width:0!important;
+}
+.external-access-modal .external-access-list article>div{
+  min-width:0!important;
+}
+.external-access-modal .external-access-list article code{
+  overflow-wrap:anywhere!important;
+}
+.external-access-modal .modal-actions{
+  position:relative!important;
+  bottom:auto!important;
+  flex:0 0 auto!important;
+  min-height:64px!important;
+  padding:12px 20px calc(12px + env(safe-area-inset-bottom))!important;
+}
+.external-access-modal .modal-actions .primary-btn{
+  min-width:120px!important;
+  min-height:40px!important;
+}
+
+@media(max-width:720px){
+  .external-access-modal{
+    align-self:end!important;
+    width:100%!important;
+    max-height:94dvh!important;
+    border-radius:18px 18px 0 0!important;
+  }
+  .external-access-modal .modal-head{
+    padding:16px!important;
+  }
+  .external-access-modal .work-register-body{
+    padding:12px!important;
+  }
+  .external-access-modal .external-access-form{
+    grid-template-columns:1fr!important;
+  }
+  .external-access-modal .external-access-submit,
+  .external-access-modal .external-access-notice{
+    grid-column:1!important;
+  }
+  .external-access-modal .external-access-submit{
+    width:100%!important;
+  }
+  .external-access-modal .external-access-list article{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) auto!important;
+    gap:8px!important;
+  }
+  .external-access-modal .external-access-list article>button{
+    grid-column:1/-1!important;
+    width:100%!important;
+    min-height:40px!important;
+  }
+  .external-access-modal .modal-actions{
+    padding:10px 12px calc(10px + env(safe-area-inset-bottom))!important;
+  }
+  .external-access-modal .modal-actions .primary-btn{
+    width:100%!important;
+  }
+}
+
