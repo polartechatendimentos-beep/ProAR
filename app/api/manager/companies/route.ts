@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
   const instances = await supabaseRest("proar_tenant_instances?select=*&order=created_at.desc");
   const audit = await supabaseRest("proar_manager_audit?select=*&order=created_at.desc&limit=60");
   const entitlementsResponse = await supabaseRest("proar_manager_module_entitlements?select=*&order=module_name.asc").catch(()=>null);
+  const incidentsResponse = await supabaseRest("proar_system_incidents?select=*&order=created_at.desc&limit=80").catch(()=>null);
   if (!companies.ok) return NextResponse.json({ error: "Falha ao consultar empresas." }, { status: 502 });
   const companyRows = await companies.json();
   const instanceRows = instances.ok ? await instances.json() : [];
@@ -34,6 +35,7 @@ export async function GET(request: NextRequest) {
   }));
   const auditRows = audit.ok ? await audit.json() : [];
   const entitlementRows = entitlementsResponse?.ok ? await entitlementsResponse.json() : [];
+  const incidentRows = incidentsResponse?.ok ? await incidentsResponse.json() : [];
   const now = Date.now();
   const summary = {
     total: enrichedCompanies.length,
@@ -54,8 +56,10 @@ export async function GET(request: NextRequest) {
       if (!instance.last_health_at) return true;
       return now - new Date(String(instance.last_health_at)).getTime() > 24 * 60 * 60 * 1000;
     }).length,
+    openCriticalIncidents: incidentRows.filter((incident:Record<string,unknown>) => !incident.resolved_at && incident.severity === "critical").length,
+    recentIncidents: incidentRows.filter((incident:Record<string,unknown>) => now - new Date(String(incident.created_at||0)).getTime() <= 24*60*60*1000).length,
   };
-  return NextResponse.json({ companies: enrichedCompanies, instances: instanceRows, audit: auditRows, entitlements: entitlementRows, moduleCatalog: ALL_MANAGER_MODULES, summary, platform: managerPlatformInfo(), plans: MANAGER_PLANS });
+  return NextResponse.json({ companies: enrichedCompanies, instances: instanceRows, audit: auditRows, incidents: incidentRows, entitlements: entitlementRows, moduleCatalog: ALL_MANAGER_MODULES, summary, platform: managerPlatformInfo(), plans: MANAGER_PLANS });
 }
 
 export async function PATCH(request: NextRequest) {
