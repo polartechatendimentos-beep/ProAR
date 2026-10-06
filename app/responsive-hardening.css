@@ -119,3 +119,308 @@ img,video,canvas,iframe{max-width:100%}
 :where(button,[role="button"]){touch-action:manipulation}
 @media(max-width:1024px){:where(button,a,[role="button"],input,select){min-height:44px}.icon-btn,.close-btn{min-width:44px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+/* /mobile — dedicated touch shell, independent from viewport width */
+html[data-proar-experience="mobile"]{
+ --proar-mobile-nav-space:86px;
+ background:#06111f;
+}
+html[data-proar-experience="mobile"] body{
+ min-width:0;
+ background:linear-gradient(180deg,#06111f 0,#081827 100%);
+}
+html[data-proar-experience="mobile"] .proar-mobile-entry{
+ min-height:100dvh;
+ background:#071522;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience{
+ min-height:100dvh;
+ background:#071522;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .main{
+ width:100%!important;
+ min-height:100dvh;
+ margin-left:0!important;
+ padding-bottom:calc(var(--proar-mobile-nav-space) + env(safe-area-inset-bottom))!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .sidebar{
+ width:min(310px,88vw)!important;
+ transform:translateX(-105%)!important;
+ transition:transform .22s ease!important;
+ box-shadow:20px 0 55px rgba(0,0,0,.42)!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .sidebar.open{
+ transform:translateX(0)!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .backdrop{
+ display:block!important;
+ position:fixed!important;
+ z-index:39!important;
+ inset:0!important;
+ border:0!important;
+ background:rgba(1,8,18,.72)!important;
+ backdrop-filter:blur(4px)!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .topbar{
+ position:sticky!important;
+ top:0!important;
+ z-index:35!important;
+ min-height:62px!important;
+ height:62px!important;
+ padding:7px 10px!important;
+ border-bottom:1px solid #17314a!important;
+ background:rgba(6,19,32,.96)!important;
+ backdrop-filter:blur(16px)!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .menu-toggle{
+ display:grid!important;
+ min-width:44px!important;
+ width:44px!important;
+ height:44px!important;
+ border:1px solid #1e466a!important;
+ background:#0b2741!important;
+ color:#7dd3fc!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .header-module-mark,
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .eyebrow,
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .headline-copy p,
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .profile,
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .switch-user-btn{
+ display:none!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .headline{
+ min-width:0!important;
+ gap:9px!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .headline-copy{
+ min-width:0!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .headline-copy h1{
+ margin:0!important;
+ color:#f3f8fd!important;
+ font-size:16px!important;
+ line-height:1.15!important;
+ white-space:nowrap!important;
+ overflow:hidden!important;
+ text-overflow:ellipsis!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .top-actions{
+ margin-left:auto!important;
+ gap:5px!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .header-global-search,
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .header-pending{
+ display:none!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .header-tool-button.sync-state{
+ display:grid!important;
+ width:44px!important;
+ height:44px!important;
+ border:1px solid #1e466a!important;
+ background:#0b2741!important;
+ color:#7dd3fc!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .company-context{
+ display:none!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .page-content{
+ width:100%!important;
+ max-width:720px!important;
+ margin:0 auto!important;
+ padding:10px 10px calc(var(--proar-mobile-nav-space) + 16px + env(safe-area-inset-bottom))!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience footer{
+ display:none!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .mobile-nav{
+ position:fixed!important;
+ display:grid!important;
+ grid-template-columns:repeat(5,minmax(0,1fr))!important;
+ left:max(8px,env(safe-area-inset-left))!important;
+ right:max(8px,env(safe-area-inset-right))!important;
+ bottom:max(8px,env(safe-area-inset-bottom))!important;
+ z-index:1550!important;
+ height:68px!important;
+ padding:5px!important;
+ border:1px solid rgba(69,157,218,.30)!important;
+ border-radius:20px!important;
+ background:rgba(5,24,42,.96)!important;
+ box-shadow:0 18px 45px rgba(0,0,0,.44)!important;
+ backdrop-filter:blur(18px)!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .mobile-nav button{
+ min-width:0!important;
+ min-height:56px!important;
+ padding:4px 2px!important;
+ border:0!important;
+ border-radius:14px!important;
+ background:transparent!important;
+ color:#7899b7!important;
+ display:flex!important;
+ flex-direction:column!important;
+ align-items:center!important;
+ justify-content:center!important;
+ gap:3px!important;
+ font-size:9px!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .mobile-nav button.active{
+ color:#67dcff!important;
+ background:rgba(31,132,205,.18)!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .module-page{
+ gap:10px!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .module-toolbar{
+ position:sticky!important;
+ top:62px!important;
+ z-index:20!important;
+ display:grid!important;
+ grid-template-columns:1fr!important;
+ gap:7px!important;
+ padding:7px 0!important;
+ background:#071522!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .module-toolbar .list-search{
+ width:100%!important;
+ margin:0!important;
+ min-height:48px!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .module-toolbar>.primary-btn,
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .module-toolbar>.outline-btn,
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .module-toolbar>.filter-btn{
+ width:100%!important;
+ min-height:46px!important;
+ justify-content:center!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .panel,
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .employee-card{
+ border-radius:14px!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .modal,
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .service-picker,
+html[data-proar-experience="mobile"] .mobile-dedicated-experience .customer-structure-screen .modal-card{
+ width:100%!important;
+ max-width:none!important;
+ max-height:92dvh!important;
+ border-radius:18px 18px 0 0!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience input,
+html[data-proar-experience="mobile"] .mobile-dedicated-experience select,
+html[data-proar-experience="mobile"] .mobile-dedicated-experience textarea{
+ font-size:16px!important;
+}
+html[data-proar-experience="mobile"] .mobile-dedicated-experience button,
+html[data-proar-experience="mobile"] .mobile-dedicated-experience a[role="button"]{
+ touch-action:manipulation;
+}
+
+/* Mobile login is a single-column app entry, not the desktop split screen. */
+html[data-proar-experience="mobile"] .login-page{
+ min-height:100dvh!important;
+ display:grid!important;
+ grid-template-columns:1fr!important;
+ background:linear-gradient(180deg,#06162d,#081d34)!important;
+}
+html[data-proar-experience="mobile"] .login-brand{
+ display:none!important;
+}
+html[data-proar-experience="mobile"] .login-panel{
+ min-height:100dvh!important;
+ padding:24px 18px!important;
+ background:transparent!important;
+}
+html[data-proar-experience="mobile"] .login-panel form{
+ width:min(100%,440px)!important;
+ padding:22px 18px!important;
+ border:1px solid #193a58!important;
+ border-radius:20px!important;
+ background:#0a1c30!important;
+ box-shadow:0 20px 55px rgba(0,0,0,.32)!important;
+}
+html[data-proar-experience="mobile"] .login-panel h2{
+ color:#f4f9ff!important;
+}
+html[data-proar-experience="mobile"] .login-panel form>p,
+html[data-proar-experience="mobile"] .login-panel label{
+ color:#91a9bf!important;
+}
+html[data-proar-experience="mobile"] .login-panel input{
+ background:#071522!important;
+ border-color:#24445f!important;
+ color:#fff!important;
+}
+
+/* Make the most common list modules feel like mobile cards instead of desktop tables. */
+html[data-proar-experience="mobile"] .customer-panel .table-wrap,
+html[data-proar-experience="mobile"] .orders-panel .table-wrap{
+ overflow:visible!important;
+}
+html[data-proar-experience="mobile"] .customer-panel table,
+html[data-proar-experience="mobile"] .orders-panel table{
+ min-width:0!important;
+ width:100%!important;
+}
+html[data-proar-experience="mobile"] .customer-panel thead,
+html[data-proar-experience="mobile"] .orders-panel thead{
+ display:none!important;
+}
+html[data-proar-experience="mobile"] .customer-panel tbody,
+html[data-proar-experience="mobile"] .orders-panel tbody{
+ display:grid!important;
+ gap:8px!important;
+ padding:8px!important;
+}
+html[data-proar-experience="mobile"] .customer-panel tbody tr,
+html[data-proar-experience="mobile"] .orders-panel tbody tr{
+ display:grid!important;
+ grid-template-columns:1fr auto!important;
+ gap:4px 8px!important;
+ padding:11px!important;
+ border:1px solid #173750!important;
+ border-radius:12px!important;
+ background:#091b2e!important;
+}
+html[data-proar-experience="mobile"] .customer-panel tbody td,
+html[data-proar-experience="mobile"] .orders-panel tbody td{
+ display:block!important;
+ min-width:0!important;
+ padding:3px 0!important;
+ border:0!important;
+ white-space:normal!important;
+}
+html[data-proar-experience="mobile"] .customer-panel tbody td:first-child,
+html[data-proar-experience="mobile"] .orders-panel tbody td:first-child{
+ grid-column:1/-1!important;
+}
+html[data-proar-experience="mobile"] .customer-panel tbody td:last-child,
+html[data-proar-experience="mobile"] .orders-panel tbody td:last-child{
+ grid-column:1/-1!important;
+}
+html[data-proar-experience="mobile"] .customer-panel .row-actions,
+html[data-proar-experience="mobile"] .orders-panel .row-actions{
+ width:100%!important;
+ display:grid!important;
+ grid-template-columns:repeat(3,minmax(0,1fr))!important;
+ gap:6px!important;
+}
+html[data-proar-experience="mobile"] .customer-panel .row-actions button,
+html[data-proar-experience="mobile"] .orders-panel .row-actions button{
+ min-height:40px!important;
+ justify-content:center!important;
+}
+html[data-proar-experience="mobile"] .customer-panel tbody td:nth-child(4),
+html[data-proar-experience="mobile"] .customer-panel tbody td:nth-child(5),
+html[data-proar-experience="mobile"] .orders-panel tbody td:nth-child(n+5):not(:last-child){
+ display:none!important;
+}
+
+@media(max-width:420px){
+ html[data-proar-experience="mobile"] .mobile-dedicated-experience .page-content{
+  padding-inline:8px!important;
+ }
+ html[data-proar-experience="mobile"] .mobile-dedicated-experience .mobile-nav{
+  left:5px!important;
+  right:5px!important;
+ }
+}
+
