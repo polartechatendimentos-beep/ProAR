@@ -7,6 +7,7 @@ import { resolveTenantDb, tenantHeaders } from "../../../../lib/tenant-rest";
 import { managerPlatformInfo } from "../../../../lib/manager-platform";
 import { ALL_MANAGER_MODULES, MANAGER_PLANS, managerPlan } from "../../../../lib/manager-plans";
 import { getBillingCompany, setCompanyModuleEntitlements, syncCompanyBillingAccess, syncPlanEntitlements } from "../../../../lib/manager-billing";
+import { tenantReadiness } from "../../../../lib/tenant-readiness";
 
 const isAdmin = (request: NextRequest) => readManagerSession(request);
 
@@ -23,6 +24,7 @@ export async function GET(request: NextRequest) {
   const instanceRows = instances.ok ? await instances.json() : [];
   const primaryCompanyId = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
   const primarySlug = process.env.PROAR_PRIMARY_COMPANY_SLUG || "polartech";
+  const instanceByCompany=Object.fromEntries(instanceRows.map((instance:Record<string,unknown>)=>[String(instance.company_id||""),instance]));
   const enrichedCompanies = companyRows.map((company: Record<string,unknown>) => ({
     ...company,
     tenant: tenantIdentity({
@@ -32,6 +34,7 @@ export async function GET(request: NextRequest) {
       primaryCompanyId,
       primarySlug,
     }),
+    readiness:tenantReadiness({company,instance:instanceByCompany[String(company.id||"")]}),
   }));
   const auditRows = audit.ok ? await audit.json() : [];
   const entitlementRows = entitlementsResponse?.ok ? await entitlementsResponse.json() : [];
