@@ -2082,6 +2082,71 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
       localStorage.setItem(shareKey, String(result.token));
     }
   };
+  const loadLatestProjectsForExternalAccess = async () => {
+    const response = await fetch(`/api/work-projects?company=${encodeURIComponent(companyId)}`, { cache:"no-store" });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = result.error || `Não foi possível recarregar as obras (HTTP ${response.status}).`;
+      throw new Error(result.code ? `${message} (${result.code})` : message);
+    }
+    const authoritative = Array.isArray(result.state?.projects) ? result.state.projects as WorkProject[] : [];
+    const revision = Number(result.state?.revision || 0);
+    if (!authoritative.some(project => project.id === activeProject.id)) {
+      throw new Error("A obra ativa não foi localizada na versão mais recente da base.");
+    }
+    setProjects(authoritative);
+    setProjectsRevision(revision);
+    localStorage.setItem(projectsKey, JSON.stringify(authoritative));
+    return { projects: authoritative, revision };
+  };
+
+  const applyExternalAccessState = (baseProjects: WorkProject[], externalAccess: WorkExternalAccess[], revision: number) => {
+    const next = baseProjects.map(project => project.id === activeProject.id ? { ...project, externalAccess } : project);
+    setProjects(next);
+    setProjectsRevision(revision);
+    localStorage.setItem(projectsKey, JSON.stringify(next));
+    return next;
+  };
+
+  const persistExternalAccessChange = async (
+    payload:
+      | { action:"external_access_add"; workId:string; access:WorkExternalAccess }
+      | { action:"external_access_toggle"; workId:string; accessId:string; active:boolean },
+  ) => {
+    let baseProjects = projects;
+    let revision = projectsRevision;
+
+    const send = async () => {
+      const response = await fetch("/api/work-projects", {
+        method:"PATCH",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ companyId, baseRevision:revision, ...payload }),
+      });
+      const result = await response.json().catch(() => ({}));
+      return { response, result };
+    };
+
+    let attempt = await send();
+    if (attempt.response.status === 409 && attempt.result.code === "WORK_PROJECTS_REVISION_CONFLICT") {
+      const latest = await loadLatestProjectsForExternalAccess();
+      baseProjects = latest.projects;
+      revision = latest.revision;
+      attempt = await send();
+    }
+
+    if (!attempt.response.ok) {
+      const message = attempt.result.error || `Não foi possível salvar o acesso externo (HTTP ${attempt.response.status}).`;
+      throw new Error(attempt.result.code ? `${message} (${attempt.result.code})` : message);
+    }
+
+    const externalAccess = Array.isArray(attempt.result.externalAccess)
+      ? attempt.result.externalAccess as WorkExternalAccess[]
+      : [];
+    const savedRevision = Number(attempt.result.revision ?? revision);
+    applyExternalAccessState(baseProjects, externalAccess, savedRevision);
+    return { externalAccess, revision:savedRevision };
+  };
+
   const saveExternalAccess = async () => {
     if (accessSaving) return;
     const name = newAccessName.trim();
@@ -2102,8 +2167,9 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
       setAccessNotice({ tone:"error", text:"A gestão de acessos externos exige conexão com a base principal." });
       return;
     }
+
     setAccessSaving(true);
-    setAccessNotice({ tone:"info", text:"Criando acesso e sincronizando com a obra..." });
+    setAccessNotice({ tone:"info", text:"Criando acesso na obra..." });
     try {
       const access: WorkExternalAccess = {
         id: `obra-access-${Date.now()}-${crypto.randomUUID().slice(0,8)}`,
@@ -2115,78 +2181,72 @@ function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do
         createdAt: new Date().toISOString(),
       };
 
-      const persistAgainst = async (baseProjects: WorkProject[], revision: number) => {
-        const target=baseProjects.find(project=>project.id===activeProject.id);
-        if(!target) throw new Error("A obra ativa não foi localizada na base principal.");
-        if((target.externalAccess ?? []).some(item=>item.username.toLocaleLowerCase("pt-BR")===username)) throw new Error("Este usuário já possui acesso cadastrado nesta obra.");
-        const externalAccess=[access,...(target.externalAccess ?? [])];
-        const next=baseProjects.map(project=>project.id===target.id?{...project,externalAccess}:project);
-        const response=await fetch("/api/work-projects",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({companyId,projects:next,baseRevision:revision})});
-        const result=await response.json().catch(()=>({}));
-        return {response,result,next,externalAccess};
-      };
+      const persisted = await persistExternalAccessChange({
+        action:"external_access_add",
+        workId:activeProject.id,
+        access,
+      });
 
-      let attempt=await persistAgainst(projects,projectsRevision);
-      if(attempt.response.status===409 && attempt.result.state?.projects){
-        const authoritative=attempt.result.state.projects as WorkProject[];
-        const revision=Number(attempt.result.state.revision||0);
-        setProjects(authoritative);
-        setProjectsRevision(revision);
-        localStorage.setItem(projectsKey,JSON.stringify(authoritative));
-        attempt=await persistAgainst(authoritative,revision);
-      }
-      if(!attempt.response.ok) throw new Error(attempt.result.error || `Não foi possível salvar o acesso na obra (HTTP ${attempt.response.status}).`);
-
-      const savedRevision=Number(attempt.result.state?.revision||projectsRevision+1);
-      setProjects(attempt.next);
-      setProjectsRevision(savedRevision);
-      localStorage.setItem(projectsKey,JSON.stringify(attempt.next));
-
+      setAccessNotice({ tone:"info", text:"Acesso salvo. Ativando no portal externo..." });
       try {
-        if (shareToken) await syncExternalAccessMap(attempt.externalAccess);
-        else await publishPublicMap(houses, serverRevision, attempt.externalAccess);
+        if (shareToken) await syncExternalAccessMap(persisted.externalAccess);
+        else await publishPublicMap(houses, serverRevision, persisted.externalAccess);
       } catch (syncError) {
         setNewAccessName("");
         setNewAccessUsername("");
         setNewAccessPassword("");
-        setAccessNotice({tone:"error",text:`O acesso foi salvo na obra, mas não foi possível ativá-lo no portal externo: ${syncError instanceof Error ? syncError.message : "falha de sincronização"}`});
-        setReportNotice("Cadastro salvo, mas o portal externo ainda precisa ser sincronizado.");
+        setAccessNotice({
+          tone:"error",
+          text:`O acesso foi salvo na obra, mas o portal externo ainda não foi sincronizado: ${syncError instanceof Error ? syncError.message : "falha de sincronização"}`,
+        });
+        setReportNotice("Cadastro salvo; falta sincronizar o portal externo.");
         return;
       }
 
       setNewAccessName("");
       setNewAccessUsername("");
       setNewAccessPassword("");
-      setAccessNotice({ tone:"success", text:`Acesso de ${name} criado e ativado no portal externo.` });
+      setAccessNotice({ tone:"success", text:`Acesso de ${name} criado e ativado com sucesso.` });
       setReportNotice("Acesso externo criado e sincronizado com a obra.");
     } catch (error) {
-      setAccessNotice({ tone:"error", text:error instanceof Error ? error.message : "Não foi possível salvar o acesso." });
+      setAccessNotice({
+        tone:"error",
+        text:error instanceof Error ? error.message : "Não foi possível salvar o acesso. Tente novamente.",
+      });
     } finally {
       setAccessSaving(false);
     }
   };
+
   const toggleExternalAccess = async (accessId: string) => {
     if (accessSaving) return;
-    const externalAccess = (activeProject.externalAccess ?? []).map(access => access.id === accessId ? { ...access, active: !access.active } : access);
-    const nextProject = { ...activeProject, externalAccess };
-    const next = projects.map(project => project.id === activeProject.id ? nextProject : project);
+    const target = (activeProject.externalAccess ?? []).find(access => access.id === accessId);
+    if (!target) {
+      setAccessNotice({ tone:"error", text:"Acesso externo não localizado na obra." });
+      return;
+    }
+    if (!navigator.onLine) {
+      setAccessNotice({ tone:"error", text:"A gestão de acessos externos exige conexão com a base principal." });
+      return;
+    }
+
     setAccessSaving(true);
-    setAccessNotice({ tone:"info", text:"Atualizando acesso..." });
+    setAccessNotice({ tone:"info", text:target.active ? "Inativando acesso..." : "Ativando acesso..." });
     try {
-      const response = await fetch("/api/work-projects", {
-        method:"PUT",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ companyId, projects:next, baseRevision:projectsRevision }),
+      const persisted = await persistExternalAccessChange({
+        action:"external_access_toggle",
+        workId:activeProject.id,
+        accessId,
+        active:!target.active,
       });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || "Não foi possível atualizar o acesso.");
-      await syncExternalAccessMap(externalAccess);
-      setProjects(next);
-      setProjectsRevision(Number(result.state?.revision || projectsRevision + 1));
-      localStorage.setItem(projectsKey, JSON.stringify(next));
-      setAccessNotice({ tone:"success", text:"Acesso atualizado com sucesso." });
+      await syncExternalAccessMap(persisted.externalAccess);
+      setAccessNotice({ tone:"success", text:`Acesso ${target.active ? "inativado" : "ativado"} com sucesso.` });
+      setReportNotice(`Acesso externo ${target.active ? "inativado" : "ativado"} e sincronizado.`);
     } catch (error) {
-      setAccessNotice({ tone:"error", text:error instanceof Error ? error.message : "Não foi possível atualizar o acesso." });
+      setAccessNotice({
+        tone:"error",
+        text:error instanceof Error ? error.message : "Não foi possível atualizar o acesso.",
+      });
     } finally {
       setAccessSaving(false);
     }
