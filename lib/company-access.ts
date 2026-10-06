@@ -21,15 +21,47 @@ function evaluateCompany(company:Record<string,unknown>):CompanyAccessResult {
   return { ok:true, company };
 }
 
-const select="id,slug,status,trade_name,trial_expires_at,plan_code,modules,access_block_source,suspended_reason";
+const fullSelect="id,slug,status,trade_name,trial_expires_at,plan_code,modules,access_block_source,suspended_reason";
+const compatibleSelect="id,slug,status,trade_name,trial_expires_at,plan_code,modules";
+const minimalSelect="id,slug,status,trade_name";
+
+async function readCompany(queryForSelect:(select:string)=>string) {
+  let lastError: unknown = null;
+
+  for (const select of [fullSelect, compatibleSelect, minimalSelect]) {
+    try {
+      const response = await supabaseRest(queryForSelect(select));
+      if (!response.ok) {
+        lastError = new Error(`Manager respondeu HTTP ${response.status}`);
+        continue;
+      }
+      const rows = await response.json().catch(() => null);
+      if (!Array.isArray(rows)) {
+        lastError = new Error("Resposta inválida do ProAR Manager.");
+        continue;
+      }
+      return { rows, degraded: select !== fullSelect };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastError) {
+    console.error("COMPANY_ACCESS_QUERY_FAILED", {
+      message:lastError instanceof Error ? lastError.message : String(lastError),
+    });
+  }
+  return null;
+}
 
 export async function validateCompanyAccess(companyId?: string | null): Promise<CompanyAccessResult> {
   if (!companyId) return { ok: true };
   if (!supabaseConfigured()) return { ok: false, code:"MANAGER_UNAVAILABLE", reason: "Banco mestre não configurado." };
-  const response = await supabaseRest(`proar_companies?select=${select}&id=eq.${encodeURIComponent(companyId)}&limit=1`);
-  if (!response.ok) return { ok: false, code:"MANAGER_UNAVAILABLE", reason: "Não foi possível validar a empresa no ProAR Manager." };
-  const rows = await response.json();
-  const company = rows?.[0];
+
+  const result = await readCompany(select => `proar_companies?select=${select}&id=eq.${encodeURIComponent(companyId)}&limit=1`);
+  if (!result) return { ok: false, code:"MANAGER_UNAVAILABLE", reason: "Não foi possível validar a empresa no ProAR Manager." };
+
+  const company = result.rows[0] as Record<string,unknown> | undefined;
   if (!company) return { ok: false, code:"COMPANY_NOT_FOUND", reason: "Empresa não cadastrada no ProAR Manager." };
   return evaluateCompany(company);
 }
@@ -38,10 +70,11 @@ export async function validateCompanyAccessBySlug(slug?: string | null): Promise
   const normalized=String(slug||"").trim().toLowerCase();
   if (!normalized) return { ok:true };
   if (!supabaseConfigured()) return { ok:false, code:"MANAGER_UNAVAILABLE", reason:"Banco mestre não configurado." };
-  const response=await supabaseRest(`proar_companies?select=${select}&slug=eq.${encodeURIComponent(normalized)}&limit=1`);
-  if (!response.ok) return { ok:false, code:"MANAGER_UNAVAILABLE", reason:"Não foi possível validar a empresa no ProAR Manager." };
-  const rows=await response.json();
-  const company=rows?.[0];
+
+  const result = await readCompany(select => `proar_companies?select=${select}&slug=eq.${encodeURIComponent(normalized)}&limit=1`);
+  if (!result) return { ok:false, code:"MANAGER_UNAVAILABLE", reason:"Não foi possível validar a empresa no ProAR Manager." };
+
+  const company=result.rows[0] as Record<string,unknown> | undefined;
   if (!company) return { ok:false, code:"COMPANY_NOT_FOUND", reason:"Empresa não cadastrada no ProAR Manager." };
   return evaluateCompany(company);
 }
