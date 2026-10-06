@@ -97,7 +97,7 @@ export function BiddingOperationsWorkspace({ tenders, onOpen }: { tenders: Biddi
   const checklist = useMemo(() => checklistFor(selected, vault), [selected, vault]);
   const margin = proposal > 0 ? ((proposal - cost) / proposal) * 100 : 0;
   const minimumMargin = minimum > 0 ? ((minimum - cost) / minimum) * 100 : 0;
-  const goNoGo=selected?evaluateGoNo({score:scoreTender(selected).score,missingDocuments:checklist.filter(i=>i.status==="missing").length,expiredDocuments:vault.filter(d=>d.status==="Vencido").length,criticalRisks:tenderRisks(`${selected.objetoCompra||""} ${analysisResult?.risks.map(r=>r.detail).join(" ")||""}`).filter(r=>r.severity==="Crítico").length,marginPercent:proposal?margin:undefined,daysToDeadline:selected.dataEncerramentoProposta?Math.ceil((new Date(selected.dataEncerramentoProposta).getTime()-Date.now())/86400000):undefined}):null;
+  const goNoGo=selected?evaluateGoNoGo({score:scoreTender(selected).score,missingDocuments:checklist.filter(i=>i.status==="missing").length,expiredDocuments:vault.filter(d=>d.status==="Vencido").length,criticalRisks:tenderRisks(`${selected.objetoCompra||""} ${analysisResult?.risks.map(r=>r.detail).join(" ")||""}`).filter(r=>r.severity==="Crítico").length,marginPercent:proposal?margin:undefined,daysToDeadline:selected.dataEncerramentoProposta?Math.ceil((new Date(selected.dataEncerramentoProposta).getTime()-Date.now())/86400000):undefined}):null;
   const executive=useMemo(()=>procurementKpis(tenders.map((t,index)=>({status:getStatus(tenderKey(t,index)),estimatedValue:t.valorTotalEstimado}))),[tenders,statuses]);
   const riskMap=selected?tenderRisks(`${selected.objetoCompra||""} ${analysisResult?.risks.map(r=>`${r.title} ${r.detail}`).join(" ")||""}`):[];
   const analyzeEdital = async () => {
