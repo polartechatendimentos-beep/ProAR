@@ -264,6 +264,32 @@ async function applyTarget(release:ProARReleaseRecord,channel:ReleaseChannel,com
   return{ok:true,alias,companyId,health};
 }
 
+async function latestTarget(releaseIdValue:string,channel:ReleaseChannel){
+  const response=await supabaseRest("proar_release_targets?select=*&release_id=eq."+encodeURIComponent(releaseIdValue)+"&environment_code=eq."+channel+"&order=created_at.desc&limit=1");
+  return response.ok?((await response.json())[0] as ReleaseTarget|undefined):undefined;
+}
+
+async function validatePromotionSource(release:ProARReleaseRecord,next:ReleaseChannel){
+  if(next===release.channel)return{ok:true as const};
+  const source=await latestTarget(release.id,release.channel);
+  if(!source||source.status!=="active"||source.health_status!=="ok"){
+    return{ok:false as const,error:"A etapa "+release.channel+" ainda não possui target ativo e saudável.",code:"PROAR-REL-SOURCE-NOT-HEALTHY"};
+  }
+  if(next==="production"){
+    const minMinutes=Math.max(0,Number(process.env.PROAR_CANARY_MINUTES||60));
+    const applied=source.applied_at?new Date(source.applied_at).getTime():0;
+    const elapsed=applied?Date.now()-applied:0;
+    if(!applied||elapsed<minMinutes*60_000){
+      const remaining=Math.max(1,Math.ceil((minMinutes*60_000-elapsed)/60_000));
+      return{ok:false as const,error:"Canary ainda em observação. Aguarde aproximadamente "+remaining+" minuto(s) antes da Produção.",code:"PROAR-REL-CANARY-WINDOW"};
+    }
+    if(source.company_id&&await criticalIncidentCount(source.company_id)>0){
+      return{ok:false as const,error:"Canary apresentou incidente crítico recente. A Produção permanece bloqueada.",code:"PROAR-REL-CANARY-REGRESSION"};
+    }
+  }
+  return{ok:true as const};
+}
+
 function nextChannelAllowed(current:ReleaseChannel,next:ReleaseChannel){
   const order:ReleaseChannel[]=["internal","homologation","canary","production"];
   return order.indexOf(next)===order.indexOf(current)+1 || next===current;
@@ -290,8 +316,15 @@ export async function POST(request:NextRequest){
       const deployment=await inspectDeployment(deploymentId);
       if(!deployment.ok)return NextResponse.json({error:"O deployment precisa estar READY antes de entrar no fluxo.",code:"PROAR-REL-DEPLOYMENT"},{status:409});
       if(commitSha&&deployment.commitSha&&commitSha!==deployment.commitSha)return NextResponse.json({error:"O commit informado não corresponde ao deployment selecionado.",code:"PROAR-REL-COMMIT"},{status:409});
+      const migrations=Array.isArray(body.migrations)?body.migrations:[];
+      const unsafeMigration=migrations.find((item:unknown)=>{
+        if(!item||typeof item!=="object")return false;
+        const migration=item as Record<string,unknown>;
+        return migration.destructive===true&&migration.reversible!==true;
+      });
+      if(unsafeMigration)return NextResponse.json({error:"Migration destrutiva sem rollback declarado foi bloqueada.",code:"PROAR-REL-MIGRATION-SAFETY"},{status:409});
       const id=releaseId(version);
-      const release={
+      const release:ProARReleaseRecord={
         id,version,commit_sha:commitSha||deployment.commitSha||"",
         deployment_id:deploymentId,schema_version:String(body.schemaVersion||PROAR_SCHEMA_VERSION),
         minimum_schema_version:String(body.minimumSchemaVersion||PROAR_SCHEMA_VERSION),
@@ -299,15 +332,33 @@ export async function POST(request:NextRequest){
         summary:String(body.summary||"").slice(0,1000)||null,
         affected_modules:Array.isArray(body.affectedModules)?body.affectedModules:[],
         notes:Array.isArray(body.notes)?body.notes:[],
-        migrations:Array.isArray(body.migrations)?body.migrations:[],
-        compatibility:body.compatibility&&typeof body.compatibility==="object"?body.compatibility:{},
+        migrations,
+        compatibility:body.compatibility&&typeof body.compatibility==="object"?body.compatibility as Record<string,unknown>:{},
         quality_gate:{deploymentReady:true,commitVerified:Boolean(deployment.commitSha),createdAt:now()},
         approval_required:body.approvalRequired!==false,created_by:user.username,updated_at:now(),
       };
       const response=await supabaseRest("proar_releases?on_conflict=id",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify(release)});
       if(!response.ok)return NextResponse.json({error:"Não foi possível registrar a release."},{status:502});
       await audit("RELEASE_CREATED",user.username,{releaseId:id,version,deploymentId,commitSha:release.commit_sha});
-      return NextResponse.json({saved:true,release});
+      await ensureInternalTenant(user.username);
+      const internal=await applyTarget(release,"internal",INTERNAL_QA_COMPANY_ID,"teste.proar.online",user.username);
+      if(!internal.ok){
+        await supabaseRest(`proar_releases?id=eq.${encodeURIComponent(id)}`,{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({status:"failed",updated_at:now()})});
+        return NextResponse.json({saved:true,release,internal,error:"Release registrada, mas a publicação no ProAR Interno falhou. Corrija a causa e use Repetir Interno.",code:"PROAR-REL-INTERNAL-PUBLISH"},{status:409});
+      }
+      return NextResponse.json({saved:true,release,internal});
+    }
+
+    if(action==="publish-internal"){
+      const id=String(body.releaseId||"");
+      const release=await releaseById(id);
+      if(!release)return NextResponse.json({error:"Release não encontrada."},{status:404});
+      await ensureInternalTenant(user.username);
+      await supabaseRest(`proar_releases?id=eq.${encodeURIComponent(id)}`,{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({channel:"internal",status:"testing",updated_at:now()})});
+      const result=await applyTarget({...release,channel:"internal",status:"testing"},"internal",INTERNAL_QA_COMPANY_ID,"teste.proar.online",user.username);
+      if(!result.ok)return NextResponse.json({saved:false,error:result.error||"Falha ao publicar no ProAR Interno.",code:result.code||"PROAR-REL-INTERNAL-PUBLISH"},{status:409});
+      await audit("RELEASE_INTERNAL_PUBLISHED",user.username,{releaseId:id,version:release.version,deploymentId:release.deployment_id});
+      return NextResponse.json({saved:true,published:true,result});
     }
 
     if(action==="approve"){
@@ -373,6 +424,8 @@ export async function POST(request:NextRequest){
       if(!release)return NextResponse.json({error:"Release não encontrada."},{status:404});
       if(!RELEASE_ENVIRONMENTS.some(env=>env.code===channel))return NextResponse.json({error:"Canal inválido."},{status:400});
       if(!nextChannelAllowed(release.channel,channel))return NextResponse.json({error:`Fluxo inválido: ${release.channel} deve avançar somente para o próximo canal.`,code:"PROAR-REL-FLOW"},{status:409});
+      const sourceGate=await validatePromotionSource(release,channel);
+      if(!sourceGate.ok)return NextResponse.json({error:sourceGate.error,code:sourceGate.code},{status:409});
 
       const customerFacing=channel==="canary"||channel==="production";
       if(customerFacing&&release.approval_required&&!release.approved_by){
