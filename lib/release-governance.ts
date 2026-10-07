@@ -1,5 +1,5 @@
 import { neon } from "@neondatabase/serverless";
-import { createStateSnapshot, listStateSnapshots } from "./state-snapshots";
+import { createStateSnapshot, getStateSnapshot, listStateSnapshots } from "./state-snapshots";
 import { databaseProvider, databaseFetch, supabaseRest } from "./supabase-rest";
 import { resolveTenantDb, tenantHeaders } from "./tenant-rest";
 
@@ -229,6 +229,24 @@ export async function snapshotBeforeRelease(companyId:string,actor:string){
   if(!saved)return{ok:false,snapshotId:null,error:"Não foi possível confirmar o snapshot pré-release."};
   const latest=await listStateSnapshots(companyId,1);
   return{ok:true,snapshotId:latest[0]?.id||null,error:null};
+}
+
+export async function restoreReleaseSnapshot(companyId:string,snapshotId:number,actor:string){
+  const snapshot=await getStateSnapshot(companyId,snapshotId);
+  if(!snapshot)return{ok:false,error:"Snapshot de pré-release não encontrado."};
+  const db=await resolveTenantDb(companyId);
+  if(!db.url||!db.key)return{ok:false,error:"Banco do tenant indisponível para rollback de dados."};
+  const stateId=db.dedicated?"main":companyId;
+  const response=await databaseFetch(`${db.url}/rest/v1/proar_state?id=eq.${encodeURIComponent(stateId)}&select=payload`,{headers:tenantHeaders(db.key),cache:"no-store"});
+  const rows=response.ok?await response.json() as Array<{payload?:Record<string,unknown>}>:[];
+  const current=rows[0]?.payload||null;
+  if(current)await createStateSnapshot({companyId,stateId,payload:current,reason:"pre-release-rollback",createdBy:actor});
+  const nextRevision=Number(current?._revision||0)+1;
+  const restored={...snapshot.payload,_revision:nextRevision,_updatedAt:new Date().toISOString(),_companyId:companyId,_restoredFromSnapshot:snapshotId,_restoredBy:actor};
+  const write=current
+    ? await databaseFetch(`${db.url}/rest/v1/proar_state?id=eq.${encodeURIComponent(stateId)}`,{method:"PATCH",headers:{...tenantHeaders(db.key),Prefer:"return=minimal"},body:JSON.stringify({payload:restored,updated_at:new Date().toISOString()}),cache:"no-store"})
+    : await databaseFetch(`${db.url}/rest/v1/proar_state?on_conflict=id`,{method:"POST",headers:{...tenantHeaders(db.key),Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({id:stateId,payload:restored,updated_at:new Date().toISOString()}),cache:"no-store"});
+  return write.ok?{ok:true,newRevision:nextRevision}:{ok:false,error:"Falha ao restaurar snapshot operacional."};
 }
 
 export async function recordReleaseCheck(input:{
