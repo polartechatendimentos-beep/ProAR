@@ -8,11 +8,13 @@ import { validateCompanyAccess, validateCompanyAccessBySlug } from "../../../lib
 import { validateManagerCredentials } from "../../../lib/manager-auth";
 import { classifyProarError } from "../../../lib/system-errors";
 import { ALL_MANAGER_MODULES } from "../../../lib/manager-plans";
+import { managerPlan } from "../../../lib/manager-plans";
 const COOKIE_NAME = "proar_session";
 const PRIMARY_COMPANY_ID = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
 const PRIMARY_COMPANY_SLUG = (process.env.PROAR_PRIMARY_COMPANY_SLUG || "polartech").trim().toLowerCase();
 const isPrimaryTenant = (companyId?: string, companySlug?: string) => companyId === PRIMARY_COMPANY_ID || String(companySlug || "").trim().toLowerCase() === PRIMARY_COMPANY_SLUG;
 const primaryTenantModules = () => [...ALL_MANAGER_MODULES];
+const contractedModules = (companyId?: string, companySlug?: string, planCode?: unknown) => isPrimaryTenant(companyId,companySlug) ? primaryTenantModules() : [...managerPlan(planCode || "basico").modules];
 const safeEqual = (left: string, right: string) => { const a=Buffer.from(left); const b=Buffer.from(right); return a.length===b.length && timingSafeEqual(a,b); };
 
 async function authenticateLegacyEmployee(username: string, password: string) {
@@ -66,7 +68,7 @@ export async function GET(request: NextRequest) {
       }
       console.warn("AUTH_PRIMARY_MANAGER_UNAVAILABLE", { companyId:user.companyId, companySlug:user.companySlug });
     }
-    if (Array.isArray(access.company?.modules)) entitledModules = access.company?.modules as string[];
+    if (access.company) entitledModules = contractedModules(user.companyId,user.companySlug,access.company.plan_code);
     if (isPrimaryTenant(user.companyId, user.companySlug)) entitledModules = primaryTenantModules();
   }
   return NextResponse.json({ authenticated: true, ...user, entitledModules });
@@ -95,12 +97,12 @@ async function handlePostAuth(request: NextRequest) {
     let companySlug = resolvedTenant || PRIMARY_COMPANY_SLUG;
     let entitledModules: string[] | undefined = isPrimaryTenant(companyId, companySlug) ? primaryTenantModules() : undefined;
     if (resolvedTenant && resolvedTenant !== PRIMARY_COMPANY_SLUG && supabaseConfigured()) {
-      const tenantResponse = await supabaseRest(`proar_companies?select=id,slug,status,modules&slug=eq.${encodeURIComponent(resolvedTenant)}&limit=1`);
+      const tenantResponse = await supabaseRest(`proar_companies?select=id,slug,status,plan_code&slug=eq.${encodeURIComponent(resolvedTenant)}&limit=1`);
       const tenantRows = tenantResponse.ok ? await tenantResponse.json() : [];
       if (tenantRows[0]?.status === "active") {
         companyId = String(tenantRows[0].id);
         companySlug = String(tenantRows[0].slug || resolvedTenant);
-        entitledModules = isPrimaryTenant(companyId, companySlug) ? primaryTenantModules() : (Array.isArray(tenantRows[0].modules) ? tenantRows[0].modules : undefined);
+        entitledModules = contractedModules(companyId,companySlug,tenantRows[0].plan_code);
       }
     }
     const claims = { username: String(username), displayName: "Tiago Viana", role: "Administrador", permissions: ["*"], companyId, companySlug, entitledModules };
@@ -123,7 +125,7 @@ async function handlePostAuth(request: NextRequest) {
   }
 
   if (resolvedTenant && supabaseConfigured()) {
-    const companyResponse = await supabaseRest(`proar_companies?select=id,slug,status,trade_name,trial_expires_at,modules&slug=eq.${encodeURIComponent(resolvedTenant)}&limit=1`);
+    const companyResponse = await supabaseRest(`proar_companies?select=id,slug,status,trade_name,trial_expires_at,plan_code&slug=eq.${encodeURIComponent(resolvedTenant)}&limit=1`);
     const companies = companyResponse.ok ? await companyResponse.json() : []; const company = companies[0];
     if (company) {
       const instanceResponse = await supabaseRest(`proar_tenant_instances?select=provisioning_status&company_id=eq.${encodeURIComponent(company.id)}&limit=1`);
@@ -139,7 +141,7 @@ async function handlePostAuth(request: NextRequest) {
         }
         const isTiagoAdministrator = String(user.username).toLowerCase() === "tiago.viana" && String(user.role) === "Administrador";
         const permissions = String(user.role) === "Administrador" || isTiagoAdministrator ? ["*"] : (Array.isArray(user.permissions) ? user.permissions : []);
-        const entitledModules = isPrimaryTenant(String(company.id), String(company.slug)) ? primaryTenantModules() : (Array.isArray(company.modules) ? company.modules : undefined);
+        const entitledModules = contractedModules(String(company.id),String(company.slug),company.plan_code);
         const claims = { username: user.username, displayName: user.display_name, role: user.role, permissions, companyId: company.id, companySlug: company.slug, trialExpiresAt: company.trial_expires_at, entitledModules };
         const response = NextResponse.json({ authenticated: true, ...claims, mustChangePassword: user.must_change_password, company: { id: company.id, slug: company.slug, tradeName: company.trade_name, modules: entitledModules } });
         response.cookies.set(COOKIE_NAME, createSessionForUser(claims), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 }); return response;
