@@ -138,11 +138,11 @@ export default function ManagerPage(){
 
   useEffect(()=>{
     setBillingDraft(billingDraftFromCompany(selectedCompany));
-    setSelectedPlanDraftCode(selectedPlanCode);
+    setSelectedPlanDraftCode("");
   },[selectedCompanyId,selectedPlanCode,selectedCompany?.billing_enabled,selectedCompany?.monthly_fee_cents,selectedCompany?.billing_day,selectedCompany?.billing_method,selectedCompany?.billing_issue_lead_days,selectedCompany?.billing_auto_block,selectedCompany?.billing_email,selectedCompany?.email]);
 
   const billingDirty=Boolean(selectedCompany)&&JSON.stringify(billingDraft)!==JSON.stringify(billingDraftFromCompany(selectedCompany));
-  const planDirty=Boolean(selectedCompany)&&Boolean(effectivePlanDraftCode)&&effectivePlanDraftCode!==selectedPlanCode;
+  const planDirty=Boolean(selectedCompany)&&Boolean(selectedPlanDraftCode)&&(selectedCompany?.plan_code==="trial"||effectivePlanDraftCode!==selectedPlanCode);
   const hasUnsavedCompanyChanges=billingDirty||planDirty;
 
   const patch=async(companyId:string,body:Record<string,unknown>)=>{
@@ -212,7 +212,7 @@ export default function ManagerPage(){
 
   const resetCompanyDraft=()=>{
     setBillingDraft(billingDraftFromCompany(selectedCompany));
-    setSelectedPlanDraftCode(selectedPlanCode);
+    setSelectedPlanDraftCode("");
     setNotice("Alterações descartadas.");
     setError("");
   };
@@ -443,7 +443,7 @@ export default function ManagerPage(){
           {detailTab==="Plano e módulos"&&<div className="manager-detail-tab">
             {selectedCompany.plan_code==="trial"&&<div className="manager-warning"><AlertTriangle size={16}/><span>O Trial usa os recursos e o limite de usuários do plano Básico. Ao selecionar um plano comercial, o período de teste é convertido.</span></div>}
             <div className="manager-plan-grid">{plans.map(plan=><button key={plan.code} className={"manager-plan-card "+(effectivePlanDraftCode===plan.code?"active":"")} disabled={selectedCompany.tenant?.role==="primary-pilot"&&plan.code!=="completo"} onClick={()=>setSelectedPlanDraftCode(plan.code)}>
-              <header><div><b>{plan.name}</b><small>{userLimitLabel(plan.limits.users)} • {plan.modules.length} recursos</small></div>{effectivePlanDraftCode===plan.code&&<span>{plan.code===selectedPlanCode?"ATUAL":"SELECIONADO"}</span>}</header>
+              <header><div><b>{plan.name}</b><small>{userLimitLabel(plan.limits.users)} • {plan.modules.length} recursos</small></div>{effectivePlanDraftCode===plan.code&&<span>{planDirty?"SELECIONADO":"ATUAL"}</span>}</header>
               <p>{plan.description}</p>
               <div className="manager-plan-features">{plan.modules.slice(0,8).map(module=><span key={module}>{module}</span>)}{plan.modules.length>8&&<span>+ {plan.modules.length-8} recursos</span>}</div>
               <small>{userLimitLabel(plan.limits.users)} • {plan.limits.serviceOrdersPerMonth} OS/mês • {plan.limits.storageGb} GB</small>
