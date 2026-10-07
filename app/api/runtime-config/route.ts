@@ -9,6 +9,7 @@ import {
   type TenantReleaseSettings,
 } from "../../../lib/release-governance";
 import { supabaseRest } from "../../../lib/supabase-rest";
+import { managerPlan } from "../../../lib/manager-plans";
 
 export const runtime="nodejs";
 
@@ -25,12 +26,14 @@ export async function GET(request:NextRequest){
   let companyId:string|undefined=forcedChannel?INTERNAL_QA_COMPANY_ID:undefined;
   let channel:ReleaseChannel=forcedChannel||"production";
   let settings:TenantReleaseSettings|null=null;
+  let contractedModules:string[]=[];
 
   if(!companyId&&tenantSlug){
-    const companyResponse=await supabaseRest(`proar_companies?select=id,slug&slug=eq.${encodeURIComponent(tenantSlug)}&limit=1`).catch(()=>null);
+    const companyResponse=await supabaseRest(`proar_companies?select=id,slug,plan_code&slug=eq.${encodeURIComponent(tenantSlug)}&limit=1`).catch(()=>null);
     if(companyResponse?.ok){
       const company=(await companyResponse.json())[0];
       companyId=company?.id?String(company.id):undefined;
+      contractedModules=company?managerPlan(company.plan_code||"basico").modules:[];
     }
   }
 
@@ -66,7 +69,11 @@ export async function GET(request:NextRequest){
     const releaseResponse=await supabaseRest(`proar_releases?select=version,title,summary,notes&version=eq.${encodeURIComponent(currentVersion)}&limit=1`).catch(()=>null);
     if(releaseResponse?.ok){
       const release=(await releaseResponse.json())[0];
-      if(release)changelog={version:String(release.version),title:release.title,summary:release.summary,notes:Array.isArray(release.notes)?release.notes:[]};
+      if(release){
+        const notes=Array.isArray(release.notes)?release.notes:[];
+        const visibleNotes=internalChannel(host)?notes:notes.filter((note:unknown)=>{if(!note||typeof note!=="object")return true;const moduleName=String((note as Record<string,unknown>).module||"").trim();return !moduleName||!contractedModules.length||contractedModules.includes(moduleName)});
+        changelog={version:String(release.version),title:release.title,summary:release.summary,notes:visibleNotes};
+      }
     }
   }
 
