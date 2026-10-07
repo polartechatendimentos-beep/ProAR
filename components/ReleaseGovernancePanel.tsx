@@ -102,7 +102,7 @@ export function ReleaseGovernancePanel(){
       version:releaseDraft.version,deploymentId:releaseDraft.deploymentId,commitSha:releaseDraft.commitSha,
       title:releaseDraft.title||("ProAR "+releaseDraft.version),summary:releaseDraft.summary,
       minimumSchemaVersion:releaseDraft.minimumSchemaVersion,approvalRequired:true,
-    },"Release criada no canal Interno.");
+    },"Release criada e publicada primeiro no ProAR Interno.");
     if(result)setReleaseDraft({version:"",deploymentId:"",commitSha:"",title:"",summary:"",minimumSchemaVersion:"2026.10.06"});
   };
 
@@ -169,19 +169,20 @@ export function ReleaseGovernancePanel(){
     <section className="release-subpanel">
       <header><div><Rocket size={17}/><span><b>Releases</b><small>Promoção sequencial com health check, snapshot prévio, compatibilidade de schema e parada automática em regressão.</small></span></div></header>
       <div className="manager-table-wrap"><table className="manager-table release-table"><thead><tr><th>Versão</th><th>Canal</th><th>Status</th><th>Deployment</th><th>Aprovação</th><th>Ações</th></tr></thead><tbody>
-        {(data?.releases||[]).map(release=><tr key={release.id}>
+        {(data?.releases||[]).map(release=>{const sourceTarget=(data?.targets||[]).find(target=>target.release_id===release.id&&target.environment_code===release.channel&&target.status==="active"&&target.health_status==="ok");return <tr key={release.id}>
           <td><b>{release.version}</b><small className="manager-cell-detail">{release.title}</small></td>
           <td>{channelLabel[release.channel]}</td>
-          <td><span className={"manager-health "+statusTone(release.status)}>{release.status.toUpperCase()}</span></td>
+          <td><span className={"manager-health "+statusTone(sourceTarget?"active":release.status)}>{sourceTarget?"VALIDADA":release.status.toUpperCase()}</span></td>
           <td><code>{release.deployment_id}</code><small className="manager-cell-detail">{release.commit_sha?.slice(0,10)||"sem SHA"}</small></td>
           <td>{release.approved_by?<><b>{release.approved_by}</b><small className="manager-cell-detail">Aprovada</small></>:<span>Pendente</span>}</td>
           <td><div className="manager-row-actions">
-            {release.channel==="internal"&&<button onClick={()=>void promote(release,"homologation")}>→ Homologação</button>}
-            {release.channel==="homologation"&&!release.approved_by&&<button onClick={()=>void act("approve",{releaseId:release.id},"Release aprovada para rollout em clientes.")}>Aprovar</button>}
-            {release.channel==="homologation"&&release.approved_by&&<button onClick={()=>void promote(release,"canary")}>→ Canary</button>}
-            {release.channel==="canary"&&<button className="success" onClick={()=>void promote(release,"production")}>→ Produção</button>}
+            {release.channel==="internal"&&!sourceTarget&&<button onClick={()=>void act("publish-internal",{releaseId:release.id},"Release publicada no ProAR Interno.")}>Publicar/Repetir Interno</button>}
+            {release.channel==="internal"&&sourceTarget&&<button onClick={()=>void promote(release,"homologation")}>→ Homologação</button>}
+            {release.channel==="homologation"&&!release.approved_by&&sourceTarget&&<button onClick={()=>void act("approve",{releaseId:release.id},"Release aprovada para rollout em clientes.")}>Aprovar</button>}
+            {release.channel==="homologation"&&release.approved_by&&sourceTarget&&<button onClick={()=>void promote(release,"canary")}>→ Canary</button>}
+            {release.channel==="canary"&&sourceTarget&&<button className="success" onClick={()=>void promote(release,"production")}>→ Produção</button>}
           </div></td>
-        </tr>)}
+        </tr>})}
         {!(data?.releases||[]).length&&<tr><td colSpan={6}>Nenhuma release registrada.</td></tr>}
       </tbody></table></div>
     </section>
