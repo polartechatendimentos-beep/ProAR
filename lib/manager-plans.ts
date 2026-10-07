@@ -6,10 +6,26 @@ export type ManagerPlan = {
   limits:{users:number;serviceOrdersPerMonth:number;storageGb:number;aiCallsPerMonth:number};
 };
 
+export type ManagerModuleGroup = {
+  code:string;
+  name:string;
+  description:string;
+  modules:string[];
+};
+
 export const CORE_MODULES=["Painel inicial","Agenda","Clientes","Equipamentos","Orçamentos","Vendas","Ordens de serviço","Serviços","Produtos","Estoque","Compras","Fornecedores","Financeiro","Funcionários","Relatórios","Configurações"];
 export const PRO_MODULES=["PMOC e conformidade","Obras","Fiscal","Aprovações","Integridade do Sistema","Diagnósticos"];
 export const ENTERPRISE_MODULES=["Licitações","Base Técnica","Atividades","Central de pendências"];
 export const ALL_MANAGER_MODULES=[...CORE_MODULES,...PRO_MODULES,...ENTERPRISE_MODULES];
+
+export const MANAGER_MODULE_GROUPS:ManagerModuleGroup[]=[
+  {code:"gestao",name:"Gestão e Administração",description:"Administração, produtividade, acompanhamento e governança do sistema.",modules:["Painel inicial","Agenda","Funcionários","Relatórios","Configurações","Atividades","Central de pendências","Integridade do Sistema"]},
+  {code:"comercial",name:"Comercial e Clientes",description:"Relacionamento com clientes, propostas, vendas e aprovações.",modules:["Clientes","Orçamentos","Vendas","Aprovações"]},
+  {code:"operacao",name:"Operação Técnica",description:"Execução técnica, equipamentos, OS, PMOC, diagnósticos e conhecimento.",modules:["Equipamentos","Ordens de serviço","Serviços","PMOC e conformidade","Diagnósticos","Base Técnica"]},
+  {code:"suprimentos",name:"Estoque e Suprimentos",description:"Catálogo, materiais, estoque, compras e fornecedores.",modules:["Produtos","Estoque","Compras","Fornecedores"]},
+  {code:"financeiro",name:"Financeiro e Fiscal",description:"Gestão financeira e documentos fiscais.",modules:["Financeiro","Fiscal"]},
+  {code:"projetos-publico",name:"Obras e Licitações",description:"Gestão de obras e oportunidades do setor público.",modules:["Obras","Licitações"]},
+];
 
 export const MANAGER_PLANS:ManagerPlan[]=[
   {code:"trial",name:"Trial",description:"Ambiente de avaliação controlado.",modules:CORE_MODULES,limits:{users:3,serviceOrdersPerMonth:100,storageGb:2,aiCallsPerMonth:100}},
