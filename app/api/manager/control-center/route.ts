@@ -53,23 +53,50 @@ export async function GET(request:NextRequest){
     ? `proar_manager_incidents?select=*&company_id=eq.${encodeURIComponent(companyId)}&order=created_at.desc&limit=50`
     : "proar_manager_incidents?select=*&order=created_at.desc&limit=100"
   );
+  const instances=await supabaseRest(companyId
+    ? `proar_tenant_instances?select=company_id,provisioning_status,provisioning_error,last_health_at&company_id=eq.${encodeURIComponent(companyId)}`
+    : "proar_tenant_instances?select=company_id,provisioning_status,provisioning_error,last_health_at"
+  );
+  const receivables=await supabaseRest(companyId
+    ? `proar_manager_receivables?select=company_id,amount,due_date,status&company_id=eq.${encodeURIComponent(companyId)}&status=eq.open`
+    : "proar_manager_receivables?select=company_id,amount,due_date,status&status=eq.open"
+  );
+  const jobs=await supabaseRest(companyId
+    ? `proar_manager_jobs?select=*&company_id=eq.${encodeURIComponent(companyId)}&order=requested_at.desc&limit=50`
+    : "proar_manager_jobs?select=*&order=requested_at.desc&limit=100"
+  );
 
   const controlRows=controls.ok?await controls.json():[];
   const incidentRows=incidents.ok?await incidents.json():[];
+  const instanceRows=instances.ok?await instances.json():[];
+  const receivableRows=receivables.ok?await receivables.json():[];
+  const jobRows=jobs.ok?await jobs.json():[];
   let usage=null;
   if(companyId&&companyRows[0])usage=await usageFor(companyId,String(companyRows[0].plan_code||"trial"));
 
   const alerts:any[]=[];
   for(const company of companyRows){
     const control=controlRows.find((item:any)=>item.company_id===company.id);
+    const instance=instanceRows.find((item:any)=>item.company_id===company.id);
+    const companyReceivables=receivableRows.filter((item:any)=>item.company_id===company.id);
+    const now=Date.now();
     if(control?.maintenance_enabled)alerts.push({type:"maintenance",companyId:company.id,severity:"warning",title:"Modo manutenção ativo",detail:company.trade_name||company.legal_name});
     if(control?.backup_status==="error")alerts.push({type:"backup",companyId:company.id,severity:"error",title:"Falha de backup registrada",detail:company.trade_name||company.legal_name});
     if(control?.domain_status==="error")alerts.push({type:"domain",companyId:company.id,severity:"error",title:"Domínio com erro",detail:control.custom_domain||company.slug});
+    if(control?.support_access_enabled && control?.support_access_until && new Date(control.support_access_until).getTime()<now) alerts.push({type:"support",companyId:company.id,severity:"warning",title:"Acesso de suporte expirado",detail:company.trade_name||company.legal_name});
+    if(instance?.provisioning_error)alerts.push({type:"database",companyId:company.id,severity:"error",title:"Banco com erro",detail:String(instance.provisioning_error)});
+    if(!instance?.last_health_at || now-new Date(instance.last_health_at).getTime()>24*60*60*1000)alerts.push({type:"health",companyId:company.id,severity:"warning",title:"Health check vencido",detail:company.trade_name||company.legal_name});
+    const overdue=companyReceivables.filter((item:any)=>new Date(item.due_date).getTime()<now);
+    if(overdue.length)alerts.push({type:"billing",companyId:company.id,severity:"warning",title:"Mensalidade vencida",detail:`${overdue.length} conta(s) • R$ ${overdue.reduce((sum:number,item:any)=>sum+Number(item.amount||0),0).toFixed(2)}`});
+    if(company.trial_expires_at){
+      const remaining=new Date(company.trial_expires_at).getTime()-now;
+      if(remaining>=0&&remaining<=3*86400000)alerts.push({type:"trial",companyId:company.id,severity:"warning",title:"Trial vencendo",detail:company.trade_name||company.legal_name});
+    }
   }
   for(const incident of incidentRows.filter((item:any)=>item.status==="open")){
     alerts.push({type:"incident",companyId:incident.company_id,severity:incident.severity,title:incident.title,detail:incident.description||""});
   }
-  return NextResponse.json({setupPending:!controls.ok||!incidents.ok,companies:companyRows,controls:controlRows,incidents:incidentRows,usage,alerts});
+  return NextResponse.json({setupPending:!controls.ok||!incidents.ok,companies:companyRows,controls:controlRows,incidents:incidentRows,jobs:jobRows,usage,alerts});
 }
 
 export async function PATCH(request:NextRequest){
@@ -86,8 +113,15 @@ export async function PATCH(request:NextRequest){
   const patch:any={company_id:companyId,updated_at:new Date().toISOString()};
   if(typeof body.maintenanceEnabled==="boolean")patch.maintenance_enabled=body.maintenanceEnabled;
   if(typeof body.maintenanceMessage==="string")patch.maintenance_message=body.maintenanceMessage.slice(0,240);
-  if(typeof body.supportAccessEnabled==="boolean")patch.support_access_enabled=body.supportAccessEnabled;
+  if(typeof body.supportAccessEnabled==="boolean"){
+    patch.support_access_enabled=body.supportAccessEnabled;
+    if(body.supportAccessEnabled && body.supportAccessUntil===undefined) patch.support_access_until=new Date(Date.now()+60*60*1000).toISOString();
+    if(!body.supportAccessEnabled) patch.support_access_until=null;
+  }
   if(body.supportAccessUntil!==undefined)patch.support_access_until=body.supportAccessUntil||null;
+  if(typeof body.supportAccessReason==="string")patch.support_access_reason=body.supportAccessReason.slice(0,240);
+  if(["pilot","staged","general"].includes(String(body.rolloutChannel||"")))patch.rollout_channel=body.rolloutChannel;
+  if(typeof body.targetVersion==="string")patch.target_version=body.targetVersion.slice(0,80)||null;
   if(typeof body.customDomain==="string"){patch.custom_domain=body.customDomain.trim().toLowerCase().slice(0,180)||null;patch.domain_status=patch.custom_domain?"pending":"not_configured";}
   if(body.featureFlags&&typeof body.featureFlags==="object")patch.feature_flags={...(current?.feature_flags||{}),...body.featureFlags};
   if(body.limitOverrides&&typeof body.limitOverrides==="object")patch.limit_overrides={...(current?.limit_overrides||{}),...body.limitOverrides};
@@ -111,8 +145,29 @@ export async function POST(request:NextRequest){
   if(body.action==="requestBackup"){
     const r=await supabaseRest("proar_manager_controls?on_conflict=company_id",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({company_id:companyId,backup_status:"requested",updated_at:new Date().toISOString()})});
     if(!r.ok)return NextResponse.json({error:"Não foi possível registrar a solicitação de backup."},{status:502});
+    await supabaseRest("proar_manager_jobs",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({company_id:companyId,job_type:"backup",status:"requested",requested_by:user.username,details:{retentionDays:body.retentionDays||null}})});
     await supabaseRest("proar_manager_audit",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({company_id:companyId,action:"BACKUP_REQUESTED",actor:user.username,details:{providerExecution:false}})});
     return NextResponse.json({requested:true,providerExecution:false,message:"Solicitação registrada. A execução real depende da integração do provedor do banco."});
+  }
+
+  const lifecycleActions:Record<string,string>={
+    createTestEnvironment:"test_environment",
+    requestExport:"export",
+    requestRestore:"restore",
+    requestTermination:"termination",
+    requestArchive:"archive",
+  };
+  if(lifecycleActions[String(body.action||"")]){
+    const jobType=lifecycleActions[String(body.action)];
+    const details={
+      reason:String(body.reason||"").slice(0,500),
+      sourceReference:String(body.sourceReference||"").slice(0,180)||null,
+      destructiveExecution:false,
+    };
+    const r=await supabaseRest("proar_manager_jobs",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({company_id:companyId,job_type:jobType,status:"requested",requested_by:user.username,details})});
+    if(!r.ok)return NextResponse.json({error:"Não foi possível registrar a solicitação administrativa. Verifique se a migration foi aplicada."},{status:502});
+    await supabaseRest("proar_manager_audit",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({company_id:companyId,action:`LIFECYCLE_${jobType.toUpperCase()}_REQUESTED`,actor:user.username,details})});
+    return NextResponse.json({requested:true,job:(await r.json())?.[0],providerExecution:false,message:"Solicitação registrada para execução controlada. Nenhum dado foi alterado ou apagado."});
   }
 
   if(body.action==="verifyDomain"){
