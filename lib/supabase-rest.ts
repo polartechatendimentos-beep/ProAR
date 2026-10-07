@@ -244,6 +244,59 @@ async function neonRest(path: string, init: RequestInit) {
   return new NeonResponse(rows);
 }
 
+export async function primaryDatabaseMetrics() {
+  const provider=databaseProvider();
+  if(provider!=="neon") {
+    return {
+      provider,
+      databaseName:null,
+      connections:null,
+      databaseSizeBytes:null,
+      serverTime:new Date().toISOString(),
+      metricSource:"provider-rest",
+    };
+  }
+  const connectionString=neonDatabaseUrl();
+  if(!connectionString) throw new Error("Banco Neon não configurado");
+  const sql=neon(connectionString);
+  const rows=await sql.query(`
+    select
+      current_database() as database_name,
+      now() as server_time,
+      pg_database_size(current_database())::bigint as database_size_bytes,
+      (select count(*)::int from pg_stat_activity where datname=current_database()) as connections,
+      (select count(*)::int from pg_stat_activity where datname=current_database() and state='active') as active_connections,
+      (select count(*)::int from pg_stat_activity where datname=current_database() and wait_event is not null) as waiting_connections
+  `,[]);
+  const row=rows[0]||{};
+  return {
+    provider,
+    databaseName:String(row.database_name||""),
+    connections:Number(row.connections||0),
+    activeConnections:Number(row.active_connections||0),
+    waitingConnections:Number(row.waiting_connections||0),
+    databaseSizeBytes:Number(row.database_size_bytes||0),
+    serverTime:row.server_time ? new Date(String(row.server_time)).toISOString() : new Date().toISOString(),
+    metricSource:"pg_stat_activity",
+  };
+}
+
+export function neonPlanMetadata() {
+  const plan=String(process.env.PROAR_NEON_PLAN||"").trim()||"unknown";
+  const quotaMode=String(process.env.PROAR_NEON_QUOTA_MODE||"").trim()||"unknown";
+  const hardQuota=Number(process.env.PROAR_NEON_MONTHLY_CU_HOURS||"");
+  return {
+    plan,
+    quotaMode,
+    monthlyCuHours:Number.isFinite(hardQuota)&&hardQuota>0?hardQuota:null,
+    usagePercent:null as number|null,
+    status:quotaMode==="metered"?"available":"unknown",
+    note:quotaMode==="metered"
+      ?"Plano por consumo: não há uma franquia fixa de CU-hours a ser esgotada; monitore custo e limites de gasto do provedor."
+      :"Configure PROAR_NEON_PLAN/PROAR_NEON_QUOTA_MODE para exibir o modelo de quota do provedor.",
+  };
+}
+
 export async function supabaseRest(path: string, init: RequestInit = {}) {
   if (databaseProvider() === "neon") {
     return retryDatabaseOperation(
