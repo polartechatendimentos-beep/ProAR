@@ -170,7 +170,8 @@ export async function listCompanyModuleEntitlements(companyId:string) {
   }
 }
 
-export async function setCompanyModuleEntitlements(companyId:string,entitlements:{moduleName:string;enabled:boolean;monthlyPriceCents:number}[],planCode:string,actor:string) {
+export async function setCompanyModuleEntitlements(companyId:string,entitlements:{moduleName:string;enabled:boolean;monthlyPriceCents:number}[],planCode:string,actor:string,reason="Alteração de módulos no ProAR Manager") {
+  const before=await listCompanyModuleEntitlements(companyId);
   const now=new Date().toISOString();
   for (const item of entitlements) {
     await supabaseRest("proar_manager_module_entitlements?on_conflict=company_id,module_name",{
@@ -195,11 +196,11 @@ export async function setCompanyModuleEntitlements(companyId:string,entitlements
     headers:{Prefer:"return=minimal"},
     body:JSON.stringify({modules,monthly_fee_cents:monthlyFeeCents,updated_at:now}),
   });
-  await audit(companyId,"MODULE_ENTITLEMENTS_UPDATED",actor,{planCode,modules,monthlyFeeCents});
+  await audit(companyId,"MODULE_ENTITLEMENTS_UPDATED",actor,{planCode,reason,source:"proar-manager",before:before.map(item=>({moduleName:item.module_name,enabled:item.enabled,monthlyPriceCents:item.monthly_price_cents,planCode:item.plan_code||null})),after:saved.map(item=>({moduleName:item.module_name,enabled:item.enabled,monthlyPriceCents:item.monthly_price_cents,planCode:item.plan_code||null})),modules,monthlyFeeCents});
   return {entitlements:saved,modules,monthlyFeeCents};
 }
 
-export async function syncPlanEntitlements(companyId:string,planCode:string,planModules:string[],actor:string) {
+export async function syncPlanEntitlements(companyId:string,planCode:string,planModules:string[],actor:string,reason="Alteração de plano no ProAR Manager") {
   const existing=await listCompanyModuleEntitlements(companyId);
   const existingMap=new Map(existing.map(item=>[item.module_name,item]));
   const known=new Set([...existing.map(item=>item.module_name),...planModules]);
@@ -208,7 +209,7 @@ export async function syncPlanEntitlements(companyId:string,planCode:string,plan
     enabled:planModules.includes(moduleName),
     monthlyPriceCents:Number(existingMap.get(moduleName)?.monthly_price_cents||0),
   }));
-  return setCompanyModuleEntitlements(companyId,next,planCode,actor);
+  return setCompanyModuleEntitlements(companyId,next,planCode,actor,reason);
 }
 
 export async function getBillingCompany(companyId:string) {
