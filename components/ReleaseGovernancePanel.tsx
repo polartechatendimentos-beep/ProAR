@@ -9,9 +9,10 @@ type Release={id:string;version:string;commit_sha:string;deployment_id:string;sc
 type Target={id:number;release_id:string;company_id?:string|null;environment_code:Channel;alias:string;previous_version?:string|null;previous_deployment_id?:string|null;target_version:string;target_deployment_id:string;status:string;health_status?:string|null;snapshot_id?:number|null;error_code?:string|null;error_message?:string|null;scheduled_at?:string|null;applied_at?:string|null};
 type TenantSettings={company_id:string;release_channel:Channel;update_policy:"automatic"|"manual"|"pinned"|"scheduled";pinned_version?:string|null;current_version?:string|null;current_deployment_id?:string|null;schema_version:string;maintenance_mode:boolean;maintenance_message?:string|null;scheduled_update_at?:string|null;last_health_status?:string|null;last_error_code?:string|null};
 type FeatureFlag={flag_key:string;name:string;description?:string|null;module_name?:string|null;status:string;default_enabled:boolean;internal_enabled:boolean;homologation_enabled:boolean;canary_percent:number;production_enabled:boolean};
+type FlagOverride={flag_key:string;company_id:string;enabled:boolean;reason?:string|null;updated_by?:string|null;updated_at?:string};
 type Company={id:string;slug?:string;trade_name?:string;legal_name?:string;status?:string;plan_code?:string};
 type Check={id:number;release_id:string;company_id?:string|null;environment_code:Channel;stage:string;check_key:string;status:string;code?:string|null;detail?:string|null;latency_ms?:number|null;checked_at:string};
-type Data={ready:boolean;schema?:{ready:boolean;reason?:string|null};environments:Environment[];releases:Release[];targets:Target[];settings:TenantSettings[];flags:FeatureFlag[];companies:Company[];checks:Check[];dualApproval?:boolean};
+type Data={ready:boolean;schema?:{ready:boolean;reason?:string|null};environments:Environment[];releases:Release[];targets:Target[];settings:TenantSettings[];flags:FeatureFlag[];overrides:FlagOverride[];companies:Company[];checks:Check[];dualApproval?:boolean};
 
 const channelLabel:Record<Channel,string>={internal:"ProAR Interno",homologation:"Homologação",canary:"Canary",production:"Produção"};
 const statusTone=(value?:string)=>value==="active"||value==="ok"||value==="approved"?"ok":value==="failed"||value==="error"||value==="blocked"?"error":"warning";
@@ -27,6 +28,7 @@ export function ReleaseGovernancePanel(){
   const[canaryCompany,setCanaryCompany]=useState("");
   const[scheduleAt,setScheduleAt]=useState("");
   const[flagDraft,setFlagDraft]=useState({flagKey:"",name:"",description:"",moduleName:"",canaryPercent:"10"});
+  const[overrideDraft,setOverrideDraft]=useState({flagKey:"",companyId:"",enabled:true,reason:"Liberação controlada pelo ProAR Manager"});
   const[tenantDraft,setTenantDraft]=useState<Record<string,{channel:Channel;policy:"automatic"|"manual"|"pinned"|"scheduled";pinnedVersion:string;schemaVersion:string;maintenance:boolean;maintenanceMessage:string}>>({});
 
   const load=async()=>{
@@ -102,6 +104,13 @@ export function ReleaseGovernancePanel(){
       minimumSchemaVersion:releaseDraft.minimumSchemaVersion,approvalRequired:true,
     },"Release criada no canal Interno.");
     if(result)setReleaseDraft({version:"",deploymentId:"",commitSha:"",title:"",summary:"",minimumSchemaVersion:"2026.10.06"});
+  };
+
+  const saveFlagOverride=async()=>{
+    if(!overrideDraft.flagKey||!overrideDraft.companyId){setError("Selecione a feature flag e a empresa.");return}
+    await act("feature-override",{
+      flagKey:overrideDraft.flagKey,companyId:overrideDraft.companyId,enabled:overrideDraft.enabled,reason:overrideDraft.reason,
+    },"Exceção da feature flag salva para a empresa.");
   };
 
   const createFlag=async()=>{
@@ -218,6 +227,15 @@ export function ReleaseGovernancePanel(){
         <label className="wide">Descrição<input value={flagDraft.description} onChange={e=>setFlagDraft(v=>({...v,description:e.target.value}))}/></label>
       </div>
       <button className="release-primary-button" onClick={()=>void createFlag()} disabled={Boolean(busy)}><Flag size={14}/> Criar feature flag</button>
+      <div className="release-flag-override">
+        <div><b>Exceção por empresa</b><small>Libere ou bloqueie uma funcionalidade para um tenant específico sem alterar o canal inteiro.</small></div>
+        <label>Feature<select value={overrideDraft.flagKey} onChange={e=>setOverrideDraft(v=>({...v,flagKey:e.target.value}))}><option value="">Selecione...</option>{(data?.flags||[]).map(flag=><option key={flag.flag_key} value={flag.flag_key}>{flag.name}</option>)}</select></label>
+        <label>Empresa<select value={overrideDraft.companyId} onChange={e=>setOverrideDraft(v=>({...v,companyId:e.target.value}))}><option value="">Selecione...</option>{eligibleCanary.map(company=><option key={company.id} value={company.id}>{company.trade_name||company.legal_name||company.slug||company.id}</option>)}</select></label>
+        <label>Estado<select value={overrideDraft.enabled?"on":"off"} onChange={e=>setOverrideDraft(v=>({...v,enabled:e.target.value==="on"}))}><option value="on">Liberada</option><option value="off">Bloqueada</option></select></label>
+        <label className="wide">Motivo<input value={overrideDraft.reason} onChange={e=>setOverrideDraft(v=>({...v,reason:e.target.value}))}/></label>
+        <button onClick={()=>void saveFlagOverride()} disabled={Boolean(busy)}><Save size={13}/> Salvar exceção</button>
+      </div>
+      {(data?.overrides||[]).length>0&&<div className="release-overrides-list">{data!.overrides.slice(0,12).map(row=><article key={row.flag_key+":"+row.company_id}><b>{(data?.flags||[]).find(flag=>flag.flag_key===row.flag_key)?.name||row.flag_key}</b><span>{companyMap[row.company_id]?.trade_name||row.company_id} • {row.enabled?"LIBERADA":"BLOQUEADA"}</span><small>{row.reason||"Sem motivo informado."}</small></article>)}</div>}
       <div className="release-flag-grid">{(data?.flags||[]).map(flag=><article key={flag.flag_key}><header><div><b>{flag.name}</b><code>{flag.flag_key}</code></div><span className={"manager-health "+statusTone(flag.status==="active"?"ok":"warning")}>{flag.status.toUpperCase()}</span></header><p>{flag.description||"Sem descrição."}</p><small>{flag.module_name?("Módulo: "+flag.module_name+" • "):""}Interno {flag.internal_enabled?"ON":"OFF"} • Homologação {flag.homologation_enabled?"ON":"OFF"} • Canary {flag.canary_percent}% • Produção {flag.production_enabled?"ON":"OFF"}</small><div className="manager-row-actions"><button onClick={()=>void act("feature-flag",{...flag,flagKey:flag.flag_key,homologationEnabled:!flag.homologation_enabled,internalEnabled:flag.internal_enabled,canaryPercent:flag.canary_percent,productionEnabled:flag.production_enabled},"Feature flag atualizada.")}>Homologação {flag.homologation_enabled?"OFF":"ON"}</button><button onClick={()=>void act("feature-flag",{...flag,flagKey:flag.flag_key,homologationEnabled:flag.homologation_enabled,internalEnabled:flag.internal_enabled,canaryPercent:flag.canary_percent,productionEnabled:!flag.production_enabled},"Feature flag atualizada.")}>Produção {flag.production_enabled?"OFF":"ON"}</button></div></article>)}</div>
     </section>
 
