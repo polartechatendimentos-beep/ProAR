@@ -10,3 +10,23 @@
 @media(max-width:600px){.commitment-kpis,.commitment-fields{grid-template-columns:1fr}.commitment-orders>label{grid-template-columns:20px 1fr}.commitment-orders>label>input[type=number]{grid-column:2}.commitment-list>article{align-items:flex-start;flex-wrap:wrap}.commitment-list>article>span{min-width:75%}}
 .public-contract-report-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid #edf2f7}.public-contract-report-actions button{min-height:34px;padding:0 11px;border:1px solid #bfdbfe;border-radius:8px;background:#f8fbff;color:#1d4ed8;font-size:10px;font-weight:800}.public-contract-report-actions button:hover{background:#eff6ff}
 @media(max-width:600px){.public-contract-report-actions{align-items:stretch;flex-direction:column}.public-contract-report-actions button{width:100%}}
+
+/* Compact forms and readable balances, scoped to public contracts. */
+.public-contracts,.public-commitments{min-width:0}
+.public-contracts-head h2,.public-commitments>header h2{font-size:21px}
+.public-contract-form,.commitment-form{padding:16px}
+.public-contract-fields{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.public-contract-fields label:first-child{grid-column:span 2}
+.public-contract-fields label,.public-contract-item label,.commitment-fields label{min-width:0;font-size:12px;gap:5px}
+.public-contract-fields input,.public-contract-fields select,.public-contract-fields textarea,.public-contract-item input,.commitment-fields input{box-sizing:border-box;min-width:0;min-height:36px;padding:7px 9px;font-size:13px;line-height:1.4;border-radius:7px}
+.public-contract-fields textarea{min-height:64px}
+.public-contract-item{grid-template-columns:minmax(75px,.7fr) minmax(160px,2fr) minmax(55px,.5fr) minmax(95px,.8fr) minmax(100px,.9fr) 34px;gap:8px}
+.public-contract-item>button{height:36px}
+.public-contract-report-actions{flex-wrap:wrap}
+.public-contract-list>article>section{overflow-x:auto}
+.public-contract-list>article>section>div{grid-template-columns:minmax(180px,2fr) repeat(4,minmax(90px,1fr));min-width:580px}
+.public-contract-list>article>section span:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
+.commitment-fields input{width:100%}
+@media(max-width:1100px){.public-contract-fields{grid-template-columns:repeat(3,minmax(0,1fr))}.public-contract-item{grid-template-columns:repeat(4,minmax(0,1fr))}.public-contract-item .description{grid-column:span 3}}
+@media(max-width:800px){.public-contract-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.public-contract-item{grid-template-columns:repeat(2,minmax(0,1fr))}.public-contract-item .description{grid-column:span 2}}
+@media(max-width:600px){.public-contract-fields{grid-template-columns:1fr}.public-contract-fields label:first-child,.public-contract-fields .wide{grid-column:auto}.public-contract-item .description{grid-column:1/-1}.public-contract-form>footer{z-index:2;flex-wrap:wrap}.public-contract-fields input,.public-contract-fields select,.public-contract-fields textarea,.public-contract-item input,.commitment-fields input{min-height:42px;font-size:16px}.public-contract-item>button{height:42px}}
