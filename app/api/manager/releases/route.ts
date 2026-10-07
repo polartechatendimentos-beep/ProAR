@@ -237,12 +237,18 @@ async function applyTarget(release:ProARReleaseRecord,channel:ReleaseChannel,com
 
   await new Promise(resolve=>setTimeout(resolve,900));
   const health=await probeAlias(alias);
-  await recordReleaseCheck({releaseId:release.id,companyId,environmentCode:channel,stage:"post",checkKey:"http-health",status:health.ok?"ok":"error",code:health.ok?null:"PROAR-REL-HEALTH",detail:`HTTP ${health.httpStatus}`,latencyMs:health.latencyMs});
-  if(!health.ok){
+  const servedDeployment=String((health.payload as Record<string,unknown>)?.deploymentId||"");
+  const servedCommit=String((health.payload as Record<string,unknown>)?.commit||"");
+  const deploymentMatch=servedDeployment===release.deployment_id||Boolean(release.commit_sha&&servedCommit===release.commit_sha);
+  const healthOk=health.ok&&deploymentMatch;
+  await recordReleaseCheck({releaseId:release.id,companyId,environmentCode:channel,stage:"post",checkKey:"http-health",status:healthOk?"ok":"error",code:healthOk?null:(health.ok?"PROAR-REL-ALIAS-MISMATCH":"PROAR-REL-HEALTH"),detail:"HTTP "+health.httpStatus+" • servido "+(servedDeployment||servedCommit||"desconhecido")+" • esperado "+release.deployment_id,latencyMs:health.latencyMs});
+  if(!healthOk){
     if(previousDeploymentId)await assignDeploymentAlias(previousDeploymentId,alias).catch(()=>null);
-    const error=`Health check pós-deploy falhou em ${alias}. Rollback do alias foi solicitado automaticamente.`;
-    await recordTargetFailure(release,channel,companyId,alias,"PROAR-REL-HEALTH",error,previousDeploymentId,snapshotId);
-    return{ok:false,error,code:"PROAR-REL-HEALTH"};
+    const error=health.ok
+      ? "O alias "+alias+" respondeu, mas ainda servia outro deployment. Rollback automático solicitado."
+      : "Health check pós-deploy falhou em "+alias+". Rollback do alias foi solicitado automaticamente.";
+    await recordTargetFailure(release,channel,companyId,alias,health.ok?"PROAR-REL-ALIAS-MISMATCH":"PROAR-REL-HEALTH",error,previousDeploymentId,snapshotId);
+    return{ok:false,error,code:health.ok?"PROAR-REL-ALIAS-MISMATCH":"PROAR-REL-HEALTH"};
   }
 
   await upsertTarget({release,companyId,environmentCode:channel,alias,status:"active",previousVersion,previousDeploymentId,snapshotId,healthStatus:"ok"});
