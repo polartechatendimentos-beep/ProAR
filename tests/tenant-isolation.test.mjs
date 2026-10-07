@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { tenantDatabaseName, tenantIdentity, tenantProjectName } from "../lib/tenant-identity.ts";
 
-test("PolarTech is identified as Tenant 1 pilot with stable database name",()=>{
+test("PolarTech keeps stable primary tenant identity and database name",()=>{
   const tenant=tenantIdentity({companyId:"polartech-principal",slug:"polartech",tradeName:"PolarTech Mirassol"});
   assert.equal(tenant.role,"primary-pilot");
   assert.equal(tenant.environment,"pilot");
@@ -29,7 +29,7 @@ test("tenant resolver refuses silent master fallback for customer tenants",async
 
 test("manager exposes tenant role database name and isolation",async()=>{
   const source=await readFile(new URL("../app/manager/page.tsx",import.meta.url),"utf8");
-  assert.ok(source.includes("Tenant 1 • Piloto"));
+  assert.ok(source.includes("Empresa do Grupo • Produção"));
   assert.ok(source.includes("Banco lógico"));
   assert.ok(source.includes("Projeto/Banco dedicado"));
 });
