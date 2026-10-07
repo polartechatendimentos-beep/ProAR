@@ -5,7 +5,7 @@ import { resumeTenantProvisioning } from "../../../../lib/tenant-provisioning";
 import { tenantIdentity } from "../../../../lib/tenant-identity";
 import { resolveTenantDb, tenantHeaders } from "../../../../lib/tenant-rest";
 import { managerPlatformInfo } from "../../../../lib/manager-platform";
-import { ALL_MANAGER_MODULES, MANAGER_MODULE_GROUPS, MANAGER_PLANS, REQUIRED_MANAGER_MODULES, managerPlan, normalizeManagerModules } from "../../../../lib/manager-plans";
+import { ALL_MANAGER_MODULES, COMMERCIAL_MANAGER_PLANS, managerPlan, normalizeManagerModules } from "../../../../lib/manager-plans";
 import { getBillingCompany, setCompanyModuleEntitlements, syncCompanyBillingAccess, syncPlanEntitlements } from "../../../../lib/manager-billing";
 import { tenantReadiness } from "../../../../lib/tenant-readiness";
 import { classifyProarError } from "../../../../lib/system-errors";
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     const isPrimary = String(company.id || "") === primaryCompanyId || String(company.slug || "").toLowerCase() === primarySlug;
     return ({
     ...company,
-    ...(isPrimary ? { plan_code:"enterprise", modules:ALL_MANAGER_MODULES } : {}),
+    ...(isPrimary ? { plan_code:"completo", modules:ALL_MANAGER_MODULES } : { plan_code: company.plan_code === "trial" ? "trial" : managerPlan(company.plan_code).code }),
     tenant: tenantIdentity({
       companyId:String(company.id||""),
       slug:String(company.slug||""),
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
     openCriticalIncidents: incidentRows.filter((incident:Record<string,unknown>) => !incident.resolved_at && incident.severity === "critical").length,
     recentIncidents: incidentRows.filter((incident:Record<string,unknown>) => now - new Date(String(incident.created_at||0)).getTime() <= 24*60*60*1000).length,
   };
-  return NextResponse.json({ companies: enrichedCompanies, instances: instanceRows, audit: auditRows, incidents: incidentRows, entitlements: entitlementRows, moduleCatalog: ALL_MANAGER_MODULES, moduleGroups: MANAGER_MODULE_GROUPS, requiredModules: REQUIRED_MANAGER_MODULES, summary, platform: managerPlatformInfo(), plans: MANAGER_PLANS });
+  return NextResponse.json({ companies: enrichedCompanies, instances: instanceRows, audit: auditRows, incidents: incidentRows, entitlements: entitlementRows, moduleCatalog: ALL_MANAGER_MODULES, summary, platform: managerPlatformInfo(), plans: COMMERCIAL_MANAGER_PLANS });
 }
 
 export async function PATCH(request: NextRequest) {
@@ -134,7 +134,7 @@ export async function PATCH(request: NextRequest) {
   const primaryCompanyId = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
   const primaryCompanySlug = (process.env.PROAR_PRIMARY_COMPANY_SLUG || "polartech").trim().toLowerCase();
   const isPrimaryCompany = companyId === primaryCompanyId || String(current?.slug || "").trim().toLowerCase() === primaryCompanySlug;
-  const targetPlan = isPrimaryCompany ? "enterprise" : (typeof body.planCode === "string" ? managerPlan(body.planCode).code : String(current?.plan_code || "trial"));
+  const targetPlan = isPrimaryCompany ? "completo" : (typeof body.planCode === "string" ? managerPlan(body.planCode).code : String(current?.plan_code || "trial"));
   if (body.status === "active" && targetPlan === "trial" && current?.trial_expires_at && new Date(current.trial_expires_at).getTime() < Date.now()) {
     return NextResponse.json({ error:"O trial está vencido. Converta a empresa para um plano pago ou prorrogue o período de teste antes de liberar." }, { status:409 });
   }
@@ -173,7 +173,7 @@ export async function PATCH(request: NextRequest) {
   }
   if (Array.isArray(body.modules)) patch.modules = normalizeManagerModules(body.modules);
   if (isPrimaryCompany) {
-    patch.plan_code = "enterprise";
+    patch.plan_code = "completo";
     patch.modules = ALL_MANAGER_MODULES;
   }
 
@@ -199,7 +199,7 @@ export async function PATCH(request: NextRequest) {
   });
 
   if (isPrimaryCompany) {
-    await syncPlanEntitlements(companyId,"enterprise",ALL_MANAGER_MODULES,user.username);
+    await syncPlanEntitlements(companyId,"completo",ALL_MANAGER_MODULES,user.username);
   } else if (Array.isArray(body.moduleEntitlements)) {
     const planCode=String(body.planCode || patch.plan_code || current?.plan_code || "trial");
     await setCompanyModuleEntitlements(companyId,body.moduleEntitlements.map((item:Record<string,unknown>)=>({
