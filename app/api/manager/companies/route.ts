@@ -242,7 +242,7 @@ export async function PATCH(request: NextRequest) {
     await supabaseRest("proar_manager_audit",{
       method:"POST",
       headers:{Prefer:"return=minimal"},
-      body:JSON.stringify({company_id:companyId,action:"PLAN_CHANGED",actor:user.username,details:{from:beforeCode,to:afterPlan.code,fromUsers:beforePlan.limits.users,toUsers:afterPlan.limits.users,fromMonthlyFeeCents:Number(current?.monthly_fee_cents||0),toMonthlyFeeCents:Number(patch.monthly_fee_cents??current?.monthly_fee_cents||0),dataPreserved:true}}),
+      body:JSON.stringify({company_id:companyId,action:"PLAN_CHANGED",actor:user.username,details:{from:beforeCode,to:afterPlan.code,fromUsers:beforePlan.limits.users,toUsers:afterPlan.limits.users,fromMonthlyFeeCents:Number(current?.monthly_fee_cents||0),toMonthlyFeeCents:Number(patch.monthly_fee_cents ?? current?.monthly_fee_cents ?? 0),dataPreserved:true}}),
     });
   }
 
