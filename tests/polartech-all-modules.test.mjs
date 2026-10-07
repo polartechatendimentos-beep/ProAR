@@ -8,7 +8,7 @@ test("PolarTech principal recebe todos os módulos no login", async () => {
   const source = await read("../app/api/auth/route.ts");
   assert.ok(source.includes('import { ALL_MANAGER_MODULES } from "../../../lib/manager-plans";'));
   assert.ok(source.includes("primaryTenantModules"));
-  assert.ok(source.includes("isPrimaryTenant(user.companyId, user.companySlug)"));
+  assert.ok(source.includes("isPrimaryTenant(user.companyId, effectiveCompanySlug)"));
 });
 
 test("Manager normaliza PolarTech como Completo com catálogo integral", async () => {
