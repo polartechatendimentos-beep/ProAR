@@ -2,6 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { createMercadoPagoOrder, mercadoPagoConfigured, mercadoPagoOrderPaid, mercadoPagoOrderPaymentInfo } from "./mercado-pago";
 import { supabaseRest } from "./supabase-rest";
+import { normalizeManagerModules, REQUIRED_MANAGER_MODULES } from "./manager-plans";
 
 export type BillingCompany = {
   id:string;
@@ -173,7 +174,14 @@ export async function listCompanyModuleEntitlements(companyId:string) {
 
 export async function setCompanyModuleEntitlements(companyId:string,entitlements:{moduleName:string;enabled:boolean;monthlyPriceCents:number}[],planCode:string,actor:string) {
   const now=new Date().toISOString();
-  for (const item of entitlements) {
+  const entitlementMap=new Map(entitlements.map(item=>[item.moduleName,item]));
+  const normalizedNames=normalizeManagerModules(entitlements.filter(item=>item.enabled).map(item=>item.moduleName));
+  const normalized=Array.from(new Set([...entitlements.map(item=>item.moduleName),...REQUIRED_MANAGER_MODULES])).map(moduleName=>({
+    moduleName,
+    enabled:normalizedNames.includes(moduleName),
+    monthlyPriceCents:Math.max(0,Math.round(Number(entitlementMap.get(moduleName)?.monthlyPriceCents)||0)),
+  }));
+  for (const item of normalized) {
     await supabaseRest("proar_manager_module_entitlements?on_conflict=company_id,module_name",{
       method:"POST",
       headers:{Prefer:"resolution=merge-duplicates,return=minimal"},
@@ -190,7 +198,7 @@ export async function setCompanyModuleEntitlements(companyId:string,entitlements
   const saved=await listCompanyModuleEntitlements(companyId);
   const enabled=saved.filter(item=>item.enabled);
   const monthlyFeeCents=enabled.reduce((sum,item)=>sum+Number(item.monthly_price_cents||0),0);
-  const modules=enabled.map(item=>item.module_name);
+  const modules=normalizeManagerModules(enabled.map(item=>item.module_name));
   await supabaseRest(`proar_companies?id=eq.${encodeURIComponent(companyId)}`,{
     method:"PATCH",
     headers:{Prefer:"return=minimal"},
