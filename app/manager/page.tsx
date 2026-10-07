@@ -25,7 +25,7 @@ type DeploymentSafety={environment?:string;currentCommit?:string;currentDeployme
 type StateSnapshot={id:number;company_id:string;state_id:string;revision:number;reason:string;created_by?:string;created_at:string};
 type PlatformInfo={appVersion:string;releaseDate:string;releaseTitle:string;schemaVersion:string;channel:string;migrations:{id:string;title:string;status:string;destructive:boolean;description:string}[]};
 type ManagerPlan={code:string;name:string;description:string;modules:string[];limits:{users:number;serviceOrdersPerMonth:number;storageGb:number;aiCallsPerMonth:number}};
-type ModuleEntitlement={company_id:string;module_name:string;enabled:boolean;monthly_price_cents:number;plan_code?:string};
+type ModuleEntitlement={company_id:string;module_name:string;enabled:boolean;monthly_price_cents:number;plan_code?:string;created_at?:string;updated_at?:string};
 type BillingDraft={enabled:boolean;billingDay:string;leadDays:string;method:"pix"|"boleto"|"card";autoBlock:boolean;email:string};
 type ModuleDraft=Record<string,{enabled:boolean;price:string}>;
 
@@ -218,6 +218,8 @@ export default function ManagerPage(){
 
   const saveBilling=async()=>{
     if(!selectedCompany)return;
+    const changeReason=window.prompt("Motivo da alteração de módulos/cobrança:","Ajuste contratual")?.trim();
+    if(!changeReason)return;
     const moduleEntitlements=Object.entries(moduleDraft).map(([moduleName,item])=>{
       const value=Number(item.price.replace(/\./g,"").replace(",","."));
       return {moduleName,enabled:item.enabled,monthlyPriceCents:Number.isFinite(value)?Math.max(0,Math.round(value*100)):0};
@@ -230,6 +232,7 @@ export default function ManagerPage(){
       billingAutoBlock:billingDraft.autoBlock,
       billingEmail:billingDraft.email,
       moduleEntitlements,
+      changeReason,
     });
   };
 
@@ -352,7 +355,8 @@ export default function ManagerPage(){
               <div><dt>Trial</dt><dd>{expires?expires.toLocaleDateString("pt-BR"):"—"}</dd></div>
               <div><dt>Tenant</dt><dd>{c.tenant?.role==="primary-pilot"?"Tenant 1 • Piloto":"Cliente locatário"}</dd></div>
               <div><dt>Banco lógico</dt><dd>{c.tenant?.databaseName||"—"}</dd></div><div><dt>Isolamento</dt><dd>{c.tenant?.isolation==="dedicated-project"?"Projeto/Banco dedicado":c.tenant?.isolation||"—"}</dd></div>
-              <div><dt>Provisionamento</dt><dd>{inst?.provisioning_status||"não provisionado"}</dd></div><div><dt>Saúde do banco</dt><dd>{dateTime(inst?.last_health_at)}</dd></div>
+              <div><dt>Provisionamento</dt><dd>{inst?.provisioning_status||"não provisionado"}</dd></div><div><dt>Saúde do banco</dt><dd><span className={"manager-health "+(c.health?.state==="online"?"ok":c.health?.state==="query_error"||c.health?.state==="unavailable"?"error":"warning")}>{c.health?.label||"Não verificado"}</span></dd></div>
+              <div><dt>Módulos</dt><dd>{c.configuration?.moduleCounts.active??(c.modules||[]).length} ativos • {c.configuration?.moduleCounts.blocked??0} suspensos</dd></div><div><dt>Configuração</dt><dd>{c.configuration?.configurationVersion||"—"}</dd></div>
               <div><dt>Prontidão</dt><dd><span className={c.readiness?.ready?"manager-health ok":"manager-health warning"}>{c.readiness?.score??0}%</span></dd></div><div><dt>Último uso</dt><dd>{dateTime(c.last_seen_at)}</dd></div>
             </dl>
             {c.suspended_reason&&c.status!=="active"&&<div className="manager-alert compact">{c.suspended_reason}</div>}
@@ -393,7 +397,7 @@ export default function ManagerPage(){
       <section className="manager-grid-secondary">
         <section className="manager-panel">
           <div className="panel-head"><div><h2>Health Center</h2><p>Visão consolidada dos bancos e ambientes de cada tenant.</p></div></div>
-          <div className="manager-health-list">{companies.map(c=>{const inst=map[c.id];const state=inst?.provisioning_error?"error":inst?.provisioning_status==="ready"?"ok":"warning";return <button key={c.id} className={`manager-health-row ${state}`} onClick={()=>{setSelectedCompanyId(c.id);setDetailTab("Banco")}}><span><b>{c.trade_name||c.legal_name}</b><small>{c.tenant?.databaseName||c.slug||c.id}</small></span><em>{state==="ok"?"OK":state==="error"?"ERRO":"ATENÇÃO"}</em></button>})}</div>
+          <div className="manager-health-list">{companies.map(c=>{const health=c.health;const state=health?.state==="online"?"ok":health?.state==="query_error"||health?.state==="unavailable"?"error":"warning";return <button key={c.id} className={`manager-health-row ${state}`} onClick={()=>{setSelectedCompanyId(c.id);setDetailTab("Banco")}}><span><b>{c.trade_name||c.legal_name}</b><small>{health?.label||"Não verificado"} • {dateTime(health?.lastCheckedAt||undefined)}</small></span><em>{health?.state==="online"?"ONLINE":health?.state==="stale"?"VENCIDO":health?.state==="query_error"?"ERRO CONSULTA":health?.state==="unavailable"?"INDISPONÍVEL":"ATENÇÃO"}</em></button>})}</div>
         </section>
         <section className="manager-panel">
           <div className="panel-head"><div><h2>Versão e migrations</h2><p>Controle de rollout da plataforma.</p></div></div>
@@ -411,18 +415,26 @@ export default function ManagerPage(){
         <section className="manager-detail">
           <header><div><span>{selectedCompany.tenant?.role==="primary-pilot"?"TENANT 1 • PILOTO":"CLIENTE LOCATÁRIO"}</span><h2>{selectedCompany.trade_name||selectedCompany.legal_name}</h2><p>{selectedCompany.slug?selectedCompany.slug+".proar.online":"Sem domínio configurado"}</p></div><button onClick={()=>setSelectedCompanyId("")}>Fechar</button></header>
           <div className="manager-detail-grid">
-            <article><b>Banco</b><span>{selectedCompany.tenant?.databaseName||"—"}</span><small>{selectedInstance?.provider||"—"} • {selectedInstance?.provisioning_status||"não provisionado"}</small></article>
-            <article><b>Plano</b><span>{selectedCompany.plan_code||"trial"}</span><small>{statusLabel(selectedCompany)}</small></article>
+            <article><b>Banco</b><span>{selectedCompany.tenant?.databaseName||"—"}</span><small>{selectedInstance?.provider||"—"} • {selectedCompany.health?.label||selectedInstance?.provisioning_status||"não verificado"}</small></article>
+            <article><b>Plano</b><span>{selectedCompany.configuration?.planCode||selectedCompany.plan_code||"trial"}</span><small>{statusLabel(selectedCompany)}</small></article>
+            <article><b>Módulos</b><span>{selectedCompany.configuration?.moduleCounts.active??(selectedCompany.modules||[]).length} ativos</span><small>{selectedCompany.configuration?.moduleCounts.blocked??0} suspensos</small></article>
+            <article><b>Configuração</b><span>{selectedCompany.configuration?.configurationVersion||"—"}</span><small>{dateTime(selectedCompany.configuration?.lastChangeAt||selectedCompany.configuration?.configurationUpdatedAt||undefined)}</small></article>
             <article><b>Mensalidade</b><span>{selectedCompany.billing_enabled?money(selectedCompany.monthly_fee_cents):"Desativada"}</span><small>{selectedCompany.billing_enabled?`Vence dia ${selectedCompany.billing_day||10}`:"Sem cobrança recorrente"}</small></article>
-            <article><b>Saúde</b><span>{dateTime(selectedInstance?.last_health_at)}</span><small>{selectedInstance?.provisioning_error||"Sem erro registrado"}</small></article>
+            <article><b>Saúde</b><span>{selectedCompany.health?.label||"Não verificado"}</span><small>{selectedCompany.health?.detail||"Sem diagnóstico registrado"}</small></article>
           </div>
           <div className="manager-detail-tabs">{["Visão Geral","Banco","Plano e módulos","Cobrança","Segurança","Logs"].map(tab=><button key={tab} className={detailTab===tab?"active":""} onClick={()=>setDetailTab(tab)}>{tab}</button>)}</div>
 
           {detailTab==="Visão Geral"&&<div className="manager-detail-tab"><p>Empresa <b>{statusLabel(selectedCompany)}</b>. O Manager preserva o banco operacional do tenant e controla plano, acesso, cobrança e integridade de forma independente.</p>{selectedCompany.suspended_reason&&<div className="manager-alert compact">{selectedCompany.suspended_reason}</div>}</div>}
 
-          {detailTab==="Banco"&&<div className="manager-detail-tab"><p><b>{selectedCompany.tenant?.databaseName||"—"}</b> • {selectedInstance?.provider||"—"} • {selectedInstance?.provisioning_status||"não provisionado"}</p><p>{selectedInstance?.last_health_at?`Último health check: ${dateTime(selectedInstance.last_health_at)}`:"Health check ainda não executado."}</p><div className="manager-inline-actions"><button onClick={()=>void patch(selectedCompany.id,{checkTenantHealth:true})}>Verificar banco</button>{selectedCompany.tenant?.role==="primary-pilot"&&(!selectedInstance||selectedInstance.provisioning_status!=="ready")&&<button onClick={()=>void patch(selectedCompany.id,{registerPrimaryPilot:true})}>Consolidar Tenant 1</button>}{selectedInstance&&selectedInstance.provisioning_status!=="ready"&&selectedCompany.tenant?.role!=="primary-pilot"&&<button onClick={()=>void patch(selectedCompany.id,{retryProvisioning:true})}>Finalizar banco</button>}</div></div>}
+          {detailTab==="Banco"&&<div className="manager-detail-tab"><p><b>{selectedCompany.tenant?.databaseName||"—"}</b> • {selectedInstance?.provider||"—"} • {selectedCompany.health?.label||selectedInstance?.provisioning_status||"não verificado"}</p><p>{selectedCompany.health?.lastCheckedAt?`Último health check confirmado: ${dateTime(selectedCompany.health.lastCheckedAt)}`:"Health check ainda não executado."}</p><p>{selectedCompany.health?.detail||selectedInstance?.provisioning_error||"Sem erro registrado."}</p><div className="manager-inline-actions"><button onClick={()=>void patch(selectedCompany.id,{checkTenantHealth:true})}>Verificar banco</button>{selectedCompany.tenant?.role==="primary-pilot"&&(!selectedInstance||selectedInstance.provisioning_status!=="ready")&&<button onClick={()=>void patch(selectedCompany.id,{registerPrimaryPilot:true})}>Consolidar Tenant 1</button>}{selectedInstance&&selectedInstance.provisioning_status!=="ready"&&selectedCompany.tenant?.role!=="primary-pilot"&&<button onClick={()=>void patch(selectedCompany.id,{retryProvisioning:true})}>Finalizar banco</button>}</div></div>}
 
-          {detailTab==="Plano e módulos"&&<div className="manager-detail-tab"><label>Plano<select value={selectedCompany.plan_code||"trial"} onChange={e=>void patch(selectedCompany.id,{planCode:e.target.value})}>{plans.map(plan=><option key={plan.code} value={plan.code}>{plan.name}</option>)}</select></label><div className="manager-module-chips">{(selectedCompany.modules||plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.modules||[]).map(module=><span key={module}>{module}</span>)}</div>{plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))&&<small>Limites: {plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.limits.users} usuários • {plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.limits.serviceOrdersPerMonth} OS/mês • {plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.limits.storageGb} GB • {plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.limits.aiCallsPerMonth} IA/mês</small>}</div>}
+          {detailTab==="Plano e módulos"&&<div className="manager-detail-tab">
+            <div className="manager-config-meta"><article><small>Versão atual</small><b>{selectedCompany.configuration?.configurationVersion||"—"}</b></article><article><small>Última alteração</small><b>{dateTime(selectedCompany.configuration?.lastChangeAt||selectedCompany.configuration?.configurationUpdatedAt||undefined)}</b></article><article><small>Administrador</small><b>{selectedCompany.configuration?.lastAdministrator||"—"}</b></article><article><small>Motivo</small><b>{selectedCompany.configuration?.lastChangeReason||"Sem motivo informado"}</b></article></div>
+            <label>Plano<select value={selectedCompany.plan_code||"trial"} onChange={e=>{const reason=window.prompt("Motivo da alteração do plano:")?.trim();if(!reason)return;e.currentTarget.blur();void patch(selectedCompany.id,{planCode:e.target.value,changeReason:reason})}}>{plans.map(plan=><option key={plan.code} value={plan.code}>{plan.name}</option>)}</select></label>
+            <div className="manager-module-chips">{(selectedCompany.configuration?.contractedModules||selectedCompany.modules||plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.modules||[]).map(module=><span key={module}>{module}</span>)}</div>
+            {!!selectedCompany.configuration?.suspendedModules?.length&&<div className="manager-suspended-modules"><small>Módulos suspensos</small><div className="manager-module-chips">{selectedCompany.configuration.suspendedModules.map(module=><span key={module} className="suspended">{module}</span>)}</div></div>}
+            {plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))&&<small>Limites: {plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.limits.users} usuários • {plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.limits.serviceOrdersPerMonth} OS/mês • {plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.limits.storageGb} GB • {plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.limits.aiCallsPerMonth} IA/mês</small>}
+          </div>}
 
           {detailTab==="Cobrança"&&<div className="manager-detail-tab">
             <div className="manager-billing-form">
