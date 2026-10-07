@@ -18,14 +18,22 @@ export const PRO_MODULES=["PMOC e conformidade","Obras","Fiscal","Aprovações",
 export const ENTERPRISE_MODULES=["Licitações","Base Técnica","Atividades","Central de pendências"];
 export const ALL_MANAGER_MODULES=[...CORE_MODULES,...PRO_MODULES,...ENTERPRISE_MODULES];
 
+export const REQUIRED_MANAGER_MODULES=["Painel inicial","Clientes","Agenda","Funcionários","Configurações"];
+
 export const MANAGER_MODULE_GROUPS:ManagerModuleGroup[]=[
-  {code:"gestao",name:"Gestão e Administração",description:"Administração, produtividade, acompanhamento e governança do sistema.",modules:["Painel inicial","Agenda","Funcionários","Relatórios","Configurações","Atividades","Central de pendências","Integridade do Sistema"]},
-  {code:"comercial",name:"Comercial e Clientes",description:"Relacionamento com clientes, propostas, vendas e aprovações.",modules:["Clientes","Orçamentos","Vendas","Aprovações"]},
-  {code:"operacao",name:"Operação Técnica",description:"Execução técnica, equipamentos, OS, PMOC, diagnósticos e conhecimento.",modules:["Equipamentos","Ordens de serviço","Serviços","PMOC e conformidade","Diagnósticos","Base Técnica"]},
-  {code:"suprimentos",name:"Estoque e Suprimentos",description:"Catálogo, materiais, estoque, compras e fornecedores.",modules:["Produtos","Estoque","Compras","Fornecedores"]},
-  {code:"financeiro",name:"Financeiro e Fiscal",description:"Gestão financeira e documentos fiscais.",modules:["Financeiro","Fiscal"]},
-  {code:"projetos-publico",name:"Obras e Licitações",description:"Gestão de obras e oportunidades do setor público.",modules:["Obras","Licitações"]},
+  {code:"base",name:"Base Operacional",description:"Estrutura obrigatória para o ProAR funcionar com contexto de cliente, usuários e operação diária.",modules:REQUIRED_MANAGER_MODULES},
+  {code:"comercial",name:"Comercial",description:"Propostas, vendas e aprovações ligadas ao cadastro de clientes.",modules:["Orçamentos","Vendas","Aprovações"]},
+  {code:"operacao",name:"Operação Técnica",description:"Equipamentos, atendimentos, execução técnica, PMOC e diagnóstico.",modules:["Equipamentos","Ordens de serviço","Serviços","PMOC e conformidade","Diagnósticos","Base Técnica"]},
+  {code:"suprimentos",name:"Estoque e Suprimentos",description:"Produtos, materiais, movimentações, compras e fornecedores.",modules:["Produtos","Estoque","Compras","Fornecedores"]},
+  {code:"financeiro",name:"Financeiro e Fiscal",description:"Contas, movimentações financeiras e documentos fiscais.",modules:["Financeiro","Fiscal"]},
+  {code:"gestao",name:"Gestão e Produtividade",description:"Indicadores, atividades, pendências e integridade operacional.",modules:["Relatórios","Atividades","Central de pendências","Integridade do Sistema"]},
+  {code:"projetos-publico",name:"Obras e Licitações",description:"Execução de obras e processos de contratação pública.",modules:["Obras","Licitações"]},
 ];
+
+export function normalizeManagerModules(modules:unknown){
+  const requested=Array.isArray(modules)?modules.map(value=>String(value)):[];
+  return ALL_MANAGER_MODULES.filter(moduleName=>REQUIRED_MANAGER_MODULES.includes(moduleName)||requested.includes(moduleName));
+}
 
 export const MANAGER_PLANS:ManagerPlan[]=[
   {code:"trial",name:"Trial",description:"Ambiente de avaliação controlado.",modules:CORE_MODULES,limits:{users:3,serviceOrdersPerMonth:100,storageGb:2,aiCallsPerMonth:100}},
