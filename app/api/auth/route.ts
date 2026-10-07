@@ -7,9 +7,12 @@ import { tenantSlugFromHost } from "../../../lib/tenant-host";
 import { validateCompanyAccess, validateCompanyAccessBySlug } from "../../../lib/company-access";
 import { validateManagerCredentials } from "../../../lib/manager-auth";
 import { classifyProarError } from "../../../lib/system-errors";
+import { ALL_MANAGER_MODULES } from "../../../lib/manager-plans";
 const COOKIE_NAME = "proar_session";
 const PRIMARY_COMPANY_ID = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
 const PRIMARY_COMPANY_SLUG = (process.env.PROAR_PRIMARY_COMPANY_SLUG || "polartech").trim().toLowerCase();
+const isPrimaryTenant = (companyId?: string, companySlug?: string) => companyId === PRIMARY_COMPANY_ID || String(companySlug || "").trim().toLowerCase() === PRIMARY_COMPANY_SLUG;
+const primaryTenantModules = () => [...ALL_MANAGER_MODULES];
 const safeEqual = (left: string, right: string) => { const a=Buffer.from(left); const b=Buffer.from(right); return a.length===b.length && timingSafeEqual(a,b); };
 
 async function authenticateLegacyEmployee(username: string, password: string) {
@@ -64,6 +67,7 @@ export async function GET(request: NextRequest) {
       console.warn("AUTH_PRIMARY_MANAGER_UNAVAILABLE", { companyId:user.companyId, companySlug:user.companySlug });
     }
     if (Array.isArray(access.company?.modules)) entitledModules = access.company?.modules as string[];
+    if (isPrimaryTenant(user.companyId, user.companySlug)) entitledModules = primaryTenantModules();
   }
   return NextResponse.json({ authenticated: true, ...user, entitledModules });
 }
@@ -89,14 +93,14 @@ async function handlePostAuth(request: NextRequest) {
   if (validateManagerCredentials(String(username), String(password)) || isConfiguredTiago) {
     let companyId = PRIMARY_COMPANY_ID;
     let companySlug = resolvedTenant || PRIMARY_COMPANY_SLUG;
-    let entitledModules: string[] | undefined;
+    let entitledModules: string[] | undefined = isPrimaryTenant(companyId, companySlug) ? primaryTenantModules() : undefined;
     if (resolvedTenant && resolvedTenant !== PRIMARY_COMPANY_SLUG && supabaseConfigured()) {
       const tenantResponse = await supabaseRest(`proar_companies?select=id,slug,status,modules&slug=eq.${encodeURIComponent(resolvedTenant)}&limit=1`);
       const tenantRows = tenantResponse.ok ? await tenantResponse.json() : [];
       if (tenantRows[0]?.status === "active") {
         companyId = String(tenantRows[0].id);
         companySlug = String(tenantRows[0].slug || resolvedTenant);
-        entitledModules = Array.isArray(tenantRows[0].modules) ? tenantRows[0].modules : undefined;
+        entitledModules = isPrimaryTenant(companyId, companySlug) ? primaryTenantModules() : (Array.isArray(tenantRows[0].modules) ? tenantRows[0].modules : undefined);
       }
     }
     const claims = { username: String(username), displayName: "Tiago Viana", role: "Administrador", permissions: ["*"], companyId, companySlug, entitledModules };
@@ -135,8 +139,9 @@ async function handlePostAuth(request: NextRequest) {
         }
         const isTiagoAdministrator = String(user.username).toLowerCase() === "tiago.viana" && String(user.role) === "Administrador";
         const permissions = String(user.role) === "Administrador" || isTiagoAdministrator ? ["*"] : (Array.isArray(user.permissions) ? user.permissions : []);
-        const claims = { username: user.username, displayName: user.display_name, role: user.role, permissions, companyId: company.id, companySlug: company.slug, trialExpiresAt: company.trial_expires_at, entitledModules:Array.isArray(company.modules)?company.modules:undefined };
-        const response = NextResponse.json({ authenticated: true, ...claims, mustChangePassword: user.must_change_password, company: { id: company.id, slug: company.slug, tradeName: company.trade_name, modules: company.modules } });
+        const entitledModules = isPrimaryTenant(String(company.id), String(company.slug)) ? primaryTenantModules() : (Array.isArray(company.modules) ? company.modules : undefined);
+        const claims = { username: user.username, displayName: user.display_name, role: user.role, permissions, companyId: company.id, companySlug: company.slug, trialExpiresAt: company.trial_expires_at, entitledModules };
+        const response = NextResponse.json({ authenticated: true, ...claims, mustChangePassword: user.must_change_password, company: { id: company.id, slug: company.slug, tradeName: company.trade_name, modules: entitledModules } });
         response.cookies.set(COOKIE_NAME, createSessionForUser(claims), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 }); return response;
       }
     }

@@ -27,8 +27,11 @@ export async function GET(request: NextRequest) {
   const primaryCompanyId = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
   const primarySlug = process.env.PROAR_PRIMARY_COMPANY_SLUG || "polartech";
   const instanceByCompany=Object.fromEntries(instanceRows.map((instance:Record<string,unknown>)=>[String(instance.company_id||""),instance]));
-  const enrichedCompanies = companyRows.map((company: Record<string,unknown>) => ({
+  const enrichedCompanies = companyRows.map((company: Record<string,unknown>) => {
+    const isPrimary = String(company.id || "") === primaryCompanyId || String(company.slug || "").toLowerCase() === primarySlug;
+    return ({
     ...company,
+    ...(isPrimary ? { plan_code:"enterprise", modules:ALL_MANAGER_MODULES } : {}),
     tenant: tenantIdentity({
       companyId:String(company.id||""),
       slug:String(company.slug||""),
@@ -36,8 +39,9 @@ export async function GET(request: NextRequest) {
       primaryCompanyId,
       primarySlug,
     }),
-    readiness:tenantReadiness({company,instance:instanceByCompany[String(company.id||"")]}),
-  }));
+    readiness:tenantReadiness({company:isPrimary ? {...company,plan_code:"enterprise",modules:ALL_MANAGER_MODULES} : company,instance:instanceByCompany[String(company.id||"")]}),
+  });
+  });
   const auditRows = audit.ok ? await audit.json() : [];
   const entitlementRows = entitlementsResponse?.ok ? await entitlementsResponse.json() : [];
   const incidentRows = incidentsResponse?.ok ? await incidentsResponse.json() : [];
@@ -127,7 +131,10 @@ export async function PATCH(request: NextRequest) {
   }
 
   const current = await getBillingCompany(companyId).catch(()=>null);
-  const targetPlan = typeof body.planCode === "string" ? managerPlan(body.planCode).code : String(current?.plan_code || "trial");
+  const primaryCompanyId = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
+  const primaryCompanySlug = (process.env.PROAR_PRIMARY_COMPANY_SLUG || "polartech").trim().toLowerCase();
+  const isPrimaryCompany = companyId === primaryCompanyId || String(current?.slug || "").trim().toLowerCase() === primaryCompanySlug;
+  const targetPlan = isPrimaryCompany ? "enterprise" : (typeof body.planCode === "string" ? managerPlan(body.planCode).code : String(current?.plan_code || "trial"));
   if (body.status === "active" && targetPlan === "trial" && current?.trial_expires_at && new Date(current.trial_expires_at).getTime() < Date.now()) {
     return NextResponse.json({ error:"O trial está vencido. Converta a empresa para um plano pago ou prorrogue o período de teste antes de liberar." }, { status:409 });
   }
@@ -165,6 +172,10 @@ export async function PATCH(request: NextRequest) {
     }
   }
   if (Array.isArray(body.modules)) patch.modules = body.modules;
+  if (isPrimaryCompany) {
+    patch.plan_code = "enterprise";
+    patch.modules = ALL_MANAGER_MODULES;
+  }
 
   if (typeof body.billingEnabled === "boolean") patch.billing_enabled = body.billingEnabled;
   if (typeof body.monthlyFeeCents === "number" && Number.isFinite(body.monthlyFeeCents)) patch.monthly_fee_cents = Math.max(0,Math.round(body.monthlyFeeCents));
@@ -187,7 +198,9 @@ export async function PATCH(request: NextRequest) {
     body:JSON.stringify({company_id:companyId,action:"MANAGER_UPDATE",actor:user.username,details:patch}),
   });
 
-  if (Array.isArray(body.moduleEntitlements)) {
+  if (isPrimaryCompany) {
+    await syncPlanEntitlements(companyId,"enterprise",ALL_MANAGER_MODULES,user.username);
+  } else if (Array.isArray(body.moduleEntitlements)) {
     const planCode=String(body.planCode || patch.plan_code || current?.plan_code || "trial");
     await setCompanyModuleEntitlements(companyId,body.moduleEntitlements.map((item:Record<string,unknown>)=>({
       moduleName:String(item.moduleName||"").trim(),

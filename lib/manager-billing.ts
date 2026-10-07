@@ -5,6 +5,7 @@ import { supabaseRest } from "./supabase-rest";
 
 export type BillingCompany = {
   id:string;
+  slug?:string;
   trade_name?:string;
   legal_name?:string;
   responsible_name?:string;

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { supabaseConfigured, supabaseRest } from "../../../../lib/supabase-rest";
 import { hashPassword } from "../../../../lib/password";
-import { runManagerBillingCycle } from "../../../../lib/manager-billing";
+import { runManagerBillingCycle, syncPlanEntitlements } from "../../../../lib/manager-billing";
+import { ALL_MANAGER_MODULES } from "../../../../lib/manager-plans";
 
 function safeEqual(left: string, right: string) {
   const a = Buffer.from(left); const b = Buffer.from(right);
@@ -34,7 +35,8 @@ async function ensurePolartech() {
       email: process.env.PROAR_POLARTECH_EMAIL || "",
       address: process.env.PROAR_POLARTECH_ADDRESS || "",
       slug,
-      plan_code: "internal",
+      plan_code: "enterprise",
+      modules: ALL_MANAGER_MODULES,
       status: "active",
       trial_started_at: null,
       trial_expires_at: null,
@@ -43,7 +45,15 @@ async function ensurePolartech() {
     const insert = await supabaseRest("proar_companies?on_conflict=id", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify(record) });
     if (!insert.ok) throw new Error("Falha ao cadastrar PolarTech automaticamente no Manager.");
     const rows = await insert.json(); company = rows?.[0] || record;
+  } else {
+    const updatedAt = new Date().toISOString();
+    const patch = { plan_code:"enterprise", modules:ALL_MANAGER_MODULES, updated_at:updatedAt };
+    const update = await supabaseRest(`proar_companies?id=eq.${encodeURIComponent(company.id)}`, { method:"PATCH", headers:{ Prefer:"return=representation" }, body:JSON.stringify(patch) });
+    if (!update.ok) throw new Error("Falha ao sincronizar módulos completos da PolarTech.");
+    const rows = await update.json();
+    company = rows?.[0] || { ...company, ...patch };
   }
+  await syncPlanEntitlements(String(company.id),"enterprise",ALL_MANAGER_MODULES,"system-cron");
 
   const username = "tiago.viana";
   const existingUserResponse = await supabaseRest(`proar_trial_users?select=username&company_id=eq.${encodeURIComponent(company.id)}&username=eq.${encodeURIComponent(username)}&limit=1`);
