@@ -22,12 +22,13 @@ type Incident={id:string;company_id?:string;module:string;operation:string;code:
 type DeploymentSafety={environment?:string;currentCommit?:string;currentDeploymentId?:string;rollbackConfigured?:boolean;canaryRequired?:boolean;productionGate?:string};
 type StateSnapshot={id:number;company_id:string;state_id:string;revision:number;reason:string;created_by?:string;created_at:string};
 type PlatformInfo={appVersion:string;releaseDate:string;releaseTitle:string;schemaVersion:string;channel:string;migrations:{id:string;title:string;status:string;destructive:boolean;description:string}[]};
-type ManagerPlan={code:string;name:string;description:string;modules:string[];limits:{users:number;serviceOrdersPerMonth:number;storageGb:number;aiCallsPerMonth:number}};
+type ManagerPlan={code:string;name:string;description:string;modules:string[];limits:{users:number|null;serviceOrdersPerMonth:number;storageGb:number;aiCallsPerMonth:number}};
 type BillingDraft={enabled:boolean;monthlyPrice:string;billingDay:string;leadDays:string;method:"pix"|"boleto"|"card";autoBlock:boolean;email:string};
 
 const money=(cents=0)=>(Number(cents||0)/100).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const date=(value?:string)=>value?new Date(value.length===10?`${value}T12:00:00`:value).toLocaleDateString("pt-BR"):"—";
 const dateTime=(value?:string)=>value?new Date(value).toLocaleString("pt-BR"):"—";
+const userLimitLabel=(users:number|null)=>users===null?"Usuários ilimitados":`${users} usuário${users===1?"":"s"}`;
 
 function blankBilling():BillingDraft{return{enabled:false,monthlyPrice:"0,00",billingDay:"10",leadDays:"7",method:"pix",autoBlock:true,email:""}}
 
@@ -200,18 +201,15 @@ export default function ManagerPage(){
 
   const saveBilling=async()=>{
     if(!selectedCompany)return;
-    const moduleEntitlements=Object.entries(moduleDraft).map(([moduleName,item])=>{
-      const value=Number(item.price.replace(/\./g,"").replace(",","."));
-      return {moduleName,enabled:item.enabled,monthlyPriceCents:Number.isFinite(value)?Math.max(0,Math.round(value*100)):0};
-    });
+    const monthlyPrice=Number(billingDraft.monthlyPrice.replace(/\./g,"").replace(",","."));
     await patch(selectedCompany.id,{
       billingEnabled:billingDraft.enabled,
+      monthlyFeeCents:Number.isFinite(monthlyPrice)?Math.max(0,Math.round(monthlyPrice*100)):0,
       billingDay:Math.max(1,Math.min(28,Number(billingDraft.billingDay||10))),
       billingIssueLeadDays:Math.max(0,Math.min(20,Number(billingDraft.leadDays||7))),
       billingMethod:billingDraft.method,
       billingAutoBlock:billingDraft.autoBlock,
       billingEmail:billingDraft.email,
-      moduleEntitlements,
     });
   };
 
