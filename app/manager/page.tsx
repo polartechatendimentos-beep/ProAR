@@ -1,6 +1,6 @@
 "use client";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Banknote, Building2, CheckCircle2, Copy, CreditCard, ExternalLink, LogIn, LogOut, RefreshCw, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Banknote, Building2, CheckCircle2, Copy, CreditCard, ExternalLink, LogIn, LogOut, RefreshCw, Save, ShieldCheck, X } from "lucide-react";
 import "../trial-manager.css";
 import "./manager.css";
 
@@ -31,6 +31,18 @@ const dateTime=(value?:string)=>value?new Date(value).toLocaleString("pt-BR"):"�
 const userLimitLabel=(users:number|null)=>users===null?"Usuários ilimitados":`${users} usuário${users===1?"":"s"}`;
 
 function blankBilling():BillingDraft{return{enabled:false,monthlyPrice:"0,00",billingDay:"10",leadDays:"7",method:"pix",autoBlock:true,email:""}}
+function billingDraftFromCompany(company?:Company|null):BillingDraft{
+  if(!company)return blankBilling();
+  return{
+    enabled:Boolean(company.billing_enabled),
+    monthlyPrice:(Number(company.monthly_fee_cents||0)/100).toFixed(2).replace(".",","),
+    billingDay:String(company.billing_day||10),
+    leadDays:String(company.billing_issue_lead_days??7),
+    method:company.billing_method==="boleto"?"boleto":company.billing_method==="card"?"card":"pix",
+    autoBlock:company.billing_auto_block!==false,
+    email:company.billing_email||company.email||"",
+  };
+}
 
 export default function ManagerPage(){
   const[authenticated,setAuthenticated]=useState<boolean|null>(null);
@@ -59,6 +71,8 @@ export default function ManagerPage(){
   const[selectedCompanyId,setSelectedCompanyId]=useState("");
   const[detailTab,setDetailTab]=useState("Visão Geral");
   const[billingDraft,setBillingDraft]=useState<BillingDraft>(blankBilling());
+  const[selectedPlanDraftCode,setSelectedPlanDraftCode]=useState("");
+  const[savingCompanyChanges,setSavingCompanyChanges]=useState(false);
 
   const check=async()=>{
     try{
@@ -118,21 +132,18 @@ export default function ManagerPage(){
   const selectedInstance=selectedCompany?map[selectedCompany.id]:undefined;
   const selectedReceivables=receivables.filter(row=>row.company_id===selectedCompanyId);
   const selectedPlanCode=selectedCompany?.plan_code==="trial"?"basico":(plans.some(plan=>plan.code===selectedCompany?.plan_code)?String(selectedCompany?.plan_code):"basico");
-  const selectedPlan=plans.find(plan=>plan.code===selectedPlanCode)||plans[0]||null;
+  const effectivePlanDraftCode=selectedPlanDraftCode||selectedPlanCode;
+  const selectedPlan=plans.find(plan=>plan.code===effectivePlanDraftCode)||plans.find(plan=>plan.code===selectedPlanCode)||plans[0]||null;
   const planLabel=(code?:string)=>code==="trial"?"Trial • Básico":(plans.find(plan=>plan.code===code)?.name||code||"Básico");
 
   useEffect(()=>{
-    if(!selectedCompany){setBillingDraft(blankBilling());return}
-    setBillingDraft({
-      enabled:Boolean(selectedCompany.billing_enabled),
-      monthlyPrice:(Number(selectedCompany.monthly_fee_cents||0)/100).toFixed(2).replace(".",","),
-      billingDay:String(selectedCompany.billing_day||10),
-      leadDays:String(selectedCompany.billing_issue_lead_days??7),
-      method:selectedCompany.billing_method==="boleto"?"boleto":selectedCompany.billing_method==="card"?"card":"pix",
-      autoBlock:selectedCompany.billing_auto_block!==false,
-      email:selectedCompany.billing_email||selectedCompany.email||"",
-    });
-  },[selectedCompanyId,selectedCompany?.billing_enabled,selectedCompany?.monthly_fee_cents,selectedCompany?.billing_day,selectedCompany?.billing_method,selectedCompany?.billing_issue_lead_days,selectedCompany?.billing_auto_block,selectedCompany?.billing_email,selectedCompany?.email]);
+    setBillingDraft(billingDraftFromCompany(selectedCompany));
+    setSelectedPlanDraftCode(selectedPlanCode);
+  },[selectedCompanyId,selectedPlanCode,selectedCompany?.billing_enabled,selectedCompany?.monthly_fee_cents,selectedCompany?.billing_day,selectedCompany?.billing_method,selectedCompany?.billing_issue_lead_days,selectedCompany?.billing_auto_block,selectedCompany?.billing_email,selectedCompany?.email]);
+
+  const billingDirty=Boolean(selectedCompany)&&JSON.stringify(billingDraft)!==JSON.stringify(billingDraftFromCompany(selectedCompany));
+  const planDirty=Boolean(selectedCompany)&&Boolean(effectivePlanDraftCode)&&effectivePlanDraftCode!==selectedPlanCode;
+  const hasUnsavedCompanyChanges=billingDirty||planDirty;
 
   const patch=async(companyId:string,body:Record<string,unknown>)=>{
     setNotice("");
@@ -199,18 +210,38 @@ export default function ManagerPage(){
     finally{setRecoveryLoading(false)}
   };
 
-  const saveBilling=async()=>{
-    if(!selectedCompany)return;
-    const monthlyPrice=Number(billingDraft.monthlyPrice.replace(/\./g,"").replace(",","."));
-    await patch(selectedCompany.id,{
-      billingEnabled:billingDraft.enabled,
-      monthlyFeeCents:Number.isFinite(monthlyPrice)?Math.max(0,Math.round(monthlyPrice*100)):0,
-      billingDay:Math.max(1,Math.min(28,Number(billingDraft.billingDay||10))),
-      billingIssueLeadDays:Math.max(0,Math.min(20,Number(billingDraft.leadDays||7))),
-      billingMethod:billingDraft.method,
-      billingAutoBlock:billingDraft.autoBlock,
-      billingEmail:billingDraft.email,
-    });
+  const resetCompanyDraft=()=>{
+    setBillingDraft(billingDraftFromCompany(selectedCompany));
+    setSelectedPlanDraftCode(selectedPlanCode);
+    setNotice("Alterações descartadas.");
+    setError("");
+  };
+
+  const saveCompanyChanges=async()=>{
+    if(!selectedCompany||!hasUnsavedCompanyChanges||savingCompanyChanges)return;
+    const nextPlan=plans.find(plan=>plan.code===effectivePlanDraftCode)||null;
+    if(planDirty&&nextPlan){
+      const currentPlan=plans.find(plan=>plan.code===selectedPlanCode)||null;
+      const removed=(currentPlan?.modules||[]).filter(module=>!nextPlan.modules.includes(module));
+      if(removed.length&&!window.confirm(`Confirmar alteração para ${nextPlan.name}? ${removed.length} recurso(s) ficarão indisponíveis. Os dados existentes serão preservados.`))return;
+    }
+    const body:Record<string,unknown>={};
+    if(planDirty){body.planCode=effectivePlanDraftCode;body.status="active";}
+    if(billingDirty){
+      const monthlyPrice=Number(billingDraft.monthlyPrice.replace(/\./g,"").replace(",","."));
+      body.billingEnabled=billingDraft.enabled;
+      body.monthlyFeeCents=Number.isFinite(monthlyPrice)?Math.max(0,Math.round(monthlyPrice*100)):0;
+      body.billingDay=Math.max(1,Math.min(28,Number(billingDraft.billingDay||10)));
+      body.billingIssueLeadDays=Math.max(0,Math.min(20,Number(billingDraft.leadDays||7)));
+      body.billingMethod=billingDraft.method;
+      body.billingAutoBlock=billingDraft.autoBlock;
+      body.billingEmail=billingDraft.email;
+    }
+    setSavingCompanyChanges(true);
+    try{
+      const saved=await patch(selectedCompany.id,body);
+      if(saved)setNotice("Alterações da empresa salvas com sucesso.");
+    }finally{setSavingCompanyChanges(false)}
   };
 
   const copy=async(value?:string)=>{
