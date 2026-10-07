@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export const maxDuration = 120;
 
 type IndexedTender = PncpTender & { discoveredAt:string; updatedAt?:string; whatsappStatus?:string; canonicalKey?:string; score?:number; scoreReasons?:string[]; changeHistory?:Array<{at:string;summary:string}> };
-type TenderStore = { items: IndexedTender[]; lastScan?: string; lastError?: string; sync?:{runs:number;lastSuccessfulScan?:string;sourceHealth?:Record<string,string>;indexed:number} };
+type TenderStore = { items: IndexedTender[]; lastScan?: string; lastError?: string; sync?:{runs:number;lastSuccessfulScan?:string;sourceHealth?:Record<string,string>;indexed:number; checkpoints?:Record<string,{status:string;lastAttempt:string;lastSuccess?:string;pagesRead?:number;count:number;error?:string}>; coverage?:{received:number;indexed:number;incompleteSources:number;complete:boolean}} };
 
 const canonicalTenderKey = (item: PncpTender) => {
   const cnpj = String(item.orgaoEntidade?.cnpj || "").replace(/\D/g, "");
@@ -100,7 +100,12 @@ async function runTenderMonitor() {
   if(priority.length){try{whatsappStatus=await notifyWhatsApp(priority);}catch(error){whatsappStatus=error instanceof Error?error.message:"Falha no WhatsApp";}}
   const failedCount=result.failedSources.length;
   const sourceHealth=Object.fromEntries(result.diagnostics.map(item=>[item.source,item.status]));
-  const updated:TenderStore={items,lastScan:discoveredAt,lastError:failedCount?`${failedCount} fonte(s) com atenção`:"",sync:{runs:(store.sync?.runs||0)+1,lastSuccessfulScan:failedCount===0?discoveredAt:store.sync?.lastSuccessfulScan,sourceHealth,indexed:items.length}};
+  const checkpoints=Object.fromEntries(result.diagnostics.map(item=>{
+    const previous=store.sync?.checkpoints?.[item.source];
+    return [item.source,{status:item.status,lastAttempt:discoveredAt,lastSuccess:item.status==="ok"?discoveredAt:previous?.lastSuccess,pagesRead:(item as typeof item & {pagesRead?:number}).pagesRead,count:item.count,error:(item as typeof item & {error?:string}).error}];
+  }));
+  const coverage={received:result.data.length,indexed:items.length,incompleteSources:failedCount,complete:failedCount===0};
+  const updated:TenderStore={items,lastScan:discoveredAt,lastError:failedCount?`${failedCount} fonte(s) com atenção`:"",sync:{runs:(store.sync?.runs||0)+1,lastSuccessfulScan:failedCount===0?discoveredAt:store.sync?.lastSuccessfulScan,sourceHealth,indexed:items.length,checkpoints,coverage}};
   await saveStore(updated);
   return {newItems:newItems.length,priority:priority.length,total:items.length,lastScan:discoveredAt,whatsappStatus,failedSources:result.failedSources};
 }
