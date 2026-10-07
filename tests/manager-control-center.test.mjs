@@ -6,7 +6,7 @@ import { financialAccessState } from "../lib/manager-billing.ts";
 test("Manager control center exposes maintenance, rollout, domain, backup, support and incidents",async()=>{
  const component=await readFile(new URL("../components/ManagerControlCenter.tsx",import.meta.url),"utf8");
  const route=await readFile(new URL("../app/api/manager/control-center/route.ts",import.meta.url),"utf8");
- for(const term of ["Modo manutenção","Feature flags","Domínio","Backup","Suporte","Uso e limites","Incidentes"]) assert.ok(component.includes(term));
+ for(const term of ["Modo manutenção","Feature flags","Domínio","Backup","Suporte","Uso e limites","Incidentes","Rollout","Ciclo de vida do tenant"]) assert.ok(component.includes(term));
  assert.ok(route.includes("requestBackup"));
  assert.ok(route.includes("verifyDomain"));
  assert.ok(route.includes("runDiagnostic"));
@@ -46,3 +46,22 @@ test("Manager page integrates SaaS controls, billing and tenant users",async()=>
 });
 
 console.log("manager-control-center.test.mjs: ok");
+test("lifecycle actions are queued and never destructive by default",async()=>{
+ const migration=await readFile(new URL("../supabase/migrations/20261007_manager_lifecycle_jobs.sql",import.meta.url),"utf8");
+ const route=await readFile(new URL("../app/api/manager/control-center/route.ts",import.meta.url),"utf8");
+ assert.ok(migration.includes("proar_manager_jobs"));
+ assert.ok(route.includes("destructiveExecution:false"));
+ assert.ok(route.includes("providerExecution:false"));
+ assert.ok(route.includes("Nenhum dado foi alterado ou apagado"));
+});
+
+test("support access is time-boxed and rollout is tenant scoped",async()=>{
+ const route=await readFile(new URL("../app/api/manager/control-center/route.ts",import.meta.url),"utf8");
+ const component=await readFile(new URL("../components/ManagerControlCenter.tsx",import.meta.url),"utf8");
+ assert.ok(route.includes("60*60*1000"));
+ assert.ok(route.includes("rollout_channel"));
+ assert.ok(route.includes("target_version"));
+ assert.ok(component.includes("Piloto"));
+ assert.ok(component.includes("Gradual"));
+ assert.ok(component.includes("Geral"));
+});
