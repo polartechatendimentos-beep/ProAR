@@ -4,7 +4,8 @@ import { ALL_MANAGER_MODULES } from "../../../../lib/manager-plans";
 import { PROAR_SCHEMA_VERSION } from "../../../../lib/manager-platform";
 import { provisionTenant, resumeTenantProvisioning } from "../../../../lib/tenant-provisioning";
 import { recordSystemIncident } from "../../../../lib/system-observability";
-import { supabaseRest } from "../../../../lib/supabase-rest";
+import { databaseFetch, supabaseRest } from "../../../../lib/supabase-rest";
+import { resolveTenantDb, tenantHeaders } from "../../../../lib/tenant-rest";
 import {
   INTERNAL_QA_COMPANY_ID,
   INTERNAL_QA_COMPANY_SLUG,
@@ -77,6 +78,39 @@ export async function GET(request:NextRequest){
   return NextResponse.json({ready:true,schema,environments:await environmentAliases(),...data,dualApproval:process.env.PROAR_RELEASE_DUAL_APPROVAL==="true"});
 }
 
+async function seedInternalQaState(actor:string){
+  const db=await resolveTenantDb(INTERNAL_QA_COMPANY_ID);
+  if(!db.url||!db.key)return{seeded:false,reason:"Banco interno ainda não está pronto."};
+  const existing=await databaseFetch(db.url+"/rest/v1/proar_state?id=eq.main&select=id",{headers:tenantHeaders(db.key),cache:"no-store"});
+  const rows=existing.ok?await existing.json():[];
+  if(rows.length)return{seeded:false,reason:"Base sintética já inicializada."};
+  const createdAt=now();
+  const payload={
+    _revision:1,_updatedAt:createdAt,_companyId:INTERNAL_QA_COMPANY_ID,_synthetic:true,
+    customers:[{id:"QA-CLI-001",name:"Cliente Sintético ProAR",doc:"00.000.000/0001-00",city:"Ambiente QA",state:"SP",status:"Ativo"}],
+    serviceOrders:[{id:"QA-OS-001",customerId:"QA-CLI-001",client:"Cliente Sintético ProAR",description:"Teste sintético de ponta a ponta",status:"Aberta",priority:"Normal",date:createdAt.slice(0,10)}],
+    moduleRecords:{
+      "Funcionários":[{id:"QA-USR-001",name:"Administrador QA",employeeUsername:"qa.admin",employeeRole:"Administrador",status:"Ativo"}],
+      "Equipamentos":[{id:"QA-EQP-001",name:"Split QA 12.000 BTUs",client:"Cliente Sintético ProAR",customerId:"QA-CLI-001",brand:"ProAR QA",model:"SYNTH-12000",status:"Ativo"}],
+      "Orçamentos":[{id:"QA-ORC-001",name:"Orçamento Sintético",client:"Cliente Sintético ProAR",customerId:"QA-CLI-001",status:"Criado",value:650}],
+      "Vendas":[{id:"QA-VND-001",name:"Venda Sintética",client:"Cliente Sintético ProAR",customerId:"QA-CLI-001",status:"Pendente",value:650}],
+      "Produtos":[{id:"QA-PRD-001",name:"Material QA",category:"Sintético",status:"Ativo",value:10}],
+      "Estoque":[{id:"QA-EST-001",name:"Material QA",quantity:10,status:"Disponível"}],
+      "Compras":[{id:"QA-CMP-001",name:"Compra Sintética",status:"Pendente",value:100}],
+      "Fornecedores":[{id:"QA-FOR-001",name:"Fornecedor Sintético",status:"Ativo"}],
+      "Financeiro":[{id:"QA-FIN-001",name:"Recebimento Sintético",transactionType:"Receber",status:"Em aberto",value:650}],
+      "PMOC":[{id:"QA-PMOC-001",name:"PMOC Sintético",client:"Cliente Sintético ProAR",status:"Ativo"}],
+      "Obras":[{id:"QA-OBR-001",name:"Obra Sintética",client:"Cliente Sintético ProAR",status:"INÍCIO"}],
+      "Licitações":[{id:"QA-LIC-001",name:"Licitação Sintética",status:"Monitorando",value:1000}],
+      "Fiscal":[{id:"QA-FIS-001",name:"Documento Fiscal Sintético",status:"Pendente"}],
+      "Diagnósticos":[{id:"QA-DIA-001",name:"Diagnóstico Sintético",status:"Aberto"}],
+      "Atividades":[{id:"QA-ATV-001",name:"Seed QA criado",status:"Concluído",createdAt}],
+    },
+  };
+  const response=await databaseFetch(db.url+"/rest/v1/proar_state?on_conflict=id",{method:"POST",headers:{...tenantHeaders(db.key),Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({id:"main",payload,updated_by:actor,updated_at:createdAt}),cache:"no-store"});
+  return response.ok?{seeded:true,reason:null}:{seeded:false,reason:"Falha ao criar dados sintéticos."};
+}
+
 async function ensureInternalTenant(actor:string){
   const existingResponse=await supabaseRest(`proar_companies?select=*&id=eq.${encodeURIComponent(INTERNAL_QA_COMPANY_ID)}&limit=1`);
   const existing=existingResponse.ok?(await existingResponse.json())[0]:null;
@@ -111,8 +145,9 @@ async function ensureInternalTenant(actor:string){
     company_id:INTERNAL_QA_COMPANY_ID,release_channel:"internal",update_policy:"manual",schema_version:PROAR_SCHEMA_VERSION,
     maintenance_mode:false,updated_at:now(),
   })});
-  await audit("RELEASE_INTERNAL_BOOTSTRAP",actor,{companyId:INTERNAL_QA_COMPANY_ID,provisioning});
-  return{companyId:INTERNAL_QA_COMPANY_ID,provisioning};
+  const synthetic=await seedInternalQaState(actor).catch(error=>({seeded:false,reason:error instanceof Error?error.message:"Falha no seed sintético."}));
+  await audit("RELEASE_INTERNAL_BOOTSTRAP",actor,{companyId:INTERNAL_QA_COMPANY_ID,provisioning,synthetic});
+  return{companyId:INTERNAL_QA_COMPANY_ID,provisioning,synthetic};
 }
 
 async function releaseById(id:string):Promise<ProARReleaseRecord|null>{
