@@ -10,6 +10,8 @@ import { getBillingCompany, setCompanyModuleEntitlements, syncCompanyBillingAcce
 import { tenantReadiness } from "../../../../lib/tenant-readiness";
 import { classifyProarError } from "../../../../lib/system-errors";
 import { recordSystemIncident } from "../../../../lib/system-observability";
+import { buildCompanyConfiguration } from "../../../../lib/company-configuration";
+import { MODULE_CATALOG } from "../../../../lib/module-catalog";
 
 const isAdmin = (request: NextRequest) => readManagerSession(request);
 
@@ -24,24 +26,57 @@ export async function GET(request: NextRequest) {
   if (!companies.ok) return NextResponse.json({ error: "Falha ao consultar empresas." }, { status: 502 });
   const companyRows = await companies.json();
   const instanceRows = instances.ok ? await instances.json() : [];
-  const primaryCompanyId = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
-  const primarySlug = process.env.PROAR_PRIMARY_COMPANY_SLUG || "polartech";
-  const instanceByCompany=Object.fromEntries(instanceRows.map((instance:Record<string,unknown>)=>[String(instance.company_id||""),instance]));
-  const enrichedCompanies = companyRows.map((company: Record<string,unknown>) => ({
-    ...company,
-    tenant: tenantIdentity({
-      companyId:String(company.id||""),
-      slug:String(company.slug||""),
-      tradeName:String(company.trade_name||company.legal_name||""),
-      primaryCompanyId,
-      primarySlug,
-    }),
-    readiness:tenantReadiness({company,instance:instanceByCompany[String(company.id||"")]}),
-  }));
   const auditRows = audit.ok ? await audit.json() : [];
   const entitlementRows = entitlementsResponse?.ok ? await entitlementsResponse.json() : [];
   const incidentRows = incidentsResponse?.ok ? await incidentsResponse.json() : [];
+  const primaryCompanyId = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
+  const primarySlug = process.env.PROAR_PRIMARY_COMPANY_SLUG || "polartech";
+  const instanceByCompany=Object.fromEntries(instanceRows.map((instance:Record<string,unknown>)=>[String(instance.company_id||""),instance]));
+  const entitlementByCompany=new Map<string,Record<string,unknown>[]>();
+  for(const entitlement of entitlementRows as Record<string,unknown>[]){
+    const companyId=String(entitlement.company_id||"");
+    entitlementByCompany.set(companyId,[...(entitlementByCompany.get(companyId)||[]),entitlement]);
+  }
+  const configAuditByCompany=new Map<string,Record<string,unknown>>();
+  for(const row of auditRows as Record<string,unknown>[]){
+    const companyId=String(row.company_id||"");
+    if(!configAuditByCompany.has(companyId)&&/MODULE|MANAGER_UPDATE|PLAN|ACCESS/i.test(String(row.action||"")))configAuditByCompany.set(companyId,row);
+  }
   const now = Date.now();
+  const healthFor=(instance:Record<string,unknown>|undefined)=>{
+    if(!instance)return{state:"not_checked",label:"Não verificado",lastCheckedAt:null,detail:"Tenant sem registro de health check."};
+    if(instance.provisioning_error)return{state:"query_error",label:"Erro da consulta",lastCheckedAt:instance.last_health_at||null,detail:String(instance.provisioning_error)};
+    if(instance.provisioning_status==="error")return{state:"unavailable",label:"Sistema indisponível",lastCheckedAt:instance.last_health_at||null,detail:"Provisionamento do banco em erro."};
+    if(instance.provisioning_status!=="ready")return{state:"pending",label:"Banco pendente",lastCheckedAt:instance.last_health_at||null,detail:String(instance.provisioning_status||"Provisionamento pendente")};
+    if(!instance.last_health_at)return{state:"not_checked",label:"Não verificado",lastCheckedAt:null,detail:"Banco registrado como pronto, mas ainda sem health check confirmado."};
+    const age=now-new Date(String(instance.last_health_at)).getTime();
+    if(!Number.isFinite(age)||age>24*60*60*1000)return{state:"stale",label:"Health check vencido",lastCheckedAt:instance.last_health_at,detail:"O último health check confirmado tem mais de 24 horas."};
+    return{state:"online",label:"Banco online",lastCheckedAt:instance.last_health_at,detail:"Banco respondeu ao último health check."};
+  };
+  const enrichedCompanies = companyRows.map((company: Record<string,unknown>) => {
+    const companyId=String(company.id||"");
+    const instance=instanceByCompany[companyId] as Record<string,unknown>|undefined;
+    const configuration=buildCompanyConfiguration(company,entitlementByCompany.get(companyId)||[]);
+    const configAudit=configAuditByCompany.get(companyId);
+    return {
+      ...company,
+      tenant: tenantIdentity({
+        companyId,
+        slug:String(company.slug||""),
+        tradeName:String(company.trade_name||company.legal_name||""),
+        primaryCompanyId,
+        primarySlug,
+      }),
+      readiness:tenantReadiness({company,instance}),
+      configuration:{
+        ...configuration,
+        lastAdministrator:configAudit?.actor||null,
+        lastChangeAt:configAudit?.created_at||configuration.configurationUpdatedAt,
+        lastChangeReason:(configAudit?.details as Record<string,unknown>|undefined)?.reason||null,
+      },
+      health:healthFor(instance),
+    };
+  });
   const summary = {
     total: enrichedCompanies.length,
     active: enrichedCompanies.filter((company: Record<string,unknown>) => company.status === "active").length,
@@ -57,14 +92,15 @@ export async function GET(request: NextRequest) {
     readyDatabases: instanceRows.filter((instance: Record<string,unknown>) => instance.provisioning_status === "ready").length,
     databaseErrors: instanceRows.filter((instance: Record<string,unknown>) => instance.provisioning_status === "error" || Boolean(instance.provisioning_error)).length,
     pendingDatabases: instanceRows.filter((instance: Record<string,unknown>) => !["ready","error"].includes(String(instance.provisioning_status || ""))).length,
-    staleHealth: instanceRows.filter((instance: Record<string,unknown>) => {
-      if (!instance.last_health_at) return true;
-      return now - new Date(String(instance.last_health_at)).getTime() > 24 * 60 * 60 * 1000;
-    }).length,
+    healthOnline: instanceRows.filter((instance:Record<string,unknown>)=>healthFor(instance).state==="online").length,
+    staleHealth: instanceRows.filter((instance:Record<string,unknown>)=>healthFor(instance).state==="stale").length,
+    healthCheckErrors: instanceRows.filter((instance:Record<string,unknown>)=>healthFor(instance).state==="query_error").length,
+    unavailableSystems: instanceRows.filter((instance:Record<string,unknown>)=>healthFor(instance).state==="unavailable").length,
+    healthNotChecked: instanceRows.filter((instance:Record<string,unknown>)=>healthFor(instance).state==="not_checked").length,
     openCriticalIncidents: incidentRows.filter((incident:Record<string,unknown>) => !incident.resolved_at && incident.severity === "critical").length,
     recentIncidents: incidentRows.filter((incident:Record<string,unknown>) => now - new Date(String(incident.created_at||0)).getTime() <= 24*60*60*1000).length,
   };
-  return NextResponse.json({ companies: enrichedCompanies, instances: instanceRows, audit: auditRows, incidents: incidentRows, entitlements: entitlementRows, moduleCatalog: ALL_MANAGER_MODULES, summary, platform: managerPlatformInfo(), plans: MANAGER_PLANS });
+  return NextResponse.json({ companies: enrichedCompanies, instances: instanceRows, audit: auditRows, incidents: incidentRows, entitlements: entitlementRows, moduleCatalog: ALL_MANAGER_MODULES, moduleCatalogDetailed:MODULE_CATALOG, summary, platform: managerPlatformInfo(), plans: MANAGER_PLANS });
 }
 
 export async function PATCH(request: NextRequest) {
@@ -184,7 +220,7 @@ export async function PATCH(request: NextRequest) {
   await supabaseRest("proar_manager_audit", {
     method:"POST",
     headers:{Prefer:"return=minimal"},
-    body:JSON.stringify({company_id:companyId,action:"MANAGER_UPDATE",actor:user.username,details:patch}),
+    body:JSON.stringify({company_id:companyId,action:"MANAGER_UPDATE",actor:user.username,details:{before:current,after:patch,reason:String(body.changeReason||"Alteração administrativa").slice(0,240),source:"proar-manager"}}),
   });
 
   if (Array.isArray(body.moduleEntitlements)) {
