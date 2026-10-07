@@ -38,8 +38,8 @@ test("Tenant auth and UI enforce contracted modules",async()=>{
   assert.ok(auth.includes("entitledModules"));
   assert.ok(session.includes("entitledModules?: string[]"));
   assert.ok(page.includes("Módulo não contratado"));
-  assert.ok(page.includes("entitledModules={authenticatedUser.entitledModules}"));
-  assert.ok(page.includes("const planBlocked"));
+  assert.ok(page.includes("entitledModules={effectiveEntitledModules}"));
+  assert.ok(page.includes("const planBlocked = !primaryTenantAccess"));
 });
 
 test("Public card checkout sends only tokenized card data to ProAR backend",async()=>{
