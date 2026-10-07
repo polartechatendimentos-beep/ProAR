@@ -43,7 +43,7 @@ export function sessionFromRequest(request: NextRequest) {
 
 export function hasPermission(session: ProarSession | null, permission: Permission) {
   if (!session) return false;
-  if (session.role === "Administrador" || session.permissions.includes("*")) return true;
+  if (session.claims?.includes("platform_admin") || session.claims?.includes("company_owner") || session.permissions.includes("*")) return true;
   const [module] = permission.split(".");
   const explicit = session.permissions.includes(permission);
   const legacyModule = (legacy[module] || []).some(item => session.permissions.includes(item));
