@@ -6,7 +6,7 @@ on:
       - "**/*.md"
       - "docs/**"
   push:
-    branches: [main, "release/proar-production-20260921", "feat/**", "fix/**"]
+    branches: [production, "release/proar-production-20260921", "feat/**", "fix/**"]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
@@ -36,6 +36,8 @@ jobs:
         run: npm run lint
       - name: Domain and transaction tests
         run: npm test
+      - name: Release integrity guard
+        run: node tests/release-guard.test.mjs
       - name: Production build
         run: npm run build
       - name: Runtime smoke
