@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Building2, CheckCircle2, ChevronRight, Edit3, MapPin, Plus, Save, Search, Wrench, X } from "lucide-react";
+import { Building2, CheckCircle2, ChevronRight, Edit3, MapPin, Plus, Save, Search, Trash2, Wrench, X } from "lucide-react";
 
 type RecordItem = Record<string, unknown>;
 type Props = {
@@ -13,6 +13,7 @@ type Props = {
   setRoomQuery: (value: string) => void;
   onOpen: (name: string) => void;
   onUpdateStructure: (record: RecordItem) => void | boolean | Promise<boolean>;
+  onDeleteStructure: (record: RecordItem) => void | boolean | Promise<boolean>;
 };
 
 const text = (item: RecordItem | undefined, ...keys: string[]) => {
@@ -28,7 +29,7 @@ const dateLabel = (raw: unknown) => {
   return Number.isNaN(date.getTime()) ? String(raw) : date.toLocaleDateString("pt-BR");
 };
 
-export function CustomerStructureLayout({ customer, structures, serviceOrders, equipment, roomQuery, setRoomQuery, onOpen, onUpdateStructure }: Props) {
+export function CustomerStructureLayout({ customer, structures, serviceOrders, equipment, roomQuery, setRoomQuery, onOpen, onUpdateStructure, onDeleteStructure }: Props) {
   const [selectedId, setSelectedId] = useState(String(structures[0]?.id ?? ""));
   const [detailTab, setDetailTab] = useState("Ambiente");
   const [structureForm, setStructureForm] = useState<null | { id?: string; name: string; hierarchyLevel: string; parentId: string; responsible: string; phone: string; email: string; description: string }>(null);
@@ -145,7 +146,7 @@ export function CustomerStructureLayout({ customer, structures, serviceOrders, e
           const id=String(item.id); const active=id===selectedUnitId;
           const directCount=structures.filter(candidate => parentOf(candidate)===id).length;
           const machineCount=equipment.filter(eq => [text(eq,"unit","equipmentUnit","parentUnit"),text(eq,"secretary","area")].includes(text(item,"name","unit"))).length;
-          return <button type="button" key={id} className={`structure-unit-card ${active?"active":""}`} onClick={() => setSelectedId(id)}><div className="unit-card-main"><span className="tree-node-icon"><Building2 size={16}/></span><div><b>{text(item,"name","unit")}</b><small>{text(item,"category","type","hierarchyLevel")}</small></div><ChevronRight size={15}/></div><div className="unit-card-facts"><span>{directCount} vínculo(s)</span><span>{machineCount} equipamento(s)</span></div></button>;
+          return <button type="button" key={id} className={`structure-unit-card ${active?"active":""}`} onClick={() => setSelectedId(id)}><div className="unit-card-main"><span className="tree-node-icon"><Building2 size={16}/></span><div><b>{text(item,"name","unit")}</b><small>{text(item,"category","type","hierarchyLevel")}</small></div><ChevronRight size={15}/></div><div className="unit-card-facts"><span>{directCount} vínculo(s)</span><span>{machineCount} equipamento(s)</span><span className="unit-card-delete" role="button" tabIndex={0} title="Excluir / inativar" onClick={event=>{event.stopPropagation();void onDeleteStructure(item);}} onKeyDown={event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();event.stopPropagation();void onDeleteStructure(item);}}}><Trash2 size={13}/></span></div></button>;
         })}{!visibleUnits.length && <div className="empty-state compact"><Building2 size={20}/><b>Nenhuma unidade cadastrada</b><span>Cadastre a primeira unidade ou secretaria deste cliente.</span></div>}</div>
         <button className="structure-add-dashed" onClick={() => openStructureForm("Secretaria")}><Plus size={14}/> Adicionar estrutura</button>
       </aside>
@@ -153,7 +154,7 @@ export function CustomerStructureLayout({ customer, structures, serviceOrders, e
         <header className="selected-unit-head"><div><span className="section-kicker">UNIDADE SELECIONADA</span><h3>{selectedUnit ? text(selectedUnit,"name","unit") : "Selecione uma unidade"}</h3><p>{selectedUnit ? text(selectedUnit,"address","street","description") : "Os setores e ambientes aparecerão aqui."}</p></div><button className="primary-btn" disabled={!selectedUnit} onClick={() => openStructureForm("Setor", selectedUnitId)}><Plus size={14}/> Novo Setor nesta Unidade</button></header>
         <div className="structure-sector-list">{selectedChildren.map(item => {
           const itemEquipment=equipment.filter(eq => [text(eq,"room","environment","ambiente","installationLocation"),text(eq,"sector","setor")].includes(text(item,"name","unit")));
-          return <article className="structure-sector-card" key={String(item.id)}><div className="sector-card-copy"><span className="tree-node-icon"><MapPin size={15}/></span><div><div className="sector-card-title"><b>{text(item,"name","unit")}</b><em>{text(item,"category","type","hierarchyLevel")}</em></div><p>{text(item,"description","observation","observations")}</p><small>{itemEquipment.length} equipamento(s) vinculado(s)</small></div></div><div className="sector-card-actions"><button className="icon-btn" onClick={() => {setSelectedId(String(item.id)); setDetailTab("Equipamentos");}} title="Ver equipamentos"><Wrench size={14}/></button><button className="icon-btn" onClick={() => onUpdateStructure(item)} title="Editar"><Edit3 size={14}/></button></div></article>;
+          return <article className="structure-sector-card" key={String(item.id)}><div className="sector-card-copy"><span className="tree-node-icon"><MapPin size={15}/></span><div><div className="sector-card-title"><b>{text(item,"name","unit")}</b><em>{text(item,"category","type","hierarchyLevel")}</em></div><p>{text(item,"description","observation","observations")}</p><small>{itemEquipment.length} equipamento(s) vinculado(s)</small></div></div><div className="sector-card-actions"><button className="icon-btn" onClick={() => {setSelectedId(String(item.id)); setDetailTab("Equipamentos");}} title="Ver equipamentos"><Wrench size={14}/></button><button className="icon-btn" onClick={() => { setStructureForm({ id:String(item.id), name:text(item,"name","unit"), hierarchyLevel:text(item,"hierarchyLevel","category","type"), parentId:String(item.parentId??""), responsible:text(item,"responsible","contact")==="—"?"":text(item,"responsible","contact"), phone:text(item,"phone")==="—"?"":text(item,"phone"), email:text(item,"email")==="—"?"":text(item,"email"), description:text(item,"description")==="—"?"":text(item,"description") }); }} title="Editar"><Edit3 size={14}/></button><button className="icon-btn icon-danger" onClick={() => void onDeleteStructure(item)} title="Excluir / inativar"><Trash2 size={14}/></button></div></article>;
         })}{selectedUnit && !selectedChildren.length && <div className="empty-state compact"><MapPin size={20}/><b>Nenhum setor ou ambiente nesta unidade</b><span>Use “Novo Setor nesta Unidade” para criar o primeiro vínculo.</span></div>}{!selectedUnit && <div className="empty-state compact"><Building2 size={20}/><b>Nenhuma unidade selecionada</b><span>Cadastre ou selecione uma unidade.</span></div>}</div>
         <footer className="structure-live-summary"><span><CheckCircle2 size={14}/> Estrutura vinculada ao cadastro real do cliente</span><b>{selectedChildren.length} ambiente(s) • {equipment.filter(eq => selectedChildren.some(child => [text(eq,"room","environment","ambiente","installationLocation"),text(eq,"sector","setor")].includes(text(child,"name","unit")))).length} equipamento(s)</b></footer>
       </main>
