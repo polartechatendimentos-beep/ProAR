@@ -116,3 +116,22 @@
 .manager-recovery-controls select{min-height:38px;border:1px solid #1d3857;background:#061524;color:#f8fafc;border-radius:9px;padding:0 10px}
 .manager-recovery-controls span{font-size:11px;color:#7890aa}
 @media(max-width:700px){.manager-recovery-controls{align-items:stretch;flex-direction:column}.manager-recovery-controls label{min-width:0}}
+
+
+/* Catálogo de módulos por área */
+.manager-module-groups{display:grid;gap:10px}
+.manager-module-group,.manager-pricing-group{border:1px solid #dce6ef;border-radius:11px;background:#fff;overflow:hidden}
+.manager-module-group>header,.manager-pricing-group>header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:10px 11px;background:#f6f9fc;border-bottom:1px solid #e5ebf1}
+.manager-module-group>header div,.manager-pricing-group>header div{display:grid;gap:2px}
+.manager-module-group>header b,.manager-pricing-group>header b{font-size:11px;color:#173d61}
+.manager-module-group>header small,.manager-pricing-group>header small{font-size:9px;color:#75889a;line-height:1.35}
+.manager-module-group>header em,.manager-pricing-group>header em{min-width:30px;padding:4px 7px;border-radius:999px;background:#eaf2ff;color:#1768df;font-size:9px;font-style:normal;font-weight:900;text-align:center}
+.manager-module-group .manager-module-chips{padding:10px}
+.manager-module-pricing-groups{display:grid!important;grid-template-columns:1fr!important;gap:10px!important}
+.manager-pricing-group-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:9px}
+.manager-pricing-group-list label{display:grid;grid-template-columns:18px 1fr 108px;align-items:center;gap:8px;padding:8px 9px;border:1px solid #e2e9f0;border-radius:8px;background:#fff;font-size:10px;color:#6b7f92}
+.manager-pricing-group-list label.enabled{border-color:#b9d3f3;background:#f7fbff;color:#234b70}
+.manager-pricing-group-list label>span{display:grid;gap:2px;min-width:0}
+.manager-required-module{font-size:8px!important;font-weight:900;color:#1768df!important;text-transform:uppercase;letter-spacing:.04em}
+.manager-pricing-group-list input[type="checkbox"]:disabled{opacity:.65;cursor:not-allowed}
+@media(max-width:860px){.manager-pricing-group-list{grid-template-columns:1fr}}
