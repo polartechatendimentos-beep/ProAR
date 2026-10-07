@@ -42,8 +42,31 @@ async function failTarget(target:ReleaseTarget,release:ProARReleaseRecord,code:s
     snapshot_id:snapshotId||target.snapshot_id||null,updated_at:now(),
   })});
   await supabaseRest("proar_releases?id=eq."+encodeURIComponent(release.id),{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({status:"failed",updated_at:now()})});
+  await supabaseRest("proar_release_targets?release_id=eq."+encodeURIComponent(release.id)+"&status=eq.scheduled",{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({status:"blocked",health_status:"error",error_code:"PROAR-REL-ROLLOUT-HALTED",error_message:"Distribuição interrompida automaticamente após regressão.",updated_at:now()})}).catch(()=>null);
   await recordReleaseCheck({releaseId:release.id,companyId:target.company_id||null,environmentCode:target.environment_code,stage:"post",checkKey:"scheduled-rollout",status:"error",code,detail:message});
   await recordSystemIncident({companyId:target.company_id||undefined,module:"Central de Versões",operation:"Rollout agendado",code:"PROAR-DEPLOY-001",severity:"critical",route:"/api/cron/release-rollout",metadata:{releaseId:release.id,targetId:target.id,alias:target.alias,message,releaseCode:code}});
+}
+
+async function criticalIncidentsSince(companyId:string,since:string){
+  const response=await supabaseRest("proar_system_incidents?select=id&company_id=eq."+encodeURIComponent(companyId)+"&severity=eq.critical&created_at=gte."+encodeURIComponent(since)+"&limit=20").catch(()=>null);
+  return response?.ok?(await response.json()).length:0;
+}
+
+async function releaseHasRegression(release:ProARReleaseRecord,channel:ReleaseTarget["environment_code"]){
+  const since=new Date(Date.now()-24*60*60*1000).toISOString();
+  const response=await supabaseRest("proar_release_targets?select=*&release_id=eq."+encodeURIComponent(release.id)+"&environment_code=eq."+channel+"&status=eq.active&applied_at=gte."+encodeURIComponent(since)+"&order=applied_at.desc&limit=10").catch(()=>null);
+  const active=response?.ok?await response.json() as ReleaseTarget[]:[];
+  for(const item of active){
+    const health=await probeAlias(item.alias);
+    const critical=item.company_id&&item.applied_at?await criticalIncidentsSince(item.company_id,item.applied_at):0;
+    await recordReleaseCheck({releaseId:release.id,companyId:item.company_id||null,environmentCode:item.environment_code,stage:"continuous",checkKey:"regression-watch",status:health.ok&&!critical?"ok":"error",code:health.ok&&!critical?null:"PROAR-REL-REGRESSION",detail:critical?"Incidente crítico detectado após a atualização.":"HTTP "+health.httpStatus,latencyMs:health.latencyMs});
+    if(!health.ok||critical){
+      const message=critical?"Regressão detectada: incidente crítico após a atualização.":"Regressão detectada: health check do tenant falhou.";
+      await failTarget(item,release,"PROAR-REL-REGRESSION",message,item.previous_deployment_id,item.snapshot_id);
+      return{detected:true,alias:item.alias,message};
+    }
+  }
+  return{detected:false as const};
 }
 
 export async function GET(request:NextRequest){
@@ -58,6 +81,15 @@ export async function GET(request:NextRequest){
   for(const target of targets){
     const release=await releaseById(target.release_id);
     if(!release){results.push({targetId:target.id,ok:false,error:"Release ausente."});continue}
+    if(release.status==="failed"||release.status==="rolled_back"){
+      await supabaseRest("proar_release_targets?id=eq."+target.id,{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({status:"blocked",error_code:"PROAR-REL-ROLLOUT-HALTED",error_message:"Release interrompida antes deste target.",updated_at:now()})});
+      results.push({targetId:target.id,ok:false,blocked:true,error:"Release já interrompida."});
+      continue;
+    }
+    if(target.environment_code==="production"||target.environment_code==="canary"){
+      const regression=await releaseHasRegression(release,target.environment_code);
+      if(regression.detected){results.push({targetId:target.id,ok:false,blocked:true,error:regression.message});break}
+    }
     const settings=target.company_id?await settingFor(target.company_id):null;
     const schemaVersion=settings?.schema_version||PROAR_SCHEMA_VERSION;
     if(target.company_id&&!schemaCompatible(schemaVersion,release.minimum_schema_version)){
