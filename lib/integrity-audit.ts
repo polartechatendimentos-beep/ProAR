@@ -151,6 +151,57 @@ export function auditOperationalIntegrity(state: StateData, checkedAt = new Date
     for (const duplicates of documentOwners.values()) if (duplicates.length > 1) for (const record of duplicates) push(findings, "CPF/CNPJ duplicados", "Crítico", record, text(record.name) || "Cadastro duplicado", `${label}: documento repetido entre ${duplicates.map(item => text(item.name) || text(item.id)).join("; ")}.`);
   }
 
+  // Qualidade cadastral e duplicidades: somente diagnóstico, nunca corrige automaticamente.
+  for(const customer of customers){
+    const doc=digits(customer.doc||customer.cnpj||customer.cpf);
+    if(!doc)push(findings,"Clientes sem documento","Atenção",customer,text(customer.name)||"Cliente sem documento","Informe CNPJ ou CPF para melhorar validação fiscal, busca e deduplicação.");
+    const addressParts=[customer.street||customer.address,customer.city,customer.state,customer.zipCode||customer.cep].map(text);
+    if(addressParts.filter(Boolean).length<3)push(findings,"Clientes com endereço incompleto","Atenção",customer,text(customer.name)||"Cliente com endereço incompleto","Endereço sem informações suficientes de logradouro/cidade/UF/CEP.");
+  }
+
+  for(const order of orders){
+    if(!text(order.client||order.customer||order.customerId||order.clientId))push(findings,"OS sem cliente","Crítico",order,`OS ${text(order.id)} sem cliente`,"A ordem de serviço não possui cliente identificável.");
+    if(!text(order.tech||order.technician||order.technicianId)&&!/rascunho|cancelad/i.test(normalized(order.status)))push(findings,"OS sem técnico","Atenção",order,`OS ${text(order.id)} sem técnico`,"Defina um técnico ou equipe responsável antes do atendimento.");
+  }
+
+  const hierarchyLevel=(record:RecordData)=>{
+    const level=normalized(record.hierarchyLevel||record.category);
+    if(/secretaria|setor|departamento|diretoria/.test(level))return"secretaria";
+    if(level==="unidade")return"unidade";
+    if(/sala|ambiente/.test(level))return"sala";
+    return level;
+  };
+  for(const structure of structures){
+    const level=hierarchyLevel(structure);
+    const parentId=text(structure.parentId);
+    const parent=parentId?structureById.get(parentId):undefined;
+    if(level==="unidade"&&(!parent||hierarchyLevel(parent)!=="secretaria"))push(findings,"Unidades sem setor ou secretaria","Atenção",structure,text(structure.name)||`Unidade ${text(structure.id)}`,"A hierarquia oficial exige Secretaria/Setor → Unidade.");
+    if(level==="sala"&&(!parent||hierarchyLevel(parent)!=="unidade"))push(findings,"Salas sem unidade","Atenção",structure,text(structure.name)||`Sala ${text(structure.id)}`,"A hierarquia oficial exige Unidade → Sala/Ambiente.");
+  }
+
+  const duplicateField=(records:RecordData[],fieldNames:string[],check:string,label:string)=>{
+    const groups=new Map<string,RecordData[]>();
+    for(const record of records){
+      const value=fieldNames.map(field=>text(record[field])).find(Boolean);
+      if(!value)continue;
+      const key=normalized(value);
+      groups.set(key,[...(groups.get(key)||[]),record]);
+    }
+    for(const duplicates of groups.values())if(duplicates.length>1)for(const record of duplicates)push(findings,check,"Crítico",record,text(record.name)||text(record.id)||label,`${label} repetido: ${fieldNames.map(field=>text(record[field])).find(Boolean)}.`);
+  };
+
+  duplicateField(equipment,["serialNumber"],"Números de série duplicados","Número de série");
+  duplicateField(equipment,["patrimony","assetTag"],"Patrimônios duplicados","Patrimônio");
+  duplicateField(equipment,["externalCode","manufacturerCode"],"Códigos de equipamento duplicados","Código de equipamento");
+  duplicateField(orders,["id"],"Números de OS duplicados","Número da OS");
+  duplicateField(rows(modules.Obras),["id","name"],"Obras possivelmente duplicadas","Obra");
+  duplicateField([...rows(modules.Licitações),...rows(modules.Certames)],["numeroControlePNCP","processNumber","id"],"Licitações possivelmente duplicadas","Licitação");
+
+  for(const item of equipment){
+    const hasLocation=["roomId","sectorId","unitId","structureId","installationLocation","room","unit","sector"].some(field=>text(item[field]));
+    if(!hasLocation)push(findings,"Equipamentos sem localização","Atenção",item,text(item.name)||text(item.model)||`Equipamento ${text(item.id)}`,"Equipamento sem vínculo com Secretaria/Setor, Unidade ou Sala/Ambiente.");
+  }
+
   for (const budget of budgets) {
     const status = normalized(budget.status);
     const converted = Boolean(text(budget.serviceOrderId || budget.convertedOrderId || budget.convertedAt)) || /convertid|os gerada|ordem de servico criada/.test(status);
@@ -210,7 +261,7 @@ export function auditOperationalIntegrity(state: StateData, checkedAt = new Date
     for (const reversal of reversals) if (!financialBook.some(movement => text(movement.id) === `REV-${text(title.id)}-${text(reversal.id)}`)) push(findings, "Estornos sem compensação no razão", "Crítico", title, text(title.name) || `Título ${text(title.id)}`, `O estorno ${text(reversal.id)} não tem movimento compensatório no razão financeiro.`);
   }
 
-  const names = ["OS com cliente inválido", "OS sem vínculo estável de cliente", "OS com estrutura inválida", "OS em estrutura de outro cliente", "OS com equipamento inválido", "Orçamentos com cliente inválido", "Orçamentos sem vínculo estável de cliente", "Títulos financeiros duplicados", "Compras a prazo sem título", "Títulos sem origem", "Estoque divergente do livro", "Produtos sem livro de movimentos", "Produtos com saldo negativo", "OS concluídas sem saída de estoque", "Equipamentos sem cliente válido", "Equipamentos com estrutura inválida", "Equipamentos em estrutura de outro cliente", "Estruturas órfãs", "CPF/CNPJ duplicados", "Orçamentos convertidos sem OS", "Saldo legado sem baixas detalhadas", "Saldo financeiro divergente das baixas", "Baixas sem movimento no razão", "Estornos sem compensação no razão", "Vendas com orçamento de origem inválido", "Vendas com OS de origem inválida", "OS com orçamento de origem inválido", "OS com venda de origem inválida", "Documentos fiscais com origem inválida", "Documentos fiscais autorizados duplicados", "OS concluídas com fiscal pendente"];
+  const names = ["OS com cliente inválido", "OS sem vínculo estável de cliente", "OS com estrutura inválida", "OS em estrutura de outro cliente", "OS com equipamento inválido", "Orçamentos com cliente inválido", "Orçamentos sem vínculo estável de cliente", "Títulos financeiros duplicados", "Compras a prazo sem título", "Títulos sem origem", "Estoque divergente do livro", "Produtos sem livro de movimentos", "Produtos com saldo negativo", "OS concluídas sem saída de estoque", "Equipamentos sem cliente válido", "Equipamentos com estrutura inválida", "Equipamentos em estrutura de outro cliente", "Estruturas órfãs", "CPF/CNPJ duplicados", "Clientes sem documento", "Clientes com endereço incompleto", "OS sem cliente", "OS sem técnico", "Unidades sem setor ou secretaria", "Salas sem unidade", "Números de série duplicados", "Patrimônios duplicados", "Códigos de equipamento duplicados", "Números de OS duplicados", "Obras possivelmente duplicadas", "Licitações possivelmente duplicadas", "Equipamentos sem localização", "Orçamentos convertidos sem OS", "Saldo legado sem baixas detalhadas", "Saldo financeiro divergente das baixas", "Baixas sem movimento no razão", "Estornos sem compensação no razão", "Vendas com orçamento de origem inválido", "Vendas com OS de origem inválida", "OS com orçamento de origem inválido", "OS com venda de origem inválida", "Documentos fiscais com origem inválida", "Documentos fiscais autorizados duplicados", "OS concluídas com fiscal pendente"];
   const checks = names.map(name => resultOf(name, findings));
   const critical = findings.filter(item => item.severity === "Crítico").length;
   const attention = findings.filter(item => item.severity === "Atenção").length;
