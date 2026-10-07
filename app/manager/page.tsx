@@ -116,36 +116,22 @@ export default function ManagerPage(){
   const selectedCompany=companies.find(c=>c.id===selectedCompanyId)||null;
   const selectedInstance=selectedCompany?map[selectedCompany.id]:undefined;
   const selectedReceivables=receivables.filter(row=>row.company_id===selectedCompanyId);
-  const selectedEntitlements=entitlements.filter(row=>row.company_id===selectedCompanyId);
-  const moduleTotalCents=Object.values(moduleDraft).filter(item=>item.enabled).reduce((sum,item)=>{
-    const value=Number(item.price.replace(/\./g,"").replace(",","."));
-    return sum+(Number.isFinite(value)?Math.max(0,Math.round(value*100)):0);
-  },0);
-  const groupedModuleCatalog=useMemo(()=>{
-    const known=new Set(moduleGroups.flatMap(group=>group.modules));
-    const extras=moduleCatalog.filter(moduleName=>!known.has(moduleName));
-    return extras.length?[...moduleGroups,{code:"outros",name:"Outros módulos",description:"Módulos ainda não classificados.",modules:extras}]:moduleGroups;
-  },[moduleGroups,moduleCatalog]);
+  const selectedPlanCode=selectedCompany?.plan_code==="trial"?"basico":(plans.some(plan=>plan.code===selectedCompany?.plan_code)?String(selectedCompany?.plan_code):"basico");
+  const selectedPlan=plans.find(plan=>plan.code===selectedPlanCode)||plans[0]||null;
+  const planLabel=(code?:string)=>code==="trial"?"Trial • Básico":(plans.find(plan=>plan.code===code)?.name||code||"Básico");
 
   useEffect(()=>{
-    if(!selectedCompany){setBillingDraft(blankBilling());setModuleDraft({});return}
+    if(!selectedCompany){setBillingDraft(blankBilling());return}
     setBillingDraft({
       enabled:Boolean(selectedCompany.billing_enabled),
+      monthlyPrice:(Number(selectedCompany.monthly_fee_cents||0)/100).toFixed(2).replace(".",","),
       billingDay:String(selectedCompany.billing_day||10),
       leadDays:String(selectedCompany.billing_issue_lead_days??7),
       method:selectedCompany.billing_method==="boleto"?"boleto":selectedCompany.billing_method==="card"?"card":"pix",
       autoBlock:selectedCompany.billing_auto_block!==false,
       email:selectedCompany.billing_email||selectedCompany.email||"",
     });
-    const entitlementMap=new Map(selectedEntitlements.map(item=>[item.module_name,item]));
-    const modules=moduleCatalog.length?moduleCatalog:Array.from(new Set([...(selectedCompany.modules||[]),...selectedEntitlements.map(item=>item.module_name)]));
-    setModuleDraft(Object.fromEntries(modules.map(moduleName=>{
-      const item=entitlementMap.get(moduleName);
-      const enabled=requiredModules.includes(moduleName)||Boolean(item?item.enabled:(selectedCompany.modules||[]).includes(moduleName));
-      const price=(Number(item?.monthly_price_cents||0)/100).toFixed(2).replace(".",",");
-      return [moduleName,{enabled,price}];
-    })));
-  },[selectedCompanyId,selectedCompany?.billing_enabled,selectedCompany?.billing_day,selectedCompany?.billing_method,selectedCompany?.plan_code,entitlements,moduleCatalog,requiredModules]);
+  },[selectedCompanyId,selectedCompany?.billing_enabled,selectedCompany?.monthly_fee_cents,selectedCompany?.billing_day,selectedCompany?.billing_method,selectedCompany?.billing_issue_lead_days,selectedCompany?.billing_auto_block,selectedCompany?.billing_email,selectedCompany?.email]);
 
   const patch=async(companyId:string,body:Record<string,unknown>)=>{
     setNotice("");
