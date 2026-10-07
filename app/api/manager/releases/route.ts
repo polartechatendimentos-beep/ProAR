@@ -196,7 +196,7 @@ async function upsertTarget(input:{
 async function recordTargetFailure(release:ProARReleaseRecord,channel:ReleaseChannel,companyId:string|null,alias:string,code:string,error:string,previousDeploymentId?:string|null,snapshotId?:number|null){
   await upsertTarget({release,companyId,environmentCode:channel,alias,status:"failed",previousDeploymentId,snapshotId,healthStatus:"error",errorCode:code,errorMessage:error});
   await recordReleaseCheck({releaseId:release.id,companyId,environmentCode:channel,stage:"post",checkKey:"rollout",status:"error",code,detail:error});
-  await recordSystemIncident({companyId:companyId||undefined,module:"Central de Versões",operation:"Rollout de release",code,severity:"critical",route:"/api/manager/releases",metadata:{releaseId:release.id,version:release.version,channel,alias,error}});
+  await recordSystemIncident({companyId:companyId||undefined,module:"Central de Versões",operation:"Rollout de release",code:"PROAR-DEPLOY-001",severity:"critical",route:"/api/manager/releases",metadata:{releaseId:release.id,version:release.version,channel,alias,error,releaseCode:code}});
 }
 
 async function applyTarget(release:ProARReleaseRecord,channel:ReleaseChannel,companyId:string|null,alias:string,actor:string){
@@ -457,7 +457,7 @@ export async function POST(request:NextRequest){
     return NextResponse.json({error:"Ação de release desconhecida."},{status:400});
   }catch(error){
     const message=error instanceof Error?error.message:"Falha na governança de releases.";
-    await recordSystemIncident({module:"Central de Versões",operation:action||"ação desconhecida",code:"PROAR-REL-UNEXPECTED",severity:"error",route:"/api/manager/releases",error:message,metadata:{actor:user.username}});
+    await recordSystemIncident({module:"Central de Versões",operation:action||"ação desconhecida",code:"PROAR-UNKNOWN-001",severity:"error",route:"/api/manager/releases",error:message,metadata:{actor:user.username,releaseCode:"PROAR-REL-UNEXPECTED"}});
     return NextResponse.json({error:message,code:"PROAR-REL-UNEXPECTED"},{status:500});
   }
 }
