@@ -4,6 +4,7 @@ import { HVAC_TERMS, decimalText, normalizedText, normalizeProcurementStatus, pr
 const PNCP_ENDPOINT = "https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao";
 const PNCP_DOCS = "https://pncp.gov.br/api/consulta/swagger-ui/index.html";
 const PAGE_SIZE = 50;
+const MAX_PAGES = 20;
 
 function dateParam(date: Date) {
   return date.toISOString().slice(0, 10).replaceAll("-", "");
@@ -132,15 +133,18 @@ export async function searchPncp(options: {
   const startedAt = Date.now();
   const collectedAt = new Date().toISOString();
   const days = Math.max(1, Math.min(60, Number(options.days) || 14));
-  const maxPages = Math.max(1, Math.min(5, Number(options.maxPages) || 2));
+  const maxPages = Math.max(1, Math.min(MAX_PAGES, Number(options.maxPages) || 10));
   const timeoutMs = Math.max(3000, Math.min(20000, Number(options.timeoutMs) || 9000));
   const uf = safeText(options.uf)?.toUpperCase() ?? null;
   const terms = (options.terms?.length ? options.terms : [...HVAC_TERMS]).slice(0, 40).map(normalizedText).filter(Boolean);
-  const modalityCodes = (options.modalityCodes?.length ? options.modalityCodes : [6]).slice(0, 5);
+  const modalityCodes = (options.modalityCodes?.length ? options.modalityCodes : [4, 5, 6, 7, 8, 9, 12]).slice(0, 12);
+  // PNCP orders by publication date. A very broad range makes HVAC notices fall behind
+  // thousands of unrelated records. Query the requested history plus a short future window,
+  // then walk more pages so relevant notices are not limited to the first 100/250 rows.
   const start = new Date();
   start.setDate(start.getDate() - days);
   const end = new Date();
-  end.setDate(end.getDate() + 30);
+  end.setDate(end.getDate() + 7);
   const accepted: ProcurementRecord[] = [];
   let rejected = 0;
   let pagesRead = 0;
