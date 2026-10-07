@@ -58,9 +58,13 @@ async function releaseHasRegression(release:ProARReleaseRecord,channel:ReleaseTa
   const active=response?.ok?await response.json() as ReleaseTarget[]:[];
   for(const item of active){
     const health=await probeAlias(item.alias);
+    const servedDeployment=String((health.payload as Record<string,unknown>)?.deploymentId||"");
+    const servedCommit=String((health.payload as Record<string,unknown>)?.commit||"");
+    const deploymentMatch=servedDeployment===item.target_deployment_id||Boolean(release.commit_sha&&servedCommit===release.commit_sha);
     const critical=item.company_id&&item.applied_at?await criticalIncidentsSince(item.company_id,item.applied_at):0;
-    await recordReleaseCheck({releaseId:release.id,companyId:item.company_id||null,environmentCode:item.environment_code,stage:"continuous",checkKey:"regression-watch",status:health.ok&&!critical?"ok":"error",code:health.ok&&!critical?null:"PROAR-REL-REGRESSION",detail:critical?"Incidente crítico detectado após a atualização.":"HTTP "+health.httpStatus,latencyMs:health.latencyMs});
-    if(!health.ok||critical){
+    const healthy=health.ok&&deploymentMatch&&!critical;
+    await recordReleaseCheck({releaseId:release.id,companyId:item.company_id||null,environmentCode:item.environment_code,stage:"continuous",checkKey:"regression-watch",status:healthy?"ok":"error",code:healthy?null:(!deploymentMatch?"PROAR-REL-ALIAS-MISMATCH":"PROAR-REL-REGRESSION"),detail:critical?"Incidente crítico detectado após a atualização.":!deploymentMatch?"Alias servindo deployment divergente.":"HTTP "+health.httpStatus,latencyMs:health.latencyMs});
+    if(!healthy){
       const message=critical?"Regressão detectada: incidente crítico após a atualização.":"Regressão detectada: health check do tenant falhou.";
       await failTarget(item,release,"PROAR-REL-REGRESSION",message,item.previous_deployment_id,item.snapshot_id);
       return{detected:true,alias:item.alias,message};
@@ -124,10 +128,14 @@ export async function GET(request:NextRequest){
 
     await new Promise(resolve=>setTimeout(resolve,900));
     const health=await probeAlias(target.alias);
-    await recordReleaseCheck({releaseId:release.id,companyId:target.company_id||null,environmentCode:target.environment_code,stage:"post",checkKey:"scheduled-health",status:health.ok?"ok":"error",code:health.ok?null:"PROAR-REL-HEALTH",detail:"HTTP "+health.httpStatus,latencyMs:health.latencyMs});
-    if(!health.ok){
-      const message="Health check falhou em "+target.alias+". O rollout foi interrompido e o alias anterior foi restaurado.";
-      await failTarget(target,release,"PROAR-REL-HEALTH",message,previousDeploymentId,snapshotId);
+    const servedDeployment=String((health.payload as Record<string,unknown>)?.deploymentId||"");
+    const servedCommit=String((health.payload as Record<string,unknown>)?.commit||"");
+    const deploymentMatch=servedDeployment===release.deployment_id||Boolean(release.commit_sha&&servedCommit===release.commit_sha);
+    const healthOk=health.ok&&deploymentMatch;
+    await recordReleaseCheck({releaseId:release.id,companyId:target.company_id||null,environmentCode:target.environment_code,stage:"post",checkKey:"scheduled-health",status:healthOk?"ok":"error",code:healthOk?null:(health.ok?"PROAR-REL-ALIAS-MISMATCH":"PROAR-REL-HEALTH"),detail:"HTTP "+health.httpStatus+" • servido "+(servedDeployment||servedCommit||"desconhecido"),latencyMs:health.latencyMs});
+    if(!healthOk){
+      const message=health.ok?"Alias serviu deployment divergente após promoção. Rollout interrompido.":"Health check falhou em "+target.alias+". O rollout foi interrompido e o alias anterior foi restaurado.";
+      await failTarget(target,release,health.ok?"PROAR-REL-ALIAS-MISMATCH":"PROAR-REL-HEALTH",message,previousDeploymentId,snapshotId);
       results.push({targetId:target.id,ok:false,error:message});
       break;
     }
