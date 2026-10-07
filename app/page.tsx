@@ -3836,9 +3836,18 @@ export default function Home() {
         setLastSuccessfulSyncAt(cachedAt);
         if (navigator.onLine) {
           setDatabaseMode("degraded");
-          setSavedMessage(errorCode==="PROAR-DB-004"
-            ? `Limite de uso do banco excedido. Modo contingência ativo${cachedAt ? ` com dados sincronizados em ${new Date(cachedAt).toLocaleString("pt-BR")}` : ""}.`
-            : `Modo contingência ativado. Exibindo a última cópia sincronizada${cachedAt ? ` em ${new Date(cachedAt).toLocaleString("pt-BR")}` : ""}. O banco será testado novamente automaticamente.`);
+          const detail=errorCode==="PROAR-DB-004"
+            ? "Limite de uso do banco excedido."
+            : errorCode==="PROAR-DB-002"
+              ? "O banco excedeu o tempo de resposta."
+              : errorCode==="PROAR-DB-005"
+                ? "A configuração do banco precisa de correção."
+                : errorCode==="PROAR-AUTH-001"
+                  ? "Sua sessão expirou. Entre novamente no sistema."
+                  : errorCode==="PROAR-DATA-001"
+                    ? "O banco respondeu sem o snapshot esperado."
+                    : "O banco está temporariamente indisponível.";
+          setSavedMessage(`${detail} Modo contingência ativo${cachedAt ? ` com dados sincronizados em ${new Date(cachedAt).toLocaleString("pt-BR")}` : ""}.`);
         } else {
           setDatabaseMode("offline");
           setSavedMessage(`Sem internet. Exibindo dados deste aparelho${cachedAt ? ` sincronizados em ${new Date(cachedAt).toLocaleString("pt-BR")}` : ""}.`);
@@ -3912,10 +3921,19 @@ export default function Home() {
       const cachedAt=localStorage.getItem(companyStorageKey(activeCompany.id,"last-successful-sync"))||lastSuccessfulSyncAt;
       setLastSuccessfulSyncAt(cachedAt);
       setDatabaseMode(navigator.onLine?"degraded":"offline");
+      const detail=errorCode==="PROAR-DB-004"
+        ? "Limite de uso do banco excedido."
+        : errorCode==="PROAR-DB-002"
+          ? "O banco excedeu o tempo de resposta."
+          : errorCode==="PROAR-DB-005"
+            ? "A configuração do banco precisa de correção."
+            : errorCode==="PROAR-AUTH-001"
+              ? "Sua sessão expirou. Entre novamente no sistema."
+              : errorCode==="PROAR-DATA-001"
+                ? "O servidor respondeu sem o snapshot esperado."
+                : "Banco temporariamente indisponível.";
       setSavedMessage(navigator.onLine
-        ? errorCode==="PROAR-DB-004"
-          ? `Limite de uso do banco excedido. Modo contingência ativo${cachedAt?` com dados de ${new Date(cachedAt).toLocaleString("pt-BR")}`:""}.`
-          : `Banco temporariamente indisponível. Modo contingência ativo${cachedAt?` com dados de ${new Date(cachedAt).toLocaleString("pt-BR")}`:""}.`
+        ? `${detail} Modo contingência ativo${cachedAt?` com dados de ${new Date(cachedAt).toLocaleString("pt-BR")}`:""}.`
         : "Sem internet. Os dados deste aparelho foram mantidos.");
     }
     finally { setSyncing(false); }
