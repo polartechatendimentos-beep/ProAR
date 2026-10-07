@@ -42,7 +42,7 @@ export async function GET(request:NextRequest){
     }
   }
 
-  const featureFlags=await resolveFeatureFlags(companyId,channel).catch(()=>({}));
+  const featureFlags:Record<string,boolean>=await resolveFeatureFlags(companyId,channel).catch(()=>({} as Record<string,boolean>));
   const flagRowsResponse=await supabaseRest("proar_feature_flags?select=flag_key,module_name,status&status=eq.active").catch(()=>null);
   const flagRows=flagRowsResponse?.ok?await flagRowsResponse.json() as Array<{flag_key:string;module_name?:string|null}>:[];
   const moduleFlags:Record<string,boolean>={};
