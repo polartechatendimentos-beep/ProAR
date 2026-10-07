@@ -1,6 +1,6 @@
 "use client";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Banknote, Building2, CheckCircle2, Copy, CreditCard, ExternalLink, LogIn, LogOut, RefreshCw, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Banknote, Building2, CheckCircle2, Copy, CreditCard, ExternalLink, LogIn, LogOut, RefreshCw, Save, ShieldCheck, X } from "lucide-react";
 import "../trial-manager.css";
 import "./manager.css";
 
@@ -31,6 +31,18 @@ const dateTime=(value?:string)=>value?new Date(value).toLocaleString("pt-BR"):"�
 const userLimitLabel=(users:number|null)=>users===null?"Usuários ilimitados":`${users} usuário${users===1?"":"s"}`;
 
 function blankBilling():BillingDraft{return{enabled:false,monthlyPrice:"0,00",billingDay:"10",leadDays:"7",method:"pix",autoBlock:true,email:""}}
+function billingDraftFromCompany(company?:Company|null):BillingDraft{
+  if(!company)return blankBilling();
+  return{
+    enabled:Boolean(company.billing_enabled),
+    monthlyPrice:(Number(company.monthly_fee_cents||0)/100).toFixed(2).replace(".",","),
+    billingDay:String(company.billing_day||10),
+    leadDays:String(company.billing_issue_lead_days??7),
+    method:company.billing_method==="boleto"?"boleto":company.billing_method==="card"?"card":"pix",
+    autoBlock:company.billing_auto_block!==false,
+    email:company.billing_email||company.email||"",
+  };
+}
 
 export default function ManagerPage(){
   const[authenticated,setAuthenticated]=useState<boolean|null>(null);
@@ -59,6 +71,8 @@ export default function ManagerPage(){
   const[selectedCompanyId,setSelectedCompanyId]=useState("");
   const[detailTab,setDetailTab]=useState("Visão Geral");
   const[billingDraft,setBillingDraft]=useState<BillingDraft>(blankBilling());
+  const[selectedPlanDraftCode,setSelectedPlanDraftCode]=useState("");
+  const[savingCompanyChanges,setSavingCompanyChanges]=useState(false);
 
   const check=async()=>{
     try{
@@ -118,21 +132,18 @@ export default function ManagerPage(){
   const selectedInstance=selectedCompany?map[selectedCompany.id]:undefined;
   const selectedReceivables=receivables.filter(row=>row.company_id===selectedCompanyId);
   const selectedPlanCode=selectedCompany?.plan_code==="trial"?"basico":(plans.some(plan=>plan.code===selectedCompany?.plan_code)?String(selectedCompany?.plan_code):"basico");
-  const selectedPlan=plans.find(plan=>plan.code===selectedPlanCode)||plans[0]||null;
+  const effectivePlanDraftCode=selectedPlanDraftCode||selectedPlanCode;
+  const selectedPlan=plans.find(plan=>plan.code===effectivePlanDraftCode)||plans.find(plan=>plan.code===selectedPlanCode)||plans[0]||null;
   const planLabel=(code?:string)=>code==="trial"?"Trial • Básico":(plans.find(plan=>plan.code===code)?.name||code||"Básico");
 
   useEffect(()=>{
-    if(!selectedCompany){setBillingDraft(blankBilling());return}
-    setBillingDraft({
-      enabled:Boolean(selectedCompany.billing_enabled),
-      monthlyPrice:(Number(selectedCompany.monthly_fee_cents||0)/100).toFixed(2).replace(".",","),
-      billingDay:String(selectedCompany.billing_day||10),
-      leadDays:String(selectedCompany.billing_issue_lead_days??7),
-      method:selectedCompany.billing_method==="boleto"?"boleto":selectedCompany.billing_method==="card"?"card":"pix",
-      autoBlock:selectedCompany.billing_auto_block!==false,
-      email:selectedCompany.billing_email||selectedCompany.email||"",
-    });
-  },[selectedCompanyId,selectedCompany?.billing_enabled,selectedCompany?.monthly_fee_cents,selectedCompany?.billing_day,selectedCompany?.billing_method,selectedCompany?.billing_issue_lead_days,selectedCompany?.billing_auto_block,selectedCompany?.billing_email,selectedCompany?.email]);
+    setBillingDraft(billingDraftFromCompany(selectedCompany));
+    setSelectedPlanDraftCode("");
+  },[selectedCompanyId,selectedPlanCode,selectedCompany?.billing_enabled,selectedCompany?.monthly_fee_cents,selectedCompany?.billing_day,selectedCompany?.billing_method,selectedCompany?.billing_issue_lead_days,selectedCompany?.billing_auto_block,selectedCompany?.billing_email,selectedCompany?.email]);
+
+  const billingDirty=Boolean(selectedCompany)&&JSON.stringify(billingDraft)!==JSON.stringify(billingDraftFromCompany(selectedCompany));
+  const planDirty=Boolean(selectedCompany)&&Boolean(selectedPlanDraftCode)&&(selectedCompany?.plan_code==="trial"||effectivePlanDraftCode!==selectedPlanCode);
+  const hasUnsavedCompanyChanges=billingDirty||planDirty;
 
   const patch=async(companyId:string,body:Record<string,unknown>)=>{
     setNotice("");
@@ -199,18 +210,38 @@ export default function ManagerPage(){
     finally{setRecoveryLoading(false)}
   };
 
-  const saveBilling=async()=>{
-    if(!selectedCompany)return;
-    const monthlyPrice=Number(billingDraft.monthlyPrice.replace(/\./g,"").replace(",","."));
-    await patch(selectedCompany.id,{
-      billingEnabled:billingDraft.enabled,
-      monthlyFeeCents:Number.isFinite(monthlyPrice)?Math.max(0,Math.round(monthlyPrice*100)):0,
-      billingDay:Math.max(1,Math.min(28,Number(billingDraft.billingDay||10))),
-      billingIssueLeadDays:Math.max(0,Math.min(20,Number(billingDraft.leadDays||7))),
-      billingMethod:billingDraft.method,
-      billingAutoBlock:billingDraft.autoBlock,
-      billingEmail:billingDraft.email,
-    });
+  const resetCompanyDraft=()=>{
+    setBillingDraft(billingDraftFromCompany(selectedCompany));
+    setSelectedPlanDraftCode("");
+    setNotice("Alterações descartadas.");
+    setError("");
+  };
+
+  const saveCompanyChanges=async()=>{
+    if(!selectedCompany||!hasUnsavedCompanyChanges||savingCompanyChanges)return;
+    const nextPlan=plans.find(plan=>plan.code===effectivePlanDraftCode)||null;
+    if(planDirty&&nextPlan){
+      const currentPlan=plans.find(plan=>plan.code===selectedPlanCode)||null;
+      const removed=(currentPlan?.modules||[]).filter(module=>!nextPlan.modules.includes(module));
+      if(removed.length&&!window.confirm(`Confirmar alteração para ${nextPlan.name}? ${removed.length} recurso(s) ficarão indisponíveis. Os dados existentes serão preservados.`))return;
+    }
+    const body:Record<string,unknown>={};
+    if(planDirty){body.planCode=effectivePlanDraftCode;body.status="active";}
+    if(billingDirty){
+      const monthlyPrice=Number(billingDraft.monthlyPrice.replace(/\./g,"").replace(",","."));
+      body.billingEnabled=billingDraft.enabled;
+      body.monthlyFeeCents=Number.isFinite(monthlyPrice)?Math.max(0,Math.round(monthlyPrice*100)):0;
+      body.billingDay=Math.max(1,Math.min(28,Number(billingDraft.billingDay||10)));
+      body.billingIssueLeadDays=Math.max(0,Math.min(20,Number(billingDraft.leadDays||7)));
+      body.billingMethod=billingDraft.method;
+      body.billingAutoBlock=billingDraft.autoBlock;
+      body.billingEmail=billingDraft.email;
+    }
+    setSavingCompanyChanges(true);
+    try{
+      const saved=await patch(selectedCompany.id,body);
+      if(saved)setNotice("Alterações da empresa salvas com sucesso.");
+    }finally{setSavingCompanyChanges(false)}
   };
 
   const copy=async(value?:string)=>{
@@ -411,13 +442,8 @@ export default function ManagerPage(){
 
           {detailTab==="Plano e módulos"&&<div className="manager-detail-tab">
             {selectedCompany.plan_code==="trial"&&<div className="manager-warning"><AlertTriangle size={16}/><span>O Trial usa os recursos e o limite de usuários do plano Básico. Ao selecionar um plano comercial, o período de teste é convertido.</span></div>}
-            <div className="manager-plan-grid">{plans.map(plan=><button key={plan.code} className={"manager-plan-card "+(selectedPlanCode===plan.code?"active":"")} disabled={selectedCompany.tenant?.role==="primary-pilot"&&plan.code!=="completo"} onClick={()=>{
-              if(selectedPlanCode===plan.code)return;
-              const removed=(selectedPlan?.modules||[]).filter(module=>!plan.modules.includes(module));
-              const message=removed.length?"Trocar para "+plan.name+"? "+removed.length+" recurso(s) ficarão indisponíveis, mas os dados serão preservados.":"Trocar para "+plan.name+"?";
-              if(window.confirm(message))void patch(selectedCompany.id,{planCode:plan.code,status:"active"});
-            }}>
-              <header><div><b>{plan.name}</b><small>{userLimitLabel(plan.limits.users)} • {plan.modules.length} recursos</small></div>{selectedPlanCode===plan.code&&<span>ATUAL</span>}</header>
+            <div className="manager-plan-grid">{plans.map(plan=><button key={plan.code} className={"manager-plan-card "+(effectivePlanDraftCode===plan.code?"active":"")} disabled={selectedCompany.tenant?.role==="primary-pilot"&&plan.code!=="completo"} onClick={()=>setSelectedPlanDraftCode(plan.code)}>
+              <header><div><b>{plan.name}</b><small>{userLimitLabel(plan.limits.users)} • {plan.modules.length} recursos</small></div>{effectivePlanDraftCode===plan.code&&<span>{planDirty?"SELECIONADO":"ATUAL"}</span>}</header>
               <p>{plan.description}</p>
               <div className="manager-plan-features">{plan.modules.slice(0,8).map(module=><span key={module}>{module}</span>)}{plan.modules.length>8&&<span>+ {plan.modules.length-8} recursos</span>}</div>
               <small>{userLimitLabel(plan.limits.users)} • {plan.limits.serviceOrdersPerMonth} OS/mês • {plan.limits.storageGb} GB</small>
@@ -436,13 +462,21 @@ export default function ManagerPage(){
               <label className="manager-check"><input type="checkbox" checked={billingDraft.autoBlock} onChange={e=>setBillingDraft(v=>({...v,autoBlock:e.target.checked}))}/><span>Bloquear automaticamente após vencimento</span></label>
             </div>
             <div className="manager-plan-billing-summary"><b>Plano {selectedPlan?.name||"Básico"}</b><span>{userLimitLabel(selectedPlan?.limits.users??2)} • {selectedPlan?.modules.length||0} recursos. A mensalidade é definida pelo plano, sem cobrança por recurso individual.</span></div>
-            <div className="manager-inline-actions"><button onClick={()=>void saveBilling()}>Salvar cobrança</button><button onClick={()=>void billingAction({action:"issue-current",companyId:selectedCompany.id})}>Gerar mensalidade atual</button><button onClick={()=>void billingAction({action:"sync-access",companyId:selectedCompany.id})}>Revalidar acesso</button></div>
+            <div className="manager-inline-actions"><button onClick={()=>void billingAction({action:"issue-current",companyId:selectedCompany.id})}>Gerar mensalidade atual</button><button onClick={()=>void billingAction({action:"sync-access",companyId:selectedCompany.id})}>Revalidar acesso</button></div>
             <div className="manager-mini-receivables">{selectedReceivables.slice(0,8).map(row=><article key={row.id}><div><b>{row.description}</b><span>{date(row.due_date)} • {money(row.amount_cents)}</span></div><em>{row.status==="paid"?"PAGA":row.status==="pending"?"EM ABERTO":row.status.toUpperCase()}</em></article>)}{!selectedReceivables.length&&<div className="manager-empty">Nenhuma mensalidade desta empresa.</div>}</div>
           </div>}
 
           {detailTab==="Segurança"&&<div className="manager-detail-tab"><p>O bloqueio registra a origem. Pagamentos só removem bloqueios de cobrança; bloqueios manuais e trials vencidos não são liberados pelo webhook.</p><div className="manager-inline-actions"><button className={selectedCompany.status==="active"?"danger":"success"} onClick={()=>void patch(selectedCompany.id,{status:selectedCompany.status==="active"?"blocked":"active"})}>{selectedCompany.status==="active"?"Bloquear manualmente":"Tentar liberar"}</button>{selectedCompany.plan_code==="trial"&&<button onClick={()=>void patch(selectedCompany.id,{extendTrialDays:7})}>Prorrogar trial +7 dias</button>}</div></div>}
 
           {detailTab==="Logs"&&<div className="manager-detail-tab manager-mini-logs">{audit.filter(row=>row.company_id===selectedCompany.id).slice(0,12).map(row=><article key={String(row.id||row.created_at)}><b>{row.action||"Ação"}</b><span>{row.actor||"Sistema"}</span><small>{dateTime(row.created_at)}</small></article>)}</div>}
+
+          {hasUnsavedCompanyChanges&&<div className="manager-save-bar" role="status" aria-live="polite">
+            <div><span>Alterações não salvas</span><small>{planDirty&&billingDirty?"Plano e cobrança foram alterados.":planDirty?"O plano selecionado ainda não foi aplicado.":"Existem alterações na cobrança aguardando confirmação."}</small></div>
+            <div>
+              <button type="button" className="manager-save-cancel" onClick={resetCompanyDraft} disabled={savingCompanyChanges}><X size={15}/> Cancelar</button>
+              <button type="button" className="manager-save-primary" onClick={()=>void saveCompanyChanges()} disabled={savingCompanyChanges}><Save size={15}/>{savingCompanyChanges?" Salvando...":" Salvar alterações"}</button>
+            </div>
+          </div>}
 
           <nav><a href={selectedCompany.slug?`https://${selectedCompany.slug}.proar.online`:"#"} target="_blank" rel="noreferrer">Abrir ambiente</a></nav>
         </section>

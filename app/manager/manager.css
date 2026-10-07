@@ -161,3 +161,16 @@
 @media(max-width:900px){.manager-plan-grid{grid-template-columns:1fr}}
 
 .manager-plans-overview{margin-bottom:18px}.manager-plan-card-static{cursor:default}.manager-plan-card-static:hover{transform:none}
+
+
+/* Barra de confirmação das alterações da empresa */
+.manager-save-bar{position:sticky;bottom:12px;z-index:8;display:flex;align-items:center;justify-content:space-between;gap:16px;margin:14px 0 8px;padding:12px 14px;border:1px solid #b9d3f3;border-radius:12px;background:rgba(248,251,255,.98);box-shadow:0 12px 28px rgba(23,61,97,.16);backdrop-filter:blur(10px)}
+.manager-save-bar>div:first-child{display:grid;gap:3px}
+.manager-save-bar>div:first-child span{font-size:11px;font-weight:900;color:#173d61}
+.manager-save-bar>div:first-child small{font-size:9px;line-height:1.4;color:#6f8498}
+.manager-save-bar>div:last-child{display:flex;align-items:center;gap:8px}
+.manager-save-bar button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;padding:8px 11px;border-radius:8px;font-size:10px;font-weight:900}
+.manager-save-cancel{border:1px solid #d9e3ec;background:#fff;color:#587087}
+.manager-save-primary{border:1px solid #1768df;background:#1768df;color:#fff;box-shadow:0 7px 18px rgba(23,104,223,.18)}
+.manager-save-bar button:disabled{opacity:.55;cursor:not-allowed}
+@media(max-width:720px){.manager-save-bar{align-items:stretch;flex-direction:column}.manager-save-bar>div:last-child{width:100%}.manager-save-bar button{flex:1}}
