@@ -3,7 +3,7 @@ export type ManagerPlan = {
   name:string;
   description:string;
   modules:string[];
-  limits:{users:number;serviceOrdersPerMonth:number;storageGb:number;aiCallsPerMonth:number};
+  limits:{users:number|null;serviceOrdersPerMonth:number;storageGb:number;aiCallsPerMonth:number};
 };
 
 export const ALL_MANAGER_MODULES=[
@@ -34,21 +34,21 @@ export const COMMERCIAL_MANAGER_PLANS:ManagerPlan[]=[
     name:"Básico",
     description:"Operação essencial para atendimento: clientes, equipamentos, orçamentos, OS, serviços e gestão da equipe.",
     modules:BASIC_MODULES,
-    limits:{users:5,serviceOrdersPerMonth:500,storageGb:10,aiCallsPerMonth:500},
+    limits:{users:2,serviceOrdersPerMonth:500,storageGb:10,aiCallsPerMonth:500},
   },
   {
     code:"intermediario",
     name:"Intermediário",
     description:"Tudo do Básico mais vendas, estoque, compras, fornecedores, financeiro, PMOC, aprovações, diagnósticos e pendências.",
     modules:INTERMEDIATE_MODULES,
-    limits:{users:20,serviceOrdersPerMonth:3000,storageGb:50,aiCallsPerMonth:3000},
+    limits:{users:4,serviceOrdersPerMonth:3000,storageGb:50,aiCallsPerMonth:3000},
   },
   {
     code:"completo",
     name:"Completo",
     description:"Todos os 26 módulos do ProAR, incluindo fiscal, obras, licitações, integridade e base técnica.",
     modules:COMPLETE_MODULES,
-    limits:{users:100,serviceOrdersPerMonth:20000,storageGb:250,aiCallsPerMonth:20000},
+    limits:{users:null,serviceOrdersPerMonth:20000,storageGb:250,aiCallsPerMonth:20000},
   },
 ];
 
@@ -57,7 +57,7 @@ export const TRIAL_MANAGER_PLAN:ManagerPlan={
   name:"Trial",
   description:"Avaliação temporária com recursos equivalentes ao plano Básico.",
   modules:BASIC_MODULES,
-  limits:{users:3,serviceOrdersPerMonth:100,storageGb:2,aiCallsPerMonth:100},
+  limits:{users:2,serviceOrdersPerMonth:100,storageGb:2,aiCallsPerMonth:100},
 };
 
 // Compatibilidade interna: trial continua existindo apenas para o período de avaliação.
