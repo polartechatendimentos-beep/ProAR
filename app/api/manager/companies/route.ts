@@ -5,7 +5,7 @@ import { resumeTenantProvisioning } from "../../../../lib/tenant-provisioning";
 import { tenantIdentity } from "../../../../lib/tenant-identity";
 import { resolveTenantDb, tenantHeaders } from "../../../../lib/tenant-rest";
 import { managerPlatformInfo } from "../../../../lib/manager-platform";
-import { ALL_MANAGER_MODULES, MANAGER_PLANS, managerPlan } from "../../../../lib/manager-plans";
+import { ALL_MANAGER_MODULES, MANAGER_MODULE_GROUPS, MANAGER_PLANS, managerPlan } from "../../../../lib/manager-plans";
 import { getBillingCompany, setCompanyModuleEntitlements, syncCompanyBillingAccess, syncPlanEntitlements } from "../../../../lib/manager-billing";
 import { tenantReadiness } from "../../../../lib/tenant-readiness";
 import { classifyProarError } from "../../../../lib/system-errors";
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
     openCriticalIncidents: incidentRows.filter((incident:Record<string,unknown>) => !incident.resolved_at && incident.severity === "critical").length,
     recentIncidents: incidentRows.filter((incident:Record<string,unknown>) => now - new Date(String(incident.created_at||0)).getTime() <= 24*60*60*1000).length,
   };
-  return NextResponse.json({ companies: enrichedCompanies, instances: instanceRows, audit: auditRows, incidents: incidentRows, entitlements: entitlementRows, moduleCatalog: ALL_MANAGER_MODULES, summary, platform: managerPlatformInfo(), plans: MANAGER_PLANS });
+  return NextResponse.json({ companies: enrichedCompanies, instances: instanceRows, audit: auditRows, incidents: incidentRows, entitlements: entitlementRows, moduleCatalog: ALL_MANAGER_MODULES, moduleGroups: MANAGER_MODULE_GROUPS, summary, platform: managerPlatformInfo(), plans: MANAGER_PLANS });
 }
 
 export async function PATCH(request: NextRequest) {
