@@ -4732,7 +4732,8 @@ export default function Home() {
     const structures=moduleRecords["Unidades e setores"]??[];
     const structureById=new Map(structures.map(record=>[String(record.id||""),record]));
     const hierarchyFor=(record:ModuleRecord)=>{
-      const candidateIds=[record.roomId,record.sectorId,record.unitId,record.structureId,record.parentId].map(value=>String(value||"")).filter(Boolean);
+      const dynamicRecord=record as unknown as Record<string,unknown>;
+      const candidateIds=[dynamicRecord.roomId,dynamicRecord.sectorId,dynamicRecord.unitId,dynamicRecord.structureId,dynamicRecord.parentId].map(value=>String(value||"")).filter(Boolean);
       let currentRecord=candidateIds.map(id=>structureById.get(id)).find(Boolean) as ModuleRecord|undefined;
       const names:string[]=[];
       const visited=new Set<string>();
@@ -4742,7 +4743,7 @@ export default function Home() {
         const parentId=String(currentRecord.parentId||"");
         currentRecord=parentId?structureById.get(parentId):undefined;
       }
-      const explicit=[record.parentUnit,record.sector,record.unit,record.room].map(value=>String(value||"").trim()).filter(Boolean);
+      const explicit=[dynamicRecord.parentUnit,dynamicRecord.sector,dynamicRecord.unit,dynamicRecord.room].map(value=>String(value||"").trim()).filter(Boolean);
       const chain=names.length?names:explicit;
       return [...new Set([String(record.client||"").trim(),...chain].filter(Boolean))].join(" → ");
     };
@@ -4762,11 +4763,12 @@ export default function Home() {
     }));
     const moduleItems = Object.entries(moduleRecords).flatMap(([module, records]) => records.map(record => {
       const hierarchy=hierarchyFor(record);
+      const dynamicRecord=record as unknown as Record<string,unknown>;
       const identifiers=[
         record.id,record.doc,record.sku,record.barcode,record.serialNumber,
-        record.patrimony,record.assetTag,record.externalCode,record.manufacturerCode,
+        dynamicRecord.patrimony,dynamicRecord.assetTag,dynamicRecord.externalCode,record.manufacturerCode,
         record.invoiceNumber,record.empenhoNumber,record.contractNumber,
-        record.numeroControlePNCP,record.processNumber,record.address,record.blockLot,record.category,
+        dynamicRecord.numeroControlePNCP,dynamicRecord.processNumber,record.address,record.blockLot,record.category,
       ].filter(Boolean).join(" • ");
       return {
         id:record.id,
