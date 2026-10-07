@@ -51,27 +51,53 @@ async function authenticateLegacyEmployee(username: string, password: string) {
 export async function GET(request: NextRequest) {
   const user = readSession(request.cookies.get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.json({ authenticated: false }, { status: 401 });
-  let entitledModules = user.entitledModules;
-  if (user.companyId) {
-    const access = user.companySlug
-      ? await validateCompanyAccessBySlug(user.companySlug)
-      : user.companyId === PRIMARY_COMPANY_ID
+
+  // Sessões antigas podem não ter companyId/companySlug, ou podem carregar uma lista
+  // de módulos desatualizada. O domínio do tenant é a fonte adicional de identidade.
+  const hostTenant = tenantSlugFromHost(request.headers.get("host"));
+  const effectiveCompanySlug = String(user.companySlug || hostTenant || "").trim().toLowerCase() || undefined;
+  const primaryTenant = isPrimaryTenant(user.companyId, effectiveCompanySlug);
+  const effectiveCompanyId = primaryTenant ? PRIMARY_COMPANY_ID : user.companyId;
+  let entitledModules = primaryTenant ? primaryTenantModules() : user.entitledModules;
+
+  if (effectiveCompanyId) {
+    const access = effectiveCompanySlug
+      ? await validateCompanyAccessBySlug(effectiveCompanySlug)
+      : effectiveCompanyId === PRIMARY_COMPANY_ID
         ? await validateCompanyAccessBySlug(PRIMARY_COMPANY_SLUG)
-        : await validateCompanyAccess(user.companyId);
+        : await validateCompanyAccess(effectiveCompanyId);
     if (!access.ok) {
-      const primaryTenant = user.companyId === PRIMARY_COMPANY_ID || user.companySlug === PRIMARY_COMPANY_SLUG;
       if (!(primaryTenant && access.code === "MANAGER_UNAVAILABLE")) {
         const status = access.code === "MANAGER_UNAVAILABLE" ? 503 : 403;
         const response = NextResponse.json({ authenticated: false, code: access.code, blocked:access.code==="SYSTEM_BLOCKED", error: access.reason }, { status });
         response.cookies.set(COOKIE_NAME, "", { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 0 });
         return response;
       }
-      console.warn("AUTH_PRIMARY_MANAGER_UNAVAILABLE", { companyId:user.companyId, companySlug:user.companySlug });
+      console.warn("AUTH_PRIMARY_MANAGER_UNAVAILABLE", { companyId:effectiveCompanyId, companySlug:effectiveCompanySlug });
     }
-    if (access.company) entitledModules = contractedModules(user.companyId,user.companySlug,access.company.plan_code);
-    if (isPrimaryTenant(user.companyId, user.companySlug)) entitledModules = primaryTenantModules();
+    if (access.company && !primaryTenant) entitledModules = contractedModules(effectiveCompanyId,effectiveCompanySlug,access.company.plan_code);
   }
-  return NextResponse.json({ authenticated: true, ...user, entitledModules });
+
+  if (primaryTenant) entitledModules = primaryTenantModules();
+  const claims = {
+    ...user,
+    companyId: effectiveCompanyId,
+    companySlug: primaryTenant ? PRIMARY_COMPANY_SLUG : effectiveCompanySlug,
+    entitledModules,
+  };
+  const response = NextResponse.json({ authenticated: true, ...claims });
+
+  // Renova automaticamente cookies legados da PolarTech para eliminar bloqueios
+  // causados por sessões gravadas antes da adoção do licenciamento por plano.
+  if (primaryTenant && (
+    user.companyId !== PRIMARY_COMPANY_ID ||
+    user.companySlug !== PRIMARY_COMPANY_SLUG ||
+    !Array.isArray(user.entitledModules) ||
+    user.entitledModules.length !== ALL_MANAGER_MODULES.length
+  )) {
+    response.cookies.set(COOKIE_NAME, createSessionForUser(claims), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 });
+  }
+  return response;
 }
 
 async function handlePostAuth(request: NextRequest) {
@@ -114,8 +140,21 @@ async function handlePostAuth(request: NextRequest) {
   // O tenant só é usado como fallback quando não houver usuário existente.
   const staticUser = authenticate(String(username), String(password));
   if (staticUser) {
-    const claims = { username: staticUser.username, displayName: staticUser.displayName, role: staticUser.role, permissions: staticUser.permissions };
-    const response = NextResponse.json({ authenticated: true, ...claims }); response.cookies.set(COOKIE_NAME, createSessionForUser(claims), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 }); return response;
+    const primaryTenant = resolvedTenant === PRIMARY_COMPANY_SLUG;
+    const claims = {
+      username: staticUser.username,
+      displayName: staticUser.displayName,
+      role: staticUser.role,
+      permissions: staticUser.permissions,
+      ...(primaryTenant ? {
+        companyId: PRIMARY_COMPANY_ID,
+        companySlug: PRIMARY_COMPANY_SLUG,
+        entitledModules: primaryTenantModules(),
+      } : {}),
+    };
+    const response = NextResponse.json({ authenticated: true, ...claims });
+    response.cookies.set(COOKIE_NAME, createSessionForUser(claims), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 });
+    return response;
   }
 
   const legacyEmployee = await authenticateLegacyEmployee(String(username), String(password));
