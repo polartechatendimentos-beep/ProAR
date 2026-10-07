@@ -21,5 +21,6 @@ test("RBAC: estoquista recebe compra e ajusta estoque, sem baixa financeira",()=
 test("RBAC: consulta permanece somente leitura",()=>{
  for(const p of ["os.editar","financeiro.editar","comercial.editar","fiscal.emitir","estoque.editar"]) assert.equal(hasPermission(session("Consulta"),p),false);
 });
-test("RBAC: administrador mantém acesso total",()=>assert.equal(hasPermission({username:"admin",role:"Administrador",companyId:"tenant-test",permissions:[]},"fiscal.cancelar"),true));
+test("RBAC: administrador formal mantém acesso total",()=>assert.equal(hasPermission({username:"admin",role:"Administrador",companyId:"tenant-test",permissions:[],claims:["company_owner"]},"fiscal.cancelar"),true));
+test("RBAC: texto Administrador sozinho não concede acesso total",()=>assert.equal(hasPermission({username:"qualquer",role:"Administrador",companyId:"tenant-test",permissions:[],claims:[]},"fiscal.cancelar"),false));
 console.log("rbac-matrix.test.mjs: ok");
