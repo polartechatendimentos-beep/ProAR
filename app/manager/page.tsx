@@ -23,16 +23,13 @@ type DeploymentSafety={environment?:string;currentCommit?:string;currentDeployme
 type StateSnapshot={id:number;company_id:string;state_id:string;revision:number;reason:string;created_by?:string;created_at:string};
 type PlatformInfo={appVersion:string;releaseDate:string;releaseTitle:string;schemaVersion:string;channel:string;migrations:{id:string;title:string;status:string;destructive:boolean;description:string}[]};
 type ManagerPlan={code:string;name:string;description:string;modules:string[];limits:{users:number;serviceOrdersPerMonth:number;storageGb:number;aiCallsPerMonth:number}};
-type ModuleGroup={code:string;name:string;description:string;modules:string[]};
-type ModuleEntitlement={company_id:string;module_name:string;enabled:boolean;monthly_price_cents:number;plan_code?:string};
-type BillingDraft={enabled:boolean;billingDay:string;leadDays:string;method:"pix"|"boleto"|"card";autoBlock:boolean;email:string};
-type ModuleDraft=Record<string,{enabled:boolean;price:string}>;
+type BillingDraft={enabled:boolean;monthlyPrice:string;billingDay:string;leadDays:string;method:"pix"|"boleto"|"card";autoBlock:boolean;email:string};
 
 const money=(cents=0)=>(Number(cents||0)/100).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const date=(value?:string)=>value?new Date(value.length===10?`${value}T12:00:00`:value).toLocaleDateString("pt-BR"):"—";
 const dateTime=(value?:string)=>value?new Date(value).toLocaleString("pt-BR"):"—";
 
-function blankBilling():BillingDraft{return{enabled:false,billingDay:"10",leadDays:"7",method:"pix",autoBlock:true,email:""}}
+function blankBilling():BillingDraft{return{enabled:false,monthlyPrice:"0,00",billingDay:"10",leadDays:"7",method:"pix",autoBlock:true,email:""}}
 
 export default function ManagerPage(){
   const[authenticated,setAuthenticated]=useState<boolean|null>(null);
@@ -42,10 +39,6 @@ export default function ManagerPage(){
   const[companies,setCompanies]=useState<Company[]>([]);
   const[instances,setInstances]=useState<Instance[]>([]);
   const[receivables,setReceivables]=useState<Receivable[]>([]);
-  const[entitlements,setEntitlements]=useState<ModuleEntitlement[]>([]);
-  const[moduleCatalog,setModuleCatalog]=useState<string[]>([]);
-  const[moduleGroups,setModuleGroups]=useState<ModuleGroup[]>([]);
-  const[requiredModules,setRequiredModules]=useState<string[]>([]);
   const[error,setError]=useState("");
   const[notice,setNotice]=useState("");
   const[loading,setLoading]=useState(false);
@@ -65,7 +58,6 @@ export default function ManagerPage(){
   const[selectedCompanyId,setSelectedCompanyId]=useState("");
   const[detailTab,setDetailTab]=useState("Visão Geral");
   const[billingDraft,setBillingDraft]=useState<BillingDraft>(blankBilling());
-  const[moduleDraft,setModuleDraft]=useState<ModuleDraft>({});
 
   const check=async()=>{
     try{
@@ -90,10 +82,6 @@ export default function ManagerPage(){
       setIncidents(companiesJson.incidents||[]);
       setPlatform(companiesJson.platform||null);
       setPlans(companiesJson.plans||[]);
-      setEntitlements(companiesJson.entitlements||[]);
-      setModuleCatalog(companiesJson.moduleCatalog||[]);
-      setModuleGroups(companiesJson.moduleGroups||[]);
-      setRequiredModules(companiesJson.requiredModules||[]);
 
       const deploymentResponse=await fetch("/api/manager/deployment-safety",{cache:"no-store"}).catch(()=>null);
       if(deploymentResponse?.ok)setDeploymentSafety(await deploymentResponse.json());else setDeploymentSafety(null);
