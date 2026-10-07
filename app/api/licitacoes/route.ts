@@ -12,6 +12,8 @@ const MUNICIPAL_SOURCES = [
 const UFS = ["SP", "MG", "MS", "PR", "GO"] as const;
 const MODALITIES = [4, 5, 6, 7, 8, 9, 12] as const;
 const TARGETED_PNCP_PAGES = 20;
+const PNCP_PAGE_SIZE = 500;
+export const maxDuration = 60;
 const REQUEST_TIMEOUT_MS = 6500;
 const COMPRAS_TIMEOUT_MS = 7000;
 const MAX_RETRIES = 1;
@@ -73,6 +75,8 @@ type SourceDiagnostic = {
   durationMs: number;
   count: number;
   error?: string;
+  pagesRead?: number;
+  truncated?: boolean;
 };
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -123,7 +127,7 @@ function identifySource(item: PncpTender): PncpTender["sourcePortal"] {
 }
 
 async function fetchPage(dataInicial: string, dataFinal: string, uf: string, page = 1) {
-  const query = new URLSearchParams({ dataInicial, dataFinal, pagina: String(page), tamanhoPagina: "50", uf });
+  const query = new URLSearchParams({ dataInicial, dataFinal, pagina: String(page), tamanhoPagina: String(PNCP_PAGE_SIZE), uf });
   const result = await withRetry(`PNCP-${uf}-página-${page}`, async () => {
     const response = await fetch(`${PNCP_URL}?${query}`, {
       headers: {
@@ -135,23 +139,35 @@ async function fetchPage(dataInicial: string, dataFinal: string, uf: string, pag
       next: { revalidate: 300 },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
+    if (response.status === 204) return { items: [] as PncpTender[], totalPages: 0 };
     if (!response.ok) throw new Error(`respondeu ${response.status}`);
     const payload = await response.json();
-    return Array.isArray(payload?.data) ? payload.data as PncpTender[] : [];
+    return { items: Array.isArray(payload?.data) ? payload.data as PncpTender[] : [], totalPages: Number.isFinite(Number(payload?.totalPaginas)) ? Number(payload.totalPaginas) : null };
   });
-  return { items: result.value, attempts: result.attempts };
+  return { ...result.value, attempts: result.attempts };
 }
 
-async function fetchPages(dataInicial: string, dataFinal: string, uf: string, maxPages = 5) {
+async function fetchPages(dataInicial: string, dataFinal: string, uf: string, maxPages = TARGETED_PNCP_PAGES) {
   const items: PncpTender[] = [];
   let attempts = 0;
+  let pagesRead = 0;
+  let truncated = false;
+  let error: string | undefined;
   for (let page = 1; page <= maxPages; page += 1) {
-    const current = await fetchPage(dataInicial, dataFinal, uf, page);
-    attempts += current.attempts;
-    items.push(...current.items);
-    if (current.items.length < 50) break;
+    try {
+      const current = await fetchPage(dataInicial, dataFinal, uf, page);
+      attempts += current.attempts;
+      pagesRead += 1;
+      items.push(...current.items);
+      if (current.totalPages !== null ? page >= current.totalPages : current.items.length < PNCP_PAGE_SIZE) break;
+      truncated = page === maxPages;
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : String(cause);
+      truncated = true;
+      break;
+    }
   }
-  return { items, attempts };
+  return { items, attempts, pagesRead, truncated, error };
 }
 
 type ComprasTender = {
@@ -283,8 +299,8 @@ async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radi
       // Pesquisa por município também consulta diretamente o PNCP. Antes, quando
       // o termo era uma cidade conhecida (ex.: José Bonifácio), o PNCP era
       // completamente ignorado e o resultado dependia somente do Compras.gov.br.
-      const value = await fetchPages(dataInicial, dataFinal, uf, municipality ? TARGETED_PNCP_PAGES : 5);
-      return { value, diagnostic: { source: key, status: "ok" as const, attempts: value.attempts, durationMs: Date.now() - (startedAt.get(key) ?? Date.now()), count: value.items.length } };
+      const value = await fetchPages(dataInicial, dataFinal, uf, TARGETED_PNCP_PAGES);
+      return { value, diagnostic: { source: key, status: value.error ? "error" as const : "ok" as const, attempts: value.attempts, durationMs: Date.now() - (startedAt.get(key) ?? Date.now()), count: value.items.length, pagesRead: value.pagesRead, truncated: value.truncated, error: value.error } };
     }),
     runLimited(MODALITIES, COMPRAS_CONCURRENCY, async code => {
       const key = `Compras.gov.br-${code}`; startedAt.set(key, Date.now());
@@ -343,7 +359,7 @@ async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radi
   for (const item of validated) { const key=item.canonicalKey ?? canonicalTenderKey(item); const current=deduped.get(key); deduped.set(key,current?preferValidatedTender(current,item):item); }
   const unique = Array.from(deduped.values());
   unique.sort((a, b) => new Date(a.dataEncerramentoProposta ?? 0).getTime() - new Date(b.dataEncerramentoProposta ?? 0).getTime());
-  return { data: unique.slice(0, 500), failedSources, diagnostics };
+  return { data: unique.slice(0, 500), failedSources, diagnostics, coverage: { received: raw.length, relevant: filtered.length, duplicates: validated.length - unique.length, total: unique.length, displayed: Math.min(unique.length, 500), pagesRead: diagnostics.reduce((sum, source) => sum + (source.pagesRead ?? 0), 0), truncated: diagnostics.some(source => source.truncated) || unique.length > 500 } };
 }
 
 export async function GET(request: NextRequest) {
@@ -411,8 +427,8 @@ export async function GET(request: NextRequest) {
       const portal = item.sourcePortal ?? "PNCP"; acc[portal] = (acc[portal] ?? 0) + 1; return acc;
     }, {});
     return NextResponse.json({
-      data: result.data, resultados: result.data, source: "PNCP e portais de origem", radius, raio_km: radius, portalCounts, partial: result.failedSources.length > 0, sourceDiagnostics: result.diagnostics, kpis: { total_editais: result.data.filter(item=>item.validationStatus==="active_confirmed").length, valor_total_estimado: result.data.filter(item=>item.validationStatus==="active_confirmed").reduce((sum,item)=>sum+(item.valorTotalEstimado??0),0), homologadas_historico: result.data.filter(item=>item.validationStatus==="history").length, dados_incompletos: result.data.filter(item=>item.validationStatus==="incomplete").length, portais_ativos: Object.keys(portalCounts).length },
-      warning: unavailablePortals.length ? `Fonte ainda sem conector real validado no ProAR: ${unavailablePortals.join(", ")}. Nenhum resultado fictício foi gerado.` : result.failedSources.length ? `Consulta parcial: ${result.failedSources.join(", ")} não respondeu. Os demais resultados foram carregados.` : "",
+      data: result.data, resultados: result.data, source: "PNCP e portais de origem", radius, raio_km: radius, portalCounts, partial: result.failedSources.length > 0 || result.coverage.truncated, sourceDiagnostics: result.diagnostics, coverage: result.coverage, kpis: { total_editais: result.data.filter(item=>item.validationStatus==="active_confirmed").length, valor_total_estimado: result.data.filter(item=>item.validationStatus==="active_confirmed").reduce((sum,item)=>sum+(item.valorTotalEstimado??0),0), homologadas_historico: result.data.filter(item=>item.validationStatus==="history").length, dados_incompletos: result.data.filter(item=>item.validationStatus==="incomplete").length, portais_ativos: Object.keys(portalCounts).length },
+      warning: result.coverage.truncated ? "Consulta parcial: o limite de páginas/resultados foi atingido ou uma página não respondeu. Os registros já carregados foram preservados; refine os filtros ou atualize." : unavailablePortals.length ? `Fonte ainda sem conector real validado no ProAR: ${unavailablePortals.join(", ")}. Nenhum resultado fictício foi gerado.` : result.failedSources.length ? `Consulta parcial: ${result.failedSources.join(", ")} não respondeu. Os demais resultados foram carregados.` : "",
     });
   } catch (error) {
     console.error("PNCP search failed", error);
