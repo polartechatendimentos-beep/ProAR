@@ -73,6 +73,7 @@ import { allowedMobileDiscount, receiptText, whatsappReceiptUrl } from "@/lib/mo
 import { barcodeScannerSupported, openRearCamera, scanBarcodeFromVideo } from "@/lib/mobile-barcode";
 import { createMobilePaymentIntent, paymentStatusLabel } from "@/lib/mobile-payments";
 import { isModuleContracted, isUserAllowed, moduleId } from "@/lib/module-catalog";
+import { findPotentialDuplicate } from "@/lib/duplicate-detection";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type NavItem = { icon: IconType; name: string; badge?: string };
@@ -4161,6 +4162,23 @@ export default function Home() {
     }
     setSavedMessage(`Orçamento convertido em ${target}.`); window.setTimeout(() => setSavedMessage(""),2500);
   };
+  const confirmPotentialDuplicate=(moduleName:string,candidate:Record<string,unknown>)=>{
+    const duplicate=findPotentialDuplicate({
+      module:moduleName,
+      candidate,
+      customers:customerRecords as unknown as Record<string,unknown>[],
+      modules:moduleRecords as unknown as Record<string,Record<string,unknown>[]>,
+      serviceOrders:serviceOrders as unknown as Record<string,unknown>[],
+    });
+    if(!duplicate)return true;
+    const continueAnyway=window.confirm(`Já existe um cadastro semelhante. ${duplicate.reason}: “${duplicate.label}”.\n\nOK: continuar mesmo assim.\nCancelar: abrir o registro existente.`);
+    if(continueAnyway)return true;
+    setModal("");
+    setCurrent(duplicate.module);
+    window.dispatchEvent(new CustomEvent("proar:focus-record",{detail:{module:duplicate.module,recordId:duplicate.id,source:"duplicate-warning"}}));
+    setSavedMessage(`Registro existente aberto: ${duplicate.label}.`);
+    return false;
+  };
   const saveRecord = async (data: ModalSave) => {
     if (data.title.startsWith("Nova unidade, filial ou setor") || data.title.startsWith("Novo setor") || data.title.startsWith("Nova sala") || data.title.startsWith("Nova sala ou ambiente")) {
       const parentCustomer = data.title.split("•")[1]?.trim() || data.client;
@@ -4213,6 +4231,7 @@ export default function Home() {
         balancePosted: data.balancePosted ?? 0,
         financialStatus: data.financialStatus ?? "Liberado",
       };
+      if(!confirmPotentialDuplicate("Clientes",newCustomer as unknown as Record<string,unknown>))return;
       const updatedCustomers = [newCustomer, ...customerRecords];
       const updatedModules=appendAudit(moduleRecords,"Cliente criado",`Clientes • ${newCustomer.name}`,"Novo cadastro de cliente.",{moduleName:"Clientes",recordId:newCustomer.id,after:newCustomer as unknown as Record<string,unknown>});
       setCustomerRecords(updatedCustomers);
@@ -4349,6 +4368,7 @@ export default function Home() {
         nextMaintenanceDate: moduleName === "Equipamentos" ? data.nextMaintenanceDate : undefined,
         equipmentUnit: moduleName === "Equipamentos" ? data.equipmentUnit : undefined,
       };
+      if(!confirmPotentialDuplicate(moduleName,record as unknown as Record<string,unknown>))return;
       let updatedRecords = { ...moduleRecords, [moduleName]: [record, ...(moduleRecords[moduleName] ?? [])] };
       if (moduleName === "Compras" && data.xmlImported) {
         const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
