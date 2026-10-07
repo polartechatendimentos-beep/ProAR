@@ -17,7 +17,7 @@ test("login client tolerates empty or non-json responses",async()=>{
 test("auth route always converts unexpected server failures to JSON",async()=>{
   const route=await readFile(new URL("../app/api/auth/route.ts",import.meta.url),"utf8");
   assert.ok(route.includes("async function handlePostAuth"));
-  assert.ok(route.includes('code:"AUTH_INTERNAL_ERROR"'));
+  assert.ok(route.includes('code:descriptor.code'));\n  assert.ok(route.includes('classifyProarError'));
   assert.ok(route.includes("AUTH_POST_FAILED"));
   assert.ok(route.includes('access.code === "MANAGER_UNAVAILABLE"'));
   assert.ok(route.includes("primaryTenant"));
