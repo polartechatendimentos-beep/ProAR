@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/licitacoes",
       "schedule": "0 21 * * *"
+    },
+    {
+      "path": "/api/cron/database-backup",
+      "schedule": "20 6 * * *"
     }
   ]
 }
