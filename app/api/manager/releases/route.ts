@@ -458,6 +458,21 @@ export async function POST(request:NextRequest){
       }
       if(!targets.length)return NextResponse.json({error:"Nenhum target elegível para esta promoção."},{status:409});
 
+      // A liberação geral nunca acontece em massa no mesmo request. Produção é escalonada
+      // em lotes para que health checks e incidentes possam interromper o restante.
+      if(channel==="production"&&!Array.isArray(body.companyIds)&&!future){
+        const batchSize=Math.max(1,Math.min(20,Number(process.env.PROAR_PRODUCTION_BATCH_SIZE||5)));
+        const batchMinutes=Math.max(15,Number(process.env.PROAR_PRODUCTION_BATCH_MINUTES||60));
+        for(let index=0;index<targets.length;index+=1){
+          const batch=Math.floor(index/batchSize);
+          const targetSchedule=new Date(Date.now()+batch*batchMinutes*60_000).toISOString();
+          await upsertTarget({release,companyId:targets[index].companyId,environmentCode:channel,alias:targets[index].alias,status:"scheduled",scheduledAt:targetSchedule});
+        }
+        await supabaseRest(`proar_releases?id=eq.${encodeURIComponent(id)}`,{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({channel:"production",status:"scheduled",scheduled_at:now(),updated_at:now()})});
+        await audit("RELEASE_PRODUCTION_STAGED",user.username,{releaseId:id,version:release.version,totalTargets:targets.length,batchSize,batchMinutes});
+        return NextResponse.json({saved:true,scheduled:true,staged:true,targets:targets.length,batchSize,batchMinutes});
+      }
+
       if(future){
         for(const target of targets)await upsertTarget({release,companyId:target.companyId,environmentCode:channel,alias:target.alias,status:"scheduled",scheduledAt});
         await supabaseRest(`proar_releases?id=eq.${encodeURIComponent(id)}`,{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({status:"scheduled",scheduled_at:scheduledAt,updated_at:now()})});
