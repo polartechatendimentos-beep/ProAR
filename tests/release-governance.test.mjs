@@ -24,6 +24,8 @@ test("release API requires Manager auth and enforces sequential promotion",async
   assert.ok(source.includes("probeAlias"));
   assert.ok(source.includes("assignDeploymentAlias"));
   assert.ok(source.includes("RELEASE_ROLLOUT_HALTED"));
+  assert.ok(source.includes('applyTarget(release,"internal",INTERNAL_QA_COMPANY_ID,"teste.proar.online"'));
+  assert.ok(source.includes('action==="publish-internal"'));
 });
 
 test("customer rollout has automatic rollback and schema guard",async()=>{
@@ -84,6 +86,8 @@ test("scheduled rollout cron is hourly and applies the same safety gates",async(
   assert.ok(cron.includes("schemaCompatible"));
   assert.ok(cron.includes("probeAlias"));
   assert.ok(cron.includes("break;"));
+  assert.ok(cron.includes("releaseHasRegression"));
+  assert.ok(cron.includes("PROAR-REL-ROLLOUT-HALTED"));
 });
 
 test("Manager exposes release center without counting internal QA as commercial company",async()=>{
@@ -97,6 +101,16 @@ test("Manager exposes release center without counting internal QA as commercial 
   assert.ok(component.includes("Canary"));
   assert.ok(component.includes("Produção"));
   assert.ok(companies.includes('String(company.id||"")!=="proar-internal"'));
+});
+
+test("produção é escalonada em lotes e respeita janela individual por tenant",async()=>{
+  const route=await read("app/api/manager/releases/route.ts");
+  const panel=await read("components/ReleaseGovernancePanel.tsx");
+  assert.ok(route.includes("PROAR_PRODUCTION_BATCH_SIZE"));
+  assert.ok(route.includes("PROAR_PRODUCTION_BATCH_MINUTES"));
+  assert.ok(route.includes("RELEASE_PRODUCTION_STAGED"));
+  assert.ok(route.includes("tenantScheduledAt"));
+  assert.ok(panel.includes("Atualização agendada"));
 });
 
 console.log("release-governance.test.mjs: ok");
