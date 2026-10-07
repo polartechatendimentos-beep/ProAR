@@ -6,7 +6,7 @@ const state = (overrides = {}) => ({ _revision: 7, _updatedAt: "2026-09-30T10:00
 const findings = (input) => auditOperationalIntegrity(input, "2026-09-30T12:00:00.000Z").findings;
 
 test("integrity diagnostic returns clean result without mutating the state", () => {
-  const input = state({ customers: [{ id: "C1", name: "Cliente", doc: "12.345.678/0001-90" }], moduleRecords: { Produtos: [{ id: "P1", name: "Tubo", stockCurrent: 4 }], "Livro de estoque": [{ id: "OPEN-STOCK-P1", productId: "P1", kind: "Abertura", quantity: 4 }] } });
+  const input = state({ customers: [{ id: "C1", name: "Cliente", doc: "12.345.678/0001-90", street:"Rua A", city:"Mirassol", state:"SP", zipCode:"15130-000" }], moduleRecords: { Produtos: [{ id: "P1", name: "Tubo", stockCurrent: 4 }], "Livro de estoque": [{ id: "OPEN-STOCK-P1", productId: "P1", kind: "Abertura", quantity: 4 }] } });
   const before = structuredClone(input);
   const report = auditOperationalIntegrity(input, "2026-09-30T12:00:00.000Z");
   assert.deepEqual(input, before);
