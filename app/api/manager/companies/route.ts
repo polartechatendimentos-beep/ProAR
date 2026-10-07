@@ -229,10 +229,10 @@ export async function PATCH(request: NextRequest) {
       moduleName:String(item.moduleName||"").trim(),
       enabled:Boolean(item.enabled),
       monthlyPriceCents:Math.max(0,Math.round(Number(item.monthlyPriceCents)||0)),
-    })).filter((item:{moduleName:string})=>ALL_MANAGER_MODULES.includes(item.moduleName)),planCode,user.username);
+    })).filter((item:{moduleName:string})=>ALL_MANAGER_MODULES.includes(item.moduleName)),planCode,user.username,String(body.changeReason||"Alteração de módulos no ProAR Manager").slice(0,240));
   } else if (typeof body.planCode === "string") {
     const plan=managerPlan(body.planCode);
-    await syncPlanEntitlements(companyId,plan.code,plan.modules,user.username);
+    await syncPlanEntitlements(companyId,plan.code,plan.modules,user.username,String(body.changeReason||"Alteração de plano no ProAR Manager").slice(0,240));
   }
 
   const touchesBilling = ["billingEnabled","monthlyFeeCents","billingDay","billingIssueLeadDays","billingMethod","billingAutoBlock","billingEmail","status","planCode","extendTrialDays"].some(key=>Object.prototype.hasOwnProperty.call(body,key));
