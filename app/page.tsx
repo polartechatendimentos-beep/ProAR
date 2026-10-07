@@ -4709,10 +4709,54 @@ export default function Home() {
     showFeedback("Operação confirmada no banco e registrada na auditoria.", "success");
   };
   const globalSearchItems = useMemo<GlobalSearchItem[]>(() => {
-    const customerItems = customerRecords.map(customer => ({ id: customer.id, title: customer.name, detail: [customer.doc, customer.phone, customer.city || customer.address].filter(Boolean).join(" • "), module: "Clientes", kind: "Cliente" as const }));
-    const orderItems = serviceOrders.map(order => ({ id: order.id, title: order.id, detail: [order.client, order.service, order.tech].filter(Boolean).join(" • "), module: "Ordens de serviço", kind: "OS" as const }));
-    const moduleItems = Object.entries(moduleRecords).flatMap(([module, records]) => records.map(record => ({ id: record.id, title: record.name, detail: [record.id, record.client, record.sku, record.barcode, record.serialNumber, record.doc, record.invoiceNumber, record.empenhoNumber, record.contractNumber, record.address, record.blockLot, record.category].filter(Boolean).join(" • "), module, kind: "Cadastro" as const })));
-    return [...customerItems, ...orderItems, ...moduleItems];
+    const structures=moduleRecords["Unidades e setores"]??[];
+    const structureById=new Map(structures.map(record=>[String(record.id||""),record]));
+    const hierarchyFor=(record:ModuleRecord)=>{
+      const candidateIds=[record.roomId,record.sectorId,record.unitId,record.structureId,record.parentId].map(value=>String(value||"")).filter(Boolean);
+      let currentRecord=candidateIds.map(id=>structureById.get(id)).find(Boolean) as ModuleRecord|undefined;
+      const names:string[]=[];
+      const visited=new Set<string>();
+      while(currentRecord&&names.length<5&&!visited.has(String(currentRecord.id||""))){
+        visited.add(String(currentRecord.id||""));
+        if(currentRecord.name)names.unshift(String(currentRecord.name));
+        const parentId=String(currentRecord.parentId||"");
+        currentRecord=parentId?structureById.get(parentId):undefined;
+      }
+      const explicit=[record.parentUnit,record.sector,record.unit,record.room].map(value=>String(value||"").trim()).filter(Boolean);
+      const chain=names.length?names:explicit;
+      return [...new Set([String(record.client||"").trim(),...chain].filter(Boolean))].join(" → ");
+    };
+    const customerItems = customerRecords.map(customer => ({
+      id:customer.id,
+      title:customer.name,
+      detail:[customer.doc,customer.phone,customer.city||customer.address].filter(Boolean).join(" • "),
+      module:"Clientes",
+      kind:"Cliente" as const,
+    }));
+    const orderItems = serviceOrders.map(order => ({
+      id:order.id,
+      title:order.id,
+      detail:[order.client,order.unit,order.sector,order.room,order.service,order.tech].filter(Boolean).join(" → "),
+      module:"Ordens de serviço",
+      kind:"OS" as const,
+    }));
+    const moduleItems = Object.entries(moduleRecords).flatMap(([module, records]) => records.map(record => {
+      const hierarchy=hierarchyFor(record);
+      const identifiers=[
+        record.id,record.doc,record.sku,record.barcode,record.serialNumber,
+        record.patrimony,record.assetTag,record.externalCode,record.manufacturerCode,
+        record.invoiceNumber,record.empenhoNumber,record.contractNumber,
+        record.numeroControlePNCP,record.processNumber,record.address,record.blockLot,record.category,
+      ].filter(Boolean).join(" • ");
+      return {
+        id:record.id,
+        title:record.name||record.serialNumber||record.id,
+        detail:[hierarchy,identifiers].filter(Boolean).join(" • "),
+        module,
+        kind:"Cadastro" as const,
+      };
+    }));
+    return [...customerItems,...orderItems,...moduleItems];
   }, [customerRecords, serviceOrders, moduleRecords]);
   const pendingItems = useMemo<PendingItem[]>(
     () => deriveOperationalActions(serviceOrders, moduleRecords).slice(0, 20),
@@ -4729,6 +4773,7 @@ export default function Home() {
   };
   const openGlobalSearch = (item: GlobalSearchItem) => {
     setCurrent(item.module);
+    window.dispatchEvent(new CustomEvent("proar:focus-record",{detail:{module:item.module,recordId:item.id,source:"global-search"}}));
     setSavedMessage(`${item.kind} localizado: ${item.title}.`);
   };
   const openPending = (item: PendingItem) => {
