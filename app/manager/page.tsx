@@ -266,7 +266,7 @@ export default function ManagerPage(){
   return <main className="manager-dashboard">
     <header className="manager-header">
       <div className="manager-title"><div className="manager-mark small"><Building2 size={22}/></div><div><span>BY TAV&apos;s</span><h1>ProAR Manager</h1><p>Empresas, licenças, cobrança recorrente, trials e bancos isolados</p></div></div>
-      <div className="manager-actions"><a href="https://teste.proar.online" target="_blank" rel="noreferrer">Cadastro de teste</a><button onClick={()=>void load()}><RefreshCw size={15}/> Atualizar</button><button className="logout" onClick={()=>void logout()}><LogOut size={15}/> Sair</button></div>
+      <div className="manager-actions"><a href="https://teste.proar.online" target="_blank" rel="noreferrer">ProAR Interno</a><button onClick={()=>void load()}><RefreshCw size={15}/> Atualizar</button><button className="logout" onClick={()=>void logout()}><LogOut size={15}/> Sair</button></div>
     </header>
 
     <section className="manager-content">
