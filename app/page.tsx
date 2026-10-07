@@ -1274,7 +1274,7 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
     });
     setSearch("");
   };
-  const update = (id: string, changes: Partial<PurchaseItem>) => setCart(current => current.map(item => item.id === id ? { ...item, ...changes } : item).filter(item => item.quantity > 0));
+  const update = (id: string, changes: Partial<PurchaseItem>) => setCart(current => current.map(item => item.id === id ? { ...item, ...changes } : item));
   const clearDraft=()=>{setCart([]);setDiscount(0);setSurcharge(0);setObservations("");setUnit("");setReference("");setSearch("");};
 
   const save = (status:"Em elaboração"|"Enviado") => {
