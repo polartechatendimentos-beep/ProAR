@@ -25,6 +25,7 @@ import "./usability-hardening.css";
 import "./fiscal-workspace.css";
 import "./responsive-hardening.css";
 import "./resilience-status.css";
+import "./release-runtime.css";
 import { ConnectivityBanner } from "@/components/ResponsivePrimitives";
 import { MobileToday } from "@/components/MobileToday";
 
@@ -2866,6 +2867,23 @@ type ModalSave = {
 };
 
 type AuthenticatedUser = { username: string; displayName: string; role?: string; permissions?: string[]; companyId?: string; companySlug?: string; trialExpiresAt?: string; entitledModules?: string[] };
+type RuntimeReleaseConfig = {
+  environment?:"internal"|"homologation"|"canary"|"production";
+  internal?:boolean;
+  companyId?:string|null;
+  currentVersion?:string|null;
+  schemaVersion?:string|null;
+  maintenanceMode?:boolean;
+  maintenanceMessage?:string;
+  updatePolicy?:string;
+  pinnedVersion?:string|null;
+  featureFlags?:Record<string,boolean>;
+  moduleFlags?:Record<string,boolean>;
+  changelog?:{version:string;title?:string;summary?:string;notes?:Array<{type?:string;module?:string;title?:string;description?:string}>}|null;
+  publishedDeploymentId?:string|null;
+  servedDeploymentId?:string|null;
+  deploymentMismatch?:boolean;
+};
 
 const navigationModuleNames = () => navGroups.flatMap(group => group.items.map(item => item.name));
 function isPrimaryPolartechClient(user?: AuthenticatedUser | null) {
@@ -3665,8 +3683,14 @@ export default function Home() {
   const [syncPhase, setSyncPhase] = useState<"idle" | "syncing" | "complete">("idle");
   const [databaseMode, setDatabaseMode] = useState<"online" | "degraded" | "offline">("online");
   const [lastSuccessfulSyncAt, setLastSuccessfulSyncAt] = useState("");
+  const [runtimeReleaseConfig, setRuntimeReleaseConfig] = useState<RuntimeReleaseConfig | null>(null);
   const primaryTenantAccess = isPrimaryPolartechClient(authenticatedUser);
-  const effectiveEntitledModules = useMemo(() => primaryTenantAccess ? navigationModuleNames() : authenticatedUser?.entitledModules, [primaryTenantAccess, authenticatedUser?.entitledModules]);
+  const effectiveEntitledModules = useMemo(() => {
+    const base=primaryTenantAccess ? navigationModuleNames() : authenticatedUser?.entitledModules;
+    if(!Array.isArray(base))return base;
+    const moduleFlags=runtimeReleaseConfig?.moduleFlags||{};
+    return base.filter(name=>moduleFlags[name]!==false);
+  }, [primaryTenantAccess, authenticatedUser?.entitledModules, runtimeReleaseConfig?.moduleFlags]);
   useEffect(() => {
     const navigate = (event: Event) => setCurrent((event as CustomEvent<string>).detail);
     window.addEventListener("proar:navigate", navigate);
@@ -3746,6 +3770,24 @@ export default function Home() {
     }).finally(() => { window.clearTimeout(timeout); setCheckingSession(false); });
     return () => { window.clearTimeout(timeout); controller.abort(); window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); };
   }, [bootAttempt]);
+  useEffect(() => {
+    if(!authenticatedUser)return;
+    let cancelled=false;
+    const loadRuntimeReleaseConfig=async()=>{
+      try{
+        const response=await fetch("/api/runtime-config",{cache:"no-store"});
+        if(!response.ok)return;
+        const config=await response.json() as RuntimeReleaseConfig;
+        if(!cancelled)setRuntimeReleaseConfig(config);
+      }catch{}
+    };
+    void loadRuntimeReleaseConfig();
+    const interval=window.setInterval(loadRuntimeReleaseConfig,60*1000);
+    const onFocus=()=>void loadRuntimeReleaseConfig();
+    window.addEventListener("focus",onFocus);
+    return()=>{cancelled=true;window.clearInterval(interval);window.removeEventListener("focus",onFocus)};
+  },[authenticatedUser?.username,authenticatedUser?.companyId]);
+
   useEffect(() => {
     if (!authenticatedUser) return;
     const verifyManagerAccess = async () => {
@@ -4692,6 +4734,16 @@ export default function Home() {
   if (checkingSession) return <div className="session-loading" data-testid="proar-boot-loading"><div className="brand-mark brand-logo"><img src="/icon.png" alt="ProAR"/></div><p>A carregar o ProAR...</p><small>{bootRunId}</small></div>;
   if (bootError && !authenticatedUser) return <main className="session-boot-error" data-testid="proar-boot-error"><section><AlertTriangle size={28}/><h2>Não foi possível carregar a sessão</h2><p>{bootError}</p><small>Código de execução: {bootRunId}</small><div><button type="button" className="primary-btn" onClick={()=>setBootAttempt(value=>value+1)}>Tentar novamente</button><button type="button" className="outline-btn" onClick={()=>{localStorage.removeItem("proar-offline-session");setBootError("");}}>Entrar novamente</button><button type="button" className="outline-btn" onClick={()=>window.location.reload()}>Recarregar aplicação</button></div></section></main>;
   if (!authenticatedUser) return <div data-testid="proar-login-screen"><LoginScreen onLogin={handleLogin}/></div>;
+  if(runtimeReleaseConfig?.maintenanceMode)return <main className="release-maintenance-screen">
+    <section>
+      <div className="release-maintenance-icon"><RefreshCw size={28}/></div>
+      <span>PROAR • MANUTENÇÃO CONTROLADA</span>
+      <h1>Atualização em andamento</h1>
+      <p>{runtimeReleaseConfig.maintenanceMessage||"Este ambiente está em atualização. Tente novamente em alguns instantes."}</p>
+      {runtimeReleaseConfig.currentVersion&&<small>Versão atual: {runtimeReleaseConfig.currentVersion}</small>}
+      <button type="button" onClick={()=>window.location.reload()}><RefreshCw size={15}/> Tentar novamente</button>
+    </section>
+  </main>;
   const mobileOperationalModules = new Set(["Painel inicial","Agenda","Ordens de serviço","Clientes","Obras","Funcionários","Equipamentos"]);
   const mobileSubdomain = typeof document !== "undefined" && document.cookie.includes("proar-experience=mobile");
   const mobilePathExperience = typeof window !== "undefined" && (window.location.pathname==="/mobile" || window.location.pathname.startsWith("/mobile/"));
@@ -4715,7 +4767,9 @@ export default function Home() {
         {online && <button type="button" onClick={()=>void pullFromDatabase()} disabled={syncing}><RefreshCw size={14}/> Testar novamente</button>}
       </div>}
       
-      <div className="company-context"><Building2 size={13}/><span>{activeCompany.tradeName}</span><small>{activeCompany.cnpj || "CNPJ pendente"} • {activeCompany.city}/{activeCompany.state}</small></div>
+      <div className="company-context"><Building2 size={13}/><span>{activeCompany.tradeName}</span><small>{activeCompany.cnpj || "CNPJ pendente"} • {activeCompany.city}/{activeCompany.state}</small>{runtimeReleaseConfig?.internal&&<em className="release-environment-badge">{runtimeReleaseConfig.environment==="homologation"?"HOMOLOGAÇÃO":"PROAR INTERNO"}</em>}{runtimeReleaseConfig?.currentVersion&&<em className="release-version-badge">v{runtimeReleaseConfig.currentVersion}</em>}</div>
+      {runtimeReleaseConfig?.deploymentMismatch&&<div className="release-runtime-warning"><AlertTriangle size={15}/><div><b>Versão publicada diferente da versão servida</b><span>O Manager detectou divergência entre o deployment registrado e o alias deste ambiente. A promoção deve ser revisada antes de avançar.</span></div></div>}
+      {runtimeReleaseConfig?.changelog&&<details className="tenant-release-changelog"><summary><Sparkles size={14}/> Novidades da versão {runtimeReleaseConfig.changelog.version}<span>{runtimeReleaseConfig.changelog.title||"Atualização do ProAR"}</span></summary><div>{runtimeReleaseConfig.changelog.summary&&<p>{runtimeReleaseConfig.changelog.summary}</p>}{(runtimeReleaseConfig.changelog.notes||[]).slice(0,8).map((note,index)=><article key={index}><b>{note.title||note.type||"Atualização"}</b><span>{note.module?note.module+" • ":""}{note.description||""}</span></article>)}</div></details>}
       {current === "PMOC e conformidade" && !planBlocked ? <TechnicalCompliancePanel plans={(moduleRecords.PMOC ?? []) as any} fluids={(moduleRecords.Refrigerantes ?? []) as any} documents={(moduleRecords["Documentação / Habilitação"] ?? []) as any} onSave={(module,record)=>saveConfirmedModuleRecord(module,record)} onDelete={(module,record)=>deleteModuleRecord(module,record as ModuleRecord)}/> : null}
       <div className="page-content">{planBlocked ? <section className="mobile-module-blocked"><LockKeyhole size={28}/><h2>Módulo não contratado</h2><p>Este módulo não faz parte do plano ativo desta empresa. A liberação é feita pelo ProAR Manager conforme o contrato.</p><button className="primary-btn" onClick={()=>setCurrent(effectiveEntitledModules?.[0]||"Painel inicial")}>Voltar para módulos liberados</button></section> : mobileBlocked ? <section className="mobile-module-blocked"><ShieldCheck size={28}/><h2>Módulo disponível no computador</h2><p>No celular e tablet o ProAR é focado na operação de trabalho. Para gestão administrativa completa, utilize a versão desktop.</p><button className="primary-btn" onClick={()=>setCurrent("Painel inicial")}>Voltar para operação</button></section> : current === "PMOC e conformidade" ? null : current === "Integridade do Sistema" ? <IntegrityAudit/> : current === "Atividades" ? <ActivityCenter records={moduleRecords.Auditoria ?? []}/> : current === "Painel inicial" && mobileExperience ? <MobileToday manager={mobileManager}/> : current === "Painel inicial" ? <DashboardWorkspace onNavigate={setCurrent} serviceOrders={serviceOrders} modules={moduleRecords} role={authenticatedUser.role}/> : current === "Central de pendências" ? <OperationsActionCenter serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} modules={moduleRecords as unknown as Record<string,Record<string,unknown>[]>} onNavigate={setCurrent}/> : current === "Clientes" ? <Customers onOpen={name => { setModal(""); window.setTimeout(() => setModal(name), 0); }} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={saveCustomerStructure} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} company={activeCompany} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <LicitacoesWorkspace modules={moduleRecords} customers={customerRecords} orders={serviceOrders} onSaveRecord={(moduleName,record)=>saveConfirmedModuleRecord(moduleName,record)} onDeleteRecord={deleteModuleRecord} onReadyToInvoice={record=>saveConfirmedModuleRecord("Empenhos",{...record,status:"Pronto para faturar"},[{moduleName:"Financeiro",record:{id:`FAT-${record.id}`,name:`Faturamento • ${record.name}`,client:record.client,description:`Aguardando emissão de Nota Fiscal • ${record.empenhoProcess || "processo não informado"}`,createdAt:new Date().toLocaleString("pt-BR"),status:"Pronto para faturar",date:new Date().toISOString().slice(0,10),value:record.value??0,category:"Faturamento público",transactionType:"Receber",empenhoId:record.id}}])} onOpenTender={item=>setModal(`Análise de edital • ${item.numeroControlePNCP || item.objetoCompra || "Licitação"}`)}/> : current === "Orçamentos" ? <BudgetPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={record => updateModuleRecord("Orçamentos",record)} onConvert={convertBudget} onDelete={record => deleteModuleRecord("Orçamentos",record)} onCreateCustomer={createQuickCustomer} onCreateStructure={createQuickStructure}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} sales={moduleRecords.Vendas ?? []} onSave={record => updateModuleRecord("Vendas",record)} onDelete={record=>deleteModuleRecord("Vendas",record)}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders} company={activeCompany}/> : current === "Diagnósticos" ? <DiagnosticManagementDashboard serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} equipment={(moduleRecords["Equipamentos"] ?? []) as unknown as Record<string,unknown>[]}/> : current === "Fiscal" ? <FiscalWorkspace modules={moduleRecords} serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} company={activeCompany} onNavigate={setCurrent}/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany} isAdministrator={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*"))}/> : current === "Aprovações" ? <ApprovalCenter records={moduleRecords["Aprovações"] ?? []} canApprove={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*") || authenticatedUser.permissions?.includes("aprovacoes.aprovar") || authenticatedUser.permissions?.includes("Aprovações"))} onOperation={runOperationalCommand}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} modules={moduleRecords} onOperation={runOperationalCommand} onOpen={setModal} onIssueInvoice={(record,invoiceNumber)=>{const commitment=(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId);const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Faturado"}}]:[];return saveConfirmedModuleRecord("Financeiro",{...record,status:"Em aberto",transactionType:"Receber",invoiceNumber,invoiceIssuedAt:new Date().toISOString()},related)}}/> : current === "Funcionários" ? <EmployeesWorkspace records={moduleRecords["Funcionários"] ?? []} serviceOrders={serviceOrders} onOpen={setModal} onUpdate={updateModuleRecord} onDelete={deleteModuleRecord} canEdit={hasAction("Funcionários","Editar")}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} onUpdate={updateServiceOrder} serviceOrders={serviceOrders} customers={customerRecords} company={activeCompany} role={authenticatedUser.role}/> : <>{(current === "Compras" || current === "Estoque") && <InventoryOperations mode={current} modules={moduleRecords} onOperation={runOperationalCommand}/>}<GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []} allModules={moduleRecords} serviceOrders={serviceOrders}/></>}</div>
       <footer><span>© {new Date().getFullYear()} ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
