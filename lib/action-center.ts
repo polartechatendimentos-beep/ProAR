@@ -68,7 +68,8 @@ function outstanding(record: GenericRecord) {
 }
 
 function actionKey(item: OperationalAction) {
-  return `${item.category}:${item.recordId || item.id}:${item.module}`;
+  // Pendências diferentes do mesmo registro devem coexistir (ex.: OS atrasada e sem técnico).
+  return item.id;
 }
 
 export function deriveOperationalActions(
