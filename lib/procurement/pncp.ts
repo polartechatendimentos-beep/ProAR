@@ -129,6 +129,7 @@ export async function searchPncp(options: {
   maxPages?: number;
   modalityCodes?: number[];
   timeoutMs?: number;
+  onlyOpen?: boolean;
 }) {
   const startedAt = Date.now();
   const collectedAt = new Date().toISOString();
@@ -147,6 +148,7 @@ export async function searchPncp(options: {
   end.setDate(end.getDate() + 7);
   const accepted: ProcurementRecord[] = [];
   let rejected = 0;
+  let received = 0;
   let pagesRead = 0;
   let httpStatus = 200;
 
@@ -163,10 +165,16 @@ export async function searchPncp(options: {
         httpStatus = response.status;
         pagesRead += 1;
         const rows = payloadRows(payload);
+        received += rows.length;
         for (const row of rows) {
           const normalized = normalizePncpRecord(row, collectedAt);
           const searchable = normalizedText([normalized.titulo, normalized.descricao, ...(normalized.items as string[] ?? [])].join(" "));
           if (uf && normalized.uf && normalized.uf !== uf) continue;
+          const deadline = normalized.dataFimProposta ? new Date(String(normalized.dataFimProposta)).getTime() : null;
+          if (options.onlyOpen && deadline !== null && Number.isFinite(deadline) && deadline < Date.now()) {
+            rejected += 1;
+            continue;
+          }
           if (!normalized.titulo || !normalized.orgao || !terms.some(term => searchable.includes(term))) {
             rejected += 1;
             continue;
@@ -186,6 +194,7 @@ export async function searchPncp(options: {
             durationMs: Date.now() - startedAt,
             httpStatus,
             pagesRead,
+            received,
             accepted: accepted.length,
             rejected,
             errorCode: error instanceof Error ? error.message : "PNCP_ERROR",
@@ -209,6 +218,7 @@ export async function searchPncp(options: {
       durationMs: Date.now() - startedAt,
       httpStatus,
       pagesRead,
+      received,
       accepted: unique.length,
       rejected,
       duplicates: accepted.length - unique.length,
