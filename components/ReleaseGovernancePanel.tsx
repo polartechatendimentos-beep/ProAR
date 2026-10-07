@@ -128,7 +128,7 @@ export function ReleaseGovernancePanel(){
   return <section className="manager-panel manager-release-center">
     <div className="panel-head manager-panel-head-inline">
       <div><h2>Central de Versões e Ambientes</h2><p>Desenvolvimento → ProAR Interno → Homologação → Canary → Produção. Clientes nunca recebem uma versão apenas porque ela foi compilada.</p></div>
-      <div className="manager-inline-actions"><button onClick={()=>void act("bootstrap-internal",{},"Ambiente interno preparado.")} disabled={Boolean(busy)}><FlaskConical size={15}/> Preparar ProAR Interno</button><button onClick={()=>void load()} disabled={loading}><RefreshCw size={15}/> Atualizar</button></div>
+      <div className="manager-inline-actions"><button onClick={()=>void act("bootstrap-internal",{},"Ambiente interno preparado.")} disabled={Boolean(busy)}><FlaskConical size={15}/> Preparar ProAR Interno</button><button onClick={()=>{if(window.confirm("Registrar como baseline as versões que os tenants de Produção estão servindo agora? Nenhum alias será alterado."))void act("baseline-production",{},"Baseline atual de Produção registrado.")}} disabled={Boolean(busy)}><ShieldCheck size={15}/> Registrar baseline</button><button onClick={()=>void load()} disabled={loading}><RefreshCw size={15}/> Atualizar</button></div>
     </div>
 
     {error&&<div className="manager-alert">{error}</div>}
