@@ -1,5 +1,5 @@
 import { neon } from "@neondatabase/serverless";
-import { createStateSnapshot } from "./state-snapshots";
+import { createStateSnapshot, listStateSnapshots } from "./state-snapshots";
 import { databaseProvider, databaseFetch, supabaseRest } from "./supabase-rest";
 import { resolveTenantDb, tenantHeaders } from "./tenant-rest";
 
@@ -174,6 +174,26 @@ export async function assignDeploymentAlias(deploymentId:string,alias:string){
   return{ok:true,alias,deploymentId};
 }
 
+export async function inspectDeployment(deploymentId:string){
+  const cfg=vercelConfig();
+  if(!cfg.token)return{ok:false,deploymentId,state:null,commitSha:null,target:null,error:"VERCEL_TOKEN ausente."};
+  const response=await fetch(`https://api.vercel.com/v13/deployments/${encodeURIComponent(deploymentId)}${vercelQuery(cfg.teamId)}`,{
+    headers:{Authorization:`Bearer ${cfg.token}`},cache:"no-store",
+  });
+  if(!response.ok)return{ok:false,deploymentId,state:null,commitSha:null,target:null,error:`HTTP ${response.status}`};
+  const data=await response.json() as {readyState?:string;state?:string;target?:string|null;meta?:Record<string,string>;url?:string};
+  return{
+    ok:String(data.readyState||data.state||"").toUpperCase()==="READY",
+    deploymentId,
+    state:String(data.readyState||data.state||""),
+    commitSha:String(data.meta?.githubCommitSha||""),
+    commitRef:String(data.meta?.githubCommitRef||""),
+    target:data.target||null,
+    url:data.url||null,
+    error:null,
+  };
+}
+
 export async function inspectAlias(alias:string){
   const cfg=vercelConfig();
   if(!cfg.token)return{ok:false,alias,deploymentId:null,error:"VERCEL_TOKEN ausente."};
@@ -205,8 +225,10 @@ export async function snapshotBeforeRelease(companyId:string,actor:string){
   const rows=await response.json() as Array<{payload?:Record<string,unknown>}>;
   const payload=rows[0]?.payload;
   if(!payload)return{ok:true,snapshotId:null,error:null};
-  const snapshot=await createStateSnapshot({companyId,stateId,payload,reason:"pre-release",createdBy:actor});
-  return{ok:true,snapshotId:Number((snapshot as {id?:number}|undefined)?.id||0)||null,error:null};
+  const saved=await createStateSnapshot({companyId,stateId,payload,reason:"pre-release",createdBy:actor});
+  if(!saved)return{ok:false,snapshotId:null,error:"Não foi possível confirmar o snapshot pré-release."};
+  const latest=await listStateSnapshots(companyId,1);
+  return{ok:true,snapshotId:latest[0]?.id||null,error:null};
 }
 
 export async function recordReleaseCheck(input:{
