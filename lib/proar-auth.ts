@@ -14,6 +14,9 @@ type ProARUser = {
   trialExpiresAt?: string;
   legacy?: boolean;
   entitledModules?: string[];
+  moduleIds?: string[];
+  configurationVersion?: string;
+  claims?: string[];
 };
 const SESSION_SECONDS = 60 * 60 * 12;
 
@@ -44,9 +47,9 @@ export function readSession(token?: string | null): Omit<ProARUser, "passwordHas
   if (!token) return null;
   if (token.startsWith("v2.")) {
     const [, data, signature] = token.split("."); if (!data || !signature || !safeEqual(signature, sign(`v2.${data}`))) return null;
-    try { const parsed = JSON.parse(Buffer.from(data, "base64url").toString("utf8")); if (!parsed.exp || parsed.exp < Date.now() / 1000) return null; if (parsed.trialExpiresAt && new Date(parsed.trialExpiresAt).getTime() < Date.now()) return null; return { username: parsed.username, displayName: parsed.displayName, role: parsed.role, permissions: parsed.permissions ?? [], companyId: parsed.companyId, companySlug: parsed.companySlug, trialExpiresAt: parsed.trialExpiresAt, legacy: parsed.legacy === true, entitledModules: Array.isArray(parsed.entitledModules) ? parsed.entitledModules : undefined }; } catch { return null; }
+    try { const parsed = JSON.parse(Buffer.from(data, "base64url").toString("utf8")); if (!parsed.exp || parsed.exp < Date.now() / 1000) return null; if (parsed.trialExpiresAt && new Date(parsed.trialExpiresAt).getTime() < Date.now()) return null; return { username: parsed.username, displayName: parsed.displayName, role: parsed.role, permissions: parsed.permissions ?? [], companyId: parsed.companyId, companySlug: parsed.companySlug, trialExpiresAt: parsed.trialExpiresAt, legacy: parsed.legacy === true, entitledModules: Array.isArray(parsed.entitledModules) ? parsed.entitledModules : undefined, moduleIds:Array.isArray(parsed.moduleIds)?parsed.moduleIds:undefined, configurationVersion:typeof parsed.configurationVersion==="string"?parsed.configurationVersion:undefined, claims:Array.isArray(parsed.claims)?parsed.claims:[] }; } catch { return null; }
   }
   const [encodedUsername, expiresAt, signature] = token.split("."); if (!encodedUsername || !expiresAt || !signature || Number(expiresAt) < Date.now() / 1000) return null;
   const payload = `${encodedUsername}.${expiresAt}`; if (!safeEqual(signature, sign(payload))) return null; const username = decodeURIComponent(encodedUsername); const user = users().find(item => item.username === username); if (!user) return null;
-  return { username: user.username, displayName: user.displayName, role: user.role, permissions: user.permissions };
+  return { username: user.username, displayName: user.displayName, role: user.role, permissions: user.permissions, claims:user.claims ?? [] };
 }
