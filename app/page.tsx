@@ -4647,10 +4647,11 @@ export default function Home() {
     const structures = moduleRecords["Unidades e setores"] ?? [];
     const id = String(record.id);
     const name = String(record.name || "estrutura");
-    const children = structures.filter(item => String(item.parentId ?? item.parentStructureId ?? "") === id);
+    const children = structures.filter(item => String(item.parentId ?? "") === id);
     const linkedEquipment = (moduleRecords["Equipamentos"] ?? []).filter(item => {
-      const ids = [item.structureId,item.unitId,item.sectorId,item.roomId,item.environmentId].filter(Boolean).map(String);
-      const names = [item.unit,item.equipmentUnit,item.parentUnit,item.room,item.environment,item.ambiente,item.installationLocation,item.sector,item.setor].filter(Boolean).map(String);
+      const raw = item as unknown as Record<string, unknown>;
+      const ids = [raw.structureId,raw.unitId,raw.sectorId,raw.roomId,raw.environmentId].filter(Boolean).map(String);
+      const names = [raw.unit,raw.equipmentUnit,raw.parentUnit,raw.room,raw.environment,raw.ambiente,raw.installationLocation,raw.sector,raw.setor].filter(Boolean).map(String);
       return ids.includes(id) || names.includes(name);
     });
     const linkedOrders = serviceOrders.filter(order => order.unit === name || String((order as unknown as Record<string,unknown>).structureId ?? "") === id);
