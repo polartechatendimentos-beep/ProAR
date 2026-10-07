@@ -1,0 +1,19 @@
+.release-maintenance-screen{min-height:100dvh;display:grid;place-items:center;padding:24px;background:#03101f;color:#eaf2fb}
+.release-maintenance-screen section{width:min(560px,100%);display:grid;justify-items:center;gap:12px;padding:34px;border:1px solid #173451;border-radius:20px;background:#071729;box-shadow:0 30px 80px rgba(0,0,0,.35);text-align:center}
+.release-maintenance-icon{display:grid;place-items:center;width:56px;height:56px;border-radius:16px;background:#0e2d4e;color:#60a5fa}
+.release-maintenance-screen span{font-size:10px;font-weight:900;letter-spacing:.12em;color:#60a5fa}
+.release-maintenance-screen h1{margin:0;font-size:28px}
+.release-maintenance-screen p{max-width:460px;margin:0;color:#9db2c7;line-height:1.55}
+.release-maintenance-screen small{color:#6f879f}
+.release-maintenance-screen button{display:inline-flex;align-items:center;gap:7px;min-height:40px;padding:0 14px;border:1px solid #2f76c7;border-radius:9px;background:#1768df;color:#fff;font-weight:800;cursor:pointer}
+.release-environment-badge,.release-version-badge{margin-left:auto;padding:3px 7px;border:1px solid #245684;border-radius:999px;background:#0a2743;color:#7ec0ff;font-size:9px;font-style:normal;font-weight:900;letter-spacing:.05em}
+.release-version-badge{margin-left:4px;background:#0b1d30;color:#9fb7cc}
+.release-runtime-warning{display:flex;align-items:flex-start;gap:9px;margin:10px 0;padding:10px 12px;border:1px solid #d9ad46;border-radius:9px;background:#2b2109;color:#f5d477}
+.release-runtime-warning div{display:grid;gap:2px}.release-runtime-warning b{font-size:11px}.release-runtime-warning span{font-size:10px;line-height:1.4;color:#dec98c}
+.tenant-release-changelog{margin:10px 0;border:1px solid #173451;border-radius:10px;background:#061525;color:#c8d8e8;overflow:hidden}
+.tenant-release-changelog summary{display:flex;align-items:center;gap:7px;padding:10px 12px;cursor:pointer;font-size:11px;font-weight:900;color:#e9f2fb;list-style:none}
+.tenant-release-changelog summary::-webkit-details-marker{display:none}.tenant-release-changelog summary span{margin-left:auto;color:#7290ab;font-weight:700}
+.tenant-release-changelog>div{display:grid;gap:7px;padding:0 12px 12px}.tenant-release-changelog p{margin:0 0 3px;color:#8fa7bc;font-size:10px;line-height:1.45}
+.tenant-release-changelog article{display:grid;gap:2px;padding:8px 9px;border:1px solid #15314c;border-radius:8px;background:#081a2d}
+.tenant-release-changelog article b{font-size:10px;color:#b9d8f7}.tenant-release-changelog article span{font-size:9px;line-height:1.4;color:#8099af}
+@media(max-width:760px){.release-environment-badge{margin-left:0}.company-context{flex-wrap:wrap}.tenant-release-changelog summary{align-items:flex-start;flex-wrap:wrap}.tenant-release-changelog summary span{width:100%;margin-left:21px}}
