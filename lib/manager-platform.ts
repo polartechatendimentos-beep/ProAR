@@ -12,6 +12,13 @@ export const PROAR_SCHEMA_VERSION = "2026.10.02";
 
 export const MANAGER_MIGRATIONS:ManagerMigration[] = [
   {
+    id:"20261007_manager_lifecycle_jobs",
+    title:"Lifecycle, rollout e jobs administrativos",
+    status:"prepared",
+    destructive:false,
+    description:"Adiciona canal de rollout por tenant e fila auditável para backup, restauração, homologação, exportação, encerramento e arquivamento.",
+  },
+  {
     id:"20261005_manager_control_center",
     title:"Centro Operacional SaaS",
     status:"prepared",
