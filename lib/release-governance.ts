@@ -174,6 +174,22 @@ export async function assignDeploymentAlias(deploymentId:string,alias:string){
   return{ok:true,alias,deploymentId};
 }
 
+export async function inspectGitQualityGate(commitSha:string){
+  const sha=String(commitSha||"").trim();
+  if(!/^[a-f0-9]{7,40}$/i.test(sha))return{passed:false,checks:[],error:"Commit SHA inválido."};
+  const org=String(process.env.PROAR_GITHUB_ORG||"polartechatendimentos-beep");
+  const repository=String(process.env.PROAR_GITHUB_REPO||"ProAR");
+  const token=String(process.env.GITHUB_TOKEN||process.env.PROAR_GITHUB_TOKEN||"").trim();
+  const headers:Record<string,string>={Accept:"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"};
+  if(token)headers.Authorization="Bearer "+token;
+  const response=await fetch("https://api.github.com/repos/"+encodeURIComponent(org)+"/"+encodeURIComponent(repository)+"/commits/"+encodeURIComponent(sha)+"/check-runs?per_page=100",{headers,cache:"no-store"});
+  if(!response.ok)return{passed:false,checks:[],error:"GitHub checks indisponíveis (HTTP "+response.status+")."};
+  const payload=await response.json() as {check_runs?:Array<{name?:string;status?:string;conclusion?:string;html_url?:string}>};
+  const checks=(payload.check_runs||[]).map(check=>({name:String(check.name||""),status:String(check.status||""),conclusion:String(check.conclusion||""),url:check.html_url||null}));
+  const validation=checks.filter(check=>/validate|validar proar/i.test(check.name));
+  return{passed:validation.length>0&&validation.every(check=>check.status==="completed"&&check.conclusion==="success"),checks,error:null};
+}
+
 export async function inspectDeployment(deploymentId:string){
   const cfg=vercelConfig();
   if(!cfg.token)return{ok:false,deploymentId,state:null,commitSha:null,target:null,error:"VERCEL_TOKEN ausente."};
