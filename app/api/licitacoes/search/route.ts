@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { readSession } from "@/lib/proar-auth";
 import { getEffectiveCompanyId } from "@/lib/company-access";
 import { searchPncp } from "@/lib/procurement/pncp";
-import { normalizedText, type ProcurementRecord } from "@/lib/procurement/domain";
+import { type ProcurementRecord } from "@/lib/procurement/domain";
 
 const DEFAULT_TERMS = [
   "ar condicionado", "ar-condicionado", "climatização", "climatizacao", "pmoc",
@@ -10,7 +10,12 @@ const DEFAULT_TERMS = [
   "manutencao de ar condicionado", "instalação de ar condicionado",
   "instalacao de ar condicionado", "fluido refrigerante", "recarga de gás",
   "recarga de gas", "vrf", "vrv", "split", "cassete", "piso teto",
-  "compressor", "higienização", "higienizacao", "chiller", "fan coil"
+  "compressor", "higienização", "higienizacao", "chiller", "fan coil",
+  "climatizador", "climatizadores", "ventilação", "ventilacao", "exaustão", "exaustao",
+  "duto", "dutos", "evaporadora", "condensadora", "sistema de climatização",
+  "sistema de climatizacao", "manutenção preventiva", "manutencao preventiva",
+  "manutenção corretiva", "manutencao corretiva", "limpeza de ar condicionado",
+  "limpeza de ar-condicionado", "limpeza de evaporadora", "limpeza de condensadora"
 ];
 
 const MODALITY_CODES = [4, 5, 6, 7, 8, 9, 12];
@@ -34,23 +39,16 @@ export async function POST(request: Request) {
 
     const uf = String(body.uf || "SP").trim().toUpperCase();
     const days = Math.max(1, Math.min(60, Number(body.days) || 30));
-    const maxPages = Math.max(1, Math.min(5, Number(body.maxPages) || 5));
+    const maxPages = Math.max(1, Math.min(20, Number(body.maxPages) || 10));
     const terms = parseTerms(body.terms);
     const modalityCodes = Array.isArray(body.modalityCodes) && body.modalityCodes.length
       ? body.modalityCodes.map(Number).filter(Number.isFinite)
       : MODALITY_CODES;
 
     const result = await searchPncp({ uf, days, maxPages, terms, modalityCodes });
-    const normalizedTerms = terms.map(normalizedText).filter(Boolean);
-
-    const data = (result.data as ProcurementRecord[]).filter(item => {
-      const searchable = normalizedText([
-        item.titulo,
-        item.descricao,
-        ...(Array.isArray(item.items) ? item.items : []),
-      ].join(" "));
-      return normalizedTerms.some(term => searchable.includes(term));
-    });
+    // searchPncp already performs normalized relevance filtering. Do not filter a second
+    // time here: double filtering previously hid valid PNCP opportunities.
+    const data = result.data as ProcurementRecord[];
 
     const health = {
       ...result.health,
