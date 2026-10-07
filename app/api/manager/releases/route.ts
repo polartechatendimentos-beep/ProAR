@@ -434,11 +434,11 @@ export async function POST(request:NextRequest){
 
       const scheduledAt=String(body.scheduledAt||"").trim();
       const future=scheduledAt&&new Date(scheduledAt).getTime()>Date.now()+60_000;
-      let targets:Array<{companyId:string|null;alias:string}>=[];
+      let targets:Array<{companyId:string|null;alias:string;tenantScheduledAt?:string|null}>=[];
       const env=RELEASE_ENVIRONMENTS.find(item=>item.code===channel)!;
       if(channel==="internal"||channel==="homologation"){
         await ensureInternalTenant(user.username);
-        targets=[{companyId:INTERNAL_QA_COMPANY_ID,alias:String(env.alias)}];
+        targets=[{companyId:INTERNAL_QA_COMPANY_ID,alias:String(env.alias),tenantScheduledAt:null}];
       }else{
         let requested=Array.isArray(body.companyIds)?body.companyIds.map((value:unknown)=>String(value)).filter(Boolean):[];
         if(channel==="canary"&&!requested.length)return NextResponse.json({error:"Selecione ao menos um tenant para o Canary."},{status:400});
@@ -453,7 +453,7 @@ export async function POST(request:NextRequest){
           const settings=await settingFor(companyId);
           if(channel==="production"&&settings?.update_policy==="pinned"&&settings.pinned_version&&settings.pinned_version!==release.version)continue;
           if(channel==="production"&&settings?.update_policy==="manual"&&!Array.isArray(body.companyIds))continue;
-          targets.push({companyId,alias:companyAlias(String(company.slug))});
+          targets.push({companyId,alias:companyAlias(String(company.slug)),tenantScheduledAt:settings?.update_policy==="scheduled"?settings.scheduled_update_at||null:null});
         }
       }
       if(!targets.length)return NextResponse.json({error:"Nenhum target elegível para esta promoção."},{status:409});
@@ -465,7 +465,9 @@ export async function POST(request:NextRequest){
         const batchMinutes=Math.max(15,Number(process.env.PROAR_PRODUCTION_BATCH_MINUTES||60));
         for(let index=0;index<targets.length;index+=1){
           const batch=Math.floor(index/batchSize);
-          const targetSchedule=new Date(Date.now()+batch*batchMinutes*60_000).toISOString();
+          const batchAt=Date.now()+batch*batchMinutes*60_000;
+          const tenantAt=targets[index].tenantScheduledAt?new Date(String(targets[index].tenantScheduledAt)).getTime():0;
+          const targetSchedule=new Date(Math.max(batchAt,Number.isFinite(tenantAt)?tenantAt:0)).toISOString();
           await upsertTarget({release,companyId:targets[index].companyId,environmentCode:channel,alias:targets[index].alias,status:"scheduled",scheduledAt:targetSchedule});
         }
         await supabaseRest(`proar_releases?id=eq.${encodeURIComponent(id)}`,{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({channel:"production",status:"scheduled",scheduled_at:now(),updated_at:now()})});
@@ -474,7 +476,7 @@ export async function POST(request:NextRequest){
       }
 
       if(future){
-        for(const target of targets)await upsertTarget({release,companyId:target.companyId,environmentCode:channel,alias:target.alias,status:"scheduled",scheduledAt});
+        for(const target of targets){const tenantAt=target.tenantScheduledAt?new Date(String(target.tenantScheduledAt)).getTime():0;const globalAt=new Date(scheduledAt).getTime();const effective=new Date(Math.max(globalAt,Number.isFinite(tenantAt)?tenantAt:0)).toISOString();await upsertTarget({release,companyId:target.companyId,environmentCode:channel,alias:target.alias,status:"scheduled",scheduledAt:effective});}
         await supabaseRest(`proar_releases?id=eq.${encodeURIComponent(id)}`,{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({status:"scheduled",scheduled_at:scheduledAt,updated_at:now()})});
         await audit("RELEASE_SCHEDULED",user.username,{releaseId:id,version:release.version,channel,scheduledAt,targets:targets.map(item=>item.alias)});
         return NextResponse.json({saved:true,scheduled:true,targets:targets.length});
