@@ -32,3 +32,20 @@ alter table public.proar_manager_jobs enable row level security;
 
 comment on table public.proar_manager_jobs is
   'Fila auditável de ações administrativas do SaaS. Jobs são registrados antes de qualquer execução em provedor.';
+
+
+create table if not exists public.proar_manager_login_attempts (
+  id bigserial primary key,
+  ip_hash text not null,
+  username text,
+  success boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists proar_manager_login_attempts_ip_created_idx
+  on public.proar_manager_login_attempts(ip_hash, created_at desc);
+
+alter table public.proar_manager_login_attempts enable row level security;
+
+comment on table public.proar_manager_login_attempts is
+  'Tentativas de login do ProAR Manager usadas para auditoria e limitação de força bruta.';
