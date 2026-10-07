@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { get,list } from "@vercel/blob";
-import { createClient } from "@vercel/postgres";
+import { neon } from "@neondatabase/serverless";
 import type { DatabaseBackupArtifact } from "./database-backup";
 
 function safeIdentifier(value:string){
@@ -52,23 +52,21 @@ export async function runRestoreDrill(companyId:string){
     };
   }
 
-  const client=createClient({connectionString:target});
-  await client.connect();
+  const sql=neon(target);
   const restored:Record<string,number>={};
   try{
-    await client.query("begin");
     for(const [tableName,table] of Object.entries(artifact.tables)){
       if(!table.available)continue;
       const tableSql=safeIdentifier(tableName);
-      const exists=await client.query("select to_regclass($1) as relation",[`public.${tableName}`]);
-      if(!exists.rows[0]?.relation)throw new Error(`Tabela ${tableName} não existe no banco de homologação.`);
+      const exists=await sql.query("select to_regclass($1) as relation",[ `public.${tableName}` ]);
+      if(!(exists[0] as Record<string,unknown>|undefined)?.relation)throw new Error(`Tabela ${tableName} não existe no banco de homologação.`);
 
-      const columnsResult=await client.query(
+      const columnsResult=await sql.query(
         "select column_name,data_type from information_schema.columns where table_schema='public' and table_name=$1 order by ordinal_position",
         [tableName],
       );
-      const types=new Map(columnsResult.rows.map(row=>[String(row.column_name),String(row.data_type)]));
-      await client.query(`delete from ${tableSql}`);
+      const types=new Map(columnsResult.map((row:Record<string,unknown>)=>[String(row.column_name),String(row.data_type)]));
+      await sql.query(`delete from ${tableSql}`,[]);
 
       for(const raw of table.rows){
         if(!raw||typeof raw!=="object")continue;
@@ -84,18 +82,14 @@ export async function runRestoreDrill(companyId:string){
           return `$${index+1}${cast}`;
         });
         const columnSql=columns.map(column=>`"${column.replaceAll('"','""')}"`).join(",");
-        await client.query(`insert into ${tableSql} (${columnSql}) values (${placeholders.join(",")})`,values);
+        await sql.query(`insert into ${tableSql} (${columnSql}) values (${placeholders.join(",")})`,values);
       }
-      const count=await client.query(`select count(*)::int as count from ${tableSql}`);
-      restored[tableName]=Number(count.rows[0]?.count||0);
+      const count=await sql.query(`select count(*)::int as count from ${tableSql}`,[]);
+      restored[tableName]=Number((count[0] as Record<string,unknown>|undefined)?.count||0);
       if(restored[tableName]!==table.count)throw new Error(`Contagem divergente em ${tableName}: esperado ${table.count}, restaurado ${restored[tableName]}.`);
     }
-    await client.query("commit");
   }catch(error){
-    await client.query("rollback").catch(()=>null);
     throw error;
-  }finally{
-    await client.end();
   }
 
   return{
