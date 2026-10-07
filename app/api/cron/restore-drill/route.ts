@@ -18,7 +18,7 @@ export async function GET(request:NextRequest){
     await supabaseRest("proar_state?on_conflict=id",{
       method:"POST",
       headers:{Prefer:"resolution=merge-duplicates,return=minimal"},
-      body:JSON.stringify({id:`restore-drill-status:${companyId}`,payload:{status:"ok",...result},updated_at:new Date().toISOString()}),
+      body:JSON.stringify({id:`restore-drill-status:${companyId}`,payload:{executionStatus:"ok",...result},updated_at:new Date().toISOString()}),
     }).catch(()=>null);
     return NextResponse.json({ok:true,result});
   }catch(error){
