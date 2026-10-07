@@ -11,17 +11,18 @@ import "./operations-action-center.css";
 type Props = {
   serviceOrders: Record<string, unknown>[];
   modules: Record<string, Record<string, unknown>[]>;
+  customers?: Record<string, unknown>[];
   onNavigate: (module: string) => void;
 };
 
-const categories = ["Todas", "OS", "Financeiro", "Estoque", "PMOC", "Fiscal", "Compras", "Comercial", "Aprovação", "Operação"] as const;
+const categories = ["Todas", "OS", "Financeiro", "Estoque", "PMOC", "Fiscal", "Compras", "Comercial", "Aprovação", "Licitações", "Obras", "Integrações", "Sincronização", "Usuários", "Clientes", "Operação"] as const;
 const priorityLabel: Record<number,string> = {1:"Crítica",2:"Atenção",3:"Follow-up"};
 
-export function OperationsActionCenter({ serviceOrders, modules, onNavigate }: Props) {
+export function OperationsActionCenter({ serviceOrders, modules, customers=[], onNavigate }: Props) {
   const [category,setCategory]=useState<(typeof categories)[number]>("Todas");
   const [priority,setPriority]=useState("Todas");
   const [query,setQuery]=useState("");
-  const actions=useMemo(()=>deriveOperationalActions(serviceOrders,modules),[serviceOrders,modules]);
+  const actions=useMemo(()=>deriveOperationalActions(serviceOrders,modules,new Date(),customers),[serviceOrders,modules,customers]);
   const summary=useMemo(()=>summarizeOperationalActions(actions),[actions]);
   const command=useMemo(()=>buildCommandCenter(serviceOrders,modules),[serviceOrders,modules]);
   const exceptions=useMemo(()=>deriveExceptionCenter(serviceOrders,modules),[serviceOrders,modules]);
@@ -39,7 +40,7 @@ export function OperationsActionCenter({ serviceOrders, modules, onNavigate }: P
 
   return <section className="operations-center module-page">
     <div className="management-hero">
-      <div><span className="section-kicker"><Bell size={12}/> CENTRAL OPERACIONAL</span><h2>Pendências e próximas ações</h2><p>Prioridades consolidadas de OS, financeiro, estoque, PMOC, fiscal, compras e comercial.</p></div>
+      <div><span className="section-kicker"><Bell size={12}/> CENTRAL OPERACIONAL</span><h2>Pendências e próximas ações</h2><p>Fila única de OS, orçamentos, licitações, estoque, PMOC, clientes, obras, sincronização, integrações e usuários.</p></div>
       <div className="operations-health"><CheckCircle2 size={18}/><span><b>{summary.total}</b> ação(ões) identificada(s)</span></div>
     </div>
     <div className="operations-summary">
