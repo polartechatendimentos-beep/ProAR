@@ -7,6 +7,8 @@ import { tenantSlugFromHost } from "../../../lib/tenant-host";
 import { validateCompanyAccess, validateCompanyAccessBySlug } from "../../../lib/company-access";
 import { validateManagerCredentials } from "../../../lib/manager-auth";
 import { classifyProarError } from "../../../lib/system-errors";
+import { identityClaims, hasAdministrativeClaim } from "../../../lib/identity-claims";
+import { buildCompanyConfiguration } from "../../../lib/company-configuration";
 const COOKIE_NAME = "proar_session";
 const PRIMARY_COMPANY_ID = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
 const PRIMARY_COMPANY_SLUG = (process.env.PROAR_PRIMARY_COMPANY_SLUG || "polartech").trim().toLowerCase();
@@ -37,8 +39,10 @@ async function authenticateLegacyEmployee(username: string, password: string) {
       if (!inside) return { denied: true as const, reason: `Login permitido somente no expediente configurado (${start}–${end}, horário de Brasília).` };
     }
     const permissionsMap = (employee.employeePermissions ?? {}) as Record<string, string[]>;
-    const permissions = String(employee.employeeRole || "") === "Administrador" ? ["*"] : Object.entries(permissionsMap).flatMap(([module, actions]) => actions.includes("Visualizar") ? [module, ...actions.map(action => `${module}:${action}`)] : []);
-    return { username: String(employee.employeeUsername || normalized), displayName: String(employee.name || normalized), role: String(employee.employeeRole || "Utilizador"), permissions, companyId: primaryCompanyId, legacy: true };
+    const basePermissions = Object.entries(permissionsMap).flatMap(([module, actions]) => actions.includes("Visualizar") ? [module, ...actions.map(action => `${module}:${action}`)] : []);
+    const claims=identityClaims({username:String(employee.employeeUsername||normalized),permissions:basePermissions});
+    const permissions=hasAdministrativeClaim(claims)?[...new Set([...basePermissions,"*"])]:basePermissions;
+    return { username: String(employee.employeeUsername || normalized), displayName: String(employee.name || normalized), role: String(employee.employeeRole || "Utilizador"), permissions, claims, companyId: primaryCompanyId, legacy: true };
   }
   return null;
 }
@@ -47,6 +51,10 @@ export async function GET(request: NextRequest) {
   const user = readSession(request.cookies.get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.json({ authenticated: false }, { status: 401 });
   let entitledModules = user.entitledModules;
+  let moduleIds = user.moduleIds;
+  let configurationVersion=user.configurationVersion;
+  let configurationState:"ready"|"error"="ready";
+  let claims=[...new Set([...(user.claims||[]),...identityClaims({username:user.username,permissions:user.permissions})])];
   if (user.companyId) {
     const access = user.companySlug
       ? await validateCompanyAccessBySlug(user.companySlug)
@@ -63,9 +71,16 @@ export async function GET(request: NextRequest) {
       }
       console.warn("AUTH_PRIMARY_MANAGER_UNAVAILABLE", { companyId:user.companyId, companySlug:user.companySlug });
     }
-    if (Array.isArray(access.company?.modules)) entitledModules = access.company?.modules as string[];
+    if (access.configurationAvailable && Array.isArray(access.company?.modules)) {
+      const config=buildCompanyConfiguration(access.company||{},[]);
+      entitledModules=config.contractedModules;
+      moduleIds=config.contractedModuleIds;
+      configurationVersion=config.configurationVersion;
+    } else if (access.ok) {
+      configurationState="error";
+    }
   }
-  return NextResponse.json({ authenticated: true, ...user, entitledModules });
+  return NextResponse.json({ authenticated: true, ...user, claims, entitledModules, moduleIds, configurationVersion, configurationState });
 }
 
 async function handlePostAuth(request: NextRequest) {
@@ -86,7 +101,8 @@ async function handlePostAuth(request: NextRequest) {
     }
   }
   const isConfiguredTiago = String(username).trim().toLocaleLowerCase("pt-BR") === "tiago.viana" && Boolean(process.env.PROAR_POLARTECH_TIAGO_PASSWORD) && safeEqual(String(password), String(process.env.PROAR_POLARTECH_TIAGO_PASSWORD));
-  if (validateManagerCredentials(String(username), String(password)) || isConfiguredTiago) {
+  const managerCredentialValid=validateManagerCredentials(String(username), String(password));
+  if (managerCredentialValid || isConfiguredTiago) {
     let companyId = PRIMARY_COMPANY_ID;
     let companySlug = resolvedTenant || PRIMARY_COMPANY_SLUG;
     let entitledModules: string[] | undefined;
@@ -99,17 +115,19 @@ async function handlePostAuth(request: NextRequest) {
         entitledModules = Array.isArray(tenantRows[0].modules) ? tenantRows[0].modules : undefined;
       }
     }
-    const claims = { username: String(username), displayName: "Tiago Viana", role: "Administrador", permissions: ["*"], companyId, companySlug, entitledModules };
-    const response = NextResponse.json({ authenticated: true, ...claims });
-    response.cookies.set(COOKIE_NAME, createSessionForUser(claims), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 });
+    const formalClaims=identityClaims({username:String(username),permissions:["*"],managerAuthenticated:managerCredentialValid||isConfiguredTiago});
+    const sessionClaims = { username: String(username), displayName: "Tiago Viana", role: "Administrador", permissions: ["*"], claims:formalClaims, companyId, companySlug, entitledModules };
+    const response = NextResponse.json({ authenticated: true, ...sessionClaims });
+    response.cookies.set(COOKIE_NAME, createSessionForUser(sessionClaims), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 });
     return response;
   }
   // Usuários administrativos/legados continuam válidos também no domínio oficial.
   // O tenant só é usado como fallback quando não houver usuário existente.
   const staticUser = authenticate(String(username), String(password));
   if (staticUser) {
-    const claims = { username: staticUser.username, displayName: staticUser.displayName, role: staticUser.role, permissions: staticUser.permissions };
-    const response = NextResponse.json({ authenticated: true, ...claims }); response.cookies.set(COOKIE_NAME, createSessionForUser(claims), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 }); return response;
+    const formalClaims=identityClaims({username:staticUser.username,permissions:staticUser.permissions});
+    const sessionClaims = { username: staticUser.username, displayName: staticUser.displayName, role: staticUser.role, permissions: staticUser.permissions, claims:formalClaims };
+    const response = NextResponse.json({ authenticated: true, ...sessionClaims }); response.cookies.set(COOKIE_NAME, createSessionForUser(sessionClaims), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 }); return response;
   }
 
   const legacyEmployee = await authenticateLegacyEmployee(String(username), String(password));
@@ -133,11 +151,13 @@ async function handlePostAuth(request: NextRequest) {
         if (!String(user.password_hash || "").startsWith("scrypt$")) {
           void supabaseRest(`proar_trial_users?company_id=eq.${encodeURIComponent(company.id)}&username=eq.${encodeURIComponent(String(user.username))}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ password_hash: hashPassword(String(password)), updated_at: new Date().toISOString() }) });
         }
-        const isTiagoAdministrator = String(user.username).toLowerCase() === "tiago.viana" && String(user.role) === "Administrador";
-        const permissions = String(user.role) === "Administrador" || isTiagoAdministrator ? ["*"] : (Array.isArray(user.permissions) ? user.permissions : []);
-        const claims = { username: user.username, displayName: user.display_name, role: user.role, permissions, companyId: company.id, companySlug: company.slug, trialExpiresAt: company.trial_expires_at, entitledModules:Array.isArray(company.modules)?company.modules:undefined };
-        const response = NextResponse.json({ authenticated: true, ...claims, mustChangePassword: user.must_change_password, company: { id: company.id, slug: company.slug, tradeName: company.trade_name, modules: company.modules } });
-        response.cookies.set(COOKIE_NAME, createSessionForUser(claims), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 }); return response;
+        const basePermissions=Array.isArray(user.permissions)?user.permissions:[];
+        const formalClaims=identityClaims({username:user.username,permissions:basePermissions});
+        const permissions=hasAdministrativeClaim(formalClaims)?[...new Set([...basePermissions,"*"])]:basePermissions;
+        const companyConfig=buildCompanyConfiguration(company,[]);
+        const sessionClaims = { username: user.username, displayName: user.display_name, role: user.role, permissions, claims:formalClaims, companyId: company.id, companySlug: company.slug, trialExpiresAt: company.trial_expires_at, entitledModules:companyConfig.contractedModules, moduleIds:companyConfig.contractedModuleIds, configurationVersion:companyConfig.configurationVersion };
+        const response = NextResponse.json({ authenticated: true, ...sessionClaims, mustChangePassword: user.must_change_password, company: { id: company.id, slug: company.slug, tradeName: company.trade_name, modules: company.modules } });
+        response.cookies.set(COOKIE_NAME, createSessionForUser(sessionClaims), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 }); return response;
       }
     }
   }
