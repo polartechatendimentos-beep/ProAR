@@ -23,6 +23,7 @@ type DeploymentSafety={environment?:string;currentCommit?:string;currentDeployme
 type StateSnapshot={id:number;company_id:string;state_id:string;revision:number;reason:string;created_by?:string;created_at:string};
 type PlatformInfo={appVersion:string;releaseDate:string;releaseTitle:string;schemaVersion:string;channel:string;migrations:{id:string;title:string;status:string;destructive:boolean;description:string}[]};
 type ManagerPlan={code:string;name:string;description:string;modules:string[];limits:{users:number;serviceOrdersPerMonth:number;storageGb:number;aiCallsPerMonth:number}};
+type ModuleGroup={code:string;name:string;description:string;modules:string[]};
 type ModuleEntitlement={company_id:string;module_name:string;enabled:boolean;monthly_price_cents:number;plan_code?:string};
 type BillingDraft={enabled:boolean;billingDay:string;leadDays:string;method:"pix"|"boleto"|"card";autoBlock:boolean;email:string};
 type ModuleDraft=Record<string,{enabled:boolean;price:string}>;
@@ -43,6 +44,7 @@ export default function ManagerPage(){
   const[receivables,setReceivables]=useState<Receivable[]>([]);
   const[entitlements,setEntitlements]=useState<ModuleEntitlement[]>([]);
   const[moduleCatalog,setModuleCatalog]=useState<string[]>([]);
+  const[moduleGroups,setModuleGroups]=useState<ModuleGroup[]>([]);
   const[error,setError]=useState("");
   const[notice,setNotice]=useState("");
   const[loading,setLoading]=useState(false);
@@ -89,6 +91,7 @@ export default function ManagerPage(){
       setPlans(companiesJson.plans||[]);
       setEntitlements(companiesJson.entitlements||[]);
       setModuleCatalog(companiesJson.moduleCatalog||[]);
+      setModuleGroups(companiesJson.moduleGroups||[]);
 
       const deploymentResponse=await fetch("/api/manager/deployment-safety",{cache:"no-store"}).catch(()=>null);
       if(deploymentResponse?.ok)setDeploymentSafety(await deploymentResponse.json());else setDeploymentSafety(null);
@@ -417,7 +420,7 @@ export default function ManagerPage(){
 
           {detailTab==="Banco"&&<div className="manager-detail-tab"><p><b>{selectedCompany.tenant?.databaseName||"—"}</b> • {selectedInstance?.provider||"—"} • {selectedInstance?.provisioning_status||"não provisionado"}</p><p>{selectedInstance?.last_health_at?`Último health check: ${dateTime(selectedInstance.last_health_at)}`:"Health check ainda não executado."}</p><div className="manager-inline-actions"><button onClick={()=>void patch(selectedCompany.id,{checkTenantHealth:true})}>Verificar banco</button>{selectedCompany.tenant?.role==="primary-pilot"&&(!selectedInstance||selectedInstance.provisioning_status!=="ready")&&<button onClick={()=>void patch(selectedCompany.id,{registerPrimaryPilot:true})}>Consolidar Tenant 1</button>}{selectedInstance&&selectedInstance.provisioning_status!=="ready"&&selectedCompany.tenant?.role!=="primary-pilot"&&<button onClick={()=>void patch(selectedCompany.id,{retryProvisioning:true})}>Finalizar banco</button>}</div></div>}
 
-          {detailTab==="Plano e módulos"&&<div className="manager-detail-tab"><label>Plano<select value={selectedCompany.plan_code||"trial"} onChange={e=>void patch(selectedCompany.id,{planCode:e.target.value})}>{plans.map(plan=><option key={plan.code} value={plan.code}>{plan.name}</option>)}</select></label><div className="manager-module-chips">{(selectedCompany.modules||plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.modules||[]).map(module=><span key={module}>{module}</span>)}</div>{plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))&&<small>Limites: {plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.limits.users} usuários • {plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.limits.serviceOrdersPerMonth} OS/mês • {plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.limits.storageGb} GB • {plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.limits.aiCallsPerMonth} IA/mês</small>}</div>}
+          {detailTab==="Plano e módulos"&&<div className="manager-detail-tab"><label>Plano<select value={selectedCompany.plan_code||"trial"} onChange={e=>void patch(selectedCompany.id,{planCode:e.target.value})}>{plans.map(plan=><option key={plan.code} value={plan.code}>{plan.name}</option>)}</select></label><div className="manager-module-groups">{groupedModuleCatalog.map(group=>{const activeModules=(selectedCompany.modules||plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.modules||[]).filter(moduleName=>group.modules.includes(moduleName));if(!activeModules.length)return null;return <section key={group.code} className="manager-module-group"><header><div><b>{group.name}</b><small>{group.description}</small></div><em>{activeModules.length}</em></header><div className="manager-module-chips">{activeModules.map(module=><span key={module}>{module}</span>)}</div></section>})}</div>{plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))&&<small>Limites: {plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.limits.users} usuários • {plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.limits.serviceOrdersPerMonth} OS/mês • {plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.limits.storageGb} GB • {plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.limits.aiCallsPerMonth} IA/mês</small>}</div>}
 
           {detailTab==="Cobrança"&&<div className="manager-detail-tab">
             <div className="manager-billing-form">
@@ -431,11 +434,11 @@ export default function ManagerPage(){
             </div>
             <div className="manager-module-pricing">
               <header><div><b>Módulos contratados</b><span>O total da mensalidade é a soma dos módulos habilitados.</span></div><strong>{money(moduleTotalCents)}</strong></header>
-              <div>{Object.entries(moduleDraft).map(([moduleName,item])=><label key={moduleName} className={item.enabled?"enabled":""}>
+              <div className="manager-module-pricing-groups">{groupedModuleCatalog.map(group=>{const entries=group.modules.filter(moduleName=>moduleDraft[moduleName]).map(moduleName=>[moduleName,moduleDraft[moduleName]] as const);if(!entries.length)return null;const enabledCount=entries.filter(([,item])=>item.enabled).length;return <section key={group.code} className="manager-pricing-group"><header><div><b>{group.name}</b><small>{group.description}</small></div><em>{enabledCount}/{entries.length}</em></header><div className="manager-pricing-group-list">{entries.map(([moduleName,item])=><label key={moduleName} className={item.enabled?"enabled":""}>
                 <input type="checkbox" checked={item.enabled} onChange={e=>setModuleDraft(current=>({...current,[moduleName]:{...current[moduleName],enabled:e.target.checked}}))}/>
                 <span>{moduleName}</span>
                 <input className="module-price" inputMode="decimal" value={item.price} disabled={!item.enabled} onChange={e=>setModuleDraft(current=>({...current,[moduleName]:{...current[moduleName],price:e.target.value}}))}/>
-              </label>)}</div>
+              </label>)}</div></section>})}</div>
             </div>
             <div className="manager-inline-actions"><button onClick={()=>void saveBilling()}>Salvar cobrança</button><button onClick={()=>void billingAction({action:"issue-current",companyId:selectedCompany.id})}>Gerar mensalidade atual</button><button onClick={()=>void billingAction({action:"sync-access",companyId:selectedCompany.id})}>Revalidar acesso</button></div>
             <div className="manager-mini-receivables">{selectedReceivables.slice(0,8).map(row=><article key={row.id}><div><b>{row.description}</b><span>{date(row.due_date)} • {money(row.amount_cents)}</span></div><em>{row.status==="paid"?"PAGA":row.status==="pending"?"EM ABERTO":row.status.toUpperCase()}</em></article>)}{!selectedReceivables.length&&<div className="manager-empty">Nenhuma mensalidade desta empresa.</div>}</div>
