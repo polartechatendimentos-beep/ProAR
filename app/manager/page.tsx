@@ -317,6 +317,16 @@ export default function ManagerPage(){
         </div>
       </section>
 
+      <section className="manager-panel manager-plans-overview">
+        <div className="panel-head"><div><h2>Planos comerciais</h2><p>Somente três níveis de contratação. Os recursos são liberados pelo plano, sem módulos avulsos.</p></div></div>
+        <div className="manager-plan-grid">{plans.map(plan=><article key={"overview-"+plan.code} className="manager-plan-card manager-plan-card-static">
+          <header><div><b>{plan.name}</b><small>{userLimitLabel(plan.limits.users)} • {plan.modules.length} recursos</small></div></header>
+          <p>{plan.description}</p>
+          <div className="manager-plan-features">{plan.modules.slice(0,6).map(module=><span key={module}>{module}</span>)}{plan.modules.length>6&&<span>+ {plan.modules.length-6} recursos</span>}</div>
+          <small>{userLimitLabel(plan.limits.users)} • {plan.limits.serviceOrdersPerMonth} OS/mês • {plan.limits.storageGb} GB</small>
+        </article>)}</div>
+      </section>
+
       <section className="manager-panel">
         <div className="panel-head"><div><h2>Empresas</h2><p>Cada empresa possui ambiente e banco operacional isolados, com acesso e cobrança controlados pelo Manager.</p></div></div>
         {loading?<div className="manager-empty">Carregando empresas...</div>:<div className="manager-company-grid">
