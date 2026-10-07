@@ -5,6 +5,10 @@ export type ProARErrorCode =
   | "PROAR-DB-002"
   | "PROAR-DB-003"
   | "PROAR-DB-004"
+  | "PROAR-DB-005"
+  | "PROAR-DATA-001"
+  | "PROAR-INTEGRATION-003"
+  | "PROAR-INTEGRATION-004"
   | "PROAR-FISCAL-001"
   | "PROAR-INTEGRATION-001"
   | "PROAR-INTEGRATION-002"
@@ -28,6 +32,10 @@ const descriptors:Record<ProARErrorCode,ProARErrorDescriptor>={
   "PROAR-DB-002":{code:"PROAR-DB-002",title:"Banco lento",userMessage:"O banco está demorando mais que o esperado para responder.",severity:"warning"},
   "PROAR-DB-003":{code:"PROAR-DB-003",title:"Modo de contingência",userMessage:"O banco está temporariamente indisponível. A última cópia sincronizada foi preservada.",severity:"critical"},
   "PROAR-DB-004":{code:"PROAR-DB-004",title:"Limite do banco excedido",userMessage:"O banco está temporariamente bloqueado por limite de uso do provedor. A última cópia sincronizada foi preservada.",severity:"critical"},
+  "PROAR-DB-005":{code:"PROAR-DB-005",title:"Configuração do banco inválida",userMessage:"A configuração do banco precisa de correção antes de continuar.",severity:"critical"},
+  "PROAR-DATA-001":{code:"PROAR-DATA-001",title:"Resposta vazia",userMessage:"O serviço respondeu, mas não retornou os dados esperados.",severity:"warning"},
+  "PROAR-INTEGRATION-003":{code:"PROAR-INTEGRATION-003",title:"Timeout de integração",userMessage:"Uma integração externa excedeu o tempo de resposta. Tente novamente.",severity:"warning"},
+  "PROAR-INTEGRATION-004":{code:"PROAR-INTEGRATION-004",title:"Resposta vazia da integração",userMessage:"A integração respondeu sem conteúdo válido. O último resultado confirmado foi preservado.",severity:"warning"},
   "PROAR-FISCAL-001":{code:"PROAR-FISCAL-001",title:"Integração fiscal",userMessage:"A integração fiscal precisa de atenção antes da emissão.",severity:"warning"},
   "PROAR-INTEGRATION-001":{code:"PROAR-INTEGRATION-001",title:"Integração indisponível",userMessage:"Uma integração externa está indisponível no momento.",severity:"warning"},
   "PROAR-INTEGRATION-002":{code:"PROAR-INTEGRATION-002",title:"Integração não configurada",userMessage:"Esta integração ainda não está configurada para o ambiente atual.",severity:"info"},
@@ -49,9 +57,13 @@ export function classifyProarError(input:unknown,status?:number):ProARErrorDescr
   if(status===403||/forbidden|sem permiss[aã]o|permission denied/.test(value)) return proarError("PROAR-PERM-001");
   if(status===409||/conflito|conflict|revision/.test(value)) return proarError("PROAR-CONFLICT-001");
   if(status===402||/quota|exceeded the quota|usage limit|resource limit|payment required/.test(value)) return proarError("PROAR-DB-004");
+  if(/database.*not configured|banco.*n[aã]o configurado|missing.*database|connection string.*missing|invalid.*database url|credencial.*banco/.test(value)) return proarError("PROAR-DB-005");
+  if((status===408||status===504||/timeout|timed out|abort/.test(value)) && /pncp|cnpj|brasilapi|receita|integration|api externa/.test(value)) return proarError("PROAR-INTEGRATION-003");
   if(status===408||status===504||/timeout|timed out|abort/.test(value)) return proarError("PROAR-DB-002");
   if(/coming_up|inactive|database.*paused|project.*paused|connection terminated/.test(value)) return proarError("PROAR-DB-003");
   if(status && status>=500 || /database|postgres|supabase|neon|fetch failed|econn/.test(value)) return proarError("PROAR-DB-001");
+  if(/empty response|resposta vazia|sem conte[uú]do|payload vazio/.test(value) && /pncp|cnpj|brasilapi|receita|integration|api externa/.test(value)) return proarError("PROAR-INTEGRATION-004");
+  if(/empty response|resposta vazia|sem conte[uú]do|payload vazio/.test(value)) return proarError("PROAR-DATA-001");
   if(/fiscal|sefaz|nf-e|nfce|nfse|dfe/.test(value)) return proarError("PROAR-FISCAL-001");
   if(/vercel|deployment|deploy|rollback|promotion/.test(value)) return proarError("PROAR-DEPLOY-001");
   return proarError("PROAR-UNKNOWN-001");
