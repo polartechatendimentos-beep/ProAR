@@ -7,7 +7,7 @@ export type OperationalAction = {
   module: string;
   tone: OperationalActionTone;
   priority: 1 | 2 | 3;
-  category: "OS" | "Financeiro" | "Estoque" | "PMOC" | "Fiscal" | "Compras" | "Comercial" | "Aprovação" | "Operação";
+  category: "OS" | "Financeiro" | "Estoque" | "PMOC" | "Fiscal" | "Compras" | "Comercial" | "Aprovação" | "Operação" | "Licitações" | "Obras" | "Integrações" | "Sincronização" | "Usuários" | "Clientes";
   dueDate?: string;
   recordId?: string;
 };
@@ -75,6 +75,7 @@ export function deriveOperationalActions(
   serviceOrders: GenericRecord[],
   modules: Record<string, GenericRecord[]>,
   now = new Date(),
+  customers: GenericRecord[] = [],
 ): OperationalAction[] {
   const today = now.toISOString().slice(0, 10);
   const actions: OperationalAction[] = [];
@@ -109,6 +110,18 @@ export function deriveOperationalActions(
       });
     }
     if (/conclu[ií]d|cancelad/i.test(status)) continue;
+    if (!String(order.tech||"").trim()) {
+      actions.push({
+        id:`os-no-tech-${order.id}`,
+        title:`OS sem técnico • ${order.id}`,
+        detail:[order.client,order.service,"Defina o responsável antes do atendimento"].filter(Boolean).join(" • "),
+        module:"Ordens de serviço",
+        tone:"red",
+        priority:1,
+        category:"OS",
+        recordId:String(order.id||""),
+      });
+    }
     const orderDate = dateOnly(order.date);
     if (orderDate && orderDate < today) {
       actions.push({
@@ -284,6 +297,55 @@ export function deriveOperationalActions(
         });
       }
 
+      if ((module === "Licitações" || module === "Certames") && !/encerrad|cancelad|finalizad|perdid/i.test(recordText)) {
+        const deadline=dateOnly(record.proposalDeadline||record.closingDate||record.openingDate||record.endDate||record.dueDate||record.date);
+        if(deadline){
+          const days=daysBetween(today,deadline);
+          if(days>=0&&days<=7) actions.push({
+            id:`procurement-deadline-${recordId}`,
+            title:`Licitação com prazo próximo • ${record.name||record.numeroControlePNCP||recordId}`,
+            detail:[record.client||record.orgaoEntidade,deadline,`${days} dia(s) restantes`].filter(Boolean).join(" • "),
+            module:"Licitações",tone:days<=2?"red":"amber",priority:days<=2?1:2,category:"Licitações",dueDate:deadline,recordId,
+          });
+        }
+      }
+
+      if (module === "Obras" && /apontamento|pendente|aguardando|corre[cç][aã]o/i.test(recordText)) {
+        actions.push({
+          id:`work-pending-${recordId}`,
+          title:`Obra com apontamento pendente • ${record.name||recordId}`,
+          detail:[record.client,record.blockLot,record.status].filter(Boolean).join(" • "),
+          module:"Obras",tone:"amber",priority:2,category:"Obras",recordId,
+        });
+      }
+
+      if (/integra[cç][aã]o|pncp|cnpj|whatsapp/i.test(module+" "+recordText) && /erro|falha|indispon|timeout|429|5\d\d/i.test(recordText)) {
+        actions.push({
+          id:`integration-${module}-${recordId}`,
+          title:`Erro de integração • ${record.name||module}`,
+          detail:[record.status,record.description].filter(Boolean).join(" • "),
+          module:"Integridade do Sistema",tone:"red",priority:1,category:"Integrações",recordId,
+        });
+      }
+
+      if (/sincron/i.test(module+" "+recordText) && /erro|falha|conflito|pendente/i.test(recordText)) {
+        actions.push({
+          id:`sync-${module}-${recordId}`,
+          title:`Sincronização pendente • ${record.name||recordId}`,
+          detail:[record.status,record.description].filter(Boolean).join(" • "),
+          module:"Integridade do Sistema",tone:/erro|falha/i.test(recordText)?"red":"amber",priority:/erro|falha/i.test(recordText)?1:2,category:"Sincronização",recordId,
+        });
+      }
+
+      if (module === "Funcionários" && (/aguardando|pendente|libera[cç][aã]o/i.test(recordText) || record.active === false)) {
+        actions.push({
+          id:`user-release-${recordId}`,
+          title:`Usuário aguardando liberação • ${record.name||recordId}`,
+          detail:[record.employeeUsername,record.employeeRole,record.status].filter(Boolean).join(" • "),
+          module:"Funcionários",tone:"amber",priority:2,category:"Usuários",recordId,
+        });
+      }
+
       if (/rejeitad|erro fiscal/i.test(recordText)) {
         actions.push({
           id: `fiscal-record-${module}-${recordId}`,
@@ -308,6 +370,19 @@ export function deriveOperationalActions(
           recordId,
         });
       }
+    }
+  }
+
+  for(const customer of customers||[]){
+    const recordId=String(customer.id||"");
+    const contact=[customer.phone,customer.contact,customer.email,customer.whatsapp].some(value=>String(value||"").trim());
+    if(!contact){
+      actions.push({
+        id:`customer-no-contact-${recordId}`,
+        title:`Cliente sem contato • ${customer.name||recordId}`,
+        detail:[customer.doc,customer.city,customer.address].filter(Boolean).join(" • "),
+        module:"Clientes",tone:"amber",priority:3,category:"Clientes",recordId,
+      });
     }
   }
 
