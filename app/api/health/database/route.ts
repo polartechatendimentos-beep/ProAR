@@ -65,16 +65,19 @@ export async function GET(request:NextRequest){
       },{status:503,headers:{"Cache-Control":"no-store"}});
     }
 
-    const [metrics,stateResponse,backupResponse,incidentsResponse]=await Promise.all([
+    const [metrics,stateResponse,backupResponse,externalBackupResponse,incidentsResponse]=await Promise.all([
       primaryDatabaseMetrics().catch(()=>null),
       databaseFetch(`${db.url}/rest/v1/proar_state?select=id,payload,updated_at&order=updated_at.desc&limit=200`,{headers:tenantHeaders(db.key),cache:"no-store"}).catch(()=>null),
       databaseFetch(`${db.url}/rest/v1/proar_state_snapshots?company_id=eq.${encodeURIComponent(access.companyId)}&select=id,revision,reason,created_at&order=created_at.desc&limit=1`,{headers:tenantHeaders(db.key),cache:"no-store"}).catch(()=>null),
+      databaseFetch(`${db.url}/rest/v1/proar_state?id=eq.${encodeURIComponent(`backup-status:${access.companyId}`)}&select=payload,updated_at&limit=1`,{headers:tenantHeaders(db.key),cache:"no-store"}).catch(()=>null),
       databaseFetch(`${db.url}/rest/v1/proar_system_incidents?company_id=eq.${encodeURIComponent(access.companyId)}&created_at=gte.${encodeURIComponent(new Date(Date.now()-24*60*60*1000).toISOString())}&select=technical_message,metadata,created_at&order=created_at.desc&limit=200`,{headers:tenantHeaders(db.key),cache:"no-store"}).catch(()=>null),
     ]);
 
     const states=stateResponse?.ok?await stateResponse.json() as AnyRow[]:[];
     const operational=states.find(row=>operationalPayload(row.payload));
     const backups=backupResponse?.ok?await backupResponse.json() as AnyRow[]:[];
+    const externalBackups=externalBackupResponse?.ok?await externalBackupResponse.json() as AnyRow[]:[];
+    const externalBackupPayload=(externalBackups[0]?.payload&&typeof externalBackups[0].payload==="object"?externalBackups[0].payload:{}) as AnyRow;
     const incidents=incidentsResponse?.ok?await incidentsResponse.json() as AnyRow[]:[];
     const counts={http5xx:0,http401:0,http403:0,http429:0};
 
@@ -106,7 +109,9 @@ export async function GET(request:NextRequest){
       quota,
       observedErrors24h:counts,
       lastSuccessfulSync:operational?.updated_at||payload._updatedAt||null,
-      lastConfirmedBackup:backups[0]?.created_at||null,
+      lastConfirmedBackup:externalBackupPayload.status==="ok"?(externalBackupPayload.createdAt||externalBackups[0]?.updated_at||null):(backups[0]?.created_at||null),
+      backupType:externalBackupPayload.status==="ok"?"external-private-blob":backups[0]?"database-snapshot":null,
+      backupRecords:externalBackupPayload.status==="ok"?((externalBackupPayload.totals as AnyRow|undefined)?.records??null):null,
       backupRevision:backups[0]?.revision??null,
       runtime,
       checkedAt,
