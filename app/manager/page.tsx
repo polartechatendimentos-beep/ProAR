@@ -442,13 +442,8 @@ export default function ManagerPage(){
 
           {detailTab==="Plano e módulos"&&<div className="manager-detail-tab">
             {selectedCompany.plan_code==="trial"&&<div className="manager-warning"><AlertTriangle size={16}/><span>O Trial usa os recursos e o limite de usuários do plano Básico. Ao selecionar um plano comercial, o período de teste é convertido.</span></div>}
-            <div className="manager-plan-grid">{plans.map(plan=><button key={plan.code} className={"manager-plan-card "+(selectedPlanCode===plan.code?"active":"")} disabled={selectedCompany.tenant?.role==="primary-pilot"&&plan.code!=="completo"} onClick={()=>{
-              if(selectedPlanCode===plan.code)return;
-              const removed=(selectedPlan?.modules||[]).filter(module=>!plan.modules.includes(module));
-              const message=removed.length?"Trocar para "+plan.name+"? "+removed.length+" recurso(s) ficarão indisponíveis, mas os dados serão preservados.":"Trocar para "+plan.name+"?";
-              if(window.confirm(message))void patch(selectedCompany.id,{planCode:plan.code,status:"active"});
-            }}>
-              <header><div><b>{plan.name}</b><small>{userLimitLabel(plan.limits.users)} • {plan.modules.length} recursos</small></div>{selectedPlanCode===plan.code&&<span>ATUAL</span>}</header>
+            <div className="manager-plan-grid">{plans.map(plan=><button key={plan.code} className={"manager-plan-card "+(effectivePlanDraftCode===plan.code?"active":"")} disabled={selectedCompany.tenant?.role==="primary-pilot"&&plan.code!=="completo"} onClick={()=>setSelectedPlanDraftCode(plan.code)}>
+              <header><div><b>{plan.name}</b><small>{userLimitLabel(plan.limits.users)} • {plan.modules.length} recursos</small></div>{effectivePlanDraftCode===plan.code&&<span>{plan.code===selectedPlanCode?"ATUAL":"SELECIONADO"}</span>}</header>
               <p>{plan.description}</p>
               <div className="manager-plan-features">{plan.modules.slice(0,8).map(module=><span key={module}>{module}</span>)}{plan.modules.length>8&&<span>+ {plan.modules.length-8} recursos</span>}</div>
               <small>{userLimitLabel(plan.limits.users)} • {plan.limits.serviceOrdersPerMonth} OS/mês • {plan.limits.storageGb} GB</small>
@@ -467,13 +462,21 @@ export default function ManagerPage(){
               <label className="manager-check"><input type="checkbox" checked={billingDraft.autoBlock} onChange={e=>setBillingDraft(v=>({...v,autoBlock:e.target.checked}))}/><span>Bloquear automaticamente após vencimento</span></label>
             </div>
             <div className="manager-plan-billing-summary"><b>Plano {selectedPlan?.name||"Básico"}</b><span>{userLimitLabel(selectedPlan?.limits.users??2)} • {selectedPlan?.modules.length||0} recursos. A mensalidade é definida pelo plano, sem cobrança por recurso individual.</span></div>
-            <div className="manager-inline-actions"><button onClick={()=>void saveBilling()}>Salvar cobrança</button><button onClick={()=>void billingAction({action:"issue-current",companyId:selectedCompany.id})}>Gerar mensalidade atual</button><button onClick={()=>void billingAction({action:"sync-access",companyId:selectedCompany.id})}>Revalidar acesso</button></div>
+            <div className="manager-inline-actions"><button onClick={()=>void billingAction({action:"issue-current",companyId:selectedCompany.id})}>Gerar mensalidade atual</button><button onClick={()=>void billingAction({action:"sync-access",companyId:selectedCompany.id})}>Revalidar acesso</button></div>
             <div className="manager-mini-receivables">{selectedReceivables.slice(0,8).map(row=><article key={row.id}><div><b>{row.description}</b><span>{date(row.due_date)} • {money(row.amount_cents)}</span></div><em>{row.status==="paid"?"PAGA":row.status==="pending"?"EM ABERTO":row.status.toUpperCase()}</em></article>)}{!selectedReceivables.length&&<div className="manager-empty">Nenhuma mensalidade desta empresa.</div>}</div>
           </div>}
 
           {detailTab==="Segurança"&&<div className="manager-detail-tab"><p>O bloqueio registra a origem. Pagamentos só removem bloqueios de cobrança; bloqueios manuais e trials vencidos não são liberados pelo webhook.</p><div className="manager-inline-actions"><button className={selectedCompany.status==="active"?"danger":"success"} onClick={()=>void patch(selectedCompany.id,{status:selectedCompany.status==="active"?"blocked":"active"})}>{selectedCompany.status==="active"?"Bloquear manualmente":"Tentar liberar"}</button>{selectedCompany.plan_code==="trial"&&<button onClick={()=>void patch(selectedCompany.id,{extendTrialDays:7})}>Prorrogar trial +7 dias</button>}</div></div>}
 
           {detailTab==="Logs"&&<div className="manager-detail-tab manager-mini-logs">{audit.filter(row=>row.company_id===selectedCompany.id).slice(0,12).map(row=><article key={String(row.id||row.created_at)}><b>{row.action||"Ação"}</b><span>{row.actor||"Sistema"}</span><small>{dateTime(row.created_at)}</small></article>)}</div>}
+
+          {hasUnsavedCompanyChanges&&<div className="manager-save-bar" role="status" aria-live="polite">
+            <div><span>Alterações não salvas</span><small>{planDirty&&billingDirty?"Plano e cobrança foram alterados.":planDirty?"O plano selecionado ainda não foi aplicado.":"Existem alterações na cobrança aguardando confirmação."}</small></div>
+            <div>
+              <button type="button" className="manager-save-cancel" onClick={resetCompanyDraft} disabled={savingCompanyChanges}><X size={15}/> Cancelar</button>
+              <button type="button" className="manager-save-primary" onClick={()=>void saveCompanyChanges()} disabled={savingCompanyChanges}><Save size={15}/>{savingCompanyChanges?" Salvando...":" Salvar alterações"}</button>
+            </div>
+          </div>}
 
           <nav><a href={selectedCompany.slug?`https://${selectedCompany.slug}.proar.online`:"#"} target="_blank" rel="noreferrer">Abrir ambiente</a></nav>
         </section>
