@@ -11,7 +11,8 @@ test("auth route blocks tenant before credentials when Manager marks company blo
 
 test("active sessions are revoked when Manager access becomes blocked",async()=>{
   const source=await readFile(new URL("../app/page.tsx",import.meta.url),"utf8");
-  assert.ok(source.includes("window.setInterval(verifyManagerAccess, 60 * 1000)"));
+  assert.ok(source.includes('fetch("/api/company-config"'));
+  assert.ok(source.includes("window.setInterval(()=>void loadCompanyConfiguration(true),60*1000)"));
   assert.ok(source.includes('localStorage.removeItem("proar-offline-session")'));
   assert.ok(source.includes('setAuthenticatedUser(null)'));
 });
