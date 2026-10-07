@@ -38,7 +38,8 @@ test("Tenant auth and UI enforce contracted modules",async()=>{
   assert.ok(auth.includes("entitledModules"));
   assert.ok(session.includes("entitledModules?: string[]"));
   assert.ok(page.includes("Módulo não contratado"));
-  assert.ok(page.includes("entitledModules={authenticatedUser.entitledModules}"));
+  assert.ok(page.includes("contractedModuleIds={authenticatedUser.moduleIds}"));
+  assert.ok(page.includes("isModuleContracted(current,authenticatedUser.moduleIds)"));
   assert.ok(page.includes("const planBlocked"));
 });
 
