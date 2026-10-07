@@ -3666,7 +3666,7 @@ export default function Home() {
   const [databaseMode, setDatabaseMode] = useState<"online" | "degraded" | "offline">("online");
   const [lastSuccessfulSyncAt, setLastSuccessfulSyncAt] = useState("");
   const primaryTenantAccess = isPrimaryPolartechClient(authenticatedUser);
-  const effectiveEntitledModules = primaryTenantAccess ? navigationModuleNames() : authenticatedUser?.entitledModules;
+  const effectiveEntitledModules = useMemo(() => primaryTenantAccess ? navigationModuleNames() : authenticatedUser?.entitledModules, [primaryTenantAccess, authenticatedUser?.entitledModules]);
   useEffect(() => {
     const navigate = (event: Event) => setCurrent((event as CustomEvent<string>).detail);
     window.addEventListener("proar:navigate", navigate);
