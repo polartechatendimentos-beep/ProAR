@@ -11,10 +11,12 @@ type Company={
   billing_issue_lead_days?:number;billing_method?:"pix"|"boleto"|"card";billing_auto_block?:boolean;billing_email?:string;
   access_block_source?:string|null;suspended_reason?:string|null;
   tenant?:{companyId:string;slug:string;role:"primary-pilot"|"customer";environment:"pilot"|"production";isolation:string;databaseName:string;projectName:string};
-  readiness?:{ready:boolean;score:number;blocking:string[];checks:{id:string;label:string;ok:boolean;blocking:boolean;detail:string}[]}
+  readiness?:{ready:boolean;score:number;blocking:string[];checks:{id:string;label:string;ok:boolean;blocking:boolean;detail:string}[]};
+  configuration?:{planCode:string;companyStatus:string;configurationVersion:string;configurationUpdatedAt?:string|null;contractedModuleIds:string[];contractedModules:string[];suspendedModuleIds:string[];suspendedModules:string[];moduleCounts:{active:number;blocked:number;total:number};expiresAt?:string|null;lastAdministrator?:string|null;lastChangeAt?:string|null;lastChangeReason?:string|null};
+  health?:{state:"online"|"stale"|"query_error"|"unavailable"|"pending"|"not_checked";label:string;lastCheckedAt?:string|null;detail?:string}
 };
 type Instance={company_id:string;provider?:string;project_name?:string;api_url?:string;provisioning_status?:string;provisioning_error?:string;last_health_at?:string};
-type ManagerSummary={total:number;active:number;blocked:number;billingBlocked:number;manualBlocked:number;trials:number;expiringTrials:number;readyDatabases:number;databaseErrors:number;pendingDatabases:number;staleHealth:number;openCriticalIncidents?:number;recentIncidents?:number};
+type ManagerSummary={total:number;active:number;blocked:number;billingBlocked:number;manualBlocked:number;trials:number;expiringTrials:number;readyDatabases:number;databaseErrors:number;pendingDatabases:number;healthOnline?:number;staleHealth:number;healthCheckErrors?:number;unavailableSystems?:number;healthNotChecked?:number;openCriticalIncidents?:number;recentIncidents?:number};
 type BillingSummary={openCount:number;openCents:number;overdueCount:number;overdueCents:number;paidThisMonthCount:number;paidThisMonthCents:number;mrrCents:number};
 type Receivable={id:string;company_id:string;reference_month:string;description:string;amount_cents:number;due_date:string;status:"pending"|"paid"|"canceled"|"refunded";payment_method:"pix"|"boleto"|"card"|"manual";provider_status?:string;payment_url?:string;pix_qr_code?:string;boleto_digitable_line?:string;paid_at?:string};
 type AuditRow={id?:string|number;company_id?:string;action?:string;actor?:string;details?:Record<string,unknown>;created_at?:string};
@@ -266,25 +268,28 @@ export default function ManagerPage(){
         <article><b>{summary?.billingBlocked??0}</b><span>Bloqueadas por cobrança</span></article>
         <article><b>{summary?.trials??0}</b><span>Trials</span></article>
         <article><b>{summary?.expiringTrials??0}</b><span>Trials vencendo</span></article>
-        <article><b>{summary?.databaseErrors??0}</b><span>Bancos com erro</span></article>
+        <article><b>{summary?.healthOnline??0}</b><span>Bancos online</span></article>
         <article><b>{summary?.staleHealth??0}</b><span>Health check vencido</span></article>
+        <article className={(summary?.healthCheckErrors||0)>0?"danger":""}><b>{summary?.healthCheckErrors??0}</b><span>Erros de consulta</span></article>
+        <article className={(summary?.unavailableSystems||0)>0?"danger":""}><b>{summary?.unavailableSystems??0}</b><span>Sistemas indisponíveis</span></article>
         <article className={(summary?.openCriticalIncidents||0)>0?"danger":""}><b>{summary?.openCriticalIncidents??0}</b><span>Incidentes críticos</span></article>
         <article><b>{summary?.recentIncidents??0}</b><span>Incidentes em 24h</span></article>
       </div>
 
       <section className="manager-panel manager-operations-overview">
         <div className="panel-head manager-panel-head-inline"><div><h2>Operação das Empresas</h2><p>Status consolidado de banco, acesso, versão, atividade e incidentes dos tenants.</p></div><button onClick={()=>void load()}><RefreshCw size={15}/> Atualizar saúde</button></div>
-        <div className="manager-table-wrap"><table className="manager-table manager-operations-table"><thead><tr><th>Empresa</th><th>Acesso</th><th>Banco</th><th>Último health</th><th>Última atividade</th><th>Incidentes</th><th>Ação</th></tr></thead><tbody>
-          {companies.map(company=>{const inst=map[company.id];const companyIncidents=incidents.filter(item=>item.company_id===company.id&&!item.resolved_at);const critical=companyIncidents.filter(item=>item.severity==="critical").length;const bankState=inst?.provisioning_error?"Erro":inst?.provisioning_status==="ready"?"Online":inst?.provisioning_status||"Pendente";return <tr key={"ops-"+company.id}>
-            <td><button className="manager-link-button" onClick={()=>{setSelectedCompanyId(company.id);setDetailTab("Visão Geral")}}>{company.trade_name||company.legal_name}</button></td>
+        <div className="manager-table-wrap"><table className="manager-table manager-operations-table"><thead><tr><th>Empresa</th><th>Acesso</th><th>Banco</th><th>Plano</th><th>Módulos ativos</th><th>Último health</th><th>Incidentes</th><th>Ação</th></tr></thead><tbody>
+          {companies.map(company=>{const companyIncidents=incidents.filter(item=>item.company_id===company.id&&!item.resolved_at);const critical=companyIncidents.filter(item=>item.severity==="critical").length;const health=company.health;const healthClass=health?.state==="online"?"ok":health?.state==="query_error"||health?.state==="unavailable"?"error":"warning";return <tr key={"ops-"+company.id}>
+            <td><button className="manager-link-button" onClick={()=>{setSelectedCompanyId(company.id);setDetailTab("Visão Geral")}}>{company.trade_name||company.legal_name}</button><small className="manager-cell-detail">Config. {company.configuration?.configurationVersion||"—"}</small></td>
             <td><span className={company.status==="active"?"manager-health ok":"manager-health error"}>{company.status==="active"?"Liberado":"Bloqueado"}</span></td>
-            <td><span className={bankState==="Online"?"manager-health ok":bankState==="Erro"?"manager-health error":"manager-health warning"}>{bankState}</span></td>
-            <td>{dateTime(inst?.last_health_at)}</td>
-            <td>{dateTime(company.last_seen_at)}</td>
+            <td><span className={"manager-health "+healthClass}>{health?.label||"Não verificado"}</span><small className="manager-cell-detail">{health?.detail||"Sem diagnóstico"}</small></td>
+            <td><b>{company.configuration?.planCode||company.plan_code||"trial"}</b>{company.configuration?.expiresAt&&<small className="manager-cell-detail">Expira {date(company.configuration.expiresAt)}</small>}</td>
+            <td><b>{company.configuration?.moduleCounts.active??(company.modules||[]).length}</b><small className="manager-cell-detail">{company.configuration?.moduleCounts.blocked??0} suspenso(s)</small></td>
+            <td>{dateTime(health?.lastCheckedAt||undefined)}</td>
             <td><span className={critical?"manager-health error":companyIncidents.length?"manager-health warning":"manager-health ok"}>{critical?critical+" crítico(s)":companyIncidents.length?companyIncidents.length+" aberto(s)":"Sem incidentes"}</span></td>
             <td><button onClick={()=>void patch(company.id,{checkTenantHealth:true})}>Testar banco</button></td>
           </tr>})}
-          {!companies.length&&<tr><td colSpan={7}>Nenhuma empresa cadastrada.</td></tr>}
+          {!companies.length&&<tr><td colSpan={8}>Nenhuma empresa cadastrada.</td></tr>}
         </tbody></table></div>
       </section>
 
