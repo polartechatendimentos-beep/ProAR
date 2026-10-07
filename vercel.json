@@ -10,11 +10,7 @@
     },
     {
       "path": "/api/cron/licitacoes",
-      "schedule": "0 9 * * *"
-    },
-    {
-      "path": "/api/cron/licitacoes",
-      "schedule": "0 21 * * *"
+      "schedule": "0 */4 * * *"
     }
   ]
 }
