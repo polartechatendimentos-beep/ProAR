@@ -116,3 +116,15 @@
 .manager-recovery-controls select{min-height:38px;border:1px solid #1d3857;background:#061524;color:#f8fafc;border-radius:9px;padding:0 10px}
 .manager-recovery-controls span{font-size:11px;color:#7890aa}
 @media(max-width:700px){.manager-recovery-controls{align-items:stretch;flex-direction:column}.manager-recovery-controls label{min-width:0}}
+
+
+/* Configuração centralizada da empresa */
+.manager-config-meta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 14px}
+.manager-config-meta article{border:1px solid #17304c;background:#071729;border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:4px}
+.manager-config-meta small{color:#7890aa;font-size:10px;text-transform:uppercase;letter-spacing:.06em}
+.manager-config-meta b{font-size:12px;overflow-wrap:anywhere}
+.manager-suspended-modules{margin-top:12px;padding-top:10px;border-top:1px solid #17304c}
+.manager-suspended-modules>small{display:block;margin-bottom:7px;color:#fbbf24;font-weight:700}
+.manager-module-chips span.suspended{opacity:.8;text-decoration:line-through;border-color:rgba(245,158,11,.35);color:#fbbf24}
+@media(max-width:900px){.manager-config-meta{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.manager-config-meta{grid-template-columns:1fr}}
