@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { normalizeContractedModules,moduleNamesFromIds } from "./module-catalog";
+import { normalizeContractedModules,moduleNamesFromIds } from "./module-catalog.ts";
 
 type CompanyRecord=Record<string,unknown>;
 type EntitlementRecord=Record<string,unknown>;
