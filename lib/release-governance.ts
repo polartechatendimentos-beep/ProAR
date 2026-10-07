@@ -275,7 +275,8 @@ export async function resolveFeatureFlags(companyId:string|undefined,channel:Rel
   }
   const result:Record<string,boolean>={};
   for(const flag of flags){
-    const channelDefault=channel==="internal"?flag.internal_enabled:channel==="homologation"?flag.homologation_enabled:channel==="production"?flag.production_enabled:false;
+    const bucket=companyId?Array.from((companyId+"|"+flag.flag_key)).reduce((sum,char)=>(sum*31+char.charCodeAt(0))%100,0):99;
+    const channelDefault=channel==="internal"?flag.internal_enabled:channel==="homologation"?flag.homologation_enabled:channel==="canary"?bucket<Math.max(0,Math.min(100,Number(flag.canary_percent||0))):flag.production_enabled;
     result[flag.flag_key]=Object.prototype.hasOwnProperty.call(overrides,flag.flag_key)?overrides[flag.flag_key]:Boolean(channelDefault||flag.default_enabled);
   }
   return result;
