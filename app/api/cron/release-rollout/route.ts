@@ -43,7 +43,7 @@ async function failTarget(target:ReleaseTarget,release:ProARReleaseRecord,code:s
   })});
   await supabaseRest("proar_releases?id=eq."+encodeURIComponent(release.id),{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({status:"failed",updated_at:now()})});
   await recordReleaseCheck({releaseId:release.id,companyId:target.company_id||null,environmentCode:target.environment_code,stage:"post",checkKey:"scheduled-rollout",status:"error",code,detail:message});
-  await recordSystemIncident({companyId:target.company_id||undefined,module:"Central de Versões",operation:"Rollout agendado",code,severity:"critical",route:"/api/cron/release-rollout",metadata:{releaseId:release.id,targetId:target.id,alias:target.alias,message}});
+  await recordSystemIncident({companyId:target.company_id||undefined,module:"Central de Versões",operation:"Rollout agendado",code:"PROAR-DEPLOY-001",severity:"critical",route:"/api/cron/release-rollout",metadata:{releaseId:release.id,targetId:target.id,alias:target.alias,message,releaseCode:code}});
 }
 
 export async function GET(request:NextRequest){
