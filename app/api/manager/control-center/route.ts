@@ -39,8 +39,8 @@ export async function GET(request:NextRequest){
   const url=new URL(request.url); const companyId=url.searchParams.get("companyId")||"";
 
   const companies=await supabaseRest(companyId
-    ? `proar_companies?select=id,trade_name,legal_name,slug,plan_code,status& id=eq.${encodeURIComponent(companyId)}&limit=1`.replace("& id","&id")
-    : "proar_companies?select=id,trade_name,legal_name,slug,plan_code,status&order=trade_name.asc"
+    ? `proar_companies?select=id,trade_name,legal_name,slug,plan_code,status,trial_expires_at& id=eq.${encodeURIComponent(companyId)}&limit=1`.replace("& id","&id")
+    : "proar_companies?select=id,trade_name,legal_name,slug,plan_code,status,trial_expires_at&order=trade_name.asc"
   );
   if(!companies.ok)return NextResponse.json({error:"Falha ao consultar empresas."},{status:502});
   const companyRows=await companies.json();
@@ -96,7 +96,7 @@ export async function GET(request:NextRequest){
   for(const incident of incidentRows.filter((item:any)=>item.status==="open")){
     alerts.push({type:"incident",companyId:incident.company_id,severity:incident.severity,title:incident.title,detail:incident.description||""});
   }
-  return NextResponse.json({setupPending:!controls.ok||!incidents.ok,companies:companyRows,controls:controlRows,incidents:incidentRows,jobs:jobRows,usage,alerts});
+  return NextResponse.json({setupPending:!controls.ok||!incidents.ok||!jobs.ok,companies:companyRows,controls:controlRows,incidents:incidentRows,jobs:jobRows,usage,alerts});
 }
 
 export async function PATCH(request:NextRequest){
