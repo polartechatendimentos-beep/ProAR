@@ -1,4 +1,3 @@
-import "server-only";
 import { createHash } from "node:crypto";
 import { normalizeContractedModules,moduleNamesFromIds } from "./module-catalog";
 
