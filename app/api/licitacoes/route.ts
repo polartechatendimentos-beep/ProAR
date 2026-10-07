@@ -11,13 +11,13 @@ const MUNICIPAL_SOURCES = [
 ] as const;
 const UFS = ["SP", "MG", "MS", "PR", "GO"] as const;
 const MODALITIES = [4, 5, 6, 7, 8, 9, 12] as const;
-const TARGETED_PNCP_PAGES = 20;
+const TARGETED_PNCP_PAGES = 60;
 const PNCP_PAGE_SIZE = 500;
-export const maxDuration = 60;
-const REQUEST_TIMEOUT_MS = 6500;
+export const maxDuration = 120;
+const REQUEST_TIMEOUT_MS = 9000;
 const COMPRAS_TIMEOUT_MS = 7000;
 const MAX_RETRIES = 1;
-const PNCP_CONCURRENCY = 3;
+const PNCP_CONCURRENCY = 5;
 const COMPRAS_CONCURRENCY = 2;
 const CITY_CODES: Record<string, { ibge: string; distance: number }> = {
   "jose bonifacio": { ibge: "3525706", distance: 62 },
@@ -359,7 +359,7 @@ async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radi
   for (const item of validated) { const key=item.canonicalKey ?? canonicalTenderKey(item); const current=deduped.get(key); deduped.set(key,current?preferValidatedTender(current,item):item); }
   const unique = Array.from(deduped.values());
   unique.sort((a, b) => new Date(a.dataEncerramentoProposta ?? 0).getTime() - new Date(b.dataEncerramentoProposta ?? 0).getTime());
-  return { data: unique.slice(0, 500), failedSources, diagnostics, coverage: { received: raw.length, relevant: filtered.length, duplicates: validated.length - unique.length, total: unique.length, displayed: Math.min(unique.length, 500), pagesRead: diagnostics.reduce((sum, source) => sum + (source.pagesRead ?? 0), 0), truncated: diagnostics.some(source => source.truncated) || unique.length > 500 } };
+  return { data: unique.slice(0, 2000), failedSources, diagnostics, coverage: { received: raw.length, relevant: filtered.length, duplicates: validated.length - unique.length, total: unique.length, displayed: Math.min(unique.length, 2000), pagesRead: diagnostics.reduce((sum, source) => sum + (source.pagesRead ?? 0), 0), truncated: diagnostics.some(source => source.truncated) || unique.length > 2000 } };
 }
 
 export async function GET(request: NextRequest) {
