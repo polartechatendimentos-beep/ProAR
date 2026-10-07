@@ -4657,7 +4657,7 @@ export default function Home() {
     if (children.length || linkedEquipment.length || linkedOrders.length) {
       const details = [children.length ? `${children.length} estrutura(s) filha(s)` : "", linkedEquipment.length ? `${linkedEquipment.length} equipamento(s)` : "", linkedOrders.length ? `${linkedOrders.length} OS` : ""].filter(Boolean).join(", ");
       if (!window.confirm(`“${name}” possui ${details}. A exclusão física foi bloqueada para preservar o histórico. Deseja inativar esta estrutura?`)) return false;
-      return saveCustomerStructure({ ...record, status:"Inativo", changeReason:`Inativada com vínculos preservados: ${details}` });
+      return await saveCustomerStructure({ ...record, status:"Inativo", changeReason:`Inativada com vínculos preservados: ${details}` });
     }
     if (!window.confirm(`Excluir definitivamente “${name}”? Esta estrutura não possui filhos, equipamentos ou OS vinculados.`)) return false;
     if (!navigator.onLine) { showFeedback("Falha ao excluir estrutura • sem conexão com o banco.", "error", 5000); return false; }
