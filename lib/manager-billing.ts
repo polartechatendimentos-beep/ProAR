@@ -2,7 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { createMercadoPagoOrder, mercadoPagoConfigured, mercadoPagoOrderPaid, mercadoPagoOrderPaymentInfo } from "./mercado-pago";
 import { supabaseRest } from "./supabase-rest";
-import { normalizeManagerModules, REQUIRED_MANAGER_MODULES } from "./manager-plans";
+import { ALL_MANAGER_MODULES, normalizeManagerModules, REQUIRED_MANAGER_MODULES } from "./manager-plans";
 
 export type BillingCompany = {
   id:string;
@@ -176,7 +176,7 @@ export async function setCompanyModuleEntitlements(companyId:string,entitlements
   const now=new Date().toISOString();
   const entitlementMap=new Map(entitlements.map(item=>[item.moduleName,item]));
   const normalizedNames=normalizeManagerModules(entitlements.filter(item=>item.enabled).map(item=>item.moduleName));
-  const normalized=Array.from(new Set([...entitlements.map(item=>item.moduleName),...REQUIRED_MANAGER_MODULES])).map(moduleName=>({
+  const normalized=Array.from(new Set([...entitlements.map(item=>item.moduleName),...REQUIRED_MANAGER_MODULES])).filter(moduleName=>ALL_MANAGER_MODULES.includes(moduleName)).map(moduleName=>({
     moduleName,
     enabled:normalizedNames.includes(moduleName),
     monthlyPriceCents:Math.max(0,Math.round(Number(entitlementMap.get(moduleName)?.monthlyPriceCents)||0)),
