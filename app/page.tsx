@@ -1248,6 +1248,7 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
   const [observations, setObservations] = useState("");
   const [notice, setNotice] = useState("");
   const [quickCreate, setQuickCreate] = useState<"customer" | "structure" | null>(null);
+  const [editingBudgetId,setEditingBudgetId]=useState<string | null>(null);
 
   const items = catalog.filter(item => (item.kind === "Produto" || item.kind === "Serviço") && item.status !== "Inativo" && (kindFilter === "Todos" || item.kind === kindFilter) && `${item.name} ${item.id} ${item.category}`.toLowerCase().includes(search.toLowerCase()));
   const itemTotal=(item:PurchaseItem)=>item.quantity*item.unitValue*(1-Math.min(100,Math.max(0,item.discountPercent??0))/100);
@@ -1275,20 +1276,39 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
     setSearch("");
   };
   const update = (id: string, changes: Partial<PurchaseItem>) => setCart(current => current.map(item => item.id === id ? { ...item, ...changes } : item).filter(item => item.quantity > 0));
-  const clearDraft=()=>{setCart([]);setDiscount(0);setSurcharge(0);setObservations("");setUnit("");setReference("");setSearch("");};
+  const clearDraft=()=>{setCart([]);setDiscount(0);setSurcharge(0);setObservations("");setUnit("");setReference("");setSearch("");setEditingBudgetId(null);};
+  const editBudget=(record:ModuleRecord)=>{
+    setEditingBudgetId(record.id);
+    setCustomer(record.client || "");
+    setUnit(record.structureId || "");
+    setCart((record.purchaseItems || []) as PurchaseItem[]);
+    setDiscount(Number(record.discount || 0));
+    setSurcharge(Number(record.surcharge || 0));
+    setReference(record.reference || "");
+    setSeller(record.seller || "");
+    setPayment(record.paymentMethod || "PIX");
+    const description=String(record.description || "");
+    setObservations(description.includes(" • ") ? description.split(" • ").slice(2).join(" • ") : "");
+    if(record.endDate){
+      const days=Math.max(1,Math.round((new Date(record.endDate+"T12:00:00").getTime()-Date.now())/86400000));
+      setValidity([7,15,30,60].reduce((best,value)=>Math.abs(value-days)<Math.abs(best-days)?value:best,7));
+    }
+    setTab("novo");
+    setNotice(`Alterando ${record.id}. Salve para confirmar as mudanças.`);
+  };
 
   const save = (status:"Em elaboração"|"Enviado") => {
     if (!customer || !cart.length) { setNotice("Selecione o cliente e adicione pelo menos um produto ou serviço."); return; }
     const validUntil = new Date(); validUntil.setDate(validUntil.getDate() + validity);
     const record: ModuleRecord = {
-      id:`ORC-${Date.now().toString().slice(-6)}`,
+      id:editingBudgetId || `ORC-${Date.now().toString().slice(-6)}`,
       name:`Orçamento • ${customer}`,
       client:customer,
       unit:selectedBudgetStructure?.name || "",
       structureId:selectedBudgetStructure?.id,
       sector:/secretaria|setor|departamento|diretoria|órgão|area|área/i.test(`${selectedBudgetStructure?.category ?? ""} ${selectedBudgetStructure?.hierarchyLevel ?? ""}`) ? selectedBudgetStructure?.name : undefined,
       description:`Tabela: ${priceTable} • Condição: ${payment}${reference ? ` • Ref.: ${reference}` : ""}${seller ? ` • Vendedor: ${seller}` : ""}${observations ? ` • ${observations}` : ""}`,
-      createdAt:new Date().toLocaleString("pt-BR"),
+      createdAt:editingBudgetId ? (budgets.find(item=>item.id===editingBudgetId)?.createdAt || new Date().toLocaleString("pt-BR")) : new Date().toLocaleString("pt-BR"),
       date:new Date().toISOString().slice(0,10),
       endDate:validUntil.toISOString().slice(0,10),
       status,
@@ -1379,8 +1399,7 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
         </div>
       </section>
     </> : <>
-      <CommercialRecordsManager title="Orçamentos" records={budgets} onConvert={onConvert} onDelete={onDelete}/>
-      <div className="budget-saved panel"><header><div><span className="section-kicker"><History size={12}/> ACOMPANHAMENTO COMERCIAL</span><h3>Orçamentos salvos</h3></div><small>{budgets.length} orçamento(s)</small></header>{budgets.length ? <div>{budgets.map(record => <article key={record.id}><span><b>{record.id}</b><strong>{record.client}</strong><small>{record.purchaseItems?.length ?? 0} item(ns) • {record.reference ? `Ref. ${record.reference} • ` : ""}{record.endDate ? `Válido até ${new Date(`${record.endDate}T12:00:00`).toLocaleDateString("pt-BR")}` : record.createdAt}</small></span><em>{record.status}</em><b>R$ {(record.value ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</b><select aria-label={`Status do orçamento ${record.id}`} value={record.status || "Em elaboração"} onChange={event=>onSave({...record,status:event.target.value,changeReason:`Status comercial atualizado para ${event.target.value}`})}>{["Em elaboração","Enviado","Aguardando retorno","Em negociação","Aprovado","Perdido","Cancelado"].map(status=><option key={status}>{status}</option>)}</select><button onClick={() => onConvert(record,"Pedido")} disabled={!/Aprovado|Em negociação|Enviado|Aguardando retorno/i.test(record.status||"")}><ShoppingBag size={14}/> Converter em venda</button><button onClick={() => onConvert(record,"Ordem de serviço")} disabled={!/Aprovado|Em negociação|Enviado|Aguardando retorno/i.test(record.status||"")}><ClipboardList size={14}/> Converter em OS</button><button className="danger" onClick={() => onDelete(record)}><Trash2 size={14}/></button></article>)}</div> : <div className="linked-empty"><FileText size={22}/><h4>Nenhum orçamento salvo</h4></div>}</div>
+      <div className="budget-saved panel"><header><div><span className="section-kicker"><History size={12}/> ACOMPANHAMENTO COMERCIAL</span><h3>Orçamentos salvos</h3></div><small>{budgets.length} orçamento(s)</small></header>{budgets.length ? <div>{budgets.map(record => <article key={record.id} onDoubleClick={()=>editBudget(record)} title="Dê dois cliques para alterar este orçamento"><span><b>{record.id}</b><strong>{record.client}</strong><small>{record.purchaseItems?.length ?? 0} item(ns) • {record.reference ? `Ref. ${record.reference} • ` : ""}{record.endDate ? `Válido até ${new Date(`${record.endDate}T12:00:00`).toLocaleDateString("pt-BR")}` : record.createdAt}</small></span><em>{record.status}</em><b>R$ {(record.value ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</b><select aria-label={`Status do orçamento ${record.id}`} value={record.status || "Em elaboração"} onChange={event=>onSave({...record,status:event.target.value,changeReason:`Status comercial atualizado para ${event.target.value}`})}>{["Em elaboração","Enviado","Aguardando retorno","Em negociação","Aprovado","Perdido","Cancelado"].map(status=><option key={status}>{status}</option>)}</select><button onClick={() => onConvert(record,"Pedido")} disabled={!/Aprovado|Em negociação|Enviado|Aguardando retorno/i.test(record.status||"")}><ShoppingBag size={14}/> Converter em venda</button><button onClick={() => onConvert(record,"Ordem de serviço")} disabled={!/Aprovado|Em negociação|Enviado|Aguardando retorno/i.test(record.status||"")}><ClipboardList size={14}/> Converter em OS</button><button className="danger" onClick={() => onDelete(record)}><Trash2 size={14}/></button></article>)}</div> : <div className="linked-empty"><FileText size={22}/><h4>Nenhum orçamento salvo</h4></div>}</div>
     </>}
 
     <BudgetQuickCreateDrawer open={Boolean(quickCreate)} mode={quickCreate ?? "customer"} customerName={customer} customers={customers} structures={structures} onClose={() => setQuickCreate(null)} onCreateCustomer={created => { const result = onCreateCustomer(created); if (result) { setCustomer(result.name); setUnit(""); setNotice("Cliente criado e selecionado no orçamento."); } return result; }} onCreateStructure={created => { const result = onCreateStructure(created); if (result) { setUnit(result.id); setNotice("Estrutura criada e selecionada no orçamento."); } return result; }} />
