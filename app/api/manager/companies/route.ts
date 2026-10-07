@@ -74,6 +74,27 @@ export async function PATCH(request: NextRequest) {
   const companyId = String(body.companyId || "").trim();
   if (!companyId) return NextResponse.json({ error: "Empresa não informada." }, { status: 400 });
 
+  if (body.unlockAllModules === true) {
+    const primaryCompanyId = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
+    const primarySlug = process.env.PROAR_PRIMARY_COMPANY_SLUG || "polartech";
+    const companyResponse = await supabaseRest(`proar_companies?select=id,slug,trade_name,legal_name&id=eq.${encodeURIComponent(companyId)}&limit=1`);
+    const companyRows = companyResponse.ok ? await companyResponse.json() : [];
+    const company = companyRows?.[0] as Record<string,unknown>|undefined;
+    if (!company) return NextResponse.json({ error:"Empresa não encontrada no Manager." }, { status:404 });
+    const identity = tenantIdentity({companyId:String(company.id||companyId),slug:String(company.slug||""),tradeName:String(company.trade_name||company.legal_name||""),primaryCompanyId,primarySlug});
+    if (identity.role !== "primary-pilot") return NextResponse.json({ error:"A liberação total é exclusiva do tenant principal PolarTech." }, { status:403 });
+    const plan = managerPlan("enterprise");
+    const now = new Date().toISOString();
+    const response = await supabaseRest(`proar_companies?id=eq.${encodeURIComponent(companyId)}`, {
+      method:"PATCH", headers:{Prefer:"return=minimal"},
+      body:JSON.stringify({plan_code:plan.code,modules:ALL_MANAGER_MODULES,status:"active",suspended_reason:null,updated_at:now}),
+    });
+    if (!response.ok) return NextResponse.json({ error:"Não foi possível liberar todos os módulos para a PolarTech." }, { status:502 });
+    await syncPlanEntitlements(companyId,plan.code,ALL_MANAGER_MODULES,user.username);
+    await supabaseRest("proar_manager_audit",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({company_id:companyId,action:"PRIMARY_TENANT_ALL_MODULES_UNLOCKED",actor:user.username,details:{planCode:plan.code,modules:ALL_MANAGER_MODULES}})});
+    return NextResponse.json({saved:true,planCode:plan.code,modules:ALL_MANAGER_MODULES});
+  }
+
   if (body.registerPrimaryPilot === true) {
     const primaryCompanyId = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
     const primarySlug = process.env.PROAR_PRIMARY_COMPANY_SLUG || "polartech";
