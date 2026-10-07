@@ -15,6 +15,7 @@ import {
   ensureReleaseGovernanceSchema,
   inspectAlias,
   inspectDeployment,
+  inspectGitQualityGate,
   probeAlias,
   recordReleaseCheck,
   releaseId,
@@ -322,6 +323,11 @@ export async function POST(request:NextRequest){
       const deployment=await inspectDeployment(deploymentId);
       if(!deployment.ok)return NextResponse.json({error:"O deployment precisa estar READY antes de entrar no fluxo.",code:"PROAR-REL-DEPLOYMENT"},{status:409});
       if(commitSha&&deployment.commitSha&&commitSha!==deployment.commitSha)return NextResponse.json({error:"O commit informado não corresponde ao deployment selecionado.",code:"PROAR-REL-COMMIT"},{status:409});
+      const verifiedCommit=commitSha||deployment.commitSha||"";
+      const gitGate=await inspectGitQualityGate(verifiedCommit);
+      if(!gitGate.passed&&process.env.PROAR_RELEASE_ALLOW_UNVERIFIED!=="true"){
+        return NextResponse.json({error:"Quality Gate do GitHub ainda não está aprovado para este commit.",code:"PROAR-REL-CI-GATE",checks:gitGate.checks,detail:gitGate.error||null},{status:409});
+      }
       const migrations=Array.isArray(body.migrations)?body.migrations:[];
       const unsafeMigration=migrations.find((item:unknown)=>{
         if(!item||typeof item!=="object")return false;
@@ -340,7 +346,7 @@ export async function POST(request:NextRequest){
         notes:Array.isArray(body.notes)?body.notes:[],
         migrations,
         compatibility:body.compatibility&&typeof body.compatibility==="object"?body.compatibility as Record<string,unknown>:{},
-        quality_gate:{deploymentReady:true,commitVerified:Boolean(deployment.commitSha),createdAt:now()},
+        quality_gate:{deploymentReady:true,commitVerified:Boolean(deployment.commitSha),ciPassed:gitGate.passed,checks:gitGate.checks,createdAt:now()},
         approval_required:body.approvalRequired!==false,created_by:user.username,updated_at:now(),
       };
       const response=await supabaseRest("proar_releases?on_conflict=id",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify(release)});
