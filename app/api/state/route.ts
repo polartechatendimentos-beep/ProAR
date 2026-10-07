@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readSession } from "../../../lib/proar-auth";
 import { resolveTenantDb } from "../../../lib/tenant-rest";
-import { databaseFetch, commitNeonOperationalState, PRIMARY_DATABASE_URL } from "../../../lib/supabase-rest";
+import { databaseFetch, commitNeonOperationalState, PRIMARY_DATABASE_URL, supabaseRest } from "../../../lib/supabase-rest";
+import { managerPlan } from "../../../lib/manager-plans";
 import { tenantHeaders } from "../../../lib/tenant-rest";
 
 import { hasPermission, type Permission } from "../../../lib/permissions";
@@ -22,6 +23,38 @@ function safeCompany(value: unknown) { return String(value || "").replace(/[^a-z
 function sessionFor(request: NextRequest) { return readSession(request.cookies.get("proar_session")?.value); }
 const PRIMARY_COMPANY_ID = safeCompany(process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal") || "polartech-principal";
 const PRIMARY_COMPANY_SLUG = String(process.env.PROAR_PRIMARY_COMPANY_SLUG || "polartech").trim().toLowerCase();
+
+function employeeUsernames(state:StatePayload|null|undefined){
+  const usernames=new Set<string>();
+  const employees=state?.moduleRecords?.["Funcionários"]||[];
+  for(const employee of employees){
+    if(String(employee.status||"").toLowerCase()==="inativo")continue;
+    const username=String(employee.employeeUsername||employee.username||employee.email||employee.id||"").trim().toLowerCase();
+    if(username)usernames.add(username);
+  }
+  return usernames;
+}
+
+async function masterActiveUsernames(companyId:string){
+  const usernames=new Set<string>();
+  const response=await supabaseRest(`proar_trial_users?select=username,active&company_id=eq.${encodeURIComponent(companyId)}`);
+  if(!response.ok)return usernames;
+  const rows=await response.json() as Array<{username?:string;active?:boolean}>;
+  for(const row of rows){
+    if(row.active===false)continue;
+    const username=String(row.username||"").trim().toLowerCase();
+    if(username)usernames.add(username);
+  }
+  return usernames;
+}
+
+async function companyUserLimit(companyId:string){
+  if(companyId===PRIMARY_COMPANY_ID)return null;
+  const response=await supabaseRest(`proar_companies?select=plan_code&id=eq.${encodeURIComponent(companyId)}&limit=1`);
+  if(!response.ok)return managerPlan("basico").limits.users;
+  const rows=await response.json() as Array<{plan_code?:string}>;
+  return managerPlan(rows[0]?.plan_code||"trial").limits.users;
+}
 
 function requestedCompany(request: NextRequest) { return safeCompany(request.nextUrl.searchParams.get("company")); }
 function companyKey(request: NextRequest, session: ReturnType<typeof sessionFor>) {
@@ -163,6 +196,15 @@ export async function PUT(request: NextRequest) {
     if (current && baseRevision !== currentRevision) return NextResponse.json({ error: "A base online possui uma versão mais recente.", conflict: true, state: current }, { status: 409 });
     const { _baseRevision: _ignoredBase, _force: _ignoredForce, companyId: _ignoredCompany, ...cleanBody } = body;
     const validated = prepareOperationalState(current || null, cleanBody, { username: session.username, displayName: session.displayName, can: permission => hasPermission(session, permission as Permission) });
+    const userLimit=await companyUserLimit(company);
+    if(userLimit!==null){
+      const masterUsers=await masterActiveUsernames(company);
+      const currentUsers=new Set([...masterUsers,...employeeUsernames(current)]);
+      const nextUsers=new Set([...masterUsers,...employeeUsernames(validated as StatePayload)]);
+      if(nextUsers.size>userLimit&&nextUsers.size>currentUsers.size){
+        throw new OperationError(`Limite do plano atingido: este plano permite ${userLimit} usuários ativos. Inative um usuário ou faça upgrade do plano.`,409);
+      }
+    }
     const payload = { ...validated, _revision: currentRevision + 1, _updatedAt: new Date().toISOString(), _companyId: company };
     const updatedAt = new Date().toISOString();
     if (current) {
