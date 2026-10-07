@@ -172,7 +172,7 @@ export async function listCompanyModuleEntitlements(companyId:string) {
   }
 }
 
-export async function setCompanyModuleEntitlements(companyId:string,entitlements:{moduleName:string;enabled:boolean;monthlyPriceCents:number}[],planCode:string,actor:string) {
+export async function setCompanyModuleEntitlements(companyId:string,entitlements:{moduleName:string;enabled:boolean;monthlyPriceCents:number}[],planCode:string,actor:string,options:{syncMonthlyFee?:boolean}={}) {
   const now=new Date().toISOString();
   const entitlementMap=new Map(entitlements.map(item=>[item.moduleName,item]));
   const normalizedNames=normalizeManagerModules(entitlements.filter(item=>item.enabled).map(item=>item.moduleName));
@@ -199,12 +199,14 @@ export async function setCompanyModuleEntitlements(companyId:string,entitlements
   const enabled=saved.filter(item=>item.enabled);
   const monthlyFeeCents=enabled.reduce((sum,item)=>sum+Number(item.monthly_price_cents||0),0);
   const modules=normalizeManagerModules(enabled.map(item=>item.module_name));
+  const companyPatch:Record<string,unknown>={modules,updated_at:now};
+  if(options.syncMonthlyFee!==false) companyPatch.monthly_fee_cents=monthlyFeeCents;
   await supabaseRest(`proar_companies?id=eq.${encodeURIComponent(companyId)}`,{
     method:"PATCH",
     headers:{Prefer:"return=minimal"},
-    body:JSON.stringify({modules,monthly_fee_cents:monthlyFeeCents,updated_at:now}),
+    body:JSON.stringify(companyPatch),
   });
-  await audit(companyId,"MODULE_ENTITLEMENTS_UPDATED",actor,{planCode,modules,monthlyFeeCents});
+  await audit(companyId,"MODULE_ENTITLEMENTS_UPDATED",actor,{planCode,modules,monthlyFeeCents:options.syncMonthlyFee===false?undefined:monthlyFeeCents});
   return {entitlements:saved,modules,monthlyFeeCents};
 }
 
@@ -217,7 +219,7 @@ export async function syncPlanEntitlements(companyId:string,planCode:string,plan
     enabled:planModules.includes(moduleName),
     monthlyPriceCents:Number(existingMap.get(moduleName)?.monthly_price_cents||0),
   }));
-  return setCompanyModuleEntitlements(companyId,next,planCode,actor);
+  return setCompanyModuleEntitlements(companyId,next,planCode,actor,{syncMonthlyFee:false});
 }
 
 export async function getBillingCompany(companyId:string) {
