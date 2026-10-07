@@ -5,13 +5,37 @@ import { resumeTenantProvisioning } from "../../../../lib/tenant-provisioning";
 import { tenantIdentity } from "../../../../lib/tenant-identity";
 import { resolveTenantDb, tenantHeaders } from "../../../../lib/tenant-rest";
 import { managerPlatformInfo } from "../../../../lib/manager-platform";
-import { ALL_MANAGER_MODULES, COMMERCIAL_MANAGER_PLANS, managerPlan, normalizeManagerModules } from "../../../../lib/manager-plans";
-import { getBillingCompany, setCompanyModuleEntitlements, syncCompanyBillingAccess, syncPlanEntitlements } from "../../../../lib/manager-billing";
+import { ALL_MANAGER_MODULES, COMMERCIAL_MANAGER_PLANS, managerPlan } from "../../../../lib/manager-plans";
+import { getBillingCompany, syncCompanyBillingAccess, syncPlanEntitlements } from "../../../../lib/manager-billing";
 import { tenantReadiness } from "../../../../lib/tenant-readiness";
 import { classifyProarError } from "../../../../lib/system-errors";
 import { recordSystemIncident } from "../../../../lib/system-observability";
 
 const isAdmin = (request: NextRequest) => readManagerSession(request);
+
+async function activeLicensedUserCount(companyId:string) {
+  const usernames=new Set<string>();
+  const usersResponse=await supabaseRest(`proar_trial_users?select=username,active&company_id=eq.${encodeURIComponent(companyId)}`);
+  if(usersResponse.ok){
+    const users=await usersResponse.json() as Array<{username?:string;active?:boolean}>;
+    for(const user of users){if(user.active!==false&&user.username)usernames.add(String(user.username).trim().toLowerCase());}
+  }
+  const db=await resolveTenantDb(companyId);
+  if(db.url&&db.key){
+    const stateId=db.dedicated?"main":companyId;
+    const stateResponse=await databaseFetch(`${db.url}/rest/v1/proar_state?id=eq.${encodeURIComponent(stateId)}&select=payload&limit=1`,{headers:tenantHeaders(db.key),cache:"no-store"});
+    if(stateResponse.ok){
+      const rows=await stateResponse.json() as Array<{payload?:{moduleRecords?:Record<string,Array<Record<string,unknown>>>}}>;
+      const employees=rows[0]?.payload?.moduleRecords?.["Funcionários"]||[];
+      for(const employee of employees){
+        if(String(employee.status||"").toLowerCase()==="inativo")continue;
+        const username=String(employee.employeeUsername||employee.username||employee.email||employee.id||"").trim().toLowerCase();
+        if(username)usernames.add(username);
+      }
+    }
+  }
+  return usernames.size;
+}
 
 export async function GET(request: NextRequest) {
   if (!isAdmin(request)) return NextResponse.json({ error: "Acesso restrito ao ProAR Manager." }, { status: 403 });
@@ -39,7 +63,7 @@ export async function GET(request: NextRequest) {
       primaryCompanyId,
       primarySlug,
     }),
-    readiness:tenantReadiness({company:isPrimary ? {...company,plan_code:"enterprise",modules:ALL_MANAGER_MODULES} : company,instance:instanceByCompany[String(company.id||"")]}),
+    readiness:tenantReadiness({company:isPrimary ? {...company,plan_code:"completo",modules:ALL_MANAGER_MODULES} : company,instance:instanceByCompany[String(company.id||"")]}),
   });
   });
   const auditRows = audit.ok ? await audit.json() : [];
@@ -135,6 +159,20 @@ export async function PATCH(request: NextRequest) {
   const primaryCompanySlug = (process.env.PROAR_PRIMARY_COMPANY_SLUG || "polartech").trim().toLowerCase();
   const isPrimaryCompany = companyId === primaryCompanyId || String(current?.slug || "").trim().toLowerCase() === primaryCompanySlug;
   const targetPlan = isPrimaryCompany ? "completo" : (typeof body.planCode === "string" ? managerPlan(body.planCode).code : String(current?.plan_code || "trial"));
+  if(typeof body.planCode==="string"&&!isPrimaryCompany){
+    const requestedPlan=managerPlan(body.planCode);
+    if(requestedPlan.limits.users!==null){
+      const activeUsers=await activeLicensedUserCount(companyId);
+      if(activeUsers>requestedPlan.limits.users){
+        return NextResponse.json({
+          error:`Não é possível alterar para ${requestedPlan.name}: existem ${activeUsers} usuários ativos e o plano permite ${requestedPlan.limits.users}. Inative usuários excedentes antes do downgrade.`,
+          code:"PLAN_USER_LIMIT",
+          activeUsers,
+          allowedUsers:requestedPlan.limits.users,
+        },{status:409});
+      }
+    }
+  }
   if (body.status === "active" && targetPlan === "trial" && current?.trial_expires_at && new Date(current.trial_expires_at).getTime() < Date.now()) {
     return NextResponse.json({ error:"O trial está vencido. Converta a empresa para um plano pago ou prorrogue o período de teste antes de liberar." }, { status:409 });
   }
@@ -171,7 +209,7 @@ export async function PATCH(request: NextRequest) {
       patch.suspended_reason = null;
     }
   }
-  if (Array.isArray(body.modules)) patch.modules = normalizeManagerModules(body.modules);
+  if (Array.isArray(body.modules) && !isPrimaryCompany) patch.modules = managerPlan(targetPlan).modules;
   if (isPrimaryCompany) {
     patch.plan_code = "completo";
     patch.modules = ALL_MANAGER_MODULES;
@@ -197,16 +235,19 @@ export async function PATCH(request: NextRequest) {
     headers:{Prefer:"return=minimal"},
     body:JSON.stringify({company_id:companyId,action:"MANAGER_UPDATE",actor:user.username,details:patch}),
   });
+  if(typeof body.planCode==="string"){
+    const beforeCode=String(current?.plan_code||"trial");
+    const beforePlan=managerPlan(beforeCode);
+    const afterPlan=isPrimaryCompany?managerPlan("completo"):managerPlan(body.planCode);
+    await supabaseRest("proar_manager_audit",{
+      method:"POST",
+      headers:{Prefer:"return=minimal"},
+      body:JSON.stringify({company_id:companyId,action:"PLAN_CHANGED",actor:user.username,details:{from:beforeCode,to:afterPlan.code,fromUsers:beforePlan.limits.users,toUsers:afterPlan.limits.users,fromMonthlyFeeCents:Number(current?.monthly_fee_cents||0),toMonthlyFeeCents:Number(patch.monthly_fee_cents??current?.monthly_fee_cents||0),dataPreserved:true}}),
+    });
+  }
 
   if (isPrimaryCompany) {
     await syncPlanEntitlements(companyId,"completo",ALL_MANAGER_MODULES,user.username);
-  } else if (Array.isArray(body.moduleEntitlements)) {
-    const planCode=String(body.planCode || patch.plan_code || current?.plan_code || "trial");
-    await setCompanyModuleEntitlements(companyId,body.moduleEntitlements.map((item:Record<string,unknown>)=>({
-      moduleName:String(item.moduleName||"").trim(),
-      enabled:Boolean(item.enabled),
-      monthlyPriceCents:Math.max(0,Math.round(Number(item.monthlyPriceCents)||0)),
-    })).filter((item:{moduleName:string})=>ALL_MANAGER_MODULES.includes(item.moduleName)),planCode,user.username);
   } else if (typeof body.planCode === "string") {
     const plan=managerPlan(body.planCode);
     await syncPlanEntitlements(companyId,plan.code,plan.modules,user.username);
