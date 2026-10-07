@@ -223,7 +223,7 @@ export function PublicContractsPanel({ canEdit = true }: { canEdit?: boolean }) 
       const response = await fetch("/api/licitacoes/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uf, days: 14, maxPages: 2, terms: query.trim() ? [query.trim()] : undefined }),
+        body: JSON.stringify({ uf, days: 60, maxPages: 20, status: "recebendo_proposta", terms: query.trim() ? [query.trim()] : undefined }),
         signal: controller.signal,
       });
       const json = await response.json();
@@ -231,7 +231,7 @@ export function PublicContractsPanel({ canEdit = true }: { canEdit?: boolean }) 
       setPreview(Array.isArray(json.data) ? json.data : []);
       setSourceHealth(json.health || null);
       if (Array.isArray(json.sources)) setSources(json.sources);
-      setNotice(`${json.message || "Consulta concluída."} ${json.persistence?.message || "Prévia não persistida."}`);
+      setNotice(`${json.message || "Consulta concluída."} ${json.health ? `PNCP: ${json.health.received ?? "—"} recebidas, ${json.health.accepted ?? 0} relevantes, ${json.health.duplicates ?? 0} duplicadas, ${json.health.pagesRead ?? 0} páginas.` : ""} ${json.persistence?.message || "Prévia não persistida."}`);
       setSelected(null);
       setActiveTab("radar");
     } catch (cause) {

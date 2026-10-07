@@ -45,7 +45,8 @@ export async function POST(request: Request) {
       ? body.modalityCodes.map(Number).filter(Number.isFinite)
       : MODALITY_CODES;
 
-    const result = await searchPncp({ uf, days, maxPages, terms, modalityCodes });
+    const onlyOpen = String(body.status || "").toLowerCase() === "recebendo_proposta" || body.onlyOpen === true;
+    const result = await searchPncp({ uf, days, maxPages, terms, modalityCodes, onlyOpen });
     // searchPncp already performs normalized relevance filtering. Do not filter a second
     // time here: double filtering previously hid valid PNCP opportunities.
     const data = result.data as ProcurementRecord[];
@@ -55,6 +56,7 @@ export async function POST(request: Request) {
       accepted: data.length,
       queriedModalities: modalityCodes,
       requestedTerms: terms,
+      requestedStatus: onlyOpen ? "recebendo_proposta" : "todos",
     };
 
     return NextResponse.json({
