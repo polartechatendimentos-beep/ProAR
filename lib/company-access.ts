@@ -5,20 +5,22 @@ export type CompanyAccessResult = {
   code?: "SYSTEM_BLOCKED" | "TRIAL_EXPIRED" | "COMPANY_NOT_FOUND" | "MANAGER_UNAVAILABLE";
   reason?: string;
   company?: Record<string, unknown>;
+  configurationAvailable?: boolean;
+  degraded?: boolean;
 };
 
-function evaluateCompany(company:Record<string,unknown>):CompanyAccessResult {
+function evaluateCompany(company:Record<string,unknown>,degraded=false):CompanyAccessResult {
   if (company.trial_expires_at && String(company.plan_code||"trial")==="trial" && new Date(String(company.trial_expires_at)).getTime() < Date.now()) {
-    return { ok:false, code:"TRIAL_EXPIRED", reason:"O período de teste desta empresa terminou. Entre em contato com a equipe da ProAR para converter ou prorrogar o acesso.", company };
+    return { ok:false, code:"TRIAL_EXPIRED", reason:"O período de teste desta empresa terminou. Entre em contato com a equipe da ProAR para converter ou prorrogar o acesso.", company, configurationAvailable:!degraded && Array.isArray(company.modules), degraded };
   }
   if (company.status !== "active") {
     const source=String(company.access_block_source||"");
     if (source==="billing") {
-      return { ok:false, code:"SYSTEM_BLOCKED", reason:"Sistema bloqueado por mensalidade em atraso. Após a confirmação do pagamento, o acesso será liberado automaticamente.", company };
+      return { ok:false, code:"SYSTEM_BLOCKED", reason:"Sistema bloqueado por mensalidade em atraso. Após a confirmação do pagamento, o acesso será liberado automaticamente.", company, configurationAvailable:!degraded && Array.isArray(company.modules), degraded };
     }
-    return { ok:false, code:"SYSTEM_BLOCKED", reason:String(company.suspended_reason || "Sistema bloqueado. Entre em contato com a equipe da ProAR."), company };
+    return { ok:false, code:"SYSTEM_BLOCKED", reason:String(company.suspended_reason || "Sistema bloqueado. Entre em contato com a equipe da ProAR."), company, configurationAvailable:!degraded && Array.isArray(company.modules), degraded };
   }
-  return { ok:true, company };
+  return { ok:true, company, configurationAvailable:!degraded && Array.isArray(company.modules), degraded };
 }
 
 const fullSelect="id,slug,status,trade_name,trial_expires_at,plan_code,modules,access_block_source,suspended_reason";
@@ -63,7 +65,7 @@ export async function validateCompanyAccess(companyId?: string | null): Promise<
 
   const company = result.rows[0] as Record<string,unknown> | undefined;
   if (!company) return { ok: false, code:"COMPANY_NOT_FOUND", reason: "Empresa não cadastrada no ProAR Manager." };
-  return evaluateCompany(company);
+  return evaluateCompany(company,result.degraded);
 }
 
 export async function validateCompanyAccessBySlug(slug?: string | null): Promise<CompanyAccessResult> {
@@ -76,5 +78,5 @@ export async function validateCompanyAccessBySlug(slug?: string | null): Promise
 
   const company=result.rows[0] as Record<string,unknown> | undefined;
   if (!company) return { ok:false, code:"COMPANY_NOT_FOUND", reason:"Empresa não cadastrada no ProAR Manager." };
-  return evaluateCompany(company);
+  return evaluateCompany(company,result.degraded);
 }
