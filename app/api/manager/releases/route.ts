@@ -315,6 +315,40 @@ export async function POST(request:NextRequest){
       return NextResponse.json({saved:true,internal:await ensureInternalTenant(user.username)});
     }
 
+    if(action==="baseline-production"){
+      const response=await supabaseRest("proar_companies?select=id,slug,status&status=eq.active&order=created_at.asc");
+      const rows=response.ok?await response.json():[];
+      const baseline=[] as Array<Record<string,unknown>>;
+      for(const company of rows){
+        if(String(company.id)===INTERNAL_QA_COMPANY_ID||!company.slug)continue;
+        const alias=companyAlias(String(company.slug));
+        const [aliasInfo,health]=await Promise.all([inspectAlias(alias),probeAlias(alias)]);
+        const servedDeployment=aliasInfo.deploymentId||String((health.payload as Record<string,unknown>)?.deploymentId||"")||null;
+        const servedVersion=String((health.payload as Record<string,unknown>)?.version||"").trim()||"baseline-"+new Date().toISOString().slice(0,10);
+        const existing=await settingFor(String(company.id));
+        const settings={
+          company_id:String(company.id),
+          release_channel:existing?.release_channel||"production",
+          update_policy:existing?.update_policy||"automatic",
+          pinned_version:existing?.pinned_version||null,
+          current_version:existing?.current_version||servedVersion,
+          current_deployment_id:existing?.current_deployment_id||servedDeployment,
+          schema_version:existing?.schema_version||PROAR_SCHEMA_VERSION,
+          maintenance_mode:Boolean(existing?.maintenance_mode),
+          maintenance_message:existing?.maintenance_message||null,
+          last_health_at:now(),
+          last_health_status:health.ok?"ok":"warning",
+          last_error_code:health.ok?null:"PROAR-REL-BASELINE-HEALTH",
+          last_error_message:health.ok?null:"Health do alias não confirmado durante baseline.",
+          updated_at:now(),
+        };
+        await supabaseRest("proar_tenant_release_settings?on_conflict=company_id",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify(settings)});
+        baseline.push({companyId:company.id,alias,currentVersion:settings.current_version,currentDeploymentId:settings.current_deployment_id,health:settings.last_health_status});
+      }
+      await audit("RELEASE_PRODUCTION_BASELINE",user.username,{tenants:baseline.length});
+      return NextResponse.json({saved:true,baseline});
+    }
+
     if(action==="create-release"){
       const version=String(body.version||"").trim();
       const deploymentId=String(body.deploymentId||"").trim();
