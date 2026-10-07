@@ -29,7 +29,7 @@ export function ReleaseGovernancePanel(){
   const[scheduleAt,setScheduleAt]=useState("");
   const[flagDraft,setFlagDraft]=useState({flagKey:"",name:"",description:"",moduleName:"",canaryPercent:"10"});
   const[overrideDraft,setOverrideDraft]=useState({flagKey:"",companyId:"",enabled:true,reason:"Liberação controlada pelo ProAR Manager"});
-  const[tenantDraft,setTenantDraft]=useState<Record<string,{channel:Channel;policy:"automatic"|"manual"|"pinned"|"scheduled";pinnedVersion:string;schemaVersion:string;maintenance:boolean;maintenanceMessage:string}>>({});
+  const[tenantDraft,setTenantDraft]=useState<Record<string,{channel:Channel;policy:"automatic"|"manual"|"pinned"|"scheduled";pinnedVersion:string;schemaVersion:string;scheduledUpdateAt:string;maintenance:boolean;maintenanceMessage:string}>>({});
 
   const load=async()=>{
     setLoading(true);setError("");
@@ -46,6 +46,7 @@ export function ReleaseGovernancePanel(){
           policy:current?.update_policy||"automatic",
           pinnedVersion:current?.pinned_version||"",
           schemaVersion:current?.schema_version||"2026.10.06",
+          scheduledUpdateAt:current?.scheduled_update_at?new Date(current.scheduled_update_at).toISOString().slice(0,16):"",
           maintenance:Boolean(current?.maintenance_mode),
           maintenanceMessage:current?.maintenance_message||"",
         };
@@ -92,7 +93,7 @@ export function ReleaseGovernancePanel(){
     const draft=tenantDraft[companyId];if(!draft)return;
     await act("tenant-policy",{
       companyId,releaseChannel:draft.channel,updatePolicy:draft.policy,pinnedVersion:draft.pinnedVersion,
-      schemaVersion:draft.schemaVersion,maintenanceMode:draft.maintenance,maintenanceMessage:draft.maintenanceMessage,
+      schemaVersion:draft.schemaVersion,scheduledUpdateAt:draft.scheduledUpdateAt?new Date(draft.scheduledUpdateAt).toISOString():"",maintenanceMode:draft.maintenance,maintenanceMessage:draft.maintenanceMessage,
     },"Política de atualização do tenant salva.");
   };
 
@@ -210,6 +211,7 @@ export function ReleaseGovernancePanel(){
             <label>Política<select value={draft.policy} onChange={e=>setTenantDraft(v=>({...v,[company.id]:{...draft,policy:e.target.value as typeof draft.policy}}))}><option value="automatic">Automática</option><option value="manual">Manual</option><option value="pinned">Fixada</option><option value="scheduled">Agendada</option></select></label>
             <label>Versão fixada<input value={draft.pinnedVersion} onChange={e=>setTenantDraft(v=>({...v,[company.id]:{...draft,pinnedVersion:e.target.value}}))} disabled={draft.policy!=="pinned"}/></label>
             <label>Schema<input value={draft.schemaVersion} onChange={e=>setTenantDraft(v=>({...v,[company.id]:{...draft,schemaVersion:e.target.value}}))}/></label>
+            <label>Atualização agendada<input type="datetime-local" value={draft.scheduledUpdateAt} onChange={e=>setTenantDraft(v=>({...v,[company.id]:{...draft,scheduledUpdateAt:e.target.value}}))} disabled={draft.policy!=="scheduled"}/></label>
             <label className="release-maintenance-toggle"><input type="checkbox" checked={draft.maintenance} onChange={e=>setTenantDraft(v=>({...v,[company.id]:{...draft,maintenance:e.target.checked}}))}/><span>Modo manutenção</span></label>
             <label className="wide">Mensagem<input value={draft.maintenanceMessage} onChange={e=>setTenantDraft(v=>({...v,[company.id]:{...draft,maintenanceMessage:e.target.value}}))}/></label>
           </div>
