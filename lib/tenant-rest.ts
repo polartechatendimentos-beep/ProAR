@@ -1,5 +1,5 @@
 import { decryptTenantSecret } from "./tenant-crypto";
-import { masterDatabaseConfig, neonEnabled, supabaseRest } from "./supabase-rest";
+import { databaseProvider, masterDatabaseConfig, supabaseRest } from "./supabase-rest";
 
 export type TenantDb = { url: string; key: string; dedicated: boolean; companyId?: string; provider?: string; projectName?: string; provisioningStatus?: string; source?: "registry"|"primary-fallback"|"master" };
 export async function resolveTenantDb(companyId?: string): Promise<TenantDb> {
@@ -34,7 +34,7 @@ export async function resolveTenantDb(companyId?: string): Promise<TenantDb> {
           key: masterKey,
           dedicated: false,
           companyId,
-          provider: neonEnabled() ? "neon" : "supabase",
+          provider: databaseProvider(),
           projectName: String(instance.project_name || "proar-polartech"),
           provisioningStatus: "ready",
           source:"registry",
@@ -50,7 +50,7 @@ export async function resolveTenantDb(companyId?: string): Promise<TenantDb> {
 
   // Compatibilidade temporária do Tenant 1 enquanto o registro principal é consolidado no Manager.
   if (companyId === primaryCompanyId && masterUrl && masterKey) {
-    return { url: masterUrl, key: masterKey, dedicated: false, companyId, provider:neonEnabled()?"neon":"supabase", projectName:"proar-polartech", provisioningStatus:"legacy-ready", source:"primary-fallback" };
+    return { url: masterUrl, key: masterKey, dedicated: false, companyId, provider:databaseProvider(), projectName:"proar-polartech", provisioningStatus:"legacy-ready", source:"primary-fallback" };
   }
 
   // Nenhum cliente alugado pode acessar silenciosamente a base da PolarTech.
