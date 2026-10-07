@@ -1,6 +1,7 @@
 "use client";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Banknote, Building2, CheckCircle2, Copy, CreditCard, ExternalLink, LogIn, LogOut, RefreshCw, Save, ShieldCheck, X } from "lucide-react";
+import { ReleaseGovernancePanel } from "@/components/ReleaseGovernancePanel";
 import "../trial-manager.css";
 import "./manager.css";
 
@@ -336,6 +337,8 @@ export default function ManagerPage(){
           {!snapshots.length&&!recoveryLoading&&<tr><td colSpan={5}>Nenhum snapshot disponível para esta empresa.</td></tr>}
         </tbody></table></div>}
       </section>
+
+      <ReleaseGovernancePanel />
 
       <section className="manager-panel manager-billing-overview">
         <div className="panel-head manager-panel-head-inline"><div><h2>Financeiro do ProAR Manager</h2><p>Mensalidades das empresas locatárias, separado do financeiro operacional de cada tenant.</p></div><button onClick={()=>void billingAction({action:"run-cycle"})}><RefreshCw size={15}/> Executar ciclo agora</button></div>
