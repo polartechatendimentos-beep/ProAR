@@ -113,4 +113,22 @@ test("produção é escalonada em lotes e respeita janela individual por tenant"
   assert.ok(panel.includes("Atualização agendada"));
 });
 
+test("quality gate exige CI aprovado e migration destrutiva reversível",async()=>{
+  const core=await read("lib/release-governance.ts");
+  const route=await read("app/api/manager/releases/route.ts");
+  assert.ok(core.includes("inspectGitQualityGate"));
+  assert.ok(core.includes("/check-runs?per_page=100"));
+  assert.ok(route.includes("PROAR-REL-CI-GATE"));
+  assert.ok(route.includes("migration.destructive===true&&migration.reversible!==true"));
+});
+
+test("baseline registra versão servida sem alterar aliases",async()=>{
+  const route=await read("app/api/manager/releases/route.ts");
+  const panel=await read("components/ReleaseGovernancePanel.tsx");
+  assert.ok(route.includes('action==="baseline-production"'));
+  assert.ok(route.includes("RELEASE_PRODUCTION_BASELINE"));
+  assert.ok(panel.includes("Registrar baseline"));
+  assert.ok(panel.includes("Nenhum alias será alterado"));
+});
+
 console.log("release-governance.test.mjs: ok");
