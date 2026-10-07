@@ -323,7 +323,7 @@ export default function ManagerPage(){
           {companies.map(c=>{const inst=map[c.id];const expires=c.trial_expires_at?new Date(c.trial_expires_at):null;const label=statusLabel(c);return <article key={c.id} className="manager-company">
             <header><div><h3>{c.trade_name||c.legal_name}</h3><small>{c.cnpj||c.cpf||c.id} • {c.email||"Sem e-mail"}</small></div><span className={c.status==="active"&&label==="ATIVA"?"active":"blocked"}>{label}</span></header>
             <dl>
-              <div><dt>Plano</dt><dd>{c.plan_code||"trial"}</dd></div>
+              <div><dt>Plano</dt><dd>{planLabel(c.plan_code)}</dd></div>
               <div><dt>Mensalidade</dt><dd>{c.billing_enabled?money(c.monthly_fee_cents):"Desativada"}</dd></div>
               <div><dt>Vencimento</dt><dd>{c.billing_enabled?`Dia ${c.billing_day||10} • ${c.billing_method==="boleto"?"Boleto":c.billing_method==="card"?"Cartão":"Pix"}`:"—"}</dd></div>
               <div><dt>Trial</dt><dd>{expires?expires.toLocaleDateString("pt-BR"):"—"}</dd></div>
@@ -338,7 +338,7 @@ export default function ManagerPage(){
               <button onClick={()=>{setSelectedCompanyId(c.id);setDetailTab("Visão Geral")}}>Gerenciar</button>
               <button onClick={()=>void patch(c.id,{checkTenantHealth:true})}>Verificar banco</button>
               {c.plan_code==="trial"&&<button onClick={()=>void patch(c.id,{extendTrialDays:7})}>+7 dias</button>}
-              {c.plan_code==="trial"&&<button onClick={()=>void patch(c.id,{planCode:"profissional",status:"active"})}>Converter</button>}
+              {c.plan_code==="trial"&&<button onClick={()=>void patch(c.id,{planCode:"basico",status:"active"})}>Converter para Básico</button>}
               <button className={c.status==="active"?"danger":"success"} onClick={()=>void patch(c.id,{status:c.status==="active"?"blocked":"active"})}>{c.status==="active"?"Bloquear":"Tentar liberar"}</button>
               {c.slug&&<a href={`https://${c.slug}.proar.online`} target="_blank" rel="noreferrer">Abrir ambiente</a>}
             </footer>
@@ -389,7 +389,7 @@ export default function ManagerPage(){
           <header><div><span>{selectedCompany.tenant?.role==="primary-pilot"?"TENANT 1 • PILOTO":"CLIENTE LOCATÁRIO"}</span><h2>{selectedCompany.trade_name||selectedCompany.legal_name}</h2><p>{selectedCompany.slug?selectedCompany.slug+".proar.online":"Sem domínio configurado"}</p></div><button onClick={()=>setSelectedCompanyId("")}>Fechar</button></header>
           <div className="manager-detail-grid">
             <article><b>Banco</b><span>{selectedCompany.tenant?.databaseName||"—"}</span><small>{selectedInstance?.provider||"—"} • {selectedInstance?.provisioning_status||"não provisionado"}</small></article>
-            <article><b>Plano</b><span>{selectedCompany.plan_code||"trial"}</span><small>{statusLabel(selectedCompany)}</small></article>
+            <article><b>Plano</b><span>{planLabel(selectedCompany.plan_code)}</span><small>{statusLabel(selectedCompany)}</small></article>
             <article><b>Mensalidade</b><span>{selectedCompany.billing_enabled?money(selectedCompany.monthly_fee_cents):"Desativada"}</span><small>{selectedCompany.billing_enabled?`Vence dia ${selectedCompany.billing_day||10}`:"Sem cobrança recorrente"}</small></article>
             <article><b>Saúde</b><span>{dateTime(selectedInstance?.last_health_at)}</span><small>{selectedInstance?.provisioning_error||"Sem erro registrado"}</small></article>
           </div>
@@ -399,26 +399,33 @@ export default function ManagerPage(){
 
           {detailTab==="Banco"&&<div className="manager-detail-tab"><p><b>{selectedCompany.tenant?.databaseName||"—"}</b> • {selectedInstance?.provider||"—"} • {selectedInstance?.provisioning_status||"não provisionado"}</p><p>{selectedInstance?.last_health_at?`Último health check: ${dateTime(selectedInstance.last_health_at)}`:"Health check ainda não executado."}</p><div className="manager-inline-actions"><button onClick={()=>void patch(selectedCompany.id,{checkTenantHealth:true})}>Verificar banco</button>{selectedCompany.tenant?.role==="primary-pilot"&&(!selectedInstance||selectedInstance.provisioning_status!=="ready")&&<button onClick={()=>void patch(selectedCompany.id,{registerPrimaryPilot:true})}>Consolidar Tenant 1</button>}{selectedInstance&&selectedInstance.provisioning_status!=="ready"&&selectedCompany.tenant?.role!=="primary-pilot"&&<button onClick={()=>void patch(selectedCompany.id,{retryProvisioning:true})}>Finalizar banco</button>}</div></div>}
 
-          {detailTab==="Plano e módulos"&&<div className="manager-detail-tab"><label>Plano<select value={selectedCompany.plan_code||"trial"} onChange={e=>void patch(selectedCompany.id,{planCode:e.target.value})}>{plans.map(plan=><option key={plan.code} value={plan.code}>{plan.name}</option>)}</select></label><div className="manager-module-groups">{groupedModuleCatalog.map(group=>{const activeSet=new Set([...requiredModules,...(selectedCompany.modules||plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.modules||[])]);const activeModules=[...activeSet].filter(moduleName=>group.modules.includes(moduleName));if(!activeModules.length)return null;return <section key={group.code} className="manager-module-group"><header><div><b>{group.name}</b><small>{group.description}</small></div><em>{activeModules.length}</em></header><div className="manager-module-chips">{activeModules.map(module=><span key={module}>{module}</span>)}</div></section>})}</div>{plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))&&<small>Limites: {plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.limits.users} usuários • {plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.limits.serviceOrdersPerMonth} OS/mês • {plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.limits.storageGb} GB • {plans.find(p=>p.code===(selectedCompany.plan_code||"trial"))?.limits.aiCallsPerMonth} IA/mês</small>}</div>}
+          {detailTab==="Plano e módulos"&&<div className="manager-detail-tab">
+            {selectedCompany.plan_code==="trial"&&<div className="manager-warning"><AlertTriangle size={16}/><span>O Trial usa os recursos e o limite de usuários do plano Básico. Ao selecionar um plano comercial, o período de teste é convertido.</span></div>}
+            <div className="manager-plan-grid">{plans.map(plan=><button key={plan.code} className={"manager-plan-card "+(selectedPlanCode===plan.code?"active":"")} disabled={selectedCompany.tenant?.role==="primary-pilot"&&plan.code!=="completo"} onClick={()=>{
+              if(selectedPlanCode===plan.code)return;
+              const removed=(selectedPlan?.modules||[]).filter(module=>!plan.modules.includes(module));
+              const message=removed.length?"Trocar para "+plan.name+"? "+removed.length+" recurso(s) ficarão indisponíveis, mas os dados serão preservados.":"Trocar para "+plan.name+"?";
+              if(window.confirm(message))void patch(selectedCompany.id,{planCode:plan.code,status:"active"});
+            }}>
+              <header><div><b>{plan.name}</b><small>{userLimitLabel(plan.limits.users)} • {plan.modules.length} recursos</small></div>{selectedPlanCode===plan.code&&<span>ATUAL</span>}</header>
+              <p>{plan.description}</p>
+              <div className="manager-plan-features">{plan.modules.slice(0,8).map(module=><span key={module}>{module}</span>)}{plan.modules.length>8&&<span>+ {plan.modules.length-8} recursos</span>}</div>
+              <small>{userLimitLabel(plan.limits.users)} • {plan.limits.serviceOrdersPerMonth} OS/mês • {plan.limits.storageGb} GB</small>
+            </button>)}</div>
+            {selectedPlan&&<div className="manager-selected-plan"><b>{selectedPlan.name}</b><span>{userLimitLabel(selectedPlan.limits.users)} • {selectedPlan.modules.length} recursos liberados</span><div className="manager-module-chips">{selectedPlan.modules.map(module=><span key={module}>{module}</span>)}</div></div>}
+          </div>}
 
           {detailTab==="Cobrança"&&<div className="manager-detail-tab">
             <div className="manager-billing-form">
               <label className="manager-check"><input type="checkbox" checked={billingDraft.enabled} onChange={e=>setBillingDraft(v=>({...v,enabled:e.target.checked}))}/><span>Ativar cobrança recorrente</span></label>
-              <label>Mensalidade calculada<input value={money(moduleTotalCents)} readOnly /></label>
+              <label>Valor mensal do plano<input inputMode="decimal" value={billingDraft.monthlyPrice} onChange={e=>setBillingDraft(v=>({...v,monthlyPrice:e.target.value}))}/></label>
               <label>Dia do vencimento<input type="number" min="1" max="28" value={billingDraft.billingDay} onChange={e=>setBillingDraft(v=>({...v,billingDay:e.target.value}))}/></label>
               <label>Gerar quantos dias antes<input type="number" min="0" max="20" value={billingDraft.leadDays} onChange={e=>setBillingDraft(v=>({...v,leadDays:e.target.value}))}/></label>
               <label>Forma<select value={billingDraft.method} onChange={e=>setBillingDraft(v=>({...v,method:e.target.value==="boleto"?"boleto":e.target.value==="card"?"card":"pix"}))}><option value="pix">Pix</option><option value="boleto">Boleto</option><option value="card">Cartão de crédito</option></select></label>
               <label>E-mail financeiro<input type="email" value={billingDraft.email} onChange={e=>setBillingDraft(v=>({...v,email:e.target.value}))}/></label>
               <label className="manager-check"><input type="checkbox" checked={billingDraft.autoBlock} onChange={e=>setBillingDraft(v=>({...v,autoBlock:e.target.checked}))}/><span>Bloquear automaticamente após vencimento</span></label>
             </div>
-            <div className="manager-module-pricing">
-              <header><div><b>Módulos contratados</b><span>A Base Operacional é obrigatória. Os demais grupos podem ser contratados conforme a necessidade da empresa.</span></div><strong>{money(moduleTotalCents)}</strong></header>
-              <div className="manager-module-pricing-groups">{groupedModuleCatalog.map(group=>{const entries=group.modules.filter(moduleName=>moduleDraft[moduleName]).map(moduleName=>[moduleName,moduleDraft[moduleName]] as const);if(!entries.length)return null;const enabledCount=entries.filter(([,item])=>item.enabled).length;return <section key={group.code} className="manager-pricing-group"><header><div><b>{group.name}</b><small>{group.description}</small></div><em>{enabledCount}/{entries.length}</em></header><div className="manager-pricing-group-list">{entries.map(([moduleName,item])=><label key={moduleName} className={item.enabled?"enabled":""}>
-                <input type="checkbox" checked={item.enabled} disabled={requiredModules.includes(moduleName)} onChange={e=>setModuleDraft(current=>({...current,[moduleName]:{...current[moduleName],enabled:e.target.checked}}))}/>
-                <span>{moduleName}{requiredModules.includes(moduleName)&&<small className="manager-required-module">Base obrigatória</small>}</span>
-                <input className="module-price" inputMode="decimal" value={item.price} disabled={!item.enabled} onChange={e=>setModuleDraft(current=>({...current,[moduleName]:{...current[moduleName],price:e.target.value}}))}/>
-              </label>)}</div></section>})}</div>
-            </div>
+            <div className="manager-plan-billing-summary"><b>Plano {selectedPlan?.name||"Básico"}</b><span>{userLimitLabel(selectedPlan?.limits.users??2)} • {selectedPlan?.modules.length||0} recursos. A mensalidade é definida pelo plano, sem cobrança por recurso individual.</span></div>
             <div className="manager-inline-actions"><button onClick={()=>void saveBilling()}>Salvar cobrança</button><button onClick={()=>void billingAction({action:"issue-current",companyId:selectedCompany.id})}>Gerar mensalidade atual</button><button onClick={()=>void billingAction({action:"sync-access",companyId:selectedCompany.id})}>Revalidar acesso</button></div>
             <div className="manager-mini-receivables">{selectedReceivables.slice(0,8).map(row=><article key={row.id}><div><b>{row.description}</b><span>{date(row.due_date)} • {money(row.amount_cents)}</span></div><em>{row.status==="paid"?"PAGA":row.status==="pending"?"EM ABERTO":row.status.toUpperCase()}</em></article>)}{!selectedReceivables.length&&<div className="manager-empty">Nenhuma mensalidade desta empresa.</div>}</div>
           </div>}
