@@ -132,8 +132,8 @@ export async function POST(request: NextRequest) {
   const scope = sessionCompany(auth.session, body.companyId);
   if (!scope.ok) return NextResponse.json({ error: scope.error }, { status: scope.status });
 
-  const db = await resolveTenantDb(scope.companyId);
-  if (!db.url || !db.key) {
+  const db = await resolveTenantDb(scope.companyId).catch(error => { console.error("WORK_EXTERNAL_ACCESS_TENANT_RESOLUTION_FAILED", { message: error instanceof Error ? error.message : String(error) }); return null; });
+  if (!db?.url || !db.key) {
     return NextResponse.json(
       { error: "Base de dados indisponível.", code: "WORK_EXTERNAL_ACCESS_DATABASE_UNAVAILABLE" },
       { status: 503 },
@@ -234,10 +234,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Confirmar persistência antes de apresentar sucesso ao operador.
+  const verified = await readState(db.url, db.key, id);
+  const persisted = verified.payload;
+  const savedAccess = Array.isArray(persisted?.externalAccess) ? persisted.externalAccess as WorkExternalAccessRecord[] : [];
+  if (!verified.ok || Number(persisted?.revision || 0) !== payload.revision || savedAccess.length !== mutation.externalAccess.length) {
+    console.error("WORK_EXTERNAL_ACCESS_VERIFY_FAILED", { companyId: scope.companyId, workId, expectedRevision: payload.revision });
+    return NextResponse.json({ error: "A gravação não pôde ser confirmada. Atualize a lista antes de tentar novamente.", code: "WORK_EXTERNAL_ACCESS_VERIFY_FAILED" }, { status: 503 });
+  }
   return NextResponse.json({
     saved: true,
     workId,
-    externalAccess: mutation.externalAccess,
+    externalAccess: savedAccess,
     revision: payload.revision,
     dedicatedDatabase: db.dedicated,
   });
