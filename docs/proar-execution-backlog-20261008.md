@@ -37,3 +37,14 @@
 - Produção: nenhuma escrita, migration ou deployment executado neste ciclo.
 - Bloqueios: preview/produção e testes reais dependem de acesso autorizado ao escopo Vercel; teste de banco real não realizado.
 - Próximo checkpoint: testes isolados da fila offline antes de integrar operações reais.
+
+## Varredura estática inicial — 08/10/2026
+Inspeção parcial do código na branch `production`; não equivale a testes de ponta a ponta ou auditoria de todos os módulos.
+
+- **SEC-001 | P0 | Obras / login externo**: `app/api/public-work-map/access/route.ts` mantém contagem de tentativas em `Map` local ao processo. Em múltiplas instâncias, limites podem divergir. Proposta: limitador compartilhado com TTL e testes de concorrência; não substituir por bloqueio apenas no frontend.
+- **DATA-002 | P0 | Obras / apontamentos externos**: o mesmo endpoint lê o payload e salva por `on_conflict=id` sem pré-condição de revisão visível. Duas escritas concorrentes podem perder observações. Proposta: controle otimista por revisão no backend, 409 com orientação de recarga, testes simultâneos e auditoria; nenhuma alteração de produção antes de validar contrato.
+- **MOB-003 | P1 | /mobile**: `components/ProARMobile.tsx` na `production` renderiza `Home` do desktop, sem fila offline durável. PR #68 adiciona apenas indicadores, não sincronização. Proposta: shell mobile próprio, IndexedDB, operações idempotentes e confirmação por item, com testes offline/reabertura.
+- **QA-004 | P1 | Validação**: `package.json` define `npm run validate` (typecheck, lint, testes e build); testes e2e autenticados e persistência real ainda não executados nesta varredura.
+- **PDF-005 | P2 | Documentos**: dependência `jspdf` presente; verificar efetivamente geradores de OS, PMOC, orçamento e fiscal antes de alterar templates.
+
+**Evidências:** leitura dos arquivos `app/api/public-work-map/access/route.ts`, `app/api/work-external-access/route.ts`, `components/ProARMobile.tsx`, `package.json`, `tests/run.mjs` da branch `production`. Sem teste de execução, sem alteração de banco e sem deployment nesta inspeção.
