@@ -179,23 +179,35 @@ export async function POST(request: NextRequest) {
     updatedBy: auth.session.username,
   };
 
-  const saveResponse = await databaseFetch(
-    `${db.url}/rest/v1/proar_state?on_conflict=id`,
-    {
-      method: "POST",
-      headers: {
-        ...tenantHeaders(db.key),
-        Prefer: "resolution=merge-duplicates,return=minimal",
-        "Content-Type": "application/json",
+  let saveResponse: Response;
+  try {
+    saveResponse = await databaseFetch(
+      `${db.url}/rest/v1/proar_state?on_conflict=id`,
+      {
+        method: "POST",
+        headers: {
+          ...tenantHeaders(db.key),
+          Prefer: "resolution=merge-duplicates,return=minimal",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id,
+          payload,
+          updated_by: auth.session.username,
+          updated_at: now,
+        }),
       },
-      body: JSON.stringify({
-        id,
-        payload,
-        updated_by: auth.session.username,
-        updated_at: now,
-      }),
-    },
-  );
+    );
+  } catch (error) {
+    console.error("WORK_EXTERNAL_ACCESS_DATABASE_WRITE_EXCEPTION", {
+      companyId: scope.companyId, workId,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json({
+      error: "A conexão com o banco falhou ao cadastrar o acesso. Nenhuma alteração foi confirmada.",
+      code: "WORK_EXTERNAL_ACCESS_DATABASE_WRITE_EXCEPTION",
+    }, { status: 503 });
+  }
 
   if (!saveResponse.ok) {
     const detail = await saveResponse.text().catch(() => "");
