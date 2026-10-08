@@ -17,6 +17,18 @@ export type ProARRelease = {
 
 export const PROAR_RELEASES: ProARRelease[] = [
   {
+    version: "2.1.1", date: "08/10/2026", title: "Confiabilidade e operação compacta",
+    summary: "Correção de persistência no Neon e integração das melhorias pendentes na edição completa.",
+    notes: [
+      { type:"Correção", module:"Obras", title:"Cadastro de engenheiros e fiscais", description:"Gravação compatível com o banco Neon, proteção contra edição simultânea e confirmação dos dados salvos." },
+      { type:"Melhoria", module:"Obras", title:"Planejamento compacto", description:"Tabela de ambientes, campos menores e layout responsivo preservados na publicação completa." },
+      { type:"Correção", module:"Clientes", title:"Estruturas e histórico", description:"Edição e exclusão com verificação de vínculos e inativação para preservar o histórico." },
+      { type:"Correção", module:"Orçamentos", title:"Edição e quantidades", description:"Lista única, botão Alterar e quantidades decimais; edição preserva metadados e validade original." },
+      { type:"Melhoria", module:"Licitações", title:"Monitoramento e cache", description:"Indexação em segundo plano, ranking, histórico de alterações e diagnóstico por fonte." },
+      { type:"Melhoria", module:"Financeiro", title:"Tabela compacta", description:"Integração do layout compacto de títulos à publicação completa." },
+    ],
+  },
+  {
     version: "2.1.0",
     date: "02/10/2026",
     title: "Operação, Fiscal e Usabilidade",

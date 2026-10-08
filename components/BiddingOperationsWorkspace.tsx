@@ -11,6 +11,7 @@ type BiddingTender = {
   distanciaMirassol?: number;
   validationStatus?: "active_confirmed" | "history" | "incomplete";
   validationReason?: string;
+  score?: number; scoreReasons?: string[]; changeHistory?: Array<{at:string;summary:string}>;
 };
 type InboxStatus = "Novas" | "Para analisar" | "Interessantes" | "Participaremos" | "Descartadas" | "Aguardando abertura" | "Em disputa" | "Habilitação" | "Homologadas";
 type VaultDocument = { id: string; name: string; category: string; validUntil: string; issuer: string; status: "Válido" | "Vence em breve" | "Vencido" };
@@ -42,6 +43,7 @@ const tenderKey = (tender: BiddingTender, index: number) => tender.numeroControl
 const money = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const tenderMoney = (value?: number) => value === undefined || !Number.isFinite(value) ? "Não informado pela fonte" : money(value);
 const classifyReason = (tender: BiddingTender) => {
+  if(tender.scoreReasons?.length) return `Score ${tender.score ?? 0}/100 • ${tender.scoreReasons.join(" • ")}`;
   const text = `${tender.objetoCompra || ""}`.toLocaleLowerCase("pt-BR");
   const matched = ["ar-condicionado", "climatização", "manutenção", "pmoc", "refrigeração", "split", "chiller", "vrf", "ventilação"].filter(term => text.includes(term));
   return matched.length ? `Compatibilidade encontrada: ${matched.slice(0, 3).join(", ")}.` : "Oportunidade pública próxima à área de atuação monitorada.";
