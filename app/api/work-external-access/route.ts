@@ -25,13 +25,21 @@ type AccessStatePayload = {
 };
 
 async function readState(url: string, key: string, id: string) {
-  const response = await databaseFetch(
-    `${url}/rest/v1/proar_state?id=eq.${encodeURIComponent(id)}&select=payload`,
-    { headers: tenantHeaders(key), cache: "no-store" },
-  );
-  if (!response.ok) return { ok: false as const, payload: null };
-  const rows = await response.json() as { payload?: Record<string, unknown> }[];
-  return { ok: true as const, payload: rows[0]?.payload ?? null };
+  try {
+    const response = await databaseFetch(
+      `${url}/rest/v1/proar_state?id=eq.${encodeURIComponent(id)}&select=payload`,
+      { headers: tenantHeaders(key), cache: "no-store" },
+    );
+    if (!response.ok) {
+      console.error("WORK_EXTERNAL_ACCESS_STATE_READ_FAILED", { id, status: response.status });
+      return { ok: false as const, payload: null };
+    }
+    const rows = await response.json() as { payload?: Record<string, unknown> }[];
+    return { ok: true as const, payload: rows[0]?.payload ?? null };
+  } catch (error) {
+    console.error("WORK_EXTERNAL_ACCESS_STATE_READ_EXCEPTION", { id, message: error instanceof Error ? error.message : String(error) });
+    return { ok: false as const, payload: null };
+  }
 }
 
 async function legacyAccess(
@@ -64,8 +72,8 @@ export async function GET(request: NextRequest) {
   const scope = sessionCompany(auth.session, request.nextUrl.searchParams.get("company"));
   if (!scope.ok) return NextResponse.json({ error: scope.error }, { status: scope.status });
 
-  const db = await resolveTenantDb(scope.companyId);
-  if (!db.url || !db.key) {
+  const db = await resolveTenantDb(scope.companyId).catch(error => { console.error("WORK_EXTERNAL_ACCESS_TENANT_RESOLUTION_FAILED", error); return null; });
+  if (!db?.url || !db.key) {
     return NextResponse.json(
       { error: "Base de dados indisponível.", code: "WORK_EXTERNAL_ACCESS_DATABASE_UNAVAILABLE" },
       { status: 503 },
