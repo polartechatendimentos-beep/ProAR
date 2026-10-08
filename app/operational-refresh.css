@@ -412,3 +412,23 @@
  .finance-titles-table td{grid-column:1/-1!important}
  .finance-titles-table .erp-row-actions{grid-template-columns:1fr}
 }
+
+/* Obras: modal de engenheiros/fiscais com rolagem e formulário compacto */
+.external-access-modal{width:min(850px,calc(100vw - 28px))!important;max-width:850px!important;max-height:calc(100dvh - 28px)!important;display:flex!important;flex-direction:column!important;overflow:hidden!important}
+.external-access-modal .modal-head{flex:0 0 auto;padding:18px 22px!important}
+.external-access-modal .modal-head h2{font-size:21px!important;margin:3px 0!important}
+.external-access-modal .modal-head p{font-size:12px!important;line-height:1.45!important;max-width:690px}
+.external-access-modal .work-register-body{flex:1 1 auto!important;min-height:0!important;overflow-y:auto!important;padding:14px 20px!important;scrollbar-gutter:stable}
+.external-access-modal .work-config-section{padding:14px!important;margin-bottom:12px!important}
+.external-access-modal .external-access-form{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:12px!important;align-items:end}
+.external-access-modal .external-access-form label{min-width:0!important;margin:0!important;font-size:11px!important}
+.external-access-modal .external-access-form input,.external-access-modal .external-access-form select{height:39px!important;min-height:39px!important;width:100%!important;box-sizing:border-box!important;font-size:13px!important}
+.external-access-modal .external-access-submit{grid-column:1/-1;justify-self:start;min-width:170px;min-height:38px!important}
+.external-access-modal .external-access-notice{grid-column:1/-1;max-width:100%;overflow-wrap:anywhere}
+.external-access-modal .modal-actions{flex:0 0 auto!important;padding:12px 20px!important;border-top:1px solid #1b3854}
+@media(max-width:600px){
+ .external-access-modal{width:calc(100vw - 12px)!important;max-height:calc(100dvh - 12px)!important}
+ .external-access-modal .external-access-form{grid-template-columns:1fr!important}
+ .external-access-modal .work-register-body{padding:10px!important}
+ .external-access-modal .modal-head{padding:12px!important}
+}
