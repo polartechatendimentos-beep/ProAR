@@ -6,7 +6,8 @@ import { loadWhatsAppConfig, sendWhatsAppTemplate } from "../../../../lib/proar-
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-type TenderStore = { items: (PncpTender & { discoveredAt: string; whatsappStatus?: string; canonicalKey?: string })[]; lastScan?: string; lastError?: string };
+type IndexedTender = PncpTender & { discoveredAt:string; updatedAt?:string; whatsappStatus?:string; canonicalKey?:string; score?:number; scoreReasons?:string[]; changeHistory?:Array<{at:string;summary:string}> };
+type TenderStore = { items: IndexedTender[]; lastScan?: string; lastError?: string; sync?:{runs:number;lastSuccessfulScan?:string;sourceHealth?:Record<string,string>;indexed:number; checkpoints?:Record<string,{status:string;lastAttempt:string;lastSuccess?:string;pagesRead?:number;count:number;error?:string}>; coverage?:{received:number;indexed:number;incompleteSources:number;complete:boolean}} };
 
 const canonicalTenderKey = (item: PncpTender) => {
   const cnpj = String(item.orgaoEntidade?.cnpj || "").replace(/\D/g, "");
@@ -14,6 +15,16 @@ const canonicalTenderKey = (item: PncpTender) => {
   const control = String(item.numeroControlePNCP || "").trim();
   return control || [cnpj, year, String(item.sequencialCompra || "")].filter(Boolean).join(":");
 };
+
+const scoreTender=(item:PncpTender)=>{
+  const text=`${item.objetoCompra||""} ${item.modalidadeNome||""}`.toLocaleLowerCase("pt-BR"); let score=0; const reasons:string[]=[];
+  const rules:[RegExp,number,string][]=[[/pmoc|manutenção.*(?:ar|climat|refrig)/i,30,"PMOC/manutenção"],[/ar.?condicionado|climatiza|hvac/i,25,"HVAC"],[/instala|split|cassete|piso.?teto|vrf|chiller/i,20,"Instalação/equipamentos"],[/refrigera|compressor|fluido refrigerante/i,15,"Refrigeração"],[/exaust|ventila/i,10,"Exaustão/ventilação"]];
+  for(const [rx,points,label] of rules)if(rx.test(text)){score+=points;reasons.push(label);}
+  const distance=item.distanciaMirassol; if(distance!==undefined){const points=distance<=100?20:distance<=200?12:distance<=400?5:0;score+=points;if(points)reasons.push(`${distance} km de Mirassol`);}
+  if(item.dataEncerramentoProposta&&new Date(item.dataEncerramentoProposta).getTime()>Date.now()+3*86400000){score+=5;reasons.push("Prazo operacional");}
+  return {score:Math.min(100,score),reasons};
+};
+const changeSummary=(previous:IndexedTender|undefined,next:PncpTender)=>{if(!previous)return "";const changes:string[]=[];if(previous.dataEncerramentoProposta!==next.dataEncerramentoProposta)changes.push("prazo alterado");if(previous.valorTotalEstimado!==next.valorTotalEstimado)changes.push("valor atualizado");if(previous.objetoCompra!==next.objetoCompra)changes.push("objeto/descrição atualizado");return changes.join(", ");};
 
 const isAlertableTender = (item: PncpTender, now = Date.now()) => {
   if (!item.numeroControlePNCP || !item.dataEncerramentoProposta) return false;
@@ -71,25 +82,32 @@ async function processCustomerReminders() {
 
 async function runTenderMonitor() {
   const store = await loadStore();
-  const result = await searchAutomaticTenders({ radius: 100 });
-  const known = new Set(store.items.map(canonicalTenderKey).filter(Boolean));
-  const newItems = result.data.filter(item => {
-    const key = canonicalTenderKey(item);
-    return Boolean(key) && isAlertableTender(item) && !known.has(key);
-  });
-  let whatsappStatus = "Nenhuma nova oportunidade";
-  if (newItems.length) {
-    try { whatsappStatus = await notifyWhatsApp(newItems); }
-    catch (error) { whatsappStatus = error instanceof Error ? error.message : "Falha no WhatsApp"; }
-  }
+  // O cron faz a coleta pesada; a interface consome somente esta base consolidada.
+  const result = await searchAutomaticTenders({ radius: 1000 });
+  const previousByKey=new Map(store.items.map(item=>[canonicalTenderKey(item),item]));
   const discoveredAt = new Date().toISOString();
-  const items = [...newItems.map(item => ({ ...item, discoveredAt, whatsappStatus, canonicalKey: canonicalTenderKey(item) })), ...store.items]
-    .filter((item, index, list) => list.findIndex(candidate => canonicalTenderKey(candidate) === canonicalTenderKey(item)) === index)
-    .slice(0, 500);
-  const failedCount = result.failedSources.length;
-  const updated: TenderStore = { items, lastScan: discoveredAt, lastError: failedCount ? `${failedCount} consulta(s) parcial(is)` : "" };
+  const indexed:IndexedTender[]=result.data.map(item=>{
+    const key=canonicalTenderKey(item); const previous=previousByKey.get(key); const scored=scoreTender(item); const changed=changeSummary(previous,item);
+    return {...previous,...item,canonicalKey:key,discoveredAt:previous?.discoveredAt||discoveredAt,updatedAt:discoveredAt,score:scored.score,scoreReasons:scored.reasons,changeHistory:changed?[{at:discoveredAt,summary:changed},...(previous?.changeHistory||[])].slice(0,20):(previous?.changeHistory||[])};
+  });
+  const currentKeys=new Set(indexed.map(canonicalTenderKey));
+  const retained=store.items.filter(item=>!currentKeys.has(canonicalTenderKey(item))&&(!item.dataEncerramentoProposta||new Date(item.dataEncerramentoProposta).getTime()>Date.now()-90*86400000));
+  const items=[...indexed,...retained].sort((a,b)=>(b.score||0)-(a.score||0)).slice(0,5000);
+  const known=new Set(store.items.map(canonicalTenderKey).filter(Boolean));
+  const newItems=indexed.filter(item=>isAlertableTender(item)&&!known.has(canonicalTenderKey(item)));
+  let whatsappStatus="Nenhuma nova oportunidade";
+  const priority=newItems.filter(item=>(item.score||0)>=50);
+  if(priority.length){try{whatsappStatus=await notifyWhatsApp(priority);}catch(error){whatsappStatus=error instanceof Error?error.message:"Falha no WhatsApp";}}
+  const failedCount=result.failedSources.length;
+  const sourceHealth=Object.fromEntries(result.diagnostics.map(item=>[item.source,item.status]));
+  const checkpoints=Object.fromEntries(result.diagnostics.map(item=>{
+    const previous=store.sync?.checkpoints?.[item.source];
+    return [item.source,{status:item.status,lastAttempt:discoveredAt,lastSuccess:item.status==="ok"?discoveredAt:previous?.lastSuccess,pagesRead:(item as typeof item & {pagesRead?:number}).pagesRead,count:item.count,error:(item as typeof item & {error?:string}).error}];
+  }));
+  const coverage={received:result.data.length,indexed:items.length,incompleteSources:failedCount,complete:failedCount===0};
+  const updated:TenderStore={items,lastScan:discoveredAt,lastError:failedCount?`${failedCount} fonte(s) com atenção`:"",sync:{runs:(store.sync?.runs||0)+1,lastSuccessfulScan:failedCount===0?discoveredAt:store.sync?.lastSuccessfulScan,sourceHealth,indexed:items.length,checkpoints,coverage}};
   await saveStore(updated);
-  return { newItems: newItems.length, total: items.length, lastScan: discoveredAt, whatsappStatus };
+  return {newItems:newItems.length,priority:priority.length,total:items.length,lastScan:discoveredAt,whatsappStatus,failedSources:result.failedSources};
 }
 
 export async function GET(request: NextRequest) {

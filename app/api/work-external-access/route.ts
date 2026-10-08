@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isDeepStrictEqual } from "node:util";
+import { commitJsonState } from "../../../lib/state-commit";
+import { recordSystemIncident } from "../../../lib/system-observability";
 import { databaseFetch } from "../../../lib/supabase-rest";
 import { requirePermission, sessionCompany } from "../../../lib/permissions";
 import { resolveTenantDb, tenantHeaders } from "../../../lib/tenant-rest";
@@ -25,13 +28,21 @@ type AccessStatePayload = {
 };
 
 async function readState(url: string, key: string, id: string) {
-  const response = await databaseFetch(
-    `${url}/rest/v1/proar_state?id=eq.${encodeURIComponent(id)}&select=payload`,
-    { headers: tenantHeaders(key), cache: "no-store" },
-  );
-  if (!response.ok) return { ok: false as const, payload: null };
-  const rows = await response.json() as { payload?: Record<string, unknown> }[];
-  return { ok: true as const, payload: rows[0]?.payload ?? null };
+  try {
+    const response = await databaseFetch(
+      `${url}/rest/v1/proar_state?id=eq.${encodeURIComponent(id)}&select=payload`,
+      { headers: tenantHeaders(key), cache: "no-store" },
+    );
+    if (!response.ok) {
+      console.error("WORK_EXTERNAL_ACCESS_STATE_READ_FAILED", { id, status: response.status });
+      return { ok: false as const, payload: null };
+    }
+    const rows = await response.json() as { payload?: Record<string, unknown> }[];
+    return { ok: true as const, payload: rows[0]?.payload ?? null };
+  } catch (error) {
+    console.error("WORK_EXTERNAL_ACCESS_STATE_READ_EXCEPTION", { id, message: error instanceof Error ? error.message : String(error) });
+    return { ok: false as const, payload: null };
+  }
 }
 
 async function legacyAccess(
@@ -42,6 +53,7 @@ async function legacyAccess(
   workId: string,
 ): Promise<WorkExternalAccessRecord[]> {
   const state = await readState(url, key, projectsStateId(company, dedicated));
+  if (!state.ok) throw new Error("WORK_EXTERNAL_ACCESS_LEGACY_READ_FAILED");
   const projects = Array.isArray(state.payload?.projects) ? state.payload?.projects as Record<string, unknown>[] : [];
   const project = projects.find(item => String(item.id || "") === workId);
   return Array.isArray(project?.externalAccess)
@@ -64,8 +76,8 @@ export async function GET(request: NextRequest) {
   const scope = sessionCompany(auth.session, request.nextUrl.searchParams.get("company"));
   if (!scope.ok) return NextResponse.json({ error: scope.error }, { status: scope.status });
 
-  const db = await resolveTenantDb(scope.companyId);
-  if (!db.url || !db.key) {
+  const db = await resolveTenantDb(scope.companyId).catch(error => { console.error("WORK_EXTERNAL_ACCESS_TENANT_RESOLUTION_FAILED", error); return null; });
+  if (!db?.url || !db.key) {
     return NextResponse.json(
       { error: "Base de dados indisponível.", code: "WORK_EXTERNAL_ACCESS_DATABASE_UNAVAILABLE" },
       { status: 503 },
@@ -91,7 +103,8 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  const fallback = await legacyAccess(db.url, db.key, scope.companyId, db.dedicated, workId);
+  const fallback = await legacyAccess(db.url, db.key, scope.companyId, db.dedicated, workId).catch(() => null);
+  if (!fallback) return NextResponse.json({ error: "Não foi possível consultar os acessos anteriores.", code: "WORK_EXTERNAL_ACCESS_LOAD_FAILED" }, { status: 503 });
   return NextResponse.json({
     workId,
     externalAccess: fallback,
@@ -124,8 +137,8 @@ export async function POST(request: NextRequest) {
   const scope = sessionCompany(auth.session, body.companyId);
   if (!scope.ok) return NextResponse.json({ error: scope.error }, { status: scope.status });
 
-  const db = await resolveTenantDb(scope.companyId);
-  if (!db.url || !db.key) {
+  const db = await resolveTenantDb(scope.companyId).catch(error => { console.error("WORK_EXTERNAL_ACCESS_TENANT_RESOLUTION_FAILED", { message: error instanceof Error ? error.message : String(error) }); return null; });
+  if (!db?.url || !db.key) {
     return NextResponse.json(
       { error: "Base de dados indisponível.", code: "WORK_EXTERNAL_ACCESS_DATABASE_UNAVAILABLE" },
       { status: 503 },
@@ -143,7 +156,9 @@ export async function POST(request: NextRequest) {
 
   const existing = state.payload
     ? (Array.isArray(state.payload.externalAccess) ? state.payload.externalAccess as WorkExternalAccessRecord[] : [])
-    : await legacyAccess(db.url, db.key, scope.companyId, db.dedicated, workId);
+    : await legacyAccess(db.url, db.key, scope.companyId, db.dedicated, workId).catch(() => null);
+  if (!existing) return NextResponse.json({ error: "Não foi possível consultar os acessos anteriores. Nenhuma alteração foi gravada.", code: "WORK_EXTERNAL_ACCESS_LOAD_FAILED" }, { status: 503 });
+  if (state.payload && (state.payload.companyId !== scope.companyId || state.payload.workId !== workId)) return NextResponse.json({ error: "Cadastro fora do escopo da obra.", code: "WORK_EXTERNAL_ACCESS_SCOPE_INVALID" }, { status: 403 });
 
   const mutation = mutateWorkExternalAccess(
     [{ id: workId, externalAccess: existing }],
@@ -179,45 +194,30 @@ export async function POST(request: NextRequest) {
     updatedBy: auth.session.username,
   };
 
-  const saveResponse = await databaseFetch(
-    `${db.url}/rest/v1/proar_state?on_conflict=id`,
-    {
-      method: "POST",
-      headers: {
-        ...tenantHeaders(db.key),
-        Prefer: "resolution=merge-duplicates,return=minimal",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        id,
-        payload,
-        updated_by: auth.session.username,
-        updated_at: now,
-      }),
-    },
-  );
-
-  if (!saveResponse.ok) {
-    const detail = await saveResponse.text().catch(() => "");
-    console.error("WORK_EXTERNAL_ACCESS_SAVE_FAILED", {
-      companyId: scope.companyId,
-      workId,
-      status: saveResponse.status,
-      detail: detail.slice(0, 500),
-    });
-    return NextResponse.json(
-      {
-        error: "Não foi possível salvar o acesso externo no banco de dados.",
-        code: "WORK_EXTERNAL_ACCESS_SAVE_FAILED",
-      },
-      { status: 502 },
-    );
+  try {
+    const saved = await commitJsonState(databaseFetch, db.url, tenantHeaders(db.key), id, state.payload, payload);
+    if (!saved.ok) {
+      if (saved.conflict) return NextResponse.json({ error: "Outro usuário atualizou este cadastro. Atualize a lista e tente novamente.", code: "WORK_EXTERNAL_ACCESS_CONFLICT" }, { status: 409 });
+      const incident = await recordSystemIncident({ companyId: scope.companyId, module: "Obras", operation: "Salvar acesso externo", route: "/api/work-external-access", error: `Falha HTTP ${saved.status}`, metadata: { workId } });
+      return NextResponse.json({ error: "Não foi possível salvar o acesso externo.", code: "WORK_EXTERNAL_ACCESS_SAVE_FAILED", incidentId: incident.id }, { status: 502 });
+    }
+  } catch (error) {
+    const incident = await recordSystemIncident({ companyId: scope.companyId, module: "Obras", operation: "Salvar acesso externo", route: "/api/work-external-access", error, metadata: { workId } });
+    return NextResponse.json({ error: "A gravação não pôde ser confirmada. Atualize a lista antes de tentar novamente.", code: "WORK_EXTERNAL_ACCESS_DATABASE_WRITE_EXCEPTION", incidentId: incident.id }, { status: 503 });
   }
 
+  // Confirmar persistência antes de apresentar sucesso ao operador.
+  const verified = await readState(db.url, db.key, id);
+  const persisted = verified.payload;
+  const savedAccess = Array.isArray(persisted?.externalAccess) ? persisted.externalAccess as WorkExternalAccessRecord[] : [];
+  if (!verified.ok || Number(persisted?.revision || 0) !== payload.revision || !isDeepStrictEqual(savedAccess, mutation.externalAccess)) {
+    console.error("WORK_EXTERNAL_ACCESS_VERIFY_FAILED", { companyId: scope.companyId, workId, expectedRevision: payload.revision });
+    return NextResponse.json({ error: "A gravação não pôde ser confirmada. Atualize a lista antes de tentar novamente.", code: "WORK_EXTERNAL_ACCESS_VERIFY_FAILED" }, { status: 503 });
+  }
   return NextResponse.json({
     saved: true,
     workId,
-    externalAccess: mutation.externalAccess,
+    externalAccess: savedAccess,
     revision: payload.revision,
     dedicatedDatabase: db.dedicated,
   });

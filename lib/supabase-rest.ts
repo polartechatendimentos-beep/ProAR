@@ -163,8 +163,9 @@ function buildWhere(paramsUrl: URLSearchParams, values: unknown[]) {
     const match = raw.match(/^(eq|gte|lte|gt|lt|neq|like|is)\.(.*)$/);
     if (!match) throw new Error("Filtro SQL inválido");
     const [, operator, value] = match;
-    if (key === "payload->>_revision") {
-      const expression = `(payload->>'_revision')`;
+    if (key === "payload->>_revision" || key === "payload->>revision") {
+      if (operator !== "eq" && !(operator === "is" && value === "null")) throw new Error("Filtro de revisão inválido");
+      const expression = `(payload->>'${key === "payload->>revision" ? "revision" : "_revision"}')`;
       clauses.push(operator === "is" && value === "null" ? `${expression} IS NULL` : `${expression} = ${addParam(values, value)}`);
       continue;
     }
@@ -193,7 +194,7 @@ async function neonRest(path: string, init: RequestInit) {
   const values: unknown[] = [];
   const method = (init.method ?? "GET").toUpperCase();
   const body = init.body ? JSON.parse(String(init.body)) : undefined;
-  const jsonColumns = new Set(["payload", "details", "brand_config", "modules", "permissions"]);
+  const jsonColumns = new Set(["payload", "details", "brand_config", "modules", "permissions", "metadata"]);
   const parameter = (column: string, value: unknown) => {
     if (jsonColumns.has(column)) return `${addParam(values, JSON.stringify(value))}::jsonb`;
     return addParam(values, value);
