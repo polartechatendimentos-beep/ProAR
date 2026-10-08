@@ -47,11 +47,13 @@ export async function GET(request: NextRequest) {
   const incidentsResponse = await supabaseRest("proar_system_incidents?select=*&order=created_at.desc&limit=80").catch(()=>null);
   if (!companies.ok) return NextResponse.json({ error: "Falha ao consultar empresas." }, { status: 502 });
   const companyRows = await companies.json();
+  // O tenant interno de QA pertence ao ciclo de releases, não à carteira comercial.
+  const commercialCompanyRows = companyRows.filter((company:Record<string,unknown>)=>String(company.id||"")!=="proar-internal");
   const instanceRows = instances.ok ? await instances.json() : [];
   const primaryCompanyId = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
   const primarySlug = process.env.PROAR_PRIMARY_COMPANY_SLUG || "polartech";
   const instanceByCompany=Object.fromEntries(instanceRows.map((instance:Record<string,unknown>)=>[String(instance.company_id||""),instance]));
-  const enrichedCompanies = companyRows.map((company: Record<string,unknown>) => {
+  const enrichedCompanies = commercialCompanyRows.map((company: Record<string,unknown>) => {
     const isPrimary = String(company.id || "") === primaryCompanyId || String(company.slug || "").toLowerCase() === primarySlug;
     return ({
     ...company,

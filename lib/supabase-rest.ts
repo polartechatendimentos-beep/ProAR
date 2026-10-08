@@ -193,7 +193,7 @@ async function neonRest(path: string, init: RequestInit) {
   const values: unknown[] = [];
   const method = (init.method ?? "GET").toUpperCase();
   const body = init.body ? JSON.parse(String(init.body)) : undefined;
-  const jsonColumns = new Set(["payload", "details", "brand_config", "modules", "permissions"]);
+  const jsonColumns = new Set(["payload", "details", "brand_config", "modules", "permissions", "affected_modules", "notes", "migrations", "compatibility", "quality_gate"]);
   const parameter = (column: string, value: unknown) => {
     if (jsonColumns.has(column)) return `${addParam(values, JSON.stringify(value))}::jsonb`;
     return addParam(values, value);

@@ -12,6 +12,13 @@ export const PROAR_SCHEMA_VERSION = "2026.10.06";
 
 export const MANAGER_MIGRATIONS:ManagerMigration[] = [
   {
+    id:"20261007_release_governance",
+    title:"Governança de releases e feature flags",
+    status:"prepared",
+    destructive:false,
+    description:"Adiciona ambientes Interno/Homologação/Canary/Produção, versionamento por tenant, feature flags, health gates, snapshots e rollback controlado.",
+  },
+  {
     id:"20261006_proar_observability",
     title:"Observabilidade e saúde operacional",
     status:"prepared",
@@ -40,7 +47,8 @@ export function managerPlatformInfo(){
     releaseDate:CURRENT_PROAR_RELEASE.date,
     releaseTitle:CURRENT_PROAR_RELEASE.title,
     schemaVersion:PROAR_SCHEMA_VERSION,
-    channel:"pilot",
+    channel:"production",
+    releaseFlow:["development","internal","homologation","canary","production"],
     migrations:MANAGER_MIGRATIONS,
   };
 }

@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticate, createSessionForUser, readSession } from "../../../lib/proar-auth";
 import { supabaseConfigured, supabaseRest } from "../../../lib/supabase-rest";
 import { hashPassword, verifyPassword } from "../../../lib/password";
-import { tenantSlugFromHost } from "../../../lib/tenant-host";
+import { normalizeHost, tenantSlugFromHost } from "../../../lib/tenant-host";
+import { INTERNAL_HOSTS, INTERNAL_QA_COMPANY_ID, INTERNAL_QA_COMPANY_SLUG } from "../../../lib/release-governance";
 import { validateCompanyAccess, validateCompanyAccessBySlug } from "../../../lib/company-access";
 import { validateManagerCredentials } from "../../../lib/manager-auth";
 import { classifyProarError } from "../../../lib/system-errors";
@@ -52,6 +53,17 @@ export async function GET(request: NextRequest) {
   const user = readSession(request.cookies.get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.json({ authenticated: false }, { status: 401 });
 
+  const host=normalizeHost(request.headers.get("host"));
+  const internalHost=INTERNAL_HOSTS.has(host);
+  if(internalHost){
+    const claims={...user,companyId:INTERNAL_QA_COMPANY_ID,companySlug:INTERNAL_QA_COMPANY_SLUG,entitledModules:primaryTenantModules()};
+    const response=NextResponse.json({authenticated:true,...claims,releaseEnvironment:host==="homologacao.proar.online"?"homologation":"internal"});
+    if(user.companyId!==INTERNAL_QA_COMPANY_ID||user.companySlug!==INTERNAL_QA_COMPANY_SLUG||!Array.isArray(user.entitledModules)){
+      response.cookies.set(COOKIE_NAME,createSessionForUser(claims),{httpOnly:true,secure:true,sameSite:"lax",path:"/",maxAge:60*60*12});
+    }
+    return response;
+  }
+
   // Sessões antigas podem não ter companyId/companySlug, ou podem carregar uma lista
   // de módulos desatualizada. O domínio do tenant é a fonte adicional de identidade.
   const hostTenant = tenantSlugFromHost(request.headers.get("host"));
@@ -87,8 +99,6 @@ export async function GET(request: NextRequest) {
   };
   const response = NextResponse.json({ authenticated: true, ...claims });
 
-  // Renova automaticamente cookies legados da PolarTech para eliminar bloqueios
-  // causados por sessões gravadas antes da adoção do licenciamento por plano.
   if (primaryTenant && (
     user.companyId !== PRIMARY_COMPANY_ID ||
     user.companySlug !== PRIMARY_COMPANY_SLUG ||
@@ -102,8 +112,10 @@ export async function GET(request: NextRequest) {
 
 async function handlePostAuth(request: NextRequest) {
   const { username = "", password = "", tenant = "" } = await request.json();
+  const host=normalizeHost(request.headers.get("host"));
+  const internalHost=INTERNAL_HOSTS.has(host);
   const hostTenant = tenantSlugFromHost(request.headers.get("host"));
-  const resolvedTenant = hostTenant || String(tenant || "").trim().toLowerCase();
+  const resolvedTenant = internalHost ? "" : (hostTenant || String(tenant || "").trim().toLowerCase());
   if (resolvedTenant && supabaseConfigured()) {
     const access = await validateCompanyAccessBySlug(resolvedTenant);
     if (!access.ok) {
@@ -119,10 +131,10 @@ async function handlePostAuth(request: NextRequest) {
   }
   const isConfiguredTiago = String(username).trim().toLocaleLowerCase("pt-BR") === "tiago.viana" && Boolean(process.env.PROAR_POLARTECH_TIAGO_PASSWORD) && safeEqual(String(password), String(process.env.PROAR_POLARTECH_TIAGO_PASSWORD));
   if (validateManagerCredentials(String(username), String(password)) || isConfiguredTiago) {
-    let companyId = PRIMARY_COMPANY_ID;
-    let companySlug = resolvedTenant || PRIMARY_COMPANY_SLUG;
-    let entitledModules: string[] | undefined = isPrimaryTenant(companyId, companySlug) ? primaryTenantModules() : undefined;
-    if (resolvedTenant && resolvedTenant !== PRIMARY_COMPANY_SLUG && supabaseConfigured()) {
+    let companyId = internalHost ? INTERNAL_QA_COMPANY_ID : PRIMARY_COMPANY_ID;
+    let companySlug = internalHost ? INTERNAL_QA_COMPANY_SLUG : (resolvedTenant || PRIMARY_COMPANY_SLUG);
+    let entitledModules: string[] | undefined = internalHost ? primaryTenantModules() : (isPrimaryTenant(companyId, companySlug) ? primaryTenantModules() : undefined);
+    if (!internalHost && resolvedTenant && resolvedTenant !== PRIMARY_COMPANY_SLUG && supabaseConfigured()) {
       const tenantResponse = await supabaseRest(`proar_companies?select=id,slug,status,plan_code&slug=eq.${encodeURIComponent(resolvedTenant)}&limit=1`);
       const tenantRows = tenantResponse.ok ? await tenantResponse.json() : [];
       if (tenantRows[0]?.status === "active") {
@@ -131,7 +143,7 @@ async function handlePostAuth(request: NextRequest) {
         entitledModules = contractedModules(companyId,companySlug,tenantRows[0].plan_code);
       }
     }
-    const claims = { username: String(username), displayName: "Tiago Viana", role: "Administrador", permissions: ["*"], companyId, companySlug, entitledModules };
+    const claims = { username: String(username), displayName: "Tiago Viana", role: "Administrador", permissions: ["*"], companyId, companySlug, entitledModules, ...(internalHost?{releaseEnvironment:host==="homologacao.proar.online"?"homologation":"internal"}:{}) };
     const response = NextResponse.json({ authenticated: true, ...claims });
     response.cookies.set(COOKIE_NAME, createSessionForUser(claims), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 });
     return response;
@@ -146,7 +158,12 @@ async function handlePostAuth(request: NextRequest) {
       displayName: staticUser.displayName,
       role: staticUser.role,
       permissions: staticUser.permissions,
-      ...(primaryTenant ? {
+      ...(internalHost ? {
+        companyId: INTERNAL_QA_COMPANY_ID,
+        companySlug: INTERNAL_QA_COMPANY_SLUG,
+        entitledModules: primaryTenantModules(),
+        releaseEnvironment:host==="homologacao.proar.online"?"homologation":"internal",
+      } : primaryTenant ? {
         companyId: PRIMARY_COMPANY_ID,
         companySlug: PRIMARY_COMPANY_SLUG,
         entitledModules: primaryTenantModules(),
@@ -157,7 +174,7 @@ async function handlePostAuth(request: NextRequest) {
     return response;
   }
 
-  const legacyEmployee = await authenticateLegacyEmployee(String(username), String(password));
+  const legacyEmployee = internalHost ? null : await authenticateLegacyEmployee(String(username), String(password));
   if (legacyEmployee) {
     if ("denied" in legacyEmployee) return NextResponse.json({ error: legacyEmployee.reason }, { status: 403 });
     const response = NextResponse.json({ authenticated: true, ...legacyEmployee }); response.cookies.set(COOKIE_NAME, createSessionForUser(legacyEmployee), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 }); return response;

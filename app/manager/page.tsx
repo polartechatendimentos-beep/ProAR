@@ -1,6 +1,7 @@
 "use client";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Banknote, Building2, CheckCircle2, Copy, CreditCard, ExternalLink, LogIn, LogOut, RefreshCw, Save, ShieldCheck, X } from "lucide-react";
+import { ReleaseGovernancePanel } from "@/components/ReleaseGovernancePanel";
 import "../trial-manager.css";
 import "./manager.css";
 
@@ -265,7 +266,7 @@ export default function ManagerPage(){
   return <main className="manager-dashboard">
     <header className="manager-header">
       <div className="manager-title"><div className="manager-mark small"><Building2 size={22}/></div><div><span>BY TAV&apos;s</span><h1>ProAR Manager</h1><p>Empresas, licenças, cobrança recorrente, trials e bancos isolados</p></div></div>
-      <div className="manager-actions"><a href="https://teste.proar.online" target="_blank" rel="noreferrer">Cadastro de teste</a><button onClick={()=>void load()}><RefreshCw size={15}/> Atualizar</button><button className="logout" onClick={()=>void logout()}><LogOut size={15}/> Sair</button></div>
+      <div className="manager-actions"><a href="https://teste.proar.online" target="_blank" rel="noreferrer">ProAR Interno</a><button onClick={()=>void load()}><RefreshCw size={15}/> Atualizar</button><button className="logout" onClick={()=>void logout()}><LogOut size={15}/> Sair</button></div>
     </header>
 
     <section className="manager-content">
@@ -337,6 +338,8 @@ export default function ManagerPage(){
         </tbody></table></div>}
       </section>
 
+      <ReleaseGovernancePanel />
+
       <section className="manager-panel manager-billing-overview">
         <div className="panel-head manager-panel-head-inline"><div><h2>Financeiro do ProAR Manager</h2><p>Mensalidades das empresas locatárias, separado do financeiro operacional de cada tenant.</p></div><button onClick={()=>void billingAction({action:"run-cycle"})}><RefreshCw size={15}/> Executar ciclo agora</button></div>
         {!mercadoPagoReady&&<div className="manager-warning"><AlertTriangle size={16}/><span>Mercado Pago ainda não está configurado neste ambiente. As mensalidades podem ser geradas, mas Pix/boleto exigem as credenciais do Mercado Pago.</span></div>}
@@ -368,7 +371,7 @@ export default function ManagerPage(){
               <div><dt>Mensalidade</dt><dd>{c.billing_enabled?money(c.monthly_fee_cents):"Desativada"}</dd></div>
               <div><dt>Vencimento</dt><dd>{c.billing_enabled?`Dia ${c.billing_day||10} • ${c.billing_method==="boleto"?"Boleto":c.billing_method==="card"?"Cartão":"Pix"}`:"—"}</dd></div>
               <div><dt>Trial</dt><dd>{expires?expires.toLocaleDateString("pt-BR"):"—"}</dd></div>
-              <div><dt>Tenant</dt><dd>{c.tenant?.role==="primary-pilot"?"Tenant 1 • Piloto":"Cliente locatário"}</dd></div>
+              <div><dt>Tenant</dt><dd>{c.tenant?.role==="primary-pilot"?"Empresa do Grupo • Produção":"Cliente locatário"}</dd></div>
               <div><dt>Banco lógico</dt><dd>{c.tenant?.databaseName||"—"}</dd></div><div><dt>Isolamento</dt><dd>{c.tenant?.isolation==="dedicated-project"?"Projeto/Banco dedicado":c.tenant?.isolation||"—"}</dd></div>
               <div><dt>Provisionamento</dt><dd>{inst?.provisioning_status||"não provisionado"}</dd></div><div><dt>Saúde do banco</dt><dd>{dateTime(inst?.last_health_at)}</dd></div>
               <div><dt>Prontidão</dt><dd><span className={c.readiness?.ready?"manager-health ok":"manager-health warning"}>{c.readiness?.score??0}%</span></dd></div><div><dt>Último uso</dt><dd>{dateTime(c.last_seen_at)}</dd></div>
@@ -427,7 +430,7 @@ export default function ManagerPage(){
       {selectedCompany&&<div className="manager-detail-layer" role="dialog" aria-modal="true">
         <button className="manager-detail-backdrop" onClick={()=>setSelectedCompanyId("")} aria-label="Fechar"/>
         <section className="manager-detail">
-          <header><div><span>{selectedCompany.tenant?.role==="primary-pilot"?"TENANT 1 • PILOTO":"CLIENTE LOCATÁRIO"}</span><h2>{selectedCompany.trade_name||selectedCompany.legal_name}</h2><p>{selectedCompany.slug?selectedCompany.slug+".proar.online":"Sem domínio configurado"}</p></div><button onClick={()=>setSelectedCompanyId("")}>Fechar</button></header>
+          <header><div><span>{selectedCompany.tenant?.role==="primary-pilot"?"EMPRESA DO GRUPO • PRODUÇÃO":"CLIENTE LOCATÁRIO"}</span><h2>{selectedCompany.trade_name||selectedCompany.legal_name}</h2><p>{selectedCompany.slug?selectedCompany.slug+".proar.online":"Sem domínio configurado"}</p></div><button onClick={()=>setSelectedCompanyId("")}>Fechar</button></header>
           <div className="manager-detail-grid">
             <article><b>Banco</b><span>{selectedCompany.tenant?.databaseName||"—"}</span><small>{selectedInstance?.provider||"—"} • {selectedInstance?.provisioning_status||"não provisionado"}</small></article>
             <article><b>Plano</b><span>{planLabel(selectedCompany.plan_code)}</span><small>{statusLabel(selectedCompany)}</small></article>
