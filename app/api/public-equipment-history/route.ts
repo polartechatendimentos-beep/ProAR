@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   const token = String(request.nextUrl.searchParams.get("token") || "");
   let identity: ReturnType<typeof verifyEquipmentLabel>;
   try {
-    identity = verifyEquipmentLabel(token, requiredSecret("PROAR_SESSION_SECRET"));
+    identity = verifyEquipmentLabel(token, (process.env.PROAR_EQUIPMENT_LABEL_SECRET || requiredSecret("PROAR_SESSION_SECRET")));
   } catch {
     return NextResponse.json({ error: "Consulta temporariamente indisponível." }, { status: 503, headers: privateHeaders });
   }
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     if (!equipment || equipment.publicMaintenanceHistoryEnabled !== true) {
       return NextResponse.json({ error: "Etiqueta não localizada ou consulta desativada." }, { status: 404, headers: privateHeaders });
     }
-    const { code } = createEquipmentLabel(identity.companyId, identity.equipmentId, requiredSecret("PROAR_SESSION_SECRET"));
+    const { code } = createEquipmentLabel(identity.companyId, identity.equipmentId, (process.env.PROAR_EQUIPMENT_LABEL_SECRET || requiredSecret("PROAR_SESSION_SECRET")));
     const brand = String(equipment.brand || "").slice(0, 60);
     const model = String(equipment.model || "").slice(0, 80);
     const type = String(equipment.equipmentType || "Ar-condicionado").slice(0, 60);
