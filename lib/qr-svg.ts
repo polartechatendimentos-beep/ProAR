@@ -62,7 +62,8 @@ function codewords(value: string) {
     for (let j = 0; j < 8; j++) byte = (byte << 1) | bits[i + j];
     data.push(byte);
   }
-  while (data.length < DATA_CODEWORDS) data.push(data.length % 2 === 0 ? 0xec : 0x11);
+  let padding = 0xec;
+  while (data.length < DATA_CODEWORDS) { data.push(padding); padding ^= 0xfd; }
   const polynomial = divisor(ECC_PER_BLOCK);
   const blocks: { data: number[]; ecc: number[] }[] = [];
   let cursor = 0;
