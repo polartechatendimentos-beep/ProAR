@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import { qrSvg } from "@/lib/qr-svg";
 
-type PublicData = { label: string; equipment: { type: string; brand: string; model: string } };
+type PublicData = { label: string; branding: { name: string; subtitle: string; whatsapp: string }; equipment: { type: string; brand: string; model: string } };
 
 export default function PrintEquipmentLabel({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
@@ -53,10 +53,10 @@ export default function PrintEquipmentLabel({ params }: { params: Promise<{ toke
     {!error && !data && <p role="status" style={{textAlign:"center"}}>Preparando etiqueta...</p>}
     {data && <section className="polar-label" aria-label={`Etiqueta permanente ${data.label}`}>
       <div className="polar-left">
-        <div className="polar-brand">POLARTECH<small>AR CONDICIONADO</small></div>
+        <div className="polar-brand">{data.branding.name}<small>{data.branding.subtitle}</small></div>
         <div className="polar-subtitle">INSTALAÇÃO | MANUTENÇÃO | HIGIENIZAÇÃO | PMOC</div>
-        <div className="polar-contact">WhatsApp (17) 99243-4646</div>
-        <div className="polar-footer">EQUIPAMENTO ATENDIDO PELA POLARTECH</div>
+        {data.branding.whatsapp && <div className="polar-contact">WhatsApp {data.branding.whatsapp}</div>}
+        <div className="polar-footer">ETIQUETA PERMANENTE • HISTÓRICO DE MANUTENÇÕES</div>
       </div>
       <div className="polar-right">
         <h2>CONSULTE O HISTÓRICO DE MANUTENÇÕES</h2>
