@@ -29,6 +29,9 @@ export async function GET(request: NextRequest) {
     const capacity = Number(equipment.capacityBtus);
     return NextResponse.json({
       label: code,
+      branding: identity.companyId === (process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal")
+        ? { name:"POLARTECH", subtitle:"AR CONDICIONADO", whatsapp:"(17) 99243-4646" }
+        : { name:"ASSISTÊNCIA TÉCNICA", subtitle:"HISTÓRICO DE MANUTENÇÃO", whatsapp:"" },
       equipment: { type, brand, model, capacityBtus: Number.isFinite(capacity) && capacity > 0 && capacity <= 1_000_000 ? capacity : null },
       history: publicMaintenanceHistory(equipment, state?.orders ?? []),
       message: "Somente atendimentos concluídos e vinculados a este equipamento são exibidos.",
