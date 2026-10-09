@@ -538,6 +538,7 @@ type ModuleRecord = {
   equipmentLabelImage?: string;
   equipmentLabelImageName?: string;
   equipmentLabelHistory?: string[];
+  publicMaintenanceHistoryEnabled?: boolean;
   diagnosticHistory?: Record<string,unknown>[];
   lastDiagnosticAt?: string;
   sourceUrl?: string;
