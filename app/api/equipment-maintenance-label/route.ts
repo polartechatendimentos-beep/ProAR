@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     const state = await readEquipmentMaintenanceState(companyId);
     const equipment = state?.equipment.find(item => String(item.id) === equipmentId);
     if (!equipment) return NextResponse.json({ error: "Equipamento não localizado nesta empresa." }, { status: 404 });
-    const label = createEquipmentLabel(companyId, equipmentId, requiredSecret("PROAR_SESSION_SECRET"));
+    const label = createEquipmentLabel(companyId, equipmentId, (process.env.PROAR_EQUIPMENT_LABEL_SECRET || requiredSecret("PROAR_SESSION_SECRET")));
     const enabled = equipment.publicMaintenanceHistoryEnabled === true;
     return NextResponse.json({
       enabled, code: label.code,
