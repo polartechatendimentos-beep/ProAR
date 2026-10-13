@@ -48,7 +48,7 @@ export function EquipmentLabelControl({ equipmentId, enabled, canManage, custome
   };
   const previousOrders = orders.filter(order =>
     customerId && String(order.customerId || "") === customerId &&
-    /conclu[ií]d|finalizad|encerrad/i.test(String(order.status || "")) &&
+    /^(concluid[ao]s?|finalizad[ao]s?|encerrad[ao]s?)$/.test(String(order.status || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase()) &&
     /^[A-Za-z0-9_-]{1,120}$/.test(String(order.id || "")),
   );
   const eligiblePreviousOrders = previousOrders.filter(order => {
@@ -111,7 +111,6 @@ export function EquipmentLabelControl({ equipmentId, enabled, canManage, custome
         </select>
         <button type="button" className="os-secondary-button" disabled={busy || !selectedHistoricalOrder || historicalOrderIds.length >= 100} onClick={()=>void changeHistoricalLink(selectedHistoricalOrder,true)}>Vincular OS anterior</button>
       </div>
-      {!customerId && <small>Vincule o equipamento a um cliente com ID antes de recuperar o histórico.</small>}
     </div>}
   </section>;
 }
