@@ -22,6 +22,23 @@ export function createEquipmentLabel(companyId: string, equipmentId: string, sec
   };
 }
 
+/** Public-facing PolarTech label codes are stable and intentionally non-sequential. */
+export function isEquipmentLabelCode(value: string) {
+  return /^PT-[A-F0-9]{12}$/.test(value);
+}
+
+/** Resolve a short printed code only inside the designated PolarTech tenant. */
+export function findEquipmentByLabelCode(equipment: RecordItem[], companyId: string, code: string, secret: string) {
+  if (!isEquipmentLabelCode(code)) return null;
+  const matches = equipment.filter(item => {
+    const id = String(item.id ?? "");
+    if (!validId(id)) return false;
+    return createEquipmentLabel(companyId, id, secret).code === code;
+  });
+  // Fail closed on a truncated-code collision; never show the wrong equipment.
+  return matches.length === 1 ? matches[0] : null;
+}
+
 /** Reject tampered labels before resolving any tenant or querying the database. */
 export function verifyEquipmentLabel(token: string, secret: string) {
   if (!secret || token.length > 500) return null;
@@ -69,11 +86,17 @@ export function publicMaintenanceHistory(equipment: RecordItem, orders: RecordIt
   const id = String(equipment.id ?? "");
   const customerId = String(equipment.customerId ?? "");
   if (!id) return [];
+  const historicalOrderIds = new Set(
+    Array.isArray(equipment.historicalServiceOrderIds)
+      ? equipment.historicalServiceOrderIds.filter(value => typeof value === "string").slice(0, 100)
+      : [],
+  );
   return orders.filter(order => {
     const ids = Array.isArray(order.equipmentIds) ? order.equipmentIds.map(String) : [];
     if (order.equipmentId != null) ids.push(String(order.equipmentId));
-    if (!ids.includes(id)) return false;
-    if (customerId && order.customerId && String(order.customerId) !== customerId) return false;
+    if (!ids.includes(id) && !historicalOrderIds.has(String(order.id ?? ""))) return false;
+    // Explicit historical associations must never cross customer boundaries.
+    if (customerId && String(order.customerId ?? "") !== customerId) return false;
     return /conclu[ií]d|finalizad|encerrad/i.test(String(order.status ?? ""));
   }).sort((a, b) => dateValue(b.date ?? b.updatedAt) - dateValue(a.date ?? a.updatedAt))
     .slice(0, Math.max(0, Math.min(limit, 30)))
