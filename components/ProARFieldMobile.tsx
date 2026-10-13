@@ -144,7 +144,7 @@ export function ProARFieldMobile() {
               </dl>
             </div>
             {current.address && <a className={styles.primaryAction} href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(current.address)}`} target="_blank" rel="noopener noreferrer"><MapPin size={18}/> Abrir rota no mapa <ArrowRight size={18}/></a>}
-            <Link className={styles.secondaryAction} href="/">Abrir sistema completo para editar a OS <ArrowRight size={17}/></Link>
+            {!data.user.canEdit && <p role="alert" className={styles.warning}>Seu perfil não tem permissão para alterar esta OS. Solicite a liberação ao administrador.</p>}
             {data.user.canEdit && <FieldOrderEditor key={`${current.id}:${current.fieldVersion}`} order={current} requiresJourney={/tecnico|prestador/i.test(data.user.role.normalize("NFD").replace(/[\u0300-\u036f]/g,""))} onSaved={refresh}/>}
             <p className={styles.disclaimer}>Alterações são confirmadas no banco. Durante a pausa ou fora da jornada, técnicos podem apenas consultar.</p>
           </section> : <>
