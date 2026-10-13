@@ -21,6 +21,7 @@ export type MobileFieldOrder = {
   mobileChecklist: Record<string, boolean>;
   evidence: { before: boolean; after: boolean; signature: boolean };
   editToken?: string;
+  equipmentOptions?: { id: string; label: string }[];
 };
 
 type RecordItem = Record<string, unknown>;
