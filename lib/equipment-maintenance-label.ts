@@ -81,13 +81,19 @@ function publicServiceCategory(value: unknown) {
   return "Atendimento técnico";
 }
 
+/** Only final statuses qualify. Substring checks would accept "não concluída". */
+export function isCompletedMaintenanceStatus(value: unknown) {
+  const normalized = String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+  return /^(concluid[ao]s?|finalizad[ao]s?|encerrad[ao]s?)$/.test(normalized);
+}
+
 /** Validate explicit links to old OS records before any state write. */
 export function canLinkHistoricalServiceOrder(equipment: RecordItem, order: RecordItem, allEquipment: RecordItem[]) {
   const equipmentId = String(equipment.id ?? "");
   const orderId = String(order.id ?? "");
   const customerId = String(equipment.customerId ?? "");
   if (!validId(equipmentId) || !validId(orderId) || !customerId || String(order.customerId ?? "") !== customerId) return false;
-  if (!/conclu[ií]d|finalizad|encerrad/i.test(String(order.status ?? ""))) return false;
+  if (!isCompletedMaintenanceStatus(order.status)) return false;
   const assignedToOtherLabel = allEquipment.some(other => {
     if (String(other.id) === equipmentId) return false;
     const historical = Array.isArray(other.historicalServiceOrderIds) ? other.historicalServiceOrderIds.map(String) : [];
@@ -115,7 +121,7 @@ export function publicMaintenanceHistory(equipment: RecordItem, orders: RecordIt
     if (!ids.includes(id) && !historicalOrderIds.has(String(order.id ?? ""))) return false;
     // Explicit historical associations must never cross customer boundaries.
     if (customerId && String(order.customerId ?? "") !== customerId) return false;
-    return /conclu[ií]d|finalizad|encerrad/i.test(String(order.status ?? ""));
+    return isCompletedMaintenanceStatus(order.status);
   }).sort((a, b) => dateValue(b.date ?? b.updatedAt) - dateValue(a.date ?? a.updatedAt))
     .slice(0, Math.max(0, Math.min(limit, 30)))
     .map(order => ({
