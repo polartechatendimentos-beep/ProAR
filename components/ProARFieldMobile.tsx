@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  ArrowLeft, ArrowRight, CalendarDays, CheckCircle2, ChevronRight,
+  ArrowLeft, ArrowRight, CalendarDays, ChevronRight,
   ClipboardList, CloudOff, Home, MapPin, Menu, RefreshCw,
   Search, ShieldCheck, Smartphone, UserRound, Wrench, Wifi,
 } from "lucide-react";
@@ -18,7 +18,7 @@ type FieldData = {
   connected: boolean; stateFound: boolean; mode: "read-only";
   user: { displayName: string; role: string };
   orders: FieldOrder[];
-  summary: { today: number; inProgress: number; pending: number; completedToday: number };
+  summary: { today: number; inProgress: number; pending: number };
   lastReadAt: string; notice: string;
 };
 type Tab = "inicio" | "agenda" | "ordens" | "mais";
@@ -147,12 +147,12 @@ export function ProARFieldMobile() {
             {tab === "inicio" && <section className={styles.screen}>
               <p className={styles.eyebrow}>PAINEL OPERACIONAL</p>
               <h1 className={styles.title}>Olá, {firstName}<span className={styles.titleAccent}>.</span></h1>
-              <p className={styles.subtitle}>Seus atendimentos conectados ao ProAR.</p>
+              <p className={styles.subtitle}>Seus atendimentos em aberto conectados ao ProAR.</p>
               <div className={styles.hero}>
                 <span className={styles.heroTop}><Smartphone size={18}/> PROAR FIELD · DADOS REAIS</span>
                 <strong>{data.summary.today}</strong>
                 <span>ordens programadas para hoje</span>
-                <div className={styles.heroBottom}><span><CheckCircle2 size={15}/> {data.summary.completedToday} concluídas hoje</span><span>{todayISO().split("-").reverse().join("/")}</span></div>
+                <div className={styles.heroBottom}><span>Somente OS em aberto</span><span>{todayISO().split("-").reverse().join("/")}</span></div>
               </div>
               <div className={styles.metrics}>
                 <div><strong>{data.summary.inProgress}</strong><span>Em andamento</span></div>
@@ -160,7 +160,7 @@ export function ProARFieldMobile() {
               </div>
               <div className={styles.sectionHeading}><h2>Atendimentos de hoje</h2><button type="button" onClick={()=>setTab("agenda")}>Ver agenda <ArrowRight size={14}/></button></div>
               {todayOrders.length ? todayOrders.slice(0, 8).map(order=><OrderCard key={order.id} order={order} onOpen={()=>setSelected(order.id)}/>) : <div className={styles.empty}>Nenhuma OS vinculada a você para hoje.</div>}
-              <button type="button" className={styles.secondaryAction} onClick={()=>setTab("ordens")}>Consultar todas as ordens <ArrowRight size={17}/></button>
+              <button type="button" className={styles.secondaryAction} onClick={()=>setTab("ordens")}>Consultar ordens em aberto <ArrowRight size={17}/></button>
             </section>}
             {tab === "agenda" && <section className={styles.screen}>
               <p className={styles.eyebrow}>PLANEJAMENTO</p><h1 className={styles.title}>Agenda</h1>
