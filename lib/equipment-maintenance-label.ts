@@ -1,3 +1,5 @@
+import { isCompletedMaintenanceStatus, isEquipmentLabelCode, normalizeEquipmentLabelCode } from "./equipment-label-associations";
+export { canLinkHistoricalServiceOrder, isCompletedMaintenanceStatus, isEquipmentLabelCode, normalizeEquipmentLabelCode } from "./equipment-label-associations";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 type RecordItem = Record<string, unknown>;
@@ -23,14 +25,6 @@ export function createEquipmentLabel(companyId: string, equipmentId: string, sec
 }
 
 /** Manual PT-000001 codes and generated PT-12HEX codes use the same public route. */
-export function normalizeEquipmentLabelCode(value: unknown) {
-  return String(value ?? "").trim().toUpperCase().replace(/\s+/g, "");
-}
-
-export function isEquipmentLabelCode(value: string) {
-  return /^PT-[A-Z0-9]{6,12}$/.test(value);
-}
-
 /** A manually registered code is permanent. Never silently replace it on later OS. */
 export function equipmentDisplayLabel(equipment: RecordItem, companyId: string, secret: string) {
   const manual = normalizeEquipmentLabelCode(equipment.permanentLabelCode);
@@ -105,30 +99,6 @@ function publicServiceCategory(value: unknown) {
   if (/instal/.test(normalized)) return "Instalação";
   if (/inspec|vistoria|diagnost/.test(normalized)) return "Inspeção técnica";
   return "Atendimento técnico";
-}
-
-/** Only final statuses qualify. Substring checks would accept "não concluída". */
-export function isCompletedMaintenanceStatus(value: unknown) {
-  const normalized = String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
-  return /^(concluid[ao]s?|finalizad[ao]s?|encerrad[ao]s?)$/.test(normalized);
-}
-
-/** Validate explicit links to old OS records before any state write. */
-export function canLinkHistoricalServiceOrder(equipment: RecordItem, order: RecordItem, allEquipment: RecordItem[]) {
-  const equipmentId = String(equipment.id ?? "");
-  const orderId = String(order.id ?? "");
-  const customerId = String(equipment.customerId ?? "");
-  if (!validId(equipmentId) || !validId(orderId) || !customerId || String(order.customerId ?? "") !== customerId) return false;
-  if (!isCompletedMaintenanceStatus(order.status)) return false;
-  const assignedToOtherLabel = allEquipment.some(other => {
-    if (String(other.id) === equipmentId) return false;
-    const historical = Array.isArray(other.historicalServiceOrderIds) ? other.historicalServiceOrderIds.map(String) : [];
-    if (historical.includes(orderId)) return true;
-    const orderEquipmentIds = Array.isArray(order.equipmentIds) ? order.equipmentIds.map(String) : [];
-    if (order.equipmentId != null) orderEquipmentIds.push(String(order.equipmentId));
-    return other.publicMaintenanceHistoryEnabled === true && orderEquipmentIds.includes(String(other.id));
-  });
-  return !assignedToOtherLabel;
 }
 
 /** A public QR must never expose customer, technician, location, price, notes or photos. */
