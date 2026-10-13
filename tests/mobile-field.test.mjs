@@ -13,7 +13,7 @@ const records = [
 
 test("field technician only sees assigned OS and not unrelated tenants or users", () => {
   const orders = mobileFieldOrders(records, technician);
-  assert.deepEqual(orders.map(item=>item.id), ["OS-100","OS-103"]);
+  assert.deepEqual(orders.map(item=>item.id), ["OS-100"]);
   assert.ok(!JSON.stringify(orders).includes("private-id"));
   assert.ok(!JSON.stringify(orders).includes("sigilo"));
   assert.ok(!JSON.stringify(orders).includes("900"));
@@ -25,7 +25,7 @@ test("manager can see all OS but only allowlisted fields", () => {
   assert.equal(canSeeAllMobileOrders(manager), true);
   assert.equal(canSeeAllMobileOrders(technician), false);
   const orders = mobileFieldOrders(records, manager);
-  assert.equal(orders.length, 4);
+  assert.equal(orders.length, 3);
   assert.deepEqual(Object.keys(orders[0]).sort(), [
     "address","checkInAt","client","date","equipmentIds","id","service","status","tech","time","unit",
   ]);
@@ -42,11 +42,26 @@ test("assignment requires exact normalized match, not substring", () => {
 test("field summary counts current date and distinguishes active, pending and completed", () => {
   const orders = mobileFieldOrders(records, manager);
   assert.deepEqual(mobileFieldSummary(orders,"2026-10-13"), {
-    today:3, inProgress:1, pending:2, completedToday:1,
+    today:2, inProgress:1, pending:2,
   });
 });
 
 test("invalid data cannot crash mobile projection", () => {
   assert.deepEqual(mobileFieldOrders(null, technician), []);
   assert.deepEqual(mobileFieldOrders([null, false, "test", {}, {id:"OS-9",tech:"Tiago Viana"}], technician).map(x=>x.id), ["OS-9"]);
+});
+
+test("closed and cancelled orders never consume the mobile limit or appear in metrics", () => {
+  const statuses = ["Concluída", " CONCLUIDA ", "Finalizada", "Encerrada", "Cancelada", "Cancelado"];
+  const closed = statuses.map((status, i) => ({id:"closed-" + i, tech:"Tiago Viana", status, date:"2026-10-13"}));
+  const open = {id:"open", tech:"Tiago Viana", status:"Agendada", date:"2026-10-13"};
+  assert.deepEqual(mobileFieldOrders([...closed, open], technician, 1).map(x => x.id), ["open"]);
+  const projected = [...mobileFieldOrders([open], manager), ...closed];
+  assert.deepEqual(mobileFieldSummary(projected, "2026-10-13"), {today:1, inProgress:0, pending:1});
+});
+
+test("scheduled, waiting and in-progress orders remain visible", () => {
+  const statuses = ["Aberta", "Agendada", "Em andamento", "Aguardando cliente", "Não concluída"];
+  const orders = statuses.map((status, i) => ({id:"open-" + i, tech:"Tiago Viana", status}));
+  assert.equal(mobileFieldOrders(orders, technician).length, statuses.length);
 });
