@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import { qrSvg } from "@/lib/qr-svg";
 
-type PublicData = { label: string; branding: { name: string; subtitle: string; whatsapp: string }; equipment: { type: string; brand: string; model: string } };
+type PublicData = { label: string; publicOrigin?: string; branding: { name: string; subtitle: string; whatsapp: string }; equipment: { type: string; brand: string; model: string } };
 
 export default function PrintEquipmentLabel({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
@@ -12,10 +12,10 @@ export default function PrintEquipmentLabel({ params }: { params: Promise<{ toke
   const [error, setError] = useState("");
   useEffect(() => {
     let active = true;
-    setPublicUrl(`${window.location.origin}/equipamento/${encodeURIComponent(token)}`);
+    setPublicUrl("");
     fetch(`/api/public-equipment-history?token=${encodeURIComponent(token)}`, { cache:"no-store" })
       .then(async response => { const result = await response.json(); if (!response.ok) throw new Error(result.error); return result; })
-      .then(result => { if (active) setData(result); })
+      .then((result: PublicData) => { if (active) { setData(result); setPublicUrl(`${result.publicOrigin || window.location.origin}/equipamento/${encodeURIComponent(result.publicOrigin ? result.label : token)}`); } })
       .catch(reason => { if (active) setError(reason instanceof Error ? reason.message : "Etiqueta indisponível."); });
     return () => { active = false; };
   }, [token]);
