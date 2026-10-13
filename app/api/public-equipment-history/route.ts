@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requiredSecret } from "../../../lib/security-env";
-import { createEquipmentLabel, findEquipmentByLabelCode, isEquipmentLabelCode, publicMaintenanceHistory, verifyEquipmentLabel } from "../../../lib/equipment-maintenance-label";
+import { createEquipmentLabel, equipmentDisplayLabel, findEquipmentByLabelCode, isEquipmentLabelCode, publicMaintenanceHistory, verifyEquipmentLabel } from "../../../lib/equipment-maintenance-label";
 import { readEquipmentMaintenanceState } from "../../../lib/equipment-maintenance-state";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     if (!equipment || equipment.publicMaintenanceHistoryEnabled !== true) {
       return NextResponse.json({ error: "Etiqueta não localizada ou consulta desativada." }, { status: 404, headers: privateHeaders });
     }
-    const { code } = createEquipmentLabel(companyId, String(equipment.id), secret);
+    const code = equipmentDisplayLabel(equipment, companyId, secret);
     const brand = String(equipment.brand || "").slice(0, 60);
     const model = String(equipment.model || "").slice(0, 80);
     const type = String(equipment.equipmentType || "Ar-condicionado").slice(0, 60);
