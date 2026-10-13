@@ -79,6 +79,7 @@ test("historical OS links require explicit customer match, completion and unique
   assert.deepEqual(publicMaintenanceHistory(equipment, [{...old, customerId:"other"}]), []);
   assert.deepEqual(publicMaintenanceHistory(equipment, [{...old, status:"Em aberto"}]), []);
   assert.deepEqual(publicMaintenanceHistory(equipment, [{...old, status:"Não concluída"}]), []);
+  assert.deepEqual(publicMaintenanceHistory({ id:"EQ-000001" }, [recent, old]), []);
 });
 
 test("physical sticker PT-000001 can be entered in OS and resolves to the same equipment", () => {
