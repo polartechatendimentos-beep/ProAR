@@ -56,3 +56,15 @@ Uma etiqueta física é vinculada ao **ID imutável do equipamento**, não ao n�
 - O histórico depende de vínculos por ID. OS antigas sem `equipmentId(s)` precisam ser relacionadas corretamente, nunca por mera coincidência de nome.
 - O código não é `PT-000001` sequencial. Um contador atômico específico por empresa pode ser desenvolvido separadamente, preservando os QR já emitidos.
 - A impressão usa tipografia e cores da PolarTech; o logo gráfico original da imagem de referência ainda não foi incorporado como ativo vetorial.
+
+## Digitação do número da etiqueta na Ordem de Serviço (13/10/2026)
+
+Na OS → aba **Equipamentos**, o campo **Número da etiqueta permanente** aceita, por exemplo, `PT-000001` e o formato determinístico `PT-XXXXXXXXXXXX`.
+
+1. Digitar o número e clicar **Localizar e vincular etiqueta**. O sistema consulta o banco da empresa com a sessão do operador, exige correspondência do `customerId` e vincula o equipamento à OS. O número validado fica gravado na OS em `equipmentLabelCode` após clicar **Salvar**.
+2. Se o número ainda não estiver registrado, vincular previamente o equipamento físico correto à OS e clicar **Registrar número neste equipamento**. Somente usuários com permissão de editar equipamentos podem fazê-lo; a confirmação exige reconhecer que a etiqueta está fisicamente naquele equipamento.
+3. O cadastro do equipamento guarda `permanentLabelCode`, que não é alterado silenciosamente nas manutenções seguintes. O portal e a impressão passam a usar esse código como URL canônica `https://polartech.proar.online/equipamento/PT-000001`. O código gerado anteriormente permanece aceito como alias para não inutilizar etiquetas já impressas.
+4. O cadastro impede duplicação com etiquetas de outros equipamentos da mesma empresa, e o salvamento da OS revalida no servidor que a etiqueta informada pertence ao cliente e a um equipamento vinculado.
+5. O histórico público continua limitado a OS concluídas, com vínculo pelo ID do equipamento ou por associação histórica explícita.
+
+**Limitações de homologação:** o cadastro precisa ter `customerId` consistente. Em ambiente multiempresa, o código curto público é resolvido apenas na instância PolarTech; os demais tenants continuam com links assinados. Testar conflito de gravação concorrente, leitura do QR impresso e atualização dos dados em homologação antes de publicar.
