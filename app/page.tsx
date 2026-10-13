@@ -49,6 +49,7 @@ import { OperationalFinance } from "@/components/OperationalFinance";
 import { InventoryOperations } from "@/components/InventoryOperations";
 import type { OperationalCommand } from "@/lib/operational-ledger";
 import { ServiceOrderWorkspace } from "@/components/ServiceOrderWorkspace";
+import { canLinkHistoricalServiceOrder } from "@/lib/equipment-maintenance-label";
 import { CustomerProfileWorkspace } from "@/components/CustomerProfileWorkspace";
 import { TechnicalCompliancePanel } from "@/components/TechnicalCompliancePanel";
 import { IntegrityAudit } from "@/components/IntegrityAudit";
@@ -539,6 +540,7 @@ type ModuleRecord = {
   equipmentLabelImageName?: string;
   equipmentLabelHistory?: string[];
   publicMaintenanceHistoryEnabled?: boolean;
+  historicalServiceOrderIds?: string[];
   diagnosticHistory?: Record<string,unknown>[];
   lastDiagnosticAt?: string;
   sourceUrl?: string;
@@ -931,7 +933,7 @@ function SignaturePad({ label, value, onChange }: { label: string; value?: strin
   </div>;
 }
 
-function OrderDetail({ order, customerPhone, company, catalog, contracts, close, onUpdate, onSyncEquipmentDiagnostic, onToggleEquipmentLabel, canManageLabels, onDelete, canEdit, customers, structures, equipment, errorCodes, manuals }: { order: ServiceOrder; customerPhone?: string; company: TenantCompany; catalog: ModuleRecord[]; contracts: PublicContractRecord[]; close: () => void; onUpdate: (order: ServiceOrder) => Promise<unknown>; onSyncEquipmentDiagnostic?: (equipmentId:string, entry:Record<string,unknown>)=>Promise<unknown>; onToggleEquipmentLabel?: (equipmentId:string, enabled:boolean)=>Promise<boolean>; canManageLabels?: boolean; onDelete?: (order: ServiceOrder) => void; canEdit: boolean; customers: Customer[]; structures: ModuleRecord[]; equipment: ModuleRecord[]; errorCodes: ModuleRecord[]; manuals: ModuleRecord[] }) {
+function OrderDetail({ order, customerPhone, company, catalog, contracts, close, onUpdate, onSyncEquipmentDiagnostic, onToggleEquipmentLabel, onLinkHistoricalOrder, canManageLabels, serviceOrders, onDelete, canEdit, customers, structures, equipment, errorCodes, manuals }: { order: ServiceOrder; customerPhone?: string; company: TenantCompany; catalog: ModuleRecord[]; contracts: PublicContractRecord[]; close: () => void; onUpdate: (order: ServiceOrder) => Promise<unknown>; onSyncEquipmentDiagnostic?: (equipmentId:string, entry:Record<string,unknown>)=>Promise<unknown>; onToggleEquipmentLabel?: (equipmentId:string, enabled:boolean)=>Promise<boolean>; onLinkHistoricalOrder?: (equipmentId:string, orderId:string, linked:boolean)=>Promise<boolean>; canManageLabels?: boolean; serviceOrders?: ServiceOrder[]; onDelete?: (order: ServiceOrder) => void; canEdit: boolean; customers: Customer[]; structures: ModuleRecord[]; equipment: ModuleRecord[]; errorCodes: ModuleRecord[]; manuals: ModuleRecord[] }) {
   const [currentOrder, setCurrentOrder] = useState(order);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1107,7 +1109,7 @@ function OrderDetail({ order, customerPhone, company, catalog, contracts, close,
       <div className="modal order-detail-modal">
       <div className="modal-head order-detail-head"><div><span>ORDEM DE SERVIÇO</span><h2>{order.id} • {order.client}</h2><p>{order.unit}</p></div><div className="order-detail-actions">{dirty && <small className="order-dirty-indicator">Alterações não salvas</small>}<ContextReports title={`OS ${currentOrder.id}`} rows={[['Cliente',currentOrder.client],["Status",currentOrder.status],["Técnico",currentOrder.tech]]} options={["Imprimir Ordem de Serviço","Relatório técnico","Certificado de higienização","Relatório fotográfico","Relatório da assistência técnica","Comprovante de entrega","Histórico completo da OS"]}/>{canEdit&&<button className="outline-btn google-calendar-sync-btn" disabled={googleCalendarSyncing||!currentOrder.date} onClick={()=>void syncGoogleCalendar()}><CalendarDays size={15}/>{googleCalendarSyncing?"Sincronizando...":currentOrder.googleCalendarEventId?"Atualizar Google Agenda":"Enviar ao Google Agenda"}</button>}{currentOrder.googleCalendarEventUrl&&<button className="outline-btn" onClick={()=>window.open(currentOrder.googleCalendarEventUrl,"_blank","noopener,noreferrer")}><ArrowRight size={14}/> Abrir evento</button>}{canEdit && onDelete && <button className="outline-btn danger" type="button" onClick={()=>onDelete(currentOrder)}><Trash2 size={15}/> Excluir OS</button>}{canEdit && <button className="primary-btn order-save-button" disabled={!dirty || saving || /^cancelada$/i.test(currentOrder.status)} onClick={()=>void saveChanges()}>{saving ? <RefreshCw size={15}/> : <CheckCircle2 size={15}/>} {saving ? "Salvando..." : "Salvar alterações"}</button>}<button onClick={requestClose} aria-label="Fechar"><X size={18}/></button></div></div>
       {saveNotice && <div className={`order-save-notice ${saveNotice.startsWith("✓") ? "saved" : saveNotice.startsWith("Não") ? "error" : "saving"}`}>{saveNotice}</div>}
-      <ServiceOrderWorkspace order={currentOrder} customers={customers as unknown as Record<string, unknown>[]} structures={structures as unknown as Record<string, unknown>[]} equipment={equipment as unknown as Record<string, unknown>[]} errorCodes={errorCodes as unknown as Record<string, unknown>[]} manuals={manuals as unknown as Record<string, unknown>[]} catalogSource={catalog as unknown as Record<string, unknown>[]} canEdit={canEdit} onSave={async next => { const saved = await onUpdate(next as ServiceOrder); setCurrentOrder(saved as ServiceOrder); setDirty(false); return saved; }} onSyncEquipmentDiagnostic={onSyncEquipmentDiagnostic} onToggleEquipmentLabel={onToggleEquipmentLabel} canManageLabels={canManageLabels}/>
+      <ServiceOrderWorkspace order={currentOrder} customers={customers as unknown as Record<string, unknown>[]} structures={structures as unknown as Record<string, unknown>[]} equipment={equipment as unknown as Record<string, unknown>[]} errorCodes={errorCodes as unknown as Record<string, unknown>[]} manuals={manuals as unknown as Record<string, unknown>[]} catalogSource={catalog as unknown as Record<string, unknown>[]} canEdit={canEdit} onSave={async next => { const saved = await onUpdate(next as ServiceOrder); setCurrentOrder(saved as ServiceOrder); setDirty(false); return saved; }} onSyncEquipmentDiagnostic={onSyncEquipmentDiagnostic} onToggleEquipmentLabel={onToggleEquipmentLabel} onLinkHistoricalOrder={onLinkHistoricalOrder} canManageLabels={canManageLabels} serviceOrders={serviceOrders}/>
       <div className="order-detail-content">
         <div className="order-overview">
           <article><CalendarDays size={17}/><div><small>AGENDAMENTO</small><strong>{order.date ? new Date(`${order.date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem data"} • {order.time || "A definir"}</strong></div></article>
@@ -4807,7 +4809,21 @@ export default function Home() {
     const currentEquipment = (moduleRecords["Equipamentos"] ?? []).find(item => item.id === equipmentId);
     if (!currentEquipment) return false;
     return saveConfirmedModuleRecord("Equipamentos", { ...currentEquipment, publicMaintenanceHistoryEnabled: enabled });
-  }} canManageLabels={hasAction("Equipamentos","Editar")} canEdit={hasAction("Ordens de serviço","Editar")}/>}{/* detalhe da OS */}
+  }} onLinkHistoricalOrder={async (equipmentId, orderId, linked) => {
+    if (!hasAction("Equipamentos","Editar")) return false;
+    const currentEquipment = (moduleRecords["Equipamentos"] ?? []).find(item => item.id === equipmentId);
+    const previousOrder = serviceOrders.find(item => item.id === orderId);
+    if (!currentEquipment || !previousOrder) return false;
+    const historical = Array.isArray(currentEquipment.historicalServiceOrderIds) ? currentEquipment.historicalServiceOrderIds : [];
+    if (linked) {
+      if (!canLinkHistoricalServiceOrder(currentEquipment as Record<string,unknown>, previousOrder as unknown as Record<string,unknown>, (moduleRecords["Equipamentos"] ?? []) as Record<string,unknown>[])) return false;
+      if (historical.length >= 100 && !historical.includes(orderId)) return false;
+    } else if (!historical.includes(orderId)) return false;
+    return saveConfirmedModuleRecord("Equipamentos", {
+      ...currentEquipment,
+      historicalServiceOrderIds: linked ? [...new Set([...historical, orderId])] : historical.filter(id => id !== orderId),
+    });
+  }} canManageLabels={hasAction("Equipamentos","Editar")} serviceOrders={serviceOrders} canEdit={hasAction("Ordens de serviço","Editar")}/>}{/* detalhe da OS */}
   </div>;
 }
 
