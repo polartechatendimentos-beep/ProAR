@@ -16,7 +16,7 @@ import styles from "./ProARFieldMobile.module.css";
 type FieldOrder = MobileFieldOrder;
 type FieldData = {
   connected: boolean; stateFound: boolean; mode: "operational";
-  user: { displayName: string; role: string; canEdit: boolean; linkedEmployee: boolean; manager: boolean };
+  user: { displayName: string; role: string; canEdit: boolean; canApprove: boolean; scope:string; linkedEmployee: boolean; manager: boolean };
   orders: FieldOrder[];
   summary: { today: number; inProgress: number; pending: number };
   lastReadAt: string; notice: string;
@@ -60,6 +60,7 @@ export function ProARFieldMobile() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [day, setDay] = useState(todayISO);
+  const [completion,setCompletion]=useState<{orderId:string;completedAt:string}|null>(null);
   const refresh = useCallback(async () => {
     setLoading(true); setError("");
     try {
@@ -68,13 +69,12 @@ export function ProARFieldMobile() {
       const result = await response.json();
       if (!response.ok) {
         setLoginRequired(response.status === 401);
+        if(response.status===401||response.status===403){setData(null);setSelected(null);}
         throw new Error(result.error || "Não foi possível carregar os atendimentos.");
       }
       setLoginRequired(false);
       setData(result as FieldData);
     } catch (reason) {
-      setData(null);
-      setSelected(null);
       setError(reason instanceof Error ? reason.message : "Falha de conexão com o ProAR.");
     } finally {
       setLoading(false);
@@ -120,12 +120,14 @@ export function ProARFieldMobile() {
         </div>
       </header>
       <main className={styles.content}>
-        {!online && <div className={styles.warning}><CloudOff size={19}/>Sem conexão. Alterações e atendimentos offline ainda não estão habilitados. Os dados exibidos podem estar desatualizados.</div>}
+        {!online && <div className={styles.warning}><CloudOff size={19}/>Sem conexão. Você pode preencher o rascunho da OS neste aparelho. A gravação no servidor e a conclusão precisam de conexão.</div>}
+        {completion&&<div role="status" className={styles.detailCard}><h2>OS concluída • {completion.orderId}</h2><p>Confirmada no servidor em {new Date(completion.completedAt).toLocaleString("pt-BR")}.</p><button type="button" className={styles.secondaryAction} onClick={()=>setCompletion(null)}>Fechar confirmação</button></div>}
         {error && <div role="alert" className={styles.error}>{error}{loginRequired && <Link href="/">Entrar no ProAR</Link>}{!loginRequired && <button type="button" onClick={()=>void refresh()}>Tentar novamente</button>}</div>}
         {loading && !data && <div role="status" className={styles.loading}>Conectando aos atendimentos reais do ProAR...</div>}
         {data && <>
           <details className={styles.journeyPanel}><summary>Minha jornada • entrada, pausa e saída</summary><MobileRouteControls /></details>
           <FieldSupportPanel visible={tab === "central" && !current}/>
+          {tab==="central"&&!current&&data.user.canApprove&&<section className={styles.detailCard}><h2>Exceções de OS aguardando aprovação</h2>{orders.filter(order=>order.fieldExceptions?.some(item=>item.status==="Pendente")).map(order=><button key={order.id} type="button" className={styles.secondaryAction} onClick={()=>setSelected(order.id)}>Revisar {order.id} • {order.client}</button>)}{!orders.some(order=>order.fieldExceptions?.some(item=>item.status==="Pendente"))&&<p>Nenhuma solicitação pendente.</p>}</section>}
           {current ? <section className={styles.screen}>
             <button type="button" className={styles.back} onClick={()=>setSelected(null)}><ArrowLeft size={18}/> Voltar</button>
             <p className={styles.eyebrow}>ORDEM DE SERVIÇO</p>
@@ -145,7 +147,7 @@ export function ProARFieldMobile() {
             </div>
             {current.address && <a className={styles.primaryAction} href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(current.address)}`} target="_blank" rel="noopener noreferrer"><MapPin size={18}/> Abrir rota no mapa <ArrowRight size={18}/></a>}
             {!data.user.canEdit && <p role="alert" className={styles.warning}>Seu perfil não tem permissão para alterar esta OS. Solicite a liberação ao administrador.</p>}
-            {data.user.canEdit && <FieldOrderEditor key={`${current.id}:${current.fieldVersion}`} order={current} requiresJourney={/tecnico|prestador/i.test(data.user.role.normalize("NFD").replace(/[\u0300-\u036f]/g,""))} onSaved={refresh}/>}
+            {data.user.canEdit && <FieldOrderEditor key={`${current.id}:${current.fieldVersion}`} scope={data.user.scope} canApprove={data.user.canApprove} order={current} requiresJourney={/tecnico|prestador/i.test(data.user.role.normalize("NFD").replace(/[\u0300-\u036f]/g,""))} onSaved={async result=>{if(result){setCompletion(result);setSelected(null);setTab("ordens");setData(previous=>previous?{...previous,orders:previous.orders.filter(order=>order.id!==result.orderId)}:previous);}await refresh();}}/>}
             <p className={styles.disclaimer}>Alterações são confirmadas no banco. Durante a pausa ou fora da jornada, técnicos podem apenas consultar.</p>
           </section> : <>
             {tab === "inicio" && <section className={styles.screen}>
