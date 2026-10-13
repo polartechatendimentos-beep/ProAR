@@ -6,6 +6,9 @@ import { createHash } from "node:crypto";
 export function fieldOrderFingerprint(order:Record<string,unknown>){return createHash("sha256").update(JSON.stringify(order)).digest("hex");}
 
 export function technicianRole(role: string) { return /^(tecnico|prestador(?: de servico)?)$/.test(role.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase()); }
+export function approvedFieldException(order:Record<string,unknown>,kind:"signature"|"equipment") {
+  return Array.isArray(order.fieldExceptions) && order.fieldExceptions.some(item=>item && item.kind===kind && item.status==="Aprovado" && item.decidedBy && item.decidedAt);
+}
 export function requireActiveJourney(routes: WorkRoute[], now: string) {
   const active=routes.find(route=>route.status === "active" && Date.parse(route.startedAt)<=Date.parse(now) && Date.parse(route.expiresAt)>Date.parse(now));
   if(!active)throw new FieldSupportError("Inicie a jornada ou registre o retorno da pausa antes de atuar na OS.",403);
@@ -52,9 +55,9 @@ export function applyFieldOrder(order:Record<string,unknown>, command:FieldOrder
   if(command.point && command.action === "finish")next.checkOutGps={latitude:command.point.latitude,longitude:command.point.longitude,accuracy:command.point.accuracy,capturedAt:command.point.capturedAt};
   if(command.action === "finish") {
     const ids=Array.isArray(next.equipmentIds)?next.equipmentIds:next.equipmentId?[next.equipmentId]:[];
-    if(!order.checkInAt || !ids.length || !String(next.diagnosis||"").trim() || !String(next.executedService||"").trim() || !photos.before?.length || !photos.after?.length || !next.customerSignature)throw new FieldSupportError("Conclusão exige check-in, equipamento vinculado, diagnóstico, serviço executado, fotos antes/depois e assinatura do cliente.");
+    if(!order.checkInAt || (!ids.length&&!approvedFieldException(order,"equipment")) || !String(next.diagnosis||"").trim() || !String(next.executedService||"").trim() || !photos.before?.length || !photos.after?.length || (!next.customerSignature&&!approvedFieldException(order,"signature")))throw new FieldSupportError("Conclusão exige check-in, equipamento vinculado, diagnóstico, serviço executado, fotos antes/depois e assinatura do cliente. Exceções de equipamento ou assinatura precisam de aprovação do gestor.");
     const checks=next.mobileChecklist as Record<string,boolean>|undefined;
-    if(!checks || !checklistProgress(mobileChecklist(String(order.service||"")),checks).ready)throw new FieldSupportError("Complete o checklist técnico antes de concluir.");
+    if(!checks || !checklistProgress(mobileChecklist(String(order.service||"")),{...checks,equipment:ids.length>0||approvedFieldException(order,"equipment"),signature:Boolean(next.customerSignature)||approvedFieldException(order,"signature")}).ready)throw new FieldSupportError("Complete o checklist técnico antes de concluir.");
     next.status="Concluída";next.checkOutAt=now;
   }
   next.fieldVersion=Number(order.fieldVersion||0)+1;next.updatedAt=now;
