@@ -6,6 +6,7 @@ import { CalendarDays, ClipboardCheck, MessageCircle, RefreshCw, ShieldCheck, Sn
 type Visit = { date: string; service: string; status: string };
 type PublicHistory = {
   label: string;
+  branding: { name: string; whatsapp: string };
   equipment: { type: string; brand: string; model: string; capacityBtus: number | null };
   history: Visit[];
   message: string;
@@ -43,7 +44,7 @@ export default function PublicEquipmentHistory({ params }: { params: Promise<{ t
     <meta name="robots" content="noindex,nofollow,noarchive"/>
     <div style={{ maxWidth:700, margin:"0 auto", display:"grid", gap:18 }}>
       <header style={{ background:"linear-gradient(125deg,#041c40,#06539a)", color:"white", padding:24, borderRadius:20 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:10, fontSize:13, fontWeight:800, letterSpacing:1 }}><Snowflake size={20}/> PROAR • HISTÓRICO DO EQUIPAMENTO</div>
+        <div style={{ display:"flex", alignItems:"center", gap:10, fontSize:13, fontWeight:800, letterSpacing:1 }}><Snowflake size={20}/> {data?.branding.name || "HISTÓRICO"} • MANUTENÇÕES DO EQUIPAMENTO</div>
         <h1 style={{ margin:"18px 0 8px", fontSize:26 }}>Consulte as manutenções</h1>
         <p style={{ margin:0, lineHeight:1.6, color:"#d8e9ff" }}>Esta etiqueta identifica o mesmo equipamento em todos os atendimentos.</p>
       </header>
@@ -71,6 +72,7 @@ export default function PublicEquipmentHistory({ params }: { params: Promise<{ t
           aria-label={`Solicitar agendamento de manutenção do equipamento ${data.label} pelo WhatsApp`}
         ><MessageCircle size={21}/> Agendar manutenção pelo WhatsApp</a>
         <p style={{ margin:"-9px 0 0", color:"#5d7290", fontSize:12, textAlign:"center", lineHeight:1.5 }}>O agendamento será solicitado à equipe PolarTech e confirmado após atendimento.</p>
+        {data.branding.whatsapp && <a href={`https://wa.me/5517992434646?text=${encodeURIComponent(`Olá! Gostaria de solicitar atendimento para o equipamento ${data.label}.`)}`} target="_blank" rel="noopener noreferrer" style={{ display:"flex", alignItems:"center", justifyContent:"center", padding:14, borderRadius:12, background:"#064b93", color:"white", textDecoration:"none", fontWeight:700 }}>Solicitar manutenção à PolarTech</a>}
         <button type="button" onClick={()=>window.location.reload()} style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:13, borderRadius:12, border:"1px solid #c9d8e9", background:"white", color:"#0b477f", cursor:"pointer", fontWeight:700 }}><RefreshCw size={16}/> Atualizar consulta</button>
       </>}
     </div>
