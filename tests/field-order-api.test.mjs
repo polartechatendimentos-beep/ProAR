@@ -1,0 +1,40 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {stripTypeScriptTypes} from 'node:module';
+import {runInNewContext} from 'node:vm';
+import {createHash} from 'node:crypto';
+import {applyFieldOrder,technicianRole,fieldOrderFingerprint} from '../lib/mobile-workday.ts';
+import {FieldSupportError} from '../lib/field-support.ts';
+import {RouteError,validatePoint} from '../lib/work-routes.ts';
+import {OperationError,prepareOperationalState,independentOperationalRows} from '../lib/operational-ledger.ts';
+const source=stripTypeScriptTypes(await readFile(new URL('../app/api/mobile/orders/route.ts',import.meta.url),'utf8')).replace(/^import .*;$/gm,'').replace(/^export /gm,'');
+const order={id:'OS-1',tech:'tecnico',client:'Cliente',status:'Aberta',fieldVersion:0};
+const state=()=>({customers:[],serviceOrders:[structuredClone(order)],moduleRecords:{},_revision:1});
+function setup({session={username:'tecnico',role:'Técnico'},journey=true}={}){
+  let saved;const context={company:'empresa',state:state(),db:{url:'neon://test',key:'test-only'},actor:{employeeId:'FUN-1'}};
+  const fn=runInNewContext(source+'\nPOST;',{
+    NextResponse:{json:(body,{status=200}={})=>({body,status})},createHash,sessionFromRequest:()=>session,hasPermission:()=>true,
+    routeContext:async()=>context,activeJourneyContext:async()=>{if(!journey)throw new FieldSupportError('Jornada inativa',403);return context;},
+    technicianRole,applyFieldOrder,FieldSupportError,RouteError,validatePoint,prepareOperationalState,OperationError,independentOperationalRows,
+    PRIMARY_DATABASE_URL:'neon://test',commitNeonOperationalState:async(_id,_revision,payload)=>{saved=payload;context.state=payload;return payload;},
+  });
+  return {fn,get saved(){return saved;}};
+}
+function request(body={},origin='https://app.test'){return{headers:new Headers({origin}),nextUrl:{origin:'https://app.test'},text:async()=>JSON.stringify(body)}}
+const command=()=>({requestId:'save-order-12345',action:'save',orderId:'OS-1',expectedVersion:0,expectedToken:fieldOrderFingerprint(order),report:'Serviço registrado'});
+test('API rejects missing session, cross-origin writes and inactive workdays',async()=>{
+  assert.equal((await setup({session:null}).fn(request(command()))).status,401);
+  assert.equal((await setup().fn(request(command(),'https://other.test'))).status,403);
+  assert.equal((await setup({journey:false}).fn(request(command()))).status,403);
+});
+test('API commits report without accepting financial fields or exposing the ERP snapshot',async()=>{
+  const api=setup(),result=await api.fn(request({...command(),data:{total:9999},total:9999,companyId:'another-tenant'}));
+  assert.equal(result.status,200);assert.equal(result.body.saved,true);assert.equal(result.body.state,undefined);
+  assert.equal(api.saved.serviceOrders[0].executedService,'Serviço registrado');assert.equal(api.saved.serviceOrders[0].total,undefined);assert.equal(api.saved._companyId,'empresa');
+});
+test('API retry does not duplicate effects, and stale fingerprints fail',async()=>{
+  const api=setup();await api.fn(request(command()));const revision=api.saved._revision;
+  const replay=await api.fn(request(command()));assert.equal(replay.body.replay,true);assert.equal(api.saved._revision,revision);
+  const fresh=setup();assert.equal((await fresh.fn(request({...command(),expectedToken:'a'.repeat(64)}))).status,409);
+});
