@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
       connected: true,
       stateFound,
       mode: "operational",
-      user: { displayName: session.displayName || session.username, role: session.role, canEdit:hasPermission(session,"os.editar"), linkedEmployee:Boolean(employeeContext.actor), manager:hasPermission(session,"rotas.visualizar") },
+      user: { displayName: session.displayName || session.username, role: session.role, canEdit:hasPermission(session,"os.editar"), canApprove:hasPermission(session,"aprovacoes.aprovar"), scope:`${company.companyId}:${session.username}`, linkedEmployee:Boolean(employeeContext.actor), manager:hasPermission(session,"rotas.visualizar") },
       orders,
       summary: mobileFieldSummary(orders, today),
       lastReadAt: new Date().toISOString(),
