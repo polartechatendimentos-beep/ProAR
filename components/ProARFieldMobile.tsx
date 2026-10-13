@@ -73,6 +73,8 @@ export function ProARFieldMobile() {
       setLoginRequired(false);
       setData(result as FieldData);
     } catch (reason) {
+      setData(null);
+      setSelected(null);
       setError(reason instanceof Error ? reason.message : "Falha de conexão com o ProAR.");
     } finally {
       setLoading(false);
