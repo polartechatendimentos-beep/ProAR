@@ -12,7 +12,8 @@ Uma etiqueta física é vinculada ao **ID imutável do equipamento**, não ao n�
 6. Para revogar o acesso público, clicar **Desativar consulta**. O histórico interno não é apagado; o QR impresso passa a retornar 404 enquanto desativado.
 
 ## Dados públicos e privacidade
-- Página pública: `/equipamento/[token]`, otimizada para celular.
+- **PolarTech:** URL canônica `https://polartech.proar.online/equipamento/PT-XXXXXXXXXXXX`, otimizada para celular. O código da URL é exatamente o código impresso na etiqueta. O QR Code não aponta para a tela de login nem para o painel administrativo.
+- Outros tenants e links legados continuam aceitando o token assinado de identificação; nenhum vínculo de outra empresa é consultado pelo código curto da PolarTech.
 - Exibe apenas: código da etiqueta, tipo/marca/modelo/capacidade técnica e até 15 manutenções concluídas com data e categoria genérica do serviço.
 - **Não** publica cliente, CNPJ/CPF, endereço, telefone, técnico, assinatura, fotos, notas internas, preços ou dados financeiros.
 - Não inclui OS não concluídas, canceladas, de outro equipamento ou de outro cliente quando o vínculo por `customerId` está disponível.
@@ -23,13 +24,23 @@ Uma etiqueta física é vinculada ao **ID imutável do equipamento**, não ao n�
 - O token é HMAC-SHA256 de empresa + ID do equipamento. A API verifica assinatura antes de consultar qualquer tenant.
 - Cada leitura resolve a base de dados da empresa correspondente, sem migrações nem tabelas novas.
 - O estado operacional é somente lido na consulta pública; o opt-in é persistido pelo fluxo existente de gravação com revisão e auditoria.
-- O código impresso é `PT-` seguido de 12 caracteres hexadecimais determinísticos. **Não é numeração sequencial**; isso evita a disputa por um contador entre técnicos.
+- O código impresso é `PT-` seguido de 12 caracteres hexadecimais determinísticos. **Não é numeração sequencial**; isso evita a disputa por um contador entre técnicos. O servidor resolve o código curto exclusivamente no tenant PolarTech, verificando unicidade e ativação antes de divulgar qualquer dado.
 - Configure `PROAR_EQUIPMENT_LABEL_SECRET` estável no servidor **antes de imprimir etiquetas definitivas**. Sem ela, o sistema usa `PROAR_SESSION_SECRET` como compatibilidade, e a rotação desse segredo invalida links impressos.
 - Nunca colocar o token completo em logs ou sistemas de análise; respostas públicas usam `no-store` e `noindex`.
 - A arte de impressão inicial usa proporção 110 × 70 mm; validar fisicamente a leitura por Android/iPhone antes da produção em escala.
 
+## Vínculos atuais e anteriores
+- **Atuais:** OS com `equipmentIds` ou `equipmentId` igual ao ID permanente do equipamento entram automaticamente no histórico após conclusão.
+- **Anteriores:** na aba Equipamentos da OS, o operador autorizado pode selecionar uma OS concluída do **mesmo cliente**, confirmar que se refere ao **mesmo equipamento físico** e criar vínculo em `historicalServiceOrderIds` sem modificar ou excluir a OS original.
+- OS antigas com `customerId` ausente devem ser regularizadas antes de publicação; não se deve inferir propriedade apenas por nome, marca, modelo ou número de série.
+- A API não divulga histórico de outro cliente e não permite associação duplicada a outra etiqueta ativa. Mudança de proprietário exige análise específica de privacidade; o histórico anterior não é liberado automaticamente.
+- O operador pode desfazer o vínculo anterior, preservando a OS e a trilha de auditoria do cadastro.
+
 ## Critérios de homologação
 - [ ] Criar equipamento e vinculá-lo a duas OS concluídas; ambos aparecem no mesmo QR.
+- [ ] Conferir QR impresso: `https://polartech.proar.online/equipamento/PT-XXXXXXXXXXXX` com o código visível correspondente.
+- [ ] Vincular uma OS antiga do mesmo cliente e verificar a ordenação do histórico; desvincular sem apagar a OS.
+- [ ] Bloquear OS antiga de outro cliente, sem customerId, não concluída ou já associada a outra etiqueta.
 - [ ] OS em aberto e cancelada não aparecem.
 - [ ] OS de outro cliente/equipamento não aparece.
 - [ ] QR lido por Android e iPhone após impressão física.
