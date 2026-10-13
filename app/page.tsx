@@ -540,6 +540,7 @@ type ModuleRecord = {
   equipmentLabelImageName?: string;
   equipmentLabelHistory?: string[];
   publicMaintenanceHistoryEnabled?: boolean;
+  permanentLabelCode?: string;
   historicalServiceOrderIds?: string[];
   diagnosticHistory?: Record<string,unknown>[];
   lastDiagnosticAt?: string;
