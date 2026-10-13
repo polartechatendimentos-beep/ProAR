@@ -71,7 +71,7 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const [photos, setPhotos] = useState<Record<string, string[]>>((order.photos as Record<string, string[]>) || {});
-  const [labelCode, setLabelCode] = useState("");
+  const [labelCode, setLabelCode] = useState(String(order.equipmentLabelCode || ""));
   const [labelBusy, setLabelBusy] = useState(false);
   const [labelNotice, setLabelNotice] = useState("");
   const [labelNotFound, setLabelNotFound] = useState(false);
@@ -191,7 +191,7 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
       if (!target || String(target.customerId || "") !== customerId) throw new Error("O equipamento da etiqueta não está disponível para este cliente nesta OS.");
       setDraft(current => {
         const existing = Array.isArray(current.equipmentIds) ? current.equipmentIds.map(String) : typeof current.equipmentId === "string" ? [current.equipmentId] : [];
-        return { ...current, equipmentIds: [...new Set([...existing, String(result.equipmentId)])] };
+        return { ...current, equipmentIds: [...new Set([...existing, String(result.equipmentId)])], equipmentLabelCode: code };
       });
       setLabelNotice(`Etiqueta ${code} localizada e vinculada à OS. Clique em Salvar para confirmar o vínculo.`);
     } catch (reason) {
@@ -210,7 +210,8 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
       const ok = await onAssignEquipmentLabel(String(target.id), code, customerId);
       if (!ok) throw new Error("Não foi possível registrar: etiqueta já utilizada, cadastro incompatível ou banco indisponível.");
       setLabelNotFound(false);
-      setLabelNotice(`Etiqueta ${code} registrada no equipamento. O vínculo da OS também deve ser salvo.`);
+      setField("equipmentLabelCode", code);
+      setLabelNotice(`Etiqueta ${code} registrada no equipamento. Clique em Salvar para confirmar o número na OS.`);
     } catch (reason) {
       setLabelNotice(reason instanceof Error ? reason.message : "Falha ao registrar etiqueta.");
     } finally { setLabelBusy(false); }
@@ -230,6 +231,15 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
     }
     setSaving(true);
     try {
+      const savedCode = normalizeEquipmentLabelCode(draft.equipmentLabelCode);
+      if (savedCode) {
+        if (!isEquipmentLabelCode(savedCode) || !draft.customerId) throw new Error("Etiqueta inválida ou cliente não selecionado.");
+        const lookup = await fetch(`/api/equipment-maintenance-label?code=${encodeURIComponent(savedCode)}&customerId=${encodeURIComponent(String(draft.customerId))}`, { cache:"no-store" });
+        const resolved = await lookup.json() as { equipmentId?: string; error?: string };
+        if (!lookup.ok || !resolved.equipmentId || !selectedEquipmentIds.includes(resolved.equipmentId)) {
+          throw new Error(resolved.error || "A etiqueta informada não está vinculada a um equipamento desta OS.");
+        }
+      }
       const result = await onSave({ ...draft, photos, servicesTotal, productsTotal, discount, total, materialCost, laborCost, travelCost, outsourcedCost, taxCost, commissionCost, totalCost, grossMargin, marginPercent, closeChecklist:closeChecks });
       if (!result) throw new Error("Gravação não confirmada");
       const diagnosticHistory = Array.isArray(draft.diagnosticHistory) ? draft.diagnosticHistory as RecordItem[] : [];
@@ -240,8 +250,8 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
       }
       try { localStorage.removeItem(autosaveKey); } catch {}
       setNotice("Alterações salvas com sucesso.");
-    } catch {
-      setNotice("Não foi possível salvar. Verifique a conexão e tente novamente.");
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "Não foi possível salvar. Verifique a conexão e tente novamente.");
     } finally {
       setSaving(false);
       window.setTimeout(() => setNotice(""), 3000);
