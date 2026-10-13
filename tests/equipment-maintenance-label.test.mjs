@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createHash } from "node:crypto";
-import { createEquipmentLabel, verifyEquipmentLabel, publicMaintenanceHistory, isEquipmentLabelCode, findEquipmentByLabelCode, canLinkHistoricalServiceOrder } from "../lib/equipment-maintenance-label.ts";
+import { createEquipmentLabel, verifyEquipmentLabel, publicMaintenanceHistory, isEquipmentLabelCode, findEquipmentByLabelCode, equipmentDisplayLabel, canAssignEquipmentLabelCode, canLinkHistoricalServiceOrder } from "../lib/equipment-maintenance-label.ts";
 import { qrMatrix, qrSvg } from "../lib/qr-svg.ts";
 
 const secret = "test-secret-not-for-production";
@@ -55,7 +55,8 @@ test("QR matrix is deterministic and matches a known version 10-L reference", ()
 
 test("the printed PT code resolves only inside the intended tenant", () => {
   assert.equal(isEquipmentLabelCode(sample.code), true);
-  assert.equal(isEquipmentLabelCode("PT-000001"), false);
+  assert.equal(isEquipmentLabelCode("PT-000001"), true);
+  assert.equal(isEquipmentLabelCode("PT-123"), false);
   const records = [{ id:"EQ-000001", customerId:"client-1" }, { id:"EQ-000002", customerId:"client-1" }];
   assert.deepEqual(findEquipmentByLabelCode(records, "polartech-principal", sample.code, secret), records[0]);
   assert.equal(findEquipmentByLabelCode(records, "another-company", sample.code, secret), null);
@@ -78,4 +79,18 @@ test("historical OS links require explicit customer match, completion and unique
   assert.deepEqual(publicMaintenanceHistory(equipment, [{...old, customerId:"other"}]), []);
   assert.deepEqual(publicMaintenanceHistory(equipment, [{...old, status:"Em aberto"}]), []);
   assert.deepEqual(publicMaintenanceHistory(equipment, [{...old, status:"Não concluída"}]), []);
+});
+
+test("physical sticker PT-000001 can be entered in OS and resolves to the same equipment", () => {
+  const first = { id:"EQ-000001", customerId:"client-1", permanentLabelCode:"PT-000001" };
+  const second = { id:"EQ-000002", customerId:"client-1" };
+  const records = [first, second];
+  assert.equal(equipmentDisplayLabel(first, "polartech-principal", secret), "PT-000001");
+  assert.deepEqual(findEquipmentByLabelCode(records, "polartech-principal", "PT-000001", secret), first);
+  assert.deepEqual(findEquipmentByLabelCode(records, "polartech-principal", sample.code, secret), first);
+  assert.equal(findEquipmentByLabelCode(records, "other-company", "PT-000001", secret), first);
+  assert.equal(canAssignEquipmentLabelCode(second, "PT-000001", records, "polartech-principal", secret), false);
+  assert.equal(canAssignEquipmentLabelCode(first, "PT-000002", records, "polartech-principal", secret), false);
+  assert.equal(canAssignEquipmentLabelCode(second, "PT-000002", records, "polartech-principal", secret), true);
+  assert.equal(canAssignEquipmentLabelCode(second, sample.code, records, "polartech-principal", secret), false);
 });
