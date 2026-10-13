@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import { CalendarDays, ClipboardCheck, RefreshCw, ShieldCheck, Snowflake } from "lucide-react";
+import { CalendarDays, ClipboardCheck, MessageCircle, RefreshCw, ShieldCheck, Snowflake } from "lucide-react";
 
 type Visit = { date: string; service: string; status: string };
 type PublicHistory = {
@@ -63,6 +63,14 @@ export default function PublicEquipmentHistory({ params }: { params: Promise<{ t
           </article>)}</div> : <p style={{ color:"#5d7290", lineHeight:1.6 }}>Ainda não há manutenções concluídas vinculadas a este equipamento.</p>}
           <p style={{ display:"flex", gap:8, margin:"20px 0 0", color:"#5d7290", fontSize:12, lineHeight:1.5 }}><ShieldCheck size={16}/>{data.message} Dados pessoais e informações financeiras não são publicados.</p>
         </section>
+        <a
+          href={`https://wa.me/5517992434646?text=${encodeURIComponent(`Olá! Gostaria de agendar uma manutenção com a PolarTech para o equipamento identificado pela etiqueta ${data.label}. Podem me informar as datas disponíveis?`)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:10, padding:"16px 20px", borderRadius:14, background:"#0a7940", color:"white", textDecoration:"none", fontSize:16, fontWeight:800, textAlign:"center" }}
+          aria-label={`Solicitar agendamento de manutenção do equipamento ${data.label} pelo WhatsApp`}
+        ><MessageCircle size={21}/> Agendar manutenção pelo WhatsApp</a>
+        <p style={{ margin:"-9px 0 0", color:"#5d7290", fontSize:12, textAlign:"center", lineHeight:1.5 }}>O agendamento será solicitado à equipe PolarTech e confirmado após atendimento.</p>
         <button type="button" onClick={()=>window.location.reload()} style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:13, borderRadius:12, border:"1px solid #c9d8e9", background:"white", color:"#0b477f", cursor:"pointer", fontWeight:700 }}><RefreshCw size={16}/> Atualizar consulta</button>
       </>}
     </div>
