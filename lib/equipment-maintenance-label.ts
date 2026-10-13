@@ -105,7 +105,7 @@ function publicServiceCategory(value: unknown) {
 export function publicMaintenanceHistory(equipment: RecordItem, orders: RecordItem[], limit = 15): MaintenanceVisit[] {
   const id = String(equipment.id ?? "");
   const customerId = String(equipment.customerId ?? "");
-  if (!id) return [];
+  if (!id || !customerId) return [];
   const historicalOrderIds = new Set(
     Array.isArray(equipment.historicalServiceOrderIds)
       ? equipment.historicalServiceOrderIds.filter(value => typeof value === "string").slice(0, 100)
@@ -116,7 +116,7 @@ export function publicMaintenanceHistory(equipment: RecordItem, orders: RecordIt
     if (order.equipmentId != null) ids.push(String(order.equipmentId));
     if (!ids.includes(id) && !historicalOrderIds.has(String(order.id ?? ""))) return false;
     // Explicit historical associations must never cross customer boundaries.
-    if (customerId && String(order.customerId ?? "") !== customerId) return false;
+    if (String(order.customerId ?? "") !== customerId) return false;
     return isCompletedMaintenanceStatus(order.status);
   }).sort((a, b) => dateValue(b.date ?? b.updatedAt) - dateValue(a.date ?? a.updatedAt))
     .slice(0, Math.max(0, Math.min(limit, 30)))
