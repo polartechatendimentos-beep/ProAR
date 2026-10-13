@@ -28,12 +28,12 @@ export function proxy(request: NextRequest) {
 
   const mobileHost = host.startsWith("mobile.");
   const mobileExperience = mobileHost || mobilePath;
-  const tenantHost = mobileHost ? host.replace(/^mobile\\./, "") : host;
+  const tenantHost = mobileHost ? host.slice("mobile.".length) : host;
   const tenant = tenantSlugFromHost(tenantHost, domain);
   const headers = new Headers(request.headers);
   if (tenant) headers.set("x-proar-tenant", tenant); else headers.delete("x-proar-tenant");
   if (mobileExperience) { headers.set("x-proar-experience","mobile"); headers.set("x-proar-mobile-tenant",tenant||"default"); }
-  if (mobilePath) { const url=request.nextUrl.clone(); url.pathname=effectivePathname; const rewritten=NextResponse.rewrite(url,{request:{headers}}); rewritten.cookies.set("proar-experience","mobile",{sameSite:"lax",secure:true,path:"/"}); rewritten.cookies.set("proar-mobile-tenant",tenant||"default",{sameSite:"lax",secure:true,path:"/"}); return withPublicSecurity(rewritten); }
+  if ((mobilePath && pathname !== "/mobile") || (mobileHost && pathname === "/")) { const url=request.nextUrl.clone(); url.pathname=mobileHost && pathname === "/" ? "/mobile" : effectivePathname; const rewritten=NextResponse.rewrite(url,{request:{headers}}); rewritten.cookies.set("proar-experience","mobile",{sameSite:"lax",secure:true,path:"/"}); rewritten.cookies.set("proar-mobile-tenant",tenant||"default",{sameSite:"lax",secure:true,path:"/"}); return withPublicSecurity(rewritten); }
 
   // Todo tenant possui uma porta de entrada pública. Os aliases renderizam a mesma
   // tela de autenticação da raiz sem depender de cookie ou sessão pré-existente.

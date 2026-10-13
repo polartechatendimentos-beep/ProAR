@@ -1,19 +1,21 @@
 "use client";
 
-import Home from "@/app/page";
-import {useEffect} from "react";
+import { useEffect } from "react";
+import { ProARFieldMobile } from "@/components/ProARFieldMobile";
 
-// /mobile uses the same authenticated domain data as the desktop ProAR,
-// but the visual shell is intentionally different and optimized for touch.
-export function ProARMobile(){
-  useEffect(()=>{
+/**
+ * /mobile uses the authenticated ProAR tenant database and a dedicated
+ * field-work UI, without exposing demo orders or simulating sync success.
+ * Preserve the route flags expected by existing responsive integrations.
+ */
+export function ProARMobile() {
+  useEffect(() => {
     document.documentElement.dataset.proarExperience="mobile";
     document.body.classList.add("proar-mobile-route");
-    return()=>{
+    return () => {
       delete document.documentElement.dataset.proarExperience;
       document.body.classList.remove("proar-mobile-route");
     };
-  },[]);
-
-  return <div className="proar-mobile-entry"><Home/></div>;
+  }, []);
+  return <ProARFieldMobile />;
 }
