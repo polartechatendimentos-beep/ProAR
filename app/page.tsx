@@ -49,7 +49,7 @@ import { OperationalFinance } from "@/components/OperationalFinance";
 import { InventoryOperations } from "@/components/InventoryOperations";
 import type { OperationalCommand } from "@/lib/operational-ledger";
 import { ServiceOrderWorkspace } from "@/components/ServiceOrderWorkspace";
-import { canLinkHistoricalServiceOrder, isEquipmentLabelCode, normalizeEquipmentLabelCode } from "@/lib/equipment-maintenance-label";
+import { canLinkHistoricalServiceOrder, isEquipmentLabelCode, normalizeEquipmentLabelCode } from "@/lib/equipment-label-associations";
 import { CustomerProfileWorkspace } from "@/components/CustomerProfileWorkspace";
 import { TechnicalCompliancePanel } from "@/components/TechnicalCompliancePanel";
 import { IntegrityAudit } from "@/components/IntegrityAudit";
