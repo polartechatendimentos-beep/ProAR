@@ -1,12 +1,21 @@
 "use client";
 
+import { useEffect } from "react";
 import { ProARFieldMobile } from "@/components/ProARFieldMobile";
 
 /**
- * ProAR Field lives at /mobile and uses the existing authenticated ProAR
- * domain and tenant database. Unlike the Expo demo, this screen never
- * creates fake service orders or simulates successful synchronization.
+ * /mobile uses the authenticated ProAR tenant database and a dedicated
+ * field-work UI, without exposing demo orders or simulating sync success.
+ * Preserve the route flags expected by existing responsive integrations.
  */
 export function ProARMobile() {
+  useEffect(() => {
+    document.documentElement.dataset.proarExperience="mobile";
+    document.body.classList.add("proar-mobile-route");
+    return () => {
+      delete document.documentElement.dataset.proarExperience;
+      document.body.classList.remove("proar-mobile-route");
+    };
+  }, []);
   return <ProARFieldMobile />;
 }
