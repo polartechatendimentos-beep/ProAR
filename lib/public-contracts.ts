@@ -99,7 +99,7 @@ export class CertameBalanceError extends Error {
 const precision = (value: number) => Math.round((value + Number.EPSILON) * 1000) / 1000;
 
 function assertPositiveQuantity(quantity: number) {
-  if (!Number.isFinite(quantity) || quantity <= 0) {
+  if (!Number.isFinite(quantity) || quantity <= 0 || precision(quantity) <= 0) {
     throw new CertameBalanceError("Informe uma quantidade maior que zero.");
   }
 }
