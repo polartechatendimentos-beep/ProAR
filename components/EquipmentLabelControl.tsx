@@ -6,6 +6,7 @@ import { ClipboardCopy, Printer, QrCode, ShieldCheck } from "lucide-react";
 type LabelInfo = { enabled: boolean; code: string; historyCount: number; publicPath?: string; printPath?: string; publicOrigin?: string };
 type Props = {
   equipmentId: string;
+  registeredCode?: string;
   enabled: boolean;
   canManage: boolean;
   customerId?: string;
@@ -15,7 +16,7 @@ type Props = {
   onToggle?: (equipmentId: string, enabled: boolean) => Promise<boolean>;
 };
 
-export function EquipmentLabelControl({ equipmentId, enabled, canManage, customerId = "", historicalOrderIds = [], orders = [], onToggle, onLinkHistoricalOrder }: Props) {
+export function EquipmentLabelControl({ equipmentId, registeredCode, enabled, canManage, customerId = "", historicalOrderIds = [], orders = [], onToggle, onLinkHistoricalOrder }: Props) {
   const [info, setInfo] = useState<LabelInfo | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -29,7 +30,7 @@ export function EquipmentLabelControl({ equipmentId, enabled, canManage, custome
       .then(data => { if (active) setInfo(data); })
       .catch(reason => { if (active) setError(reason instanceof Error ? reason.message : "Etiqueta indisponível."); });
     return () => { active = false; };
-  }, [equipmentId, enabled]);
+  }, [equipmentId, enabled, registeredCode]);
 
   const toggle = async () => {
     if (!onToggle || !canManage || busy) return;
