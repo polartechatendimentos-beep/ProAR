@@ -34,7 +34,7 @@ export async function POST(request:NextRequest) {
         const point=validatePoint(command.point,new Date().toISOString());
         if(!point.reliable || Math.abs(Date.now()-Date.parse(point.capturedAt))>120000)throw new FieldSupportError("Atualize o sinal GPS com precisão de até 100 m.");
       }
-      const nextOrder=applyFieldOrder(order,command,{...session,employeeId:c.actor?.employeeId},new Date().toISOString());
+      const nextOrder=applyFieldOrder(order,command,{...session,employeeId:c.actor?.employeeId},new Date().toISOString(),state.moduleRecords?.Equipamentos || []);
       const incoming={...state,serviceOrders:state.serviceOrders!.map(item=>item.id===command.orderId?nextOrder:item)};
       const validated=prepareOperationalState(state,incoming,{username:session.username,displayName:session.displayName,can:permission=>hasPermission(session,permission as Permission)});
       const revision=Number(state._revision||0),payload={...validated,_mobileFieldOps:{...(state._mobileFieldOps||{}),[command.requestId]:fingerprint},_revision:revision+1,_updatedAt:new Date().toISOString(),_companyId:c.company};

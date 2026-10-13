@@ -17,13 +17,19 @@ async function gps(){const cap=(window as unknown as {Capacitor?:{isNativePlatfo
 export function FieldOrderEditor({order,requiresJourney,onSaved}:{order:MobileFieldOrder;requiresJourney:boolean;onSaved:()=>Promise<void>}){
   const [report,setReport]=useState(order.executedService||""),[diagnosis,setDiagnosis]=useState(order.diagnosis||""),[checklist,setChecklist]=useState(order.mobileChecklist||{});
   const [before,setBefore]=useState(""),[after,setAfter]=useState(""),[signature,setSignature]=useState(""),[signerName,setSignerName]=useState(""),[busy,setBusy]=useState(false),[notice,setNotice]=useState("");
+  const [equipmentIds,setEquipmentIds]=useState(order.equipmentIds);
+  const noticeRef=useRef<HTMLParagraphElement|null>(null);
   const canvas=useRef<HTMLCanvasElement|null>(null),drawing=useRef(false),drew=useRef(false);
-  const done={...checklist,equipment:order.equipmentIds.length>0,checkin:Boolean(order.checkInAt),beforePhoto:Boolean(before||order.evidence.before),afterPhoto:Boolean(after||order.evidence.after),signature:Boolean(signature||order.evidence.signature),executedService:Boolean(report.trim()),diagnosis:Boolean(diagnosis.trim())};
+  const done={...checklist,equipment:equipmentIds.length>0,checkin:Boolean(order.checkInAt),beforePhoto:Boolean(before||order.evidence.before),afterPhoto:Boolean(after||order.evidence.after),signature:Boolean(signature||order.evidence.signature),executedService:Boolean(report.trim()),diagnosis:Boolean(diagnosis.trim())};
   async function execute(action:"start"|"save"|"finish"){
+    if(action==="finish"){
+      const missing=[...(!done.diagnosis?["Diagnóstico e medições"]:[]),...mobileChecklist(order.service).filter(item=>item.required&&!done[item.key as keyof typeof done]).map(item=>item.label)];
+      if(missing.length){setNotice(`Para concluir, preencha: ${missing.join("; ")}.`);requestAnimationFrame(()=>noticeRef.current?.scrollIntoView({behavior:"smooth",block:"center"}));return;}
+    }
     if(action==="finish"&&!window.confirm("Concluir esta OS com o relatório, checklist, fotos e aceite registrados?"))return;
     setBusy(true);setNotice("");try{
       const point=requiresJourney&&(action==="start"||action==="finish")?await gps():undefined;
-      const response=await fetch("/api/mobile/orders",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({requestId:crypto.randomUUID(),action,orderId:order.id,expectedVersion:order.fieldVersion,expectedToken:order.editToken,report,diagnosis,checklist:done,beforePhoto:before,afterPhoto:after,signature,signerName,point})});
+      const response=await fetch("/api/mobile/orders",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({requestId:crypto.randomUUID(),action,orderId:order.id,expectedVersion:order.fieldVersion,expectedToken:order.editToken,report,diagnosis,equipmentIds,checklist:done,beforePhoto:before,afterPhoto:after,signature,signerName,point})});
       const body=await response.json();if(!response.ok)throw new Error(body.error||"Gravação não confirmada.");setNotice("OS confirmada no servidor.");await onSaved();
     }catch(error){setNotice(error instanceof Error?error.message:"Não foi possível confirmar a OS.");}finally{setBusy(false);}
   }
@@ -32,10 +38,13 @@ export function FieldOrderEditor({order,requiresJourney,onSaved}:{order:MobileFi
     if(start){drawing.current=true;drew.current=false;c.setPointerCapture(event.pointerId);ctx.beginPath();ctx.moveTo(x,y);}else if(drawing.current){ctx.lineTo(x,y);ctx.stroke();drew.current=true;}}
   return <article className={styles.detailCard}><h2>Executar atendimento</h2>
     {requiresJourney&&<p>Para atuar, mantenha a jornada ativa. A pausa e o fim do expediente bloqueiam a gravação.</p>}
-    {notice&&<p role="status" className={styles.warning}>{notice}</p>}
+    {notice&&<p ref={noticeRef} role="alert" className={styles.warning}>{notice}</p>}
     {!order.checkInAt&&<button className={styles.primaryAction} type="button" disabled={busy} onClick={()=>void execute("start")}>Iniciar atendimento com check-in</button>}
     <label className={styles.formLabel}>Diagnóstico e medições<textarea value={diagnosis} onChange={event=>setDiagnosis(event.target.value)} maxLength={4000}/></label>
     <label className={styles.formLabel}>Serviço executado<textarea value={report} onChange={event=>setReport(event.target.value)} maxLength={8000}/></label>
+    <h3>Equipamentos do atendimento</h3>
+    {(order.equipmentOptions || []).map(item=><label key={item.id} className={styles.checkLabel}><input type="checkbox" checked={equipmentIds.includes(item.id)} disabled={busy} onChange={event=>setEquipmentIds(event.target.checked?[...equipmentIds,item.id]:equipmentIds.filter(id=>id!==item.id))}/>{item.label}</label>)}
+    {!order.equipmentOptions?.length&&!equipmentIds.length&&<p className={styles.warning}>Não há equipamento cadastrado para este cliente e local. Solicite o cadastro do equipamento para vincular nesta OS.</p>}
     <h3>Checklist técnico</h3>{mobileChecklist(order.service).map(item=><label key={item.key} className={styles.checkLabel}><input type="checkbox" checked={Boolean(done[item.key as keyof typeof done])} disabled={["equipment","checkin","beforePhoto","afterPhoto","signature","executedService","diagnosis"].includes(item.key)} onChange={event=>setChecklist({...checklist,[item.key]:event.target.checked})}/>{item.label}</label>)}
     <label className={styles.formLabel}>Foto antes {order.evidence.before?"(já registrada)":""}<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={event=>void photo("before",event.target.files?.[0])}/></label>
     <label className={styles.formLabel}>Foto depois {order.evidence.after?"(já registrada)":""}<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={event=>void photo("after",event.target.files?.[0])}/></label>
