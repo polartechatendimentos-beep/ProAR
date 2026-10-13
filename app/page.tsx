@@ -126,6 +126,7 @@ type ServiceOrder = {
   sourceBudgetId?: string;
   equipmentIds?: string[];
   equipmentId?: string;
+  equipmentLabelCode?: string;
   total?: number;
   servicesTotal?: number;
   productsTotal?: number;
