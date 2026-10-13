@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requiredSecret } from "../../../lib/security-env";
-import { createEquipmentLabel, equipmentDisplayLabel, findEquipmentByLabelCode, isEquipmentLabelCode, publicMaintenanceHistory, verifyEquipmentLabel } from "../../../lib/equipment-maintenance-label";
+import { equipmentDisplayLabel, findEquipmentByLabelCode, isEquipmentLabelCode, publicMaintenanceHistory, verifyEquipmentLabel } from "../../../lib/equipment-maintenance-label";
 import { readEquipmentMaintenanceState } from "../../../lib/equipment-maintenance-state";
 
 export const dynamic = "force-dynamic";
