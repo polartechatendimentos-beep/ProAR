@@ -7,6 +7,7 @@ import { mobileChecklist, checklistProgress } from "@/lib/mobile-service-checkli
 import { CustomerSearchSelect } from "@/components/CustomerSearchSelect";
 import { HvacDiagnosticWorkspace } from "@/components/HvacDiagnosticWorkspace";
 import { EquipmentLabelControl } from "@/components/EquipmentLabelControl";
+import { isEquipmentLabelCode, normalizeEquipmentLabelCode } from "@/lib/equipment-maintenance-label";
 import "./service-order-workspace.css";
 
 type WorkspaceOrder = {
@@ -40,6 +41,7 @@ type Props = {
   onSyncEquipmentDiagnostic?: (equipmentId:string, entry:RecordItem) => Promise<unknown>;
   onToggleEquipmentLabel?: (equipmentId: string, enabled: boolean) => Promise<boolean>;
   onLinkHistoricalOrder?: (equipmentId: string, orderId: string, linked: boolean) => Promise<boolean>;
+  onAssignEquipmentLabel?: (equipmentId: string, code: string, customerId: string) => Promise<boolean>;
   canManageLabels?: boolean;
   onClose?: () => void;
 };
@@ -63,12 +65,16 @@ function money(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-export function ServiceOrderWorkspace({ order, customers = [], structures = [], equipment = [], serviceOrders = [], errorCodes = [], manuals = [], catalogSource = [], canEdit, onSave, onSyncEquipmentDiagnostic, onToggleEquipmentLabel, onLinkHistoricalOrder, canManageLabels = false, onClose }: Props) {
+export function ServiceOrderWorkspace({ order, customers = [], structures = [], equipment = [], serviceOrders = [], errorCodes = [], manuals = [], catalogSource = [], canEdit, onSave, onSyncEquipmentDiagnostic, onToggleEquipmentLabel, onLinkHistoricalOrder, onAssignEquipmentLabel, canManageLabels = false, onClose }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("Resumo");
   const [draft, setDraft] = useState<WorkspaceOrder>(order);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const [photos, setPhotos] = useState<Record<string, string[]>>((order.photos as Record<string, string[]>) || {});
+  const [labelCode, setLabelCode] = useState("");
+  const [labelBusy, setLabelBusy] = useState(false);
+  const [labelNotice, setLabelNotice] = useState("");
+  const [labelNotFound, setLabelNotFound] = useState(false);
   const [newService, setNewService] = useState("");
   const [servicePrice, setServicePrice] = useState("0");
   const [draftReady, setDraftReady] = useState(false);
@@ -165,6 +171,50 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
   const closeReady = closeChecks.every(item => item.ok);
 
   const setField = (key: string, value: unknown) => setDraft(current => ({ ...current, [key]: value }));
+  const lookupLabel = async () => {
+    const code = normalizeEquipmentLabelCode(labelCode);
+    const customerId = String(draft.customerId || "").trim();
+    setLabelNotice(""); setLabelNotFound(false);
+    if (!isEquipmentLabelCode(code)) { setLabelNotice("Informe o número completo da etiqueta (ex.: PT-000001)."); return; }
+    if (!customerId) { setLabelNotice("Selecione um cliente com cadastro válido antes de vincular a etiqueta."); return; }
+    setLabelBusy(true);
+    try {
+      const response = await fetch(`/api/equipment-maintenance-label?code=${encodeURIComponent(code)}&customerId=${encodeURIComponent(customerId)}`, { cache:"no-store" });
+      const result = await response.json() as { equipmentId?: string; error?: string };
+      if (response.status === 404) {
+        setLabelNotFound(true);
+        setLabelNotice("Etiqueta ainda não cadastrada. Para registrar este número, vincule primeiro o equipamento físico à OS.");
+        return;
+      }
+      if (!response.ok || !result.equipmentId) throw new Error(result.error || "Não foi possível consultar esta etiqueta.");
+      const target = equipment.find(item => String(item.id) === result.equipmentId);
+      if (!target || String(target.customerId || "") !== customerId) throw new Error("O equipamento da etiqueta não está disponível para este cliente nesta OS.");
+      setDraft(current => {
+        const existing = Array.isArray(current.equipmentIds) ? current.equipmentIds.map(String) : typeof current.equipmentId === "string" ? [current.equipmentId] : [];
+        return { ...current, equipmentIds: [...new Set([...existing, String(result.equipmentId)])] };
+      });
+      setLabelNotice(`Etiqueta ${code} localizada e vinculada à OS. Clique em Salvar para confirmar o vínculo.`);
+    } catch (reason) {
+      setLabelNotice(reason instanceof Error ? reason.message : "Falha ao localizar etiqueta.");
+    } finally { setLabelBusy(false); }
+  };
+  const registerLabel = async () => {
+    const code = normalizeEquipmentLabelCode(labelCode);
+    const customerId = String(draft.customerId || "").trim();
+    if (!labelNotFound || !isEquipmentLabelCode(code) || !canManageLabels || !onAssignEquipmentLabel || linkedEquipment.length !== 1 || !customerId) return;
+    const target = linkedEquipment[0];
+    if (String(target.customerId || "") !== customerId) { setLabelNotice("O equipamento precisa pertencer ao cliente desta OS."); return; }
+    if (!window.confirm(`Confirma que a etiqueta física ${code} está colada neste equipamento? O número ficará permanente e será usado no QR Code e nas próximas OS.`)) return;
+    setLabelBusy(true);
+    try {
+      const ok = await onAssignEquipmentLabel(String(target.id), code, customerId);
+      if (!ok) throw new Error("Não foi possível registrar: etiqueta já utilizada, cadastro incompatível ou banco indisponível.");
+      setLabelNotFound(false);
+      setLabelNotice(`Etiqueta ${code} registrada no equipamento. O vínculo da OS também deve ser salvo.`);
+    } catch (reason) {
+      setLabelNotice(reason instanceof Error ? reason.message : "Falha ao registrar etiqueta.");
+    } finally { setLabelBusy(false); }
+  };
   const assist = (key: string, kind: "observacao" | "cliente" = "observacao") => {
     const value = String(draft[key] || "").trim();
     if (!value) return;
@@ -241,7 +291,18 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
 
     {activeTab === "Serviços" && <div className="os-tab-content"><article className="os-card"><h3>Quantidade de produtos aplicados</h3>{catalog.filter(item => item.kind === "Produto").map(item => <label className="erp-equipment-option" key={item.id}>{item.name}<input type="number" min="0.001" step="0.001" disabled={!canEdit || saving} value={item.quantity ?? 1} onChange={event => setField("catalogItems",catalog.map(value => value.id === item.id ? {...value,quantity:Number(event.target.value)} : value))}/></label>)}{!catalog.some(item => item.kind === "Produto") && <p>Nenhum produto aplicado nesta OS.</p>}</article><article className="os-card"><div className="os-card-heading"><div><span className="os-section-label">SERVIÇOS ADICIONADOS</span><h3>Serviços e materiais da OS</h3></div><div className="os-inline-form"><input value={newService} onChange={event => setNewService(event.target.value)} placeholder="Nome do serviço"/><input value={servicePrice} onChange={event => setServicePrice(event.target.value)} inputMode="decimal" placeholder="Preço"/><button className="os-primary-button" onClick={addService}><Plus size={14}/> Adicionar</button></div></div><div className="os-items-table"><div className="os-items-head"><span>Serviço / produto</span><span>Tipo</span><span>Valor</span><span/></div>{catalog.map(item => <div className="os-item-row" key={item.id}><span>{item.name}</span><span>{item.kind}</span><span>{money(Number((item as unknown as RecordItem).price || 0))}</span><button onClick={() => setDraft(current => ({ ...current, catalogItems: (current.catalogItems || []).filter(existing => existing.id !== item.id) }))} aria-label={`Remover ${item.name}`}><X size={14}/></button></div>)}{!catalog.length && <p className="os-empty">Nenhum serviço ou material vinculado.</p>}</div><div className="os-totals"><span>Produtos / materiais <b>{money(productsTotal)}</b></span><span>Serviços <b>{money(servicesTotal)}</b></span><span>Desconto <input value={String(discount)} onChange={event => setField("discount", Number(event.target.value.replace(",", ".")) || 0)}/></span><strong>TOTAL DA OS <b>{money(total)}</b></strong></div></article></div>}
 
-    {activeTab === "Equipamentos" && <div className="os-tab-content"><article className="os-card"><div className="os-card-heading"><div><span className="os-section-label">EQUIPAMENTO DO ATENDIMENTO</span><h3>{linkedEquipment.length || 0} equipamento(s) relacionado(s)</h3></div><button className="os-secondary-button" onClick={() => setNotice("Cadastro de equipamento será aberto na aba Equipamentos.")}><Plus size={14}/> Adicionar equipamento</button></div><div className="os-equipment-grid">{linkedEquipment.map(item => <div className="os-equipment-card" key={text(item, "id", "name")}><div className="os-equipment-icon"><Wrench size={18}/></div><div><h4>{text(item, "name", "description", "model") || "Equipamento"}</h4><p>{text(item, "brand", "manufacturer")} • {text(item, "capacity", "capacityBtu", "model")}</p><small>Patrimônio: {text(item, "assetCode", "patrimony", "patrimonio") || "Não informado"} • Série: {text(item, "serial", "serialNumber") || "Não informada"}</small></div><div className="os-equipment-actions"><button onClick={() => setActiveTab("Histórico")}>Histórico</button><button onClick={() => setActiveTab("Fotos")}>Fotos</button></div><EquipmentLabelControl equipmentId={String(item.id)} enabled={item.publicMaintenanceHistoryEnabled === true} canManage={canManageLabels} onToggle={onToggleEquipmentLabel} customerId={String(item.customerId || "")} historicalOrderIds={Array.isArray(item.historicalServiceOrderIds) ? item.historicalServiceOrderIds as string[] : []} orders={serviceOrders} onLinkHistoricalOrder={onLinkHistoricalOrder}/></div>)}{!linkedEquipment.length && <div className="os-empty"><Wrench size={22}/><p>Nenhum equipamento foi vinculado a esta OS.</p><button className="os-secondary-button" onClick={() => setNotice("Vincule um equipamento pelo cadastro do cliente e ambiente.")}>Vincular equipamento</button></div>}</div></article></div>}
+    {activeTab === "Equipamentos" && <div className="os-tab-content"><article className="os-card">
+      <div style={{ padding:"14px", border:"1px solid #cbdff3", borderRadius:12, background:"#f7fbff", marginBottom:12, display:"grid", gap:9 }}>
+        <label htmlFor="os-label-number" style={{ fontWeight:800, color:"#07376b" }}>Número da etiqueta permanente</label>
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+          <input id="os-label-number" value={labelCode} onChange={event=>{setLabelCode(event.target.value.toUpperCase());setLabelNotFound(false);setLabelNotice("");}} onKeyDown={event=>{if(event.key==="Enter"){event.preventDefault();void lookupLabel();}}} placeholder="Ex.: PT-000001" maxLength={15} autoComplete="off" style={{ flex:"1 1 190px", minWidth:160, padding:"10px 12px", border:"1px solid #abc5df", borderRadius:8 }} />
+          <button type="button" className="os-secondary-button" disabled={labelBusy} onClick={()=>void lookupLabel()}>{labelBusy ? "Consultando..." : "Localizar e vincular etiqueta"}</button>
+          {labelNotFound && canManageLabels && onAssignEquipmentLabel && linkedEquipment.length === 1 && <button type="button" className="os-secondary-button" disabled={labelBusy} onClick={()=>void registerLabel()}>Registrar número neste equipamento</button>}
+        </div>
+        <small style={{ color:"#526d87" }}>Digite o número impresso na etiqueta. Se já estiver cadastrado, o equipamento será vinculado à OS e manterá todo o histórico anterior. Para cadastrar uma etiqueta nova, vincule antes o equipamento correto à OS.</small>
+        {labelNotice && <small role="status" style={{ color:"#07376b", fontWeight:600 }}>{labelNotice}</small>}
+      </div>
+      <div className="os-card-heading"><div><span className="os-section-label">EQUIPAMENTO DO ATENDIMENTO</span><h3>{linkedEquipment.length || 0} equipamento(s) relacionado(s)</h3></div><button className="os-secondary-button" onClick={() => setNotice("Cadastro de equipamento será aberto na aba Equipamentos.")}><Plus size={14}/> Adicionar equipamento</button></div><div className="os-equipment-grid">{linkedEquipment.map(item => <div className="os-equipment-card" key={text(item, "id", "name")}><div className="os-equipment-icon"><Wrench size={18}/></div><div><h4>{text(item, "name", "description", "model") || "Equipamento"}</h4><p>{text(item, "brand", "manufacturer")} • {text(item, "capacity", "capacityBtu", "model")}</p><small>Patrimônio: {text(item, "assetCode", "patrimony", "patrimonio") || "Não informado"} • Série: {text(item, "serial", "serialNumber") || "Não informada"}</small></div><div className="os-equipment-actions"><button onClick={() => setActiveTab("Histórico")}>Histórico</button><button onClick={() => setActiveTab("Fotos")}>Fotos</button></div><EquipmentLabelControl equipmentId={String(item.id)} enabled={item.publicMaintenanceHistoryEnabled === true} canManage={canManageLabels} onToggle={onToggleEquipmentLabel} customerId={String(item.customerId || "")} historicalOrderIds={Array.isArray(item.historicalServiceOrderIds) ? item.historicalServiceOrderIds as string[] : []} orders={serviceOrders} onLinkHistoricalOrder={onLinkHistoricalOrder}/></div>)}{!linkedEquipment.length && <div className="os-empty"><Wrench size={22}/><p>Nenhum equipamento foi vinculado a esta OS.</p><button className="os-secondary-button" onClick={() => setNotice("Vincule um equipamento pelo cadastro do cliente e ambiente.")}>Vincular equipamento</button></div>}</div></article></div>}
 
     {activeTab === "Diagnóstico" && <div className="os-tab-content"><HvacDiagnosticWorkspace order={draft as unknown as RecordItem} linkedEquipment={linkedEquipment} errorCodes={errorCodes} manuals={manuals} catalog={catalogSource} canEdit={canEdit} onApply={payload=>setDraft(current=>({...current,...payload}))} onPatch={payload=>setDraft(current=>({...current,...payload}))}/></div>}
 
