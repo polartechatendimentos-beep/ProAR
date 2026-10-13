@@ -81,6 +81,24 @@ function publicServiceCategory(value: unknown) {
   return "Atendimento técnico";
 }
 
+/** Validate explicit links to old OS records before any state write. */
+export function canLinkHistoricalServiceOrder(equipment: RecordItem, order: RecordItem, allEquipment: RecordItem[]) {
+  const equipmentId = String(equipment.id ?? "");
+  const orderId = String(order.id ?? "");
+  const customerId = String(equipment.customerId ?? "");
+  if (!validId(equipmentId) || !validId(orderId) || !customerId || String(order.customerId ?? "") !== customerId) return false;
+  if (!/conclu[ií]d|finalizad|encerrad/i.test(String(order.status ?? ""))) return false;
+  const assignedToOtherLabel = allEquipment.some(other => {
+    if (String(other.id) === equipmentId) return false;
+    const historical = Array.isArray(other.historicalServiceOrderIds) ? other.historicalServiceOrderIds.map(String) : [];
+    if (historical.includes(orderId)) return true;
+    const orderEquipmentIds = Array.isArray(order.equipmentIds) ? order.equipmentIds.map(String) : [];
+    if (order.equipmentId != null) orderEquipmentIds.push(String(order.equipmentId));
+    return other.publicMaintenanceHistoryEnabled === true && orderEquipmentIds.includes(String(other.id));
+  });
+  return !assignedToOtherLabel;
+}
+
 /** A public QR must never expose customer, technician, location, price, notes or photos. */
 export function publicMaintenanceHistory(equipment: RecordItem, orders: RecordItem[], limit = 15): MaintenanceVisit[] {
   const id = String(equipment.id ?? "");
