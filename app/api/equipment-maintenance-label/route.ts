@@ -18,7 +18,8 @@ export async function GET(request: NextRequest) {
   }
   const tenant = sessionCompany(session);
   if (!tenant.ok) return NextResponse.json({ error: tenant.error }, { status: tenant.status });
-  const companyId = tenant.companyId;
+  const companyId = String(session.companySlug || "").trim().toLowerCase() === String(process.env.PROAR_PRIMARY_COMPANY_SLUG || "polartech").trim().toLowerCase()
+    ? (process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal") : tenant.companyId;
   try {
     const state = await readEquipmentMaintenanceState(companyId);
     const equipment = state?.equipment.find(item => String(item.id) === equipmentId);
