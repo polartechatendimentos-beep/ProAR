@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hasPermission, sessionFromRequest } from "../../../lib/permissions";
 import { requiredSecret } from "../../../lib/security-env";
-import { createEquipmentLabel, publicMaintenanceHistory } from "../../../lib/equipment-maintenance-label";
+import { createEquipmentLabel, findEquipmentByLabelCode, publicMaintenanceHistory } from "../../../lib/equipment-maintenance-label";
 import { readEquipmentMaintenanceState } from "../../../lib/equipment-maintenance-state";
 
 export const dynamic = "force-dynamic";
@@ -25,10 +25,16 @@ export async function GET(request: NextRequest) {
     if (!equipment) return NextResponse.json({ error: "Equipamento não localizado nesta empresa." }, { status: 404 });
     const label = createEquipmentLabel(companyId, equipmentId, (process.env.PROAR_EQUIPMENT_LABEL_SECRET || requiredSecret("PROAR_SESSION_SECRET")));
     const enabled = equipment.publicMaintenanceHistoryEnabled === true;
+    const primaryCompanyId = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
+    const isPolartech = companyId === primaryCompanyId;
+    if (isPolartech && !findEquipmentByLabelCode(state?.equipment ?? [], companyId, label.code, (process.env.PROAR_EQUIPMENT_LABEL_SECRET || requiredSecret("PROAR_SESSION_SECRET")))) {
+      return NextResponse.json({ error: "Identificador de etiqueta duplicado. Contate o suporte antes de imprimir." }, { status: 409 });
+    }
+    const codeOrToken = isPolartech ? label.code : label.token;
     return NextResponse.json({
       enabled, code: label.code,
       historyCount: publicMaintenanceHistory(equipment, state?.orders ?? [], 30).length,
-      ...(enabled ? { token: label.token, publicPath: `/equipamento/${label.token}`, printPath: `/etiqueta/${label.token}` } : {}),
+      ...(enabled ? { publicPath: `/equipamento/${codeOrToken}`, printPath: `/etiqueta/${codeOrToken}`, publicOrigin: isPolartech ? "https://polartech.proar.online" : "" } : {}),
     }, { headers: { "Cache-Control": "private, no-store" } });
   } catch {
     return NextResponse.json({ error: "Não foi possível consultar a etiqueta. Verifique a conexão com o banco." }, { status: 503 });
