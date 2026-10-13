@@ -4,7 +4,7 @@ import { resolveTenantDb, tenantHeaders } from "../../../../lib/tenant-rest";
 import { databaseFetch } from "../../../../lib/supabase-rest";
 import { mobileFieldOrders, mobileFieldSummary } from "../../../../lib/mobile-field";
 import { routeContext } from "../../../../lib/work-route-store";
-import { fieldOrderFingerprint } from "../../../../lib/mobile-workday";
+import { fieldOrderFingerprint, eligibleFieldEquipment } from "../../../../lib/mobile-workday";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       displayName: session.displayName,
       role: session.role,
       employeeId: employeeContext.actor?.employeeId,
-    }).map(order=>({...order,editToken:fieldOrderFingerprint(records.get(order.id)!)}));
+    }).map(order=>({...order,editToken:fieldOrderFingerprint(records.get(order.id)!),equipmentOptions:eligibleFieldEquipment(records.get(order.id)!,employeeContext.state.moduleRecords?.Equipamentos || []).map(item=>({id:String(item.id),label:String(item.physicalCode || item.name || item.serialNumber || item.id).slice(0,150)}))}));
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
     return NextResponse.json({
       connected: true,
