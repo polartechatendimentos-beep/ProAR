@@ -8,13 +8,18 @@ type Props = {
   equipmentId: string;
   enabled: boolean;
   canManage: boolean;
+  customerId?: string;
+  historicalOrderIds?: string[];
+  orders?: Record<string, unknown>[];
+  onLinkHistoricalOrder?: (equipmentId: string, orderId: string, linked: boolean) => Promise<boolean>;
   onToggle?: (equipmentId: string, enabled: boolean) => Promise<boolean>;
 };
 
-export function EquipmentLabelControl({ equipmentId, enabled, canManage, onToggle }: Props) {
+export function EquipmentLabelControl({ equipmentId, enabled, canManage, customerId = "", historicalOrderIds = [], orders = [], onToggle, onLinkHistoricalOrder }: Props) {
   const [info, setInfo] = useState<LabelInfo | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [selectedHistoricalOrder, setSelectedHistoricalOrder] = useState("");
   const [notice, setNotice] = useState("");
   useEffect(() => {
     let active = true;
@@ -41,6 +46,31 @@ export function EquipmentLabelControl({ equipmentId, enabled, canManage, onToggl
       setNotice(reason instanceof Error ? reason.message : "Falha ao alterar etiqueta.");
     } finally { setBusy(false); }
   };
+  const previousOrders = orders.filter(order =>
+    customerId && String(order.customerId || "") === customerId &&
+    /conclu[ií]d|finalizad|encerrad/i.test(String(order.status || "")) &&
+    /^[A-Za-z0-9_-]{1,120}$/.test(String(order.id || "")),
+  );
+  const eligiblePreviousOrders = previousOrders.filter(order => {
+    const id = String(order.id);
+    if (historicalOrderIds.includes(id)) return false;
+    const linked = Array.isArray(order.equipmentIds) ? order.equipmentIds.map(String) : [];
+    if (order.equipmentId) linked.push(String(order.equipmentId));
+    return !linked.includes(equipmentId);
+  }).slice(0, 100);
+  const changeHistoricalLink = async (orderId: string, linked: boolean) => {
+    if (!onLinkHistoricalOrder || !canManage || busy) return;
+    if (linked && !window.confirm("Confirma que esta OS anterior pertence ao MESMO equipamento físico e ao mesmo cliente? O serviço passará a aparecer no QR Code público.")) return;
+    if (!linked && !window.confirm("Desvincular esta OS do histórico público da etiqueta? O registro original da OS será preservado.")) return;
+    setBusy(true); setNotice("");
+    try {
+      if (!await onLinkHistoricalOrder(equipmentId, orderId, linked)) throw new Error("Vínculo não autorizado ou não confirmado no banco. Verifique cliente, status e vínculos existentes.");
+      setSelectedHistoricalOrder("");
+      setNotice(linked ? "OS anterior vinculada ao histórico permanente." : "Vínculo anterior removido sem excluir a OS.");
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "Falha ao salvar vínculo.");
+    } finally { setBusy(false); }
+  };
   const copy = async () => {
     if (!info?.publicPath) return;
     try { await navigator.clipboard.writeText((info.publicOrigin || window.location.origin) + info.publicPath); setNotice("Link de consulta copiado."); }
@@ -62,5 +92,26 @@ export function EquipmentLabelControl({ equipmentId, enabled, canManage, onToggl
       {info?.enabled && info.publicPath && <button className="os-secondary-button" type="button" onClick={()=>void copy()}><ClipboardCopy size={14}/> Copiar link</button>}
       {canManage && onToggle && <button className="os-secondary-button" type="button" disabled={busy} onClick={()=>void toggle()}>{busy ? "Salvando..." : enabled ? "Desativar consulta" : "Ativar etiqueta e histórico"}</button>}
     </div>
+    {canManage && onLinkHistoricalOrder && customerId && <div style={{ borderTop:"1px dashed #dce6f2", paddingTop:12, display:"grid", gap:8 }}>
+      <strong style={{ fontSize:12 }}>Vínculos com manutenções anteriores</strong>
+      <small style={{ color:"#58708c" }}>As OS atuais vinculadas pelo ID aparecem automaticamente. Para OS antigas sem vínculo com este cadastro, selecione e confirme que pertencem ao mesmo equipamento físico.</small>
+      {historicalOrderIds.length > 0 && <div style={{ display:"grid", gap:5 }}>
+        {historicalOrderIds.map(id => {
+          const previous = previousOrders.find(order => String(order.id) === id);
+          return <div key={id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, fontSize:12 }}>
+            <span>OS {id}{previous ? ` • ${String(previous.date || "")} • ${String(previous.service || "Atendimento")}` : " • vínculo antigo"}</span>
+            <button type="button" className="os-secondary-button" disabled={busy} onClick={()=>void changeHistoricalLink(id,false)}>Desvincular</button>
+          </div>;
+        })}
+      </div>}
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+        <select aria-label="Selecionar OS anterior do mesmo cliente" value={selectedHistoricalOrder} onChange={event=>setSelectedHistoricalOrder(event.target.value)} style={{ maxWidth:360, minWidth:190, padding:"8px", border:"1px solid #c9d8e9", borderRadius:8 }}>
+          <option value="">Selecionar OS anterior concluída...</option>
+          {eligiblePreviousOrders.map(order => <option key={String(order.id)} value={String(order.id)}>OS {String(order.id)} • {String(order.date || "")} • {String(order.service || "Atendimento").slice(0,60)}</option>)}
+        </select>
+        <button type="button" className="os-secondary-button" disabled={busy || !selectedHistoricalOrder || historicalOrderIds.length >= 100} onClick={()=>void changeHistoricalLink(selectedHistoricalOrder,true)}>Vincular OS anterior</button>
+      </div>
+      {!customerId && <small>Vincule o equipamento a um cliente com ID antes de recuperar o histórico.</small>}
+    </div>}
   </section>;
 }
