@@ -22,21 +22,47 @@ export function createEquipmentLabel(companyId: string, equipmentId: string, sec
   };
 }
 
-/** Public-facing PolarTech label codes are stable and intentionally non-sequential. */
-export function isEquipmentLabelCode(value: string) {
-  return /^PT-[A-F0-9]{12}$/.test(value);
+/** Manual PT-000001 codes and generated PT-12HEX codes use the same public route. */
+export function normalizeEquipmentLabelCode(value: unknown) {
+  return String(value ?? "").trim().toUpperCase().replace(/\s+/g, "");
 }
 
-/** Resolve a short printed code only inside the designated PolarTech tenant. */
+export function isEquipmentLabelCode(value: string) {
+  return /^PT-[A-Z0-9]{6,12}$/.test(value);
+}
+
+/** A manually registered code is permanent. Never silently replace it on later OS. */
+export function equipmentDisplayLabel(equipment: RecordItem, companyId: string, secret: string) {
+  const manual = normalizeEquipmentLabelCode(equipment.permanentLabelCode);
+  return manual && isEquipmentLabelCode(manual) ? manual : createEquipmentLabel(companyId, String(equipment.id ?? ""), secret).code;
+}
+
+/** A generated QR remains valid even after an existing physical label is registered. */
 export function findEquipmentByLabelCode(equipment: RecordItem[], companyId: string, code: string, secret: string) {
   if (!isEquipmentLabelCode(code)) return null;
   const matches = equipment.filter(item => {
     const id = String(item.id ?? "");
     if (!validId(id)) return false;
-    return createEquipmentLabel(companyId, id, secret).code === code;
+    const generated = createEquipmentLabel(companyId, id, secret).code;
+    return generated === code || normalizeEquipmentLabelCode(item.permanentLabelCode) === code;
   });
-  // Fail closed on a truncated-code collision; never show the wrong equipment.
+  // Fail closed on a code collision; never show the wrong equipment.
   return matches.length === 1 ? matches[0] : null;
+}
+
+/** Prevent assigning a number already used by a different equipment. */
+export function canAssignEquipmentLabelCode(equipment: RecordItem, code: string, allEquipment: RecordItem[], companyId: string, secret: string) {
+  const id = String(equipment.id ?? "");
+  if (!validId(id) || !isEquipmentLabelCode(code)) return false;
+  const current = normalizeEquipmentLabelCode(equipment.permanentLabelCode);
+  if (current && current !== code) return false;
+  return allEquipment.every(other => {
+    if (String(other.id ?? "") === id) return true;
+    const otherId = String(other.id ?? "");
+    if (!validId(otherId)) return false;
+    return normalizeEquipmentLabelCode(other.permanentLabelCode) !== code &&
+      createEquipmentLabel(companyId, otherId, secret).code !== code;
+  });
 }
 
 /** Reject tampered labels before resolving any tenant or querying the database. */
