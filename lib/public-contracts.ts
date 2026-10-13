@@ -228,6 +228,9 @@ export function validateEmpenhoAllocations(
   empenhoValue: number,
   allocations: EmpenhoAllocation[],
 ) {
+  if (!Number.isFinite(empenhoValue) || empenhoValue < 0) {
+    throw new CertameBalanceError("O valor do Empenho deve ser um número válido e não negativo.");
+  }
   if (allocations.some(allocation => !Number.isFinite(allocation.amount) || allocation.amount <= 0)) {
     throw new CertameBalanceError("Todos os vínculos do Empenho devem possuir valor maior que zero.");
   }
