@@ -10,6 +10,8 @@ import { prepareOperationalState, independentOperationalRows, OperationError } f
 import { createStateSnapshot } from "../../../lib/state-snapshots";
 import { recordSystemIncident } from "../../../lib/system-observability";
 import { classifyProarError } from "../../../lib/system-errors";
+import { guardTechnicianOsChanges } from "../../../lib/journey-gate";
+import { FieldSupportError } from "../../../lib/field-support";
 
 function stateRest(db: { url: string; key: string }, path: string, init: RequestInit = {}) {
   return databaseFetch(`${db.url}/rest/v1/${path}`, {
@@ -195,6 +197,7 @@ export async function PUT(request: NextRequest) {
     const currentRows = currentResponse.ok ? await currentResponse.json() as { payload?: StatePayload }[] : []; const current = currentRows[0]?.payload; const currentRevision = Number(current?._revision || 0); const baseRevision = Number(body._baseRevision || 0);
     if (current && baseRevision !== currentRevision) return NextResponse.json({ error: "A base online possui uma versão mais recente.", conflict: true, state: current }, { status: 409 });
     const { _baseRevision: _ignoredBase, _force: _ignoredForce, companyId: _ignoredCompany, ...cleanBody } = body;
+    if (Array.isArray(cleanBody.serviceOrders)) await guardTechnicianOsChanges(session,current?.serviceOrders||[],cleanBody.serviceOrders);
     const validated = prepareOperationalState(current || null, cleanBody, { username: session.username, displayName: session.displayName, can: permission => hasPermission(session, permission as Permission) });
     const userLimit=await companyUserLimit(company);
     if(userLimit!==null){
@@ -243,10 +246,11 @@ export async function PUT(request: NextRequest) {
     }
     return NextResponse.json({ saved: true, state: confirmed, dedicatedDatabase: db.dedicated, canonicalCompanyId: company });
   } catch (error) {
-    if (error instanceof OperationError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof OperationError || error instanceof FieldSupportError) return NextResponse.json({ error: error.message }, { status: error.status });
     const company=companyKey(request,session);
     const descriptor=classifyProarError(error);
     void recordSystemIncident({companyId:company,module:"Sincronização",operation:"Gravar estado operacional",error,code:descriptor.code,route:"/api/state"});
     return NextResponse.json({ error: descriptor.userMessage, code:descriptor.code }, { status: 503 });
   }
 }
+

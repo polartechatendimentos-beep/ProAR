@@ -15,6 +15,12 @@ export type MobileFieldOrder = {
   status: string;
   equipmentIds: string[];
   checkInAt: string;
+  fieldVersion: number;
+  diagnosis: string;
+  executedService: string;
+  mobileChecklist: Record<string, boolean>;
+  evidence: { before: boolean; after: boolean; signature: boolean };
+  editToken?: string;
 };
 
 type RecordItem = Record<string, unknown>;
@@ -22,6 +28,7 @@ export type MobileFieldSession = {
   username: string;
   displayName?: string;
   role: string;
+  employeeId?: string;
 };
 
 function normalized(value: unknown) {
@@ -38,6 +45,8 @@ export function canSeeAllMobileOrders(session: MobileFieldSession) {
 
 export function assignedToSession(order: RecordItem, session: MobileFieldSession) {
   if (canSeeAllMobileOrders(session)) return true;
+  const assignedId = String(order.employeeId || order.techId || "").trim();
+  if (assignedId) return Boolean(session.employeeId && assignedId === session.employeeId);
   const assigned = normalized(order.tech);
   if (!assigned || ["nao definido", "a definir", "sem tecnico"].includes(assigned)) return false;
   const username = normalized(session.username);
@@ -78,6 +87,11 @@ export function mobileFieldOrders(
       status: short(order.status, 70),
       equipmentIds,
       checkInAt: short(order.checkInAt, 40),
+      fieldVersion: Number.isInteger(order.fieldVersion) ? Number(order.fieldVersion) : 0,
+      diagnosis: short(order.diagnosis, 4000),
+      executedService: short(order.executedService, 8000),
+      mobileChecklist: Object.fromEntries(Object.entries(order.mobileChecklist && typeof order.mobileChecklist === "object" ? order.mobileChecklist : {}).filter(([,value])=>typeof value === "boolean")) as Record<string,boolean>,
+      evidence: { before: Boolean((order.photos as Record<string,unknown[]>|undefined)?.before?.length), after: Boolean((order.photos as Record<string,unknown[]>|undefined)?.after?.length), signature: Boolean(order.customerSignature) },
     });
     if (results.length >= Math.max(1, Math.min(500, max))) break;
   }
@@ -98,3 +112,4 @@ export function mobileFieldSummary(orders: MobileFieldOrder[], date: string) {
     pending: openOrders.filter(item => !active(item.status)).length,
   };
 }
+

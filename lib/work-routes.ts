@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 export type GpsPoint = { id: string; capturedAt: string; receivedAt: string; latitude: number; longitude: number; accuracy: number; reliable: boolean; osId?: string };
 export type RouteStop = { id: string; osId: string; customer: string; address: string; arrivedAt: string; departedAt?: string; latitude: number; longitude: number; accuracy: number };
-export type WorkRoute = { id: string; employeeId: string; employeeName: string; startedAt: string; endedAt?: string; status: "active" | "paused" | "completed"; consentAt: string; consentVersion: "1"; expiresAt: string; distanceKm: number; points: GpsPoint[]; stops: RouteStop[]; events: { id: string; type: string; at: string; actor: string; fingerprint?: string }[]; closedReason?: string };
+export type WorkRoute = { id: string; employeeId: string; employeeName: string; startedAt: string; endedAt?: string; status: "active" | "paused" | "completed"; consentAt: string; consentVersion: "1"; expiresAt: string; distanceKm: number; points: GpsPoint[]; stops: RouteStop[]; events: { id: string; type: string; at: string; actor: string; fingerprint?: string; selfieEvidence?: {hash:string;cipher:string} }[]; closedReason?: string };
 export type RouteDay = { companyId: string; employeeId: string; date: string; _revision: number; routes: WorkRoute[] };
 export type RouteActor = { employeeId: string; employeeName: string; username: string };
-export type RouteCommand = { action: "start" | "pause" | "resume" | "points" | "checkin" | "checkout" | "finish"; requestId: string; routeId?: string; consent?: boolean; points?: { id: string; capturedAt: string; latitude: number; longitude: number; accuracy: number }[]; osId?: string; reason?: string };
+export type RouteCommand = { action: "start" | "pause" | "resume" | "points" | "checkin" | "checkout" | "finish"; requestId: string; routeId?: string; consent?: boolean; points?: { id: string; capturedAt: string; latitude: number; longitude: number; accuracy: number }[]; osId?: string; reason?: string; selfie?:string; selfieEvidence?:{hash:string;cipher:string} };
 export class RouteError extends Error { status: number; constructor(message: string, status = 400) { super(message); this.status = status; } }
 export function workDate(now: string) { return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(now)); }
 export function routeDayKey(company: string, employee: string, date: string) { return `${routeCompanyPrefix(company)}${date}:${Buffer.from(employee).toString("hex")}`; }
@@ -21,13 +21,14 @@ export function validatePoint(input: NonNullable<RouteCommand["points"]>[number]
 export function applyRouteCommand(day: RouteDay, command: RouteCommand, actor: RouteActor, now: string, order?: { id: string; client: string; address: string }): RouteDay {
   if (day.employeeId !== actor.employeeId) throw new RouteError("Rota de outro colaborador.", 403);
   if (!/^[a-zA-Z0-9-]{8,100}$/.test(command.requestId || "")) throw new RouteError("Chave da operação inválida.");
-  const fingerprint = createHash("sha256").update(JSON.stringify(command)).digest("hex");
+  const fingerprint = createHash("sha256").update(JSON.stringify({...command,...(command.selfieEvidence?{selfieEvidence:{hash:command.selfieEvidence.hash}}:{})})).digest("hex");
   const next = structuredClone(day);
   if (command.action === "start") {
     if (command.requestId.length > 80) throw new RouteError("Identificador de jornada muito longo.");
     if (command.consent !== true) throw new RouteError("Confirme o aviso de localização de trabalho.");
     const active = next.routes.find(route => route.status === "active");
     if (active) return day;
+    if (next.routes.some(route => route.status === "paused")) throw new RouteError("Já existe jornada em pausa. Registre o retorno do almoço.",409);
     const id = `${day.date}:${command.requestId}`;
     if (next.routes.some(route => route.id === id)) return day;
     if (day.date !== workDate(now)) throw new RouteError("Inicie a rota na data atual.");
@@ -38,16 +39,18 @@ export function applyRouteCommand(day: RouteDay, command: RouteCommand, actor: R
     const replay = route.events.find(event => event.id === command.requestId);
     if (replay) { if (replay.type !== command.action || (replay.fingerprint && replay.fingerprint !== fingerprint)) throw new RouteError("Chave já usada em outra operação.", 409); return day; }
     if (route.status === "completed") { if (command.action === "finish") return day; throw new RouteError("A jornada foi encerrada.", 409); }
-    if (route.status === "paused" && !["resume","finish"].includes(command.action)) throw new RouteError("Jornada em pausa. Registre o retorno antes de continuar.",409);
+    if (route.status === "paused" && !["resume","finish","points"].includes(command.action)) throw new RouteError("Jornada em pausa. Registre o retorno antes de continuar.",409);
     if (route.status === "active" && command.action === "resume") throw new RouteError("A jornada já está ativa.",409);
     if (!["pause","resume","points", "checkin", "checkout", "finish"].includes(command.action)) throw new RouteError("Operação inválida.");
     if (!["finish", "points"].includes(command.action) && Date.parse(now) > Date.parse(route.expiresAt)) throw new RouteError("Jornada expirada. Encerre a rota e inicie uma nova.", 409);
-    if (command.action === "pause") { route.status="paused"; route.events.push({id:command.requestId,type:"pause",at:now,actor:actor.username,fingerprint}); next._revision+=1; return next; }
-    if (command.action === "resume") { route.status="active"; route.events.push({id:command.requestId,type:"resume",at:now,actor:actor.username,fingerprint}); next._revision+=1; return next; }
+    if (command.action === "pause") { route.status="paused"; route.events.push({id:command.requestId,type:"pause",at:now,actor:actor.username,fingerprint}); next._revision+=1; attachSelfie(next,command); return next; }
+    if (command.action === "resume") { route.status="active"; route.events.push({id:command.requestId,type:"resume",at:now,actor:actor.username,fingerprint}); next._revision+=1; attachSelfie(next,command); return next; }
     if (command.action === "points" || command.action === "checkin") {
       if (!command.points?.length || command.points.length > 50) throw new RouteError("Envie de 1 a 50 pontos GPS.");
       for (const input of command.points) {
         const point = validatePoint(input, now);
+        const lifecycle=route.events.filter(event=>["start","pause","resume","finish"].includes(event.type)&&Date.parse(event.at)<=Date.parse(point.capturedAt)).at(-1);
+        if (lifecycle?.type === "pause" || lifecycle?.type === "finish") throw new RouteError("Localização capturada fora do período ativo da jornada.",403);
         if (Date.parse(point.capturedAt) < Date.parse(route.startedAt) - 60000 || Date.parse(point.capturedAt) > Date.parse(route.expiresAt)) throw new RouteError("Ponto fora da jornada.");
         const existing = route.points.find(item => item.id === point.id);
         if (existing) { if (existing.latitude !== point.latitude || existing.longitude !== point.longitude || existing.capturedAt !== point.capturedAt || existing.accuracy !== point.accuracy) throw new RouteError("Ponto já registrado com outro conteúdo.", 409); continue; }
@@ -82,6 +85,9 @@ export function applyRouteCommand(day: RouteDay, command: RouteCommand, actor: R
     route.events.push({ id: command.requestId, type: command.action, at: now, actor: actor.username, fingerprint });
   }
   next._revision += 1;
+  attachSelfie(next,command);
   return next;
 }
-export function routeSummary(route: WorkRoute) { const { points, ...summary } = route; return { ...summary, pointCount: points.length, imprecisePoints: points.filter(point => !point.reliable).length, lastPoint: points.at(-1) || null, distanceNote: "Estimativa por amostras GPS; lacunas e pontos imprecisos não compõem a distância." }; }
+function attachSelfie(day:RouteDay,command:RouteCommand) { if(command.selfieEvidence){const event=day.routes.flatMap(route=>route.events).find(item=>item.id===command.requestId);if(event)event.selfieEvidence=structuredClone(command.selfieEvidence);}}
+export function routeSummary(route: WorkRoute) { const { points, ...summary } = route; return { ...summary, events:route.events.map(({selfieEvidence,...event})=>({...event,hasSelfie:Boolean(selfieEvidence),selfieHash:selfieEvidence?.hash})), pointCount: points.length, imprecisePoints: points.filter(point => !point.reliable).length, lastPoint: points.at(-1) || null, distanceNote: "Estimativa por amostras GPS; lacunas e pontos imprecisos não compõem a distância." }; }
+
