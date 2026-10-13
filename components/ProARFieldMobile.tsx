@@ -7,21 +7,21 @@ import {
   ClipboardList, CloudOff, Home, MapPin, Menu, RefreshCw,
   Search, ShieldCheck, Smartphone, UserRound, Wrench, Wifi,
 } from "lucide-react";
+import { MobileRouteControls } from "./MobileRouteControls";
+import { FieldSupportPanel } from "./FieldSupportPanel";
+import { FieldOrderEditor } from "./FieldOrderEditor";
+import type { MobileFieldOrder } from "@/lib/mobile-field";
 import styles from "./ProARFieldMobile.module.css";
 
-type FieldOrder = {
-  id: string; client: string; unit: string; service: string; tech: string;
-  date: string; time: string; address: string; status: string;
-  equipmentIds: string[]; checkInAt: string;
-};
+type FieldOrder = MobileFieldOrder;
 type FieldData = {
-  connected: boolean; stateFound: boolean; mode: "read-only";
-  user: { displayName: string; role: string };
+  connected: boolean; stateFound: boolean; mode: "operational";
+  user: { displayName: string; role: string; canEdit: boolean; linkedEmployee: boolean; manager: boolean };
   orders: FieldOrder[];
   summary: { today: number; inProgress: number; pending: number };
   lastReadAt: string; notice: string;
 };
-type Tab = "inicio" | "agenda" | "ordens" | "mais";
+type Tab = "inicio" | "agenda" | "ordens" | "central" | "mais";
 
 function todayISO() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
@@ -107,6 +107,7 @@ export function ProARFieldMobile() {
     { id:"inicio", label:"Início", icon:Home },
     { id:"agenda", label:"Agenda", icon:CalendarDays },
     { id:"ordens", label:"Ordens", icon:ClipboardList },
+    { id:"central", label:"Central", icon:ShieldCheck },
     { id:"mais", label:"Mais", icon:Menu },
   ];
   return <div className={styles.app}>
@@ -123,6 +124,8 @@ export function ProARFieldMobile() {
         {error && <div role="alert" className={styles.error}>{error}{loginRequired && <Link href="/">Entrar no ProAR</Link>}{!loginRequired && <button type="button" onClick={()=>void refresh()}>Tentar novamente</button>}</div>}
         {loading && !data && <div role="status" className={styles.loading}>Conectando aos atendimentos reais do ProAR...</div>}
         {data && <>
+          <details className={styles.journeyPanel}><summary>Minha jornada • entrada, pausa e saída</summary><MobileRouteControls /></details>
+          <FieldSupportPanel visible={tab === "central" && !current}/>
           {current ? <section className={styles.screen}>
             <button type="button" className={styles.back} onClick={()=>setSelected(null)}><ArrowLeft size={18}/> Voltar</button>
             <p className={styles.eyebrow}>ORDEM DE SERVIÇO</p>
@@ -142,7 +145,8 @@ export function ProARFieldMobile() {
             </div>
             {current.address && <a className={styles.primaryAction} href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(current.address)}`} target="_blank" rel="noopener noreferrer"><MapPin size={18}/> Abrir rota no mapa <ArrowRight size={18}/></a>}
             <Link className={styles.secondaryAction} href="/">Abrir sistema completo para editar a OS <ArrowRight size={17}/></Link>
-            <p className={styles.disclaimer}>Este painel consulta dados reais. Check-in, assinatura, fotos e conclusão da OS serão ativados somente após a integração transacional e testes.</p>
+            {data.user.canEdit && <FieldOrderEditor key={`${current.id}:${current.fieldVersion}`} order={current} requiresJourney={/tecnico|prestador/i.test(data.user.role.normalize("NFD").replace(/[\u0300-\u036f]/g,""))} onSaved={refresh}/>}
+            <p className={styles.disclaimer}>Alterações são confirmadas no banco. Durante a pausa ou fora da jornada, técnicos podem apenas consultar.</p>
           </section> : <>
             {tab === "inicio" && <section className={styles.screen}>
               <p className={styles.eyebrow}>PAINEL OPERACIONAL</p>
@@ -180,9 +184,9 @@ export function ProARFieldMobile() {
               <p className={styles.eyebrow}>PERFIL E CONTROLE</p><h1 className={styles.title}>Mais</h1>
               <div className={styles.profile}><div className={styles.avatar}><UserRound size={26}/></div><div><strong>{data.user.displayName}</strong><span>{data.user.role}</span></div></div>
               <div className={styles.detailCard}><h2><ShieldCheck size={20}/> Integração segura</h2><p>O aplicativo utiliza sua sessão do ProAR, respeita a empresa e mostra somente as OS permitidas para o perfil. Não há usuários ou atendimentos fictícios.</p>
-              <p><strong>Sincronização:</strong> consulta online, somente leitura.</p>
+              <p><strong>Sincronização:</strong> OS e jornada com confirmação online; checklist da frota, abastecimento e solicitações de ajuste podem aguardar na fila local.</p>
               <p><strong>Última leitura:</strong> {new Date(data.lastReadAt).toLocaleString("pt-BR")}</p></div>
-              <div className={styles.detailCard}><h2>Próximas etapas</h2><p>Jornada e ponto, check-in com geolocalização, checklist, fotos, assinatura, QR Code, fila offline e sincronização segura dependem de integração adicional com o backend.</p></div>
+              <div className={styles.detailCard}><h2>Recursos de campo</h2><p>Abra a Central para consultar frota, abastecimentos, marcações operacionais e ajustes. A gestão acompanha jornadas e recebe SOS. Localização em segundo plano exige APK Android atualizado.</p><p>Reconhecimento facial, ponto legal REP-P, OCR, áudio SOS, IA por voz e comunicação entre aparelhos dependem das integrações específicas.</p></div>
               <Link className={styles.secondaryAction} href="/">Abrir ProAR completo <ArrowRight size={17}/></Link>
             </section>}
           </>}
@@ -191,7 +195,8 @@ export function ProARFieldMobile() {
       <nav className={styles.bottomNav} aria-label="Navegação ProAR Field">
         {tabs.map(item=>{const Icon=item.icon;return <button key={item.id} type="button" aria-current={tab===item.id&&!selected?"page":undefined} className={`${styles.navItem} ${tab===item.id&&!selected?styles.navActive:""}`} onClick={()=>{setSelected(null);setTab(item.id)}}><Icon size={22}/><span>{item.label}</span></button>})}
       </nav>
-      <footer className={styles.footer}><span><Wifi size={12}/> {online ? "Rede disponível" : "Offline"}</span><span>ProAR Field · integração inicial</span></footer>
+      <footer className={styles.footer}><span><Wifi size={12}/> {online ? "Rede disponível" : "Offline"}</span><span>ProAR Field · operação integrada</span></footer>
     </div>
   </div>;
 }
+

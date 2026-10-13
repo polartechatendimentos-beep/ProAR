@@ -27,7 +27,7 @@ test("manager can see all OS but only allowlisted fields", () => {
   const orders = mobileFieldOrders(records, manager);
   assert.equal(orders.length, 3);
   assert.deepEqual(Object.keys(orders[0]).sort(), [
-    "address","checkInAt","client","date","equipmentIds","id","service","status","tech","time","unit",
+    "address","checkInAt","client","date","diagnosis","equipmentIds","evidence","executedService","fieldVersion","id","mobileChecklist","service","status","tech","time","unit",
   ]);
 });
 
@@ -65,3 +65,4 @@ test("scheduled, waiting and in-progress orders remain visible", () => {
   const orders = statuses.map((status, i) => ({id:"open-" + i, tech:"Tiago Viana", status}));
   assert.equal(mobileFieldOrders(orders, technician).length, statuses.length);
 });
+

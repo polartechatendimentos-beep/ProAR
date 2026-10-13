@@ -3,6 +3,8 @@ import { sessionFromRequest, hasPermission, sessionCompany } from "../../../../l
 import { resolveTenantDb, tenantHeaders } from "../../../../lib/tenant-rest";
 import { databaseFetch } from "../../../../lib/supabase-rest";
 import { mobileFieldOrders, mobileFieldSummary } from "../../../../lib/mobile-field";
+import { routeContext } from "../../../../lib/work-route-store";
+import { fieldOrderFingerprint } from "../../../../lib/mobile-workday";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +19,8 @@ export async function GET(request: NextRequest) {
   const company = sessionCompany(session);
   if (!company.ok) return NextResponse.json({ error: company.error }, { status: company.status, headers: privateHeaders });
   try {
+    const employeeContext = await routeContext(session);
+    if (employeeContext.employee?.mobileAccessEnabled === false && !hasPermission(session,"rotas.visualizar")) return NextResponse.json({error:"Acesso mobile desativado para este funcionário."},{status:403,headers:privateHeaders});
     const db = await resolveTenantDb(company.companyId);
     if (!db.url || !db.key) throw new Error("TENANT_DATABASE_UNAVAILABLE");
     const primaryId = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
@@ -42,17 +46,18 @@ export async function GET(request: NextRequest) {
       username: session.username,
       displayName: session.displayName,
       role: session.role,
-    });
+      employeeId: employeeContext.actor?.employeeId,
+    }).map(order=>({...order,editToken:fieldOrderFingerprint(records.get(order.id)!)}));
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
     return NextResponse.json({
       connected: true,
       stateFound,
-      mode: "read-only",
-      user: { displayName: session.displayName || session.username, role: session.role },
+      mode: "operational",
+      user: { displayName: session.displayName || session.username, role: session.role, canEdit:hasPermission(session,"os.editar"), linkedEmployee:Boolean(employeeContext.actor), manager:hasPermission(session,"rotas.visualizar") },
       orders,
       summary: mobileFieldSummary(orders, today),
       lastReadAt: new Date().toISOString(),
-      notice: "Dados reais do ProAR. Alterações operacionais serão liberadas após homologação do fluxo de sincronização.",
+      notice: "OS reais. Técnicos precisam de jornada ativa para atuar nos atendimentos.",
     }, { headers: privateHeaders });
   } catch {
     return NextResponse.json({
@@ -61,3 +66,4 @@ export async function GET(request: NextRequest) {
     }, { status: 503, headers: privateHeaders });
   }
 }
+

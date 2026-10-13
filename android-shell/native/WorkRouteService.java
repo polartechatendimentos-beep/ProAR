@@ -12,6 +12,13 @@ import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.UUID;
+import java.security.KeyStore;
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 
@@ -23,8 +30,26 @@ public class WorkRouteService extends Service implements LocationListener {
  private long lastPoint=0;
  private final Handler handler=new Handler(Looper.getMainLooper());
  private static SharedPreferences prefs(Context c){return c.getSharedPreferences(PREF,Context.MODE_PRIVATE);}
- private static JSONObject queue(Context c){try{return new JSONObject(prefs(c).getString("queue","{}"));}catch(Exception e){return new JSONObject();}}
- private static void save(Context c,JSONObject q){prefs(c).edit().putString("queue",q.toString()).commit();}
+ private static SecretKey queueKey()throws Exception{
+  KeyStore keys=KeyStore.getInstance("AndroidKeyStore");keys.load(null);
+  if(!keys.containsAlias("proar-work-route-v1")){
+   KeyGenerator generator=KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES,"AndroidKeyStore");
+   generator.init(new KeyGenParameterSpec.Builder("proar-work-route-v1",KeyProperties.PURPOSE_ENCRYPT|KeyProperties.PURPOSE_DECRYPT).setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).setKeySize(256).build());generator.generateKey();
+  }
+  return (SecretKey)keys.getKey("proar-work-route-v1",null);
+ }
+ private static JSONObject queue(Context c){try{
+  String stored=prefs(c).getString("queue","{}");
+  if(!stored.startsWith("enc-v1."))return new JSONObject(stored);
+  String[] pieces=stored.split("\\.");
+  Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.DECRYPT_MODE,queueKey(),new GCMParameterSpec(128,Base64.decode(pieces[1],Base64.NO_WRAP)));
+  return new JSONObject(new String(cipher.doFinal(Base64.decode(pieces[2],Base64.NO_WRAP)),StandardCharsets.UTF_8));
+ }catch(Exception e){throw new IllegalStateException("Fila GPS protegida indisponível; preserve o aparelho para recuperação.",e);}}
+ private static void save(Context c,JSONObject q){try{
+  Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.ENCRYPT_MODE,queueKey());
+  String stored="enc-v1."+Base64.encodeToString(cipher.getIV(),Base64.NO_WRAP)+"."+Base64.encodeToString(cipher.doFinal(q.toString().getBytes(StandardCharsets.UTF_8)),Base64.NO_WRAP);
+  if(!prefs(c).edit().putString("queue",stored).commit())throw new IllegalStateException("Gravação local recusada.");
+ }catch(Exception e){throw new IllegalStateException("Não foi possível proteger a fila GPS local.",e);}}
  public static synchronized void prepare(Context c,String id,String expires,String username)throws Exception{
   JSONObject q=queue(c);JSONArray points=q.optJSONArray("points");
   if(!id.equals(q.optString("routeId")) && ((points!=null&&points.length()>0)||q.optBoolean("finishPending")))throw new Exception("Sincronize a jornada anterior antes de iniciar outra.");
@@ -36,6 +61,7 @@ public class WorkRouteService extends Service implements LocationListener {
  }
  public static JSObject status(Context c){JSONObject q=queue(c);JSObject result=new JSObject();result.put("active",running!=null);result.put("pending",q.optJSONArray("points")==null?0:q.optJSONArray("points").length());result.put("error",q.optString("error"));return result;}
  public static void stopCollection(Context c){if(running!=null)running.stopNow();else markFinish(c);flushAsync(c);}
+ public static void pauseCollection(Context c){if(running!=null)running.pauseNow();flushAsync(c);}
  private static synchronized void markFinish(Context c){JSONObject q=queue(c);if(q.optString("routeId").isEmpty())return;try{q.put("finishPending",true);if(!q.has("finishId"))q.put("finishId",UUID.randomUUID().toString());save(c,q);}catch(Exception ignored){}}
  @Override public void onCreate(){super.onCreate();running=this;locations=(LocationManager)getSystemService(LOCATION_SERVICE);}
  @Override public int onStartCommand(Intent intent,int flags,int startId){
@@ -57,6 +83,7 @@ public class WorkRouteService extends Service implements LocationListener {
   synchronized(WorkRouteService.class){JSONObject q=queue(this);if(lastPoint>q.optLong("expires")){stopNow();return;}try{JSONArray points=q.optJSONArray("points");if(points==null)points=new JSONArray();if(points.length()>=1500){q.put("error","Limite local atingido. Sincronize antes de continuar.");save(this,q);stopNow();return;}points.put(new JSONObject().put("id",UUID.randomUUID().toString()).put("capturedAt",Instant.ofEpochMilli(l.getTime()).toString()).put("latitude",l.getLatitude()).put("longitude",l.getLongitude()).put("accuracy",l.getAccuracy()));q.put("points",points);save(this,q);}catch(Exception ignored){}}
   flushAsync(this);
  }
+ private void pauseNow(){locations.removeUpdates(this);handler.removeCallbacks(tick);stopForeground(STOP_FOREGROUND_REMOVE);running=null;stopSelf();}
  private void stopNow(){locations.removeUpdates(this);handler.removeCallbacks(tick);markFinish(this);stopForeground(STOP_FOREGROUND_REMOVE);running=null;stopSelf();}
  @Override public void onDestroy(){locations.removeUpdates(this);handler.removeCallbacks(tick);running=null;super.onDestroy();}
  @Override public IBinder onBind(Intent intent){return null;}
@@ -81,3 +108,4 @@ public class WorkRouteService extends Service implements LocationListener {
   }}catch(Exception e){synchronized(WorkRouteService.class){JSONObject q=queue(c);try{q.put("error",e.getMessage());save(c,q);}catch(Exception ignored){}}if(e.getMessage()!=null&&(e.getMessage().contains("Sessão")||e.getMessage().contains("sessão")||e.getMessage().contains("recusada"))){WorkRouteService service=running;if(service!=null)service.handler.post(service::stopNow);}}
  }
 }
+

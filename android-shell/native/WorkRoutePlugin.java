@@ -51,7 +51,9 @@ public class WorkRoutePlugin extends Plugin {
   android.location.LocationListener listener=new android.location.LocationListener(){public void onLocationChanged(android.location.Location location){if(!done.compareAndSet(false,true))return;manager.removeUpdates(this);JSObject point=new JSObject();point.put("id",java.util.UUID.randomUUID().toString());point.put("capturedAt",java.time.Instant.ofEpochMilli(location.getTime()).toString());point.put("latitude",location.getLatitude());point.put("longitude",location.getLongitude());point.put("accuracy",location.getAccuracy());call.resolve(point);}};
   try{manager.requestSingleUpdate(provider,listener,android.os.Looper.getMainLooper());handler.postDelayed(()->{manager.removeUpdates(listener);if(done.compareAndSet(false,true))call.reject("GPS sem atualização. Verifique o sinal e tente novamente.");},20000);}catch(Exception e){call.reject("GPS indisponível: "+e.getMessage());}
  }
+ @PluginMethod public void pause(PluginCall call){if(!trusted(call))return;WorkRouteService.pauseCollection(getContext());call.resolve();}
  @PluginMethod public void stop(PluginCall call){if(!trusted(call))return;WorkRouteService.stopCollection(getContext());call.resolve();}
  @PluginMethod public void sync(PluginCall call){if(!trusted(call))return;WorkRouteService.flushAsync(getContext());call.resolve();}
  @PluginMethod public void status(PluginCall call){if(!trusted(call))return;call.resolve(WorkRouteService.status(getContext()));}
 }
+
