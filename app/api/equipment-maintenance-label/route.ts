@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { hasPermission, sessionFromRequest } from "../../../lib/permissions";
+import { hasPermission, sessionCompany, sessionFromRequest } from "../../../lib/permissions";
 import { requiredSecret } from "../../../lib/security-env";
 import { createEquipmentLabel, findEquipmentByLabelCode, publicMaintenanceHistory } from "../../../lib/equipment-maintenance-label";
 import { readEquipmentMaintenanceState } from "../../../lib/equipment-maintenance-state";
@@ -16,9 +16,9 @@ export async function GET(request: NextRequest) {
   if (!/^[A-Za-z0-9_-]{1,120}$/.test(equipmentId)) {
     return NextResponse.json({ error: "Identificação do equipamento inválida." }, { status: 400 });
   }
-  const companyId = String(session.companySlug || "").toLowerCase() === String(process.env.PROAR_PRIMARY_COMPANY_SLUG || "polartech").toLowerCase()
-    ? (process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal") : String(session.companyId || "");
-  if (!companyId) return NextResponse.json({ error: "Empresa não identificada na sessão." }, { status: 401 });
+  const tenant = sessionCompany(session);
+  if (!tenant.ok) return NextResponse.json({ error: tenant.error }, { status: tenant.status });
+  const companyId = tenant.companyId;
   try {
     const state = await readEquipmentMaintenanceState(companyId);
     const equipment = state?.equipment.find(item => String(item.id) === equipmentId);
