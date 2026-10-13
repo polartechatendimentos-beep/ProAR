@@ -22,6 +22,7 @@ export type MobileFieldOrder = {
   evidence: { before: boolean; after: boolean; signature: boolean };
   editToken?: string;
   equipmentOptions?: { id: string; label: string }[];
+  fieldExceptions?: { id:string;kind:"signature"|"equipment";reason:string;status:string;requestedBy:string;requestedAt:string;decidedBy?:string;decidedAt?:string;decisionReason?:string }[];
 };
 
 type RecordItem = Record<string, unknown>;
@@ -89,6 +90,7 @@ export function mobileFieldOrders(
       equipmentIds,
       checkInAt: short(order.checkInAt, 40),
       fieldVersion: Number.isInteger(order.fieldVersion) ? Number(order.fieldVersion) : 0,
+      fieldExceptions: Array.isArray(order.fieldExceptions) ? order.fieldExceptions.slice(-20).map(item=>({id:short(item.id,100),kind:item.kind,reason:short(item.reason,1000),status:short(item.status,30),requestedBy:short(item.requestedBy,120),requestedAt:short(item.requestedAt,40),decidedBy:short(item.decidedBy,120),decidedAt:short(item.decidedAt,40),decisionReason:short(item.decisionReason,1000)})) : [],
       diagnosis: short(order.diagnosis, 4000),
       executedService: short(order.executedService, 8000),
       mobileChecklist: Object.fromEntries(Object.entries(order.mobileChecklist && typeof order.mobileChecklist === "object" ? order.mobileChecklist : {}).filter(([,value])=>typeof value === "boolean")) as Record<string,boolean>,
