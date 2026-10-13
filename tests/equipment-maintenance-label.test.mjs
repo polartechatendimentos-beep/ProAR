@@ -88,7 +88,7 @@ test("physical sticker PT-000001 can be entered in OS and resolves to the same e
   assert.equal(equipmentDisplayLabel(first, "polartech-principal", secret), "PT-000001");
   assert.deepEqual(findEquipmentByLabelCode(records, "polartech-principal", "PT-000001", secret), first);
   assert.deepEqual(findEquipmentByLabelCode(records, "polartech-principal", sample.code, secret), first);
-  assert.equal(findEquipmentByLabelCode(records, "other-company", "PT-000001", secret), first);
+  assert.equal(findEquipmentByLabelCode([{ id:"EQ-OTHER", customerId:"other-customer" }], "other-company", "PT-000001", secret), null);
   assert.equal(canAssignEquipmentLabelCode(second, "PT-000001", records, "polartech-principal", secret), false);
   assert.equal(canAssignEquipmentLabelCode(first, "PT-000002", records, "polartech-principal", secret), false);
   assert.equal(canAssignEquipmentLabelCode(second, "PT-000002", records, "polartech-principal", secret), true);
