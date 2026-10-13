@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createHash } from "node:crypto";
-import { createEquipmentLabel, verifyEquipmentLabel, publicMaintenanceHistory } from "../lib/equipment-maintenance-label.ts";
+import { createEquipmentLabel, verifyEquipmentLabel, publicMaintenanceHistory, isEquipmentLabelCode, findEquipmentByLabelCode, canLinkHistoricalServiceOrder } from "../lib/equipment-maintenance-label.ts";
 import { qrMatrix, qrSvg } from "../lib/qr-svg.ts";
 
 const secret = "test-secret-not-for-production";
@@ -51,4 +51,30 @@ test("QR matrix is deterministic and matches a known version 10-L reference", ()
   assert.equal(fingerprint, "ffd3412a806a9c080454f2300f53f84e2fbc1aad5d7427d156702e209fcdbd2f");
   assert.match(qrSvg(value), /^<svg /);
   assert.throws(() => qrMatrix("x".repeat(272)), /capacidade/);
+});
+
+test("the printed PT code resolves only inside the intended tenant", () => {
+  assert.equal(isEquipmentLabelCode(sample.code), true);
+  assert.equal(isEquipmentLabelCode("PT-000001"), false);
+  const records = [{ id:"EQ-000001", customerId:"client-1" }, { id:"EQ-000002", customerId:"client-1" }];
+  assert.deepEqual(findEquipmentByLabelCode(records, "polartech-principal", sample.code, secret), records[0]);
+  assert.equal(findEquipmentByLabelCode(records, "another-company", sample.code, secret), null);
+  assert.equal(findEquipmentByLabelCode([...records, records[0]], "polartech-principal", sample.code, secret), null);
+});
+
+test("historical OS links require explicit customer match, completion and unique label ownership", () => {
+  const equipment = { id:"EQ-000001", customerId:"client-1", historicalServiceOrderIds:["os-old"] };
+  const old = { id:"os-old", customerId:"client-1", date:"2024-01-15", service:"Limpeza", status:"Concluída" };
+  const recent = { id:"os-current", customerId:"client-1", date:"2026-10-13", service:"Preventiva", status:"Concluída", equipmentIds:["EQ-000001"] };
+  assert.equal(canLinkHistoricalServiceOrder(equipment, old, [equipment]), true);
+  assert.equal(canLinkHistoricalServiceOrder(equipment, {...old, customerId:"other"}, [equipment]), false);
+  assert.equal(canLinkHistoricalServiceOrder(equipment, {...old, customerId:""}, [equipment]), false);
+  assert.equal(canLinkHistoricalServiceOrder(equipment, {...old, status:"Cancelada"}, [equipment]), false);
+  assert.equal(canLinkHistoricalServiceOrder(equipment, old, [equipment, { id:"EQ-000002", historicalServiceOrderIds:["os-old"] }]), false);
+  assert.deepEqual(publicMaintenanceHistory(equipment, [recent, old]), [
+    { date:"2026-10-13", service:"Manutenção preventiva", status:"Concluída" },
+    { date:"2024-01-15", service:"Higienização", status:"Concluída" },
+  ]);
+  assert.deepEqual(publicMaintenanceHistory(equipment, [{...old, customerId:"other"}]), []);
+  assert.deepEqual(publicMaintenanceHistory(equipment, [{...old, status:"Em aberto"}]), []);
 });
