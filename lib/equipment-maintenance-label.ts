@@ -1,5 +1,5 @@
-import { isCompletedMaintenanceStatus, isEquipmentLabelCode, normalizeEquipmentLabelCode } from "./equipment-label-associations";
-export { canLinkHistoricalServiceOrder, isCompletedMaintenanceStatus, isEquipmentLabelCode, normalizeEquipmentLabelCode } from "./equipment-label-associations";
+import { isCompletedMaintenanceStatus, isEquipmentLabelCode, normalizeEquipmentLabelCode } from "./equipment-label-associations.ts";
+export { canLinkHistoricalServiceOrder, isCompletedMaintenanceStatus, isEquipmentLabelCode, normalizeEquipmentLabelCode } from "./equipment-label-associations.ts";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 type RecordItem = Record<string, unknown>;
