@@ -7,7 +7,7 @@ import { mobileChecklist, checklistProgress } from "@/lib/mobile-service-checkli
 import { CustomerSearchSelect } from "@/components/CustomerSearchSelect";
 import { HvacDiagnosticWorkspace } from "@/components/HvacDiagnosticWorkspace";
 import { EquipmentLabelControl } from "@/components/EquipmentLabelControl";
-import { isEquipmentLabelCode, normalizeEquipmentLabelCode } from "@/lib/equipment-maintenance-label";
+import { isEquipmentLabelCode, normalizeEquipmentLabelCode } from "@/lib/equipment-label-associations";
 import "./service-order-workspace.css";
 
 type WorkspaceOrder = {
