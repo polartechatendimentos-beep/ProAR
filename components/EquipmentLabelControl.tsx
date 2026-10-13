@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ClipboardCopy, Printer, QrCode, ShieldCheck } from "lucide-react";
 
-type LabelInfo = { enabled: boolean; code: string; historyCount: number; publicPath?: string; printPath?: string };
+type LabelInfo = { enabled: boolean; code: string; historyCount: number; publicPath?: string; printPath?: string; publicOrigin?: string };
 type Props = {
   equipmentId: string;
   enabled: boolean;
@@ -43,7 +43,7 @@ export function EquipmentLabelControl({ equipmentId, enabled, canManage, onToggl
   };
   const copy = async () => {
     if (!info?.publicPath) return;
-    try { await navigator.clipboard.writeText(window.location.origin + info.publicPath); setNotice("Link de consulta copiado."); }
+    try { await navigator.clipboard.writeText((info.publicOrigin || window.location.origin) + info.publicPath); setNotice("Link de consulta copiado."); }
     catch { setNotice("Não foi possível copiar. Abra o link para compartilhar."); }
   };
   return <section style={{ gridColumn:"1 / -1", borderTop:"1px solid #dce6f2", paddingTop:12, display:"grid", gap:9 }}>
@@ -57,8 +57,8 @@ export function EquipmentLabelControl({ equipmentId, enabled, canManage, onToggl
     {error && <small role="alert" style={{ color:"#a22929" }}>{error}</small>}
     {notice && <small role="status">{notice}</small>}
     <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-      {info?.enabled && info.printPath && <a className="os-secondary-button" href={info.printPath} target="_blank" rel="noopener noreferrer"><Printer size={14}/> Imprimir etiqueta</a>}
-      {info?.enabled && info.publicPath && <a className="os-secondary-button" href={info.publicPath} target="_blank" rel="noopener noreferrer"><ShieldCheck size={14}/> Ver histórico público</a>}
+      {info?.enabled && info.printPath && <a className="os-secondary-button" href={(info.publicOrigin || "") + info.printPath} target="_blank" rel="noopener noreferrer"><Printer size={14}/> Imprimir etiqueta</a>}
+      {info?.enabled && info.publicPath && <a className="os-secondary-button" href={(info.publicOrigin || "") + info.publicPath} target="_blank" rel="noopener noreferrer"><ShieldCheck size={14}/> Ver histórico público</a>}
       {info?.enabled && info.publicPath && <button className="os-secondary-button" type="button" onClick={()=>void copy()}><ClipboardCopy size={14}/> Copiar link</button>}
       {canManage && onToggle && <button className="os-secondary-button" type="button" disabled={busy} onClick={()=>void toggle()}>{busy ? "Salvando..." : enabled ? "Desativar consulta" : "Ativar etiqueta e histórico"}</button>}
     </div>
