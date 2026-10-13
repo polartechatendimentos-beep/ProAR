@@ -28,6 +28,10 @@ function normalized(value: unknown) {
   return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+export function isOpenMobileOrder(status: unknown) {
+  return !/^(concluid[ao]s?|finalizad[ao]s?|encerrad[ao]s?|cancelad[ao]s?)(?:$|\s|[(:-])/.test(normalized(status));
+}
+
 export function canSeeAllMobileOrders(session: MobileFieldSession) {
   return ["administrador", "gerencia", "gerente", "gestor", "supervisor"].includes(normalized(session.role));
 }
@@ -57,7 +61,7 @@ export function mobileFieldOrders(
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
     const order = entry as RecordItem;
     const id = short(order.id, 100);
-    if (!id || seen.has(id) || !assignedToSession(order, session)) continue;
+    if (!id || seen.has(id) || !assignedToSession(order, session) || !isOpenMobileOrder(order.status)) continue;
     seen.add(id);
     const equipmentIds = (Array.isArray(order.equipmentIds) ? order.equipmentIds : [order.equipmentId])
       .filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
@@ -85,13 +89,12 @@ export function mobileFieldOrders(
 }
 
 export function mobileFieldSummary(orders: MobileFieldOrder[], date: string) {
-  const today = orders.filter(item => item.date === date);
-  const closed = (status: string) => /conclu[ií]d|finalizad|encerrad/i.test(status);
+  const openOrders = orders.filter(item => isOpenMobileOrder(item.status));
+  const today = openOrders.filter(item => item.date === date);
   const active = (status: string) => /andamento|execu[cç][aã]o|iniciad/i.test(status);
   return {
     today: today.length,
-    inProgress: orders.filter(item => active(item.status)).length,
-    pending: orders.filter(item => !closed(item.status) && !active(item.status)).length,
-    completedToday: today.filter(item => closed(item.status)).length,
+    inProgress: openOrders.filter(item => active(item.status)).length,
+    pending: openOrders.filter(item => !active(item.status)).length,
   };
 }
