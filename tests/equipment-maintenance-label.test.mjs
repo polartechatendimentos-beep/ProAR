@@ -77,4 +77,5 @@ test("historical OS links require explicit customer match, completion and unique
   ]);
   assert.deepEqual(publicMaintenanceHistory(equipment, [{...old, customerId:"other"}]), []);
   assert.deepEqual(publicMaintenanceHistory(equipment, [{...old, status:"Em aberto"}]), []);
+  assert.deepEqual(publicMaintenanceHistory(equipment, [{...old, status:"Não concluída"}]), []);
 });
