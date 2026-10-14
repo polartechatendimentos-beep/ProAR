@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { MobileFieldOrder } from "@/lib/mobile-field";
 import { mobileChecklist } from "@/lib/mobile-service-checklists";
 import { loadOrderDraft, saveOrderDraft, clearOrderDraft, type OrderDraft } from "@/lib/mobile-order-drafts";
+import { LocalFieldAssistant } from "./LocalFieldAssistant";
 import { FieldOrderTools } from "./FieldOrderTools";
 import styles from "./ProARFieldMobile.module.css";
 
@@ -98,6 +99,7 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
     <button type="button" className={styles.secondaryAction} onClick={()=>{canvas.current?.getContext("2d")?.clearRect(0,0,500,150);setSignature("");}}>Limpar assinatura</button>
     <button type="button" className={styles.primaryAction} disabled={busy} onClick={()=>void execute("save")}>Salvar relatório e evidências</button>
     <button type="button" className={styles.secondaryAction} disabled={busy} onClick={()=>void execute("finish")}>Concluir OS</button>
+    <LocalFieldAssistant diagnosis={diagnosis} report={report} disabled={busy||!draftReady||Boolean(olderDraft)} onApply={setReport}/>
     <FieldOrderTools order={order} busy={busy||!draftReady||Boolean(olderDraft)} canApprove={canApprove} send={sendExtra}/>
   </article>;
 }
