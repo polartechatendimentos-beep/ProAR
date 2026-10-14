@@ -10,6 +10,7 @@ import {
 import { MobileRouteControls } from "./MobileRouteControls";
 import { FieldSupportPanel } from "./FieldSupportPanel";
 import { FieldOrderEditor } from "./FieldOrderEditor";
+import { mobileWeekDates } from "@/lib/mobile-agenda";
 import type { MobileFieldOrder } from "@/lib/mobile-field";
 import styles from "./ProARFieldMobile.module.css";
 
@@ -60,6 +61,8 @@ export function ProARFieldMobile() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [day, setDay] = useState(todayISO);
+  const [agendaMode,setAgendaMode]=useState<"day"|"week">("day");
+  const [mapApp,setMapApp]=useState("google");
   const [completion,setCompletion]=useState<{orderId:string;completedAt:string}|null>(null);
   const refresh = useCallback(async () => {
     setLoading(true); setError("");
@@ -100,7 +103,8 @@ export function ProARFieldMobile() {
     return orders.filter(order => !term || [order.id, order.client, order.service, order.unit, order.status, ...order.equipmentIds].join(" ").toLocaleLowerCase("pt-BR").includes(term));
   }, [orders, query]);
   const todayOrders = useMemo(() => orders.filter(order => order.date === todayISO()), [orders]);
-  const agendaOrders = useMemo(() => orders.filter(order => order.date === day), [orders, day]);
+  const week=useMemo(()=>mobileWeekDates(day),[day]);
+  const agendaOrders = useMemo(() => orders.filter(order => agendaMode==="week"?week.includes(order.date):order.date === day), [orders, day,agendaMode,week]);
   const current = orders.find(order => order.id === selected);
   const firstName = data?.user.displayName?.split(" ")[0] || "equipe";
   const tabs: { id: Tab; label: string; icon: typeof Home }[] = [
@@ -146,7 +150,7 @@ export function ProARFieldMobile() {
                 {current.checkInAt && <div><dt>Check-in registrado</dt><dd>{current.checkInAt}</dd></div>}
               </dl>
             </div>
-            {current.address && <a className={styles.primaryAction} href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(current.address)}`} target="_blank" rel="noopener noreferrer"><MapPin size={18}/> Abrir rota no mapa <ArrowRight size={18}/></a>}
+            {current.address && <><label className={styles.formLabel}>Aplicativo de navegação<select value={mapApp} onChange={e=>setMapApp(e.target.value)}><option value="google">Google Maps</option><option value="waze">Waze</option></select></label><a className={styles.primaryAction} href={mapApp==="waze"?`https://www.waze.com/ul?q=${encodeURIComponent(current.address)}&navigate=yes`:`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(current.address)}`} target="_blank" rel="noopener noreferrer"><MapPin size={18}/> Abrir navegação <ArrowRight size={18}/></a></>}
             {!data.user.canEdit && <p role="alert" className={styles.warning}>Seu perfil não tem permissão para alterar esta OS. Solicite a liberação ao administrador.</p>}
             {data.user.canEdit && <FieldOrderEditor key={`${current.id}:${current.fieldVersion}`} scope={data.user.scope} canApprove={data.user.canApprove} order={current} requiresJourney={/tecnico|prestador/i.test(data.user.role.normalize("NFD").replace(/[\u0300-\u036f]/g,""))} onSaved={async result=>{if(result){setCompletion(result);setSelected(null);setTab("ordens");setData(previous=>previous?{...previous,orders:previous.orders.filter(order=>order.id!==result.orderId)}:previous);}await refresh();}}/>}
             <p className={styles.disclaimer}>Alterações são confirmadas no banco. Durante a pausa ou fora da jornada, técnicos podem apenas consultar.</p>
@@ -172,9 +176,10 @@ export function ProARFieldMobile() {
             {tab === "agenda" && <section className={styles.screen}>
               <p className={styles.eyebrow}>PLANEJAMENTO</p><h1 className={styles.title}>Agenda</h1>
               <p className={styles.subtitle}>Atendimentos agendados no ProAR.</p>
+              <div className={styles.sectionHeading}><button type="button" aria-pressed={agendaMode==="day"} onClick={()=>setAgendaMode("day")}>Dia</button><button type="button" aria-pressed={agendaMode==="week"} onClick={()=>setAgendaMode("week")}>Semana</button></div>{agendaMode==="week"&&<p>Semana de {formatDate(week[0]||day)} a {formatDate(week[6]||day)}</p>}
               <label className={styles.dayPicker}>Selecionar data <input type="date" value={day} onChange={event=>setDay(event.target.value)}/></label>
               <div className={styles.sectionHeading}><h2>{agendaOrders.length} atendimento(s)</h2><button type="button" onClick={()=>setDay(todayISO())}>Hoje</button></div>
-              {agendaOrders.length ? agendaOrders.map(order=><OrderCard key={order.id} order={order} onOpen={()=>setSelected(order.id)}/>) : <div className={styles.empty}>Nenhum atendimento para {formatDate(day)}.</div>}
+              {agendaOrders.length ? agendaOrders.map(order=><OrderCard key={order.id} order={order} onOpen={()=>setSelected(order.id)}/>) : <div className={styles.empty}>Nenhum atendimento para {agendaMode==="week"?"esta semana":formatDate(day)}.</div>}
             </section>}
             {tab === "ordens" && <section className={styles.screen}>
               <p className={styles.eyebrow}>OPERAÇÃO</p><h1 className={styles.title}>Ordens de serviço</h1>
