@@ -4,3 +4,12 @@ test("dispatch prioritizes qualified available technician",()=>{const r=suggestT
 test("critical transactions are never confirmed offline",()=>{assert.equal(canConfirmOffline("field-update"),true);assert.equal(canConfirmOffline("finance"),false);assert.equal(canConfirmOffline("fiscal"),false)});
 
 test("dispatch score stays finite for invalid distance and workload",()=>{for(const value of [NaN,Infinity,-Infinity]){assert.ok(Number.isFinite(technicianScore({id:"1",name:"A",skills:[],active:true,available:true,openOrders:0,distanceKm:value},{id:"OS",client:"C",status:"Pendente"})));assert.ok(Number.isFinite(technicianScore({id:"1",name:"A",skills:[],active:true,available:true,openOrders:value,distanceKm:1},{id:"OS",client:"C",status:"Pendente"})));}});
+
+test("dispatch does not reward negative metrics and prioritizes valid nearby technicians",()=>{
+ const order={id:"OS",client:"C",status:"Pendente",skills:["Split"]};
+ const base={id:"a",name:"A",skills:["Split"],active:true,available:true,openOrders:0,distanceKm:0,documentsValid:true};
+ assert.ok(technicianScore({...base,distanceKm:-100},order)<=technicianScore(base,order));
+ assert.ok(technicianScore({...base,openOrders:-100},order)<=technicianScore(base,order));
+ const ranked=suggestTechnicians([{...base,id:"bad",distanceKm:NaN,openOrders:NaN},{...base,id:"good",distanceKm:1}],order);
+ assert.equal(ranked[0].id,"good");
+});
