@@ -65,6 +65,11 @@ export function prepareCustomerStructureSave(
   if (!customer.id || !customer.name.trim()) throw new Error("Cliente principal inválido.");
   if (!name) throw new Error("Informe o nome da estrutura.");
 
+  const existing = draft.id ? structures.find(item => item.id === draft.id) : undefined;
+  if (existing && !belongsToCustomer(existing, customer)) {
+    throw new Error("A estrutura selecionada pertence a outro cliente.");
+  }
+
   const parentId = String(draft.parentId || "").trim();
   const parent = parentId ? structures.find(item => item.id === parentId) : undefined;
   if (parentId && !parent) throw new Error("A estrutura superior selecionada não existe mais.");
