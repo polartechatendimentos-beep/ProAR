@@ -3,3 +3,5 @@
 .municipal-legacy-location{display:none!important}.os-location-bar:has(.customer-hierarchy){display:grid;grid-template-columns:minmax(0,1fr);align-items:start}.os-location-bar:has(.customer-hierarchy)>svg{display:none}label:has(>.customer-search-select>.customer-hierarchy){grid-column:1/-1}.customer-hierarchy-nodes li>.hierarchy-node-choice:disabled{opacity:1}
 
 @media(max-width:720px){.customer-hierarchy input,.customer-hierarchy button,.customer-hierarchy small,.customer-hierarchy-caption,.customer-hierarchy-path{font-size:14px}}
+
+.municipal-tree-details{color:#172b4d}.municipal-tree-details h3{color:#172b4d!important}.municipal-tree-details header small{color:#66758a!important}
