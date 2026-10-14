@@ -69,6 +69,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function boundedInteger(value: unknown, max: number) {
+  if (typeof value !== "number" && typeof value !== "string") return 0;
+  const parsed = typeof value === "string" ? Number(value.trim()) : value;
+  return Number.isSafeInteger(parsed) && parsed >= 0 && parsed <= max ? parsed : 0;
+}
+
 function short(value: unknown, max: number) {
   return String(value ?? "").trim().slice(0, max);
 }
@@ -106,11 +112,11 @@ export function mobileFieldOrders(
       fieldVersion: typeof order.fieldVersion === "number" && Number.isSafeInteger(order.fieldVersion) && order.fieldVersion >= 0 ? order.fieldVersion : 0,
       fieldExceptions: Array.isArray(order.fieldExceptions) ? order.fieldExceptions.filter(isRecord).slice(-20).map(item=>({id:short(item.id,100),kind:item.kind === "equipment" ? "equipment" as const : "signature" as const,reason:short(item.reason,1000),status:short(item.status,30),requestedBy:short(item.requestedBy,120),requestedAt:short(item.requestedAt,40),decidedBy:short(item.decidedBy,120),decidedAt:short(item.decidedAt,40),decisionReason:short(item.decisionReason,1000)})) : [],
       attendancePaused:Boolean(order.fieldAttendancePaused),
-      estimatedDurationMinutes:Number(order.estimatedDurationMinutes||0),
+      estimatedDurationMinutes:boundedInteger(order.estimatedDurationMinutes,1440),
       requests:Array.isArray(order.fieldRequests)?order.fieldRequests.filter(isRecord).slice(-50).map(item=>({id:short(item.id,100),kind:short(item.kind,50),note:short(item.note,2000),status:short(item.status,30),date:short(item.date,10),time:short(item.time,5),decidedBy:short(item.decidedBy,120),decisionNote:short(item.decisionNote,2000)})):[],
       events:Array.isArray(order.fieldEvents)?order.fieldEvents.filter(isRecord).slice(-100).map(item=>({id:short(item.id,100),kind:short(item.kind,50),note:short(item.note,2000),createdBy:short(item.createdBy,120),createdAt:short(item.createdAt,40)})):[],
-      delay:order.fieldDelay&&typeof order.fieldDelay==="object"?{minutes:Number((order.fieldDelay as Record<string,unknown>).minutes||0),note:short((order.fieldDelay as Record<string,unknown>).note,2000)}:undefined,
-      warranty:order.fieldWarranty&&typeof order.fieldWarranty==="object"?{days:Number((order.fieldWarranty as Record<string,unknown>).days||0),terms:short((order.fieldWarranty as Record<string,unknown>).terms,2000)}:undefined,
+      delay:isRecord(order.fieldDelay)?{minutes:boundedInteger((order.fieldDelay as Record<string,unknown>).minutes,1440),note:short((order.fieldDelay as Record<string,unknown>).note,2000)}:undefined,
+      warranty:isRecord(order.fieldWarranty)?{days:boundedInteger((order.fieldWarranty as Record<string,unknown>).days,3650),terms:short((order.fieldWarranty as Record<string,unknown>).terms,2000)}:undefined,
       observations: short(order.fieldObservations,4000),
       measurements: Object.fromEntries(["pressure","temperature","voltage","current"].filter(key=>typeof (order.fieldMeasurements as Record<string,unknown>|undefined)?.[key]==="string").map(key=>[key,short((order.fieldMeasurements as Record<string,unknown>)[key],30)])),
       photoCounts:{before:Array.isArray((order.photos as Record<string,unknown>|undefined)?.before)?(order.photos as Record<string,string[]>).before.length:0,after:Array.isArray((order.photos as Record<string,unknown>|undefined)?.after)?(order.photos as Record<string,string[]>).after.length:0},
