@@ -1,7 +1,7 @@
 import { ProARMobile } from "@/components/ProARMobile";
 
 export const metadata = {
-  title: "ProAR Field | Operação em Campo",
+  title: "ProAR Mobile | Operação em Campo",
   description: "Agenda e ordens de serviço da equipe de campo integradas ao ProAR",
 };
 
