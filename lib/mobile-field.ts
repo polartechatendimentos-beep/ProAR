@@ -65,6 +65,10 @@ export function assignedToSession(order: RecordItem, session: MobileFieldSession
   return assigned === username || Boolean(displayName && assigned === displayName);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 function short(value: unknown, max: number) {
   return String(value ?? "").trim().slice(0, max);
 }
@@ -99,11 +103,11 @@ export function mobileFieldOrders(
       equipmentIds,
       checkInAt: short(order.checkInAt, 40),
       fieldVersion: Number.isInteger(order.fieldVersion) ? Number(order.fieldVersion) : 0,
-      fieldExceptions: Array.isArray(order.fieldExceptions) ? order.fieldExceptions.slice(-20).map(item=>({id:short(item.id,100),kind:item.kind,reason:short(item.reason,1000),status:short(item.status,30),requestedBy:short(item.requestedBy,120),requestedAt:short(item.requestedAt,40),decidedBy:short(item.decidedBy,120),decidedAt:short(item.decidedAt,40),decisionReason:short(item.decisionReason,1000)})) : [],
+      fieldExceptions: Array.isArray(order.fieldExceptions) ? order.fieldExceptions.filter(isRecord).slice(-20).map(item=>({id:short(item.id,100),kind:item.kind,reason:short(item.reason,1000),status:short(item.status,30),requestedBy:short(item.requestedBy,120),requestedAt:short(item.requestedAt,40),decidedBy:short(item.decidedBy,120),decidedAt:short(item.decidedAt,40),decisionReason:short(item.decisionReason,1000)})) : [],
       attendancePaused:Boolean(order.fieldAttendancePaused),
       estimatedDurationMinutes:Number(order.estimatedDurationMinutes||0),
-      requests:Array.isArray(order.fieldRequests)?order.fieldRequests.slice(-50).map(item=>({id:short(item.id,100),kind:short(item.kind,50),note:short(item.note,2000),status:short(item.status,30),date:short(item.date,10),time:short(item.time,5),decidedBy:short(item.decidedBy,120),decisionNote:short(item.decisionNote,2000)})):[],
-      events:Array.isArray(order.fieldEvents)?order.fieldEvents.slice(-100).map(item=>({id:short(item.id,100),kind:short(item.kind,50),note:short(item.note,2000),createdBy:short(item.createdBy,120),createdAt:short(item.createdAt,40)})):[],
+      requests:Array.isArray(order.fieldRequests)?order.fieldRequests.filter(isRecord).slice(-50).map(item=>({id:short(item.id,100),kind:short(item.kind,50),note:short(item.note,2000),status:short(item.status,30),date:short(item.date,10),time:short(item.time,5),decidedBy:short(item.decidedBy,120),decisionNote:short(item.decisionNote,2000)})):[],
+      events:Array.isArray(order.fieldEvents)?order.fieldEvents.filter(isRecord).slice(-100).map(item=>({id:short(item.id,100),kind:short(item.kind,50),note:short(item.note,2000),createdBy:short(item.createdBy,120),createdAt:short(item.createdAt,40)})):[],
       delay:order.fieldDelay&&typeof order.fieldDelay==="object"?{minutes:Number((order.fieldDelay as Record<string,unknown>).minutes||0),note:short((order.fieldDelay as Record<string,unknown>).note,2000)}:undefined,
       warranty:order.fieldWarranty&&typeof order.fieldWarranty==="object"?{days:Number((order.fieldWarranty as Record<string,unknown>).days||0),terms:short((order.fieldWarranty as Record<string,unknown>).terms,2000)}:undefined,
       observations: short(order.fieldObservations,4000),
@@ -111,7 +115,7 @@ export function mobileFieldOrders(
       photoCounts:{before:Array.isArray((order.photos as Record<string,unknown>|undefined)?.before)?(order.photos as Record<string,string[]>).before.length:0,after:Array.isArray((order.photos as Record<string,unknown>|undefined)?.after)?(order.photos as Record<string,string[]>).after.length:0},
       diagnosis: short(order.diagnosis, 4000),
       executedService: short(order.executedService, 8000),
-      mobileChecklist: Object.fromEntries(Object.entries(order.mobileChecklist && typeof order.mobileChecklist === "object" ? order.mobileChecklist : {}).filter(([,value])=>typeof value === "boolean")) as Record<string,boolean>,
+      mobileChecklist: Object.fromEntries(Object.entries(isRecord(order.mobileChecklist) ? order.mobileChecklist : {}).filter(([,value])=>typeof value === "boolean")) as Record<string,boolean>,
       evidence: { before: Boolean((order.photos as Record<string,unknown[]>|undefined)?.before?.length), after: Boolean((order.photos as Record<string,unknown[]>|undefined)?.after?.length), signature: Boolean(order.customerSignature) },
     });
     if (results.length >= Math.max(1, Math.min(500, max))) break;
