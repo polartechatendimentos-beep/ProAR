@@ -30,7 +30,7 @@ export function FieldSupportPanel({visible}:{visible:boolean}) {
   async function run(task:()=>Promise<unknown>){setBusy(true);setNotice("");try{await task();}catch(error){setNotice(error instanceof Error?error.message:"Ação não confirmada.");}finally{setBusy(false);}}
   async function sos(){if(!window.confirm("Enviar um pedido de ajuda à gestão da empresa com sua localização atual, se disponível?"))return;
     let point:Item|undefined;try{point=await position();}catch{/* SOS remains useful even if permission or GPS fails. */}
-    await save("sos",{message:"Solicitação de ajuda pelo ProAR Field",...(point?{point}:{})});setNotice("SOS registrado na central da empresa. Aguarde o retorno da gestão.");
+    await save("sos",{message:"Solicitação de ajuda pelo ProAR Mobile",...(point?{point}:{})});setNotice("SOS registrado na central da empresa. Aguarde o retorno da gestão.");
   }
   const records=data?.records||[],vehicles=records.filter(item=>item.kind==="vehicle"),selectedVehicle=vehicleId||String(vehicles.find(item=>item.assignedEmployeeId===data?.employee?.employeeId)?.id||vehicles[0]?.id||"");
   const sosEvents=records.filter(item=>item.kind==="sos"&&!records.some(ack=>ack.kind==="sos-ack"&&ack.sosId===item.id&&ack.decision==="resolved"));
