@@ -27,12 +27,17 @@ export function validatePtDataset(dataset:RefrigerantPtDataset){
   if(!dataset.source.trim()||!dataset.sourceUrl.trim())reasons.push("Fonte rastreável ausente");
   if(!dataset.verified)reasons.push("Dataset não verificado");
   if(dataset.points.length<2)reasons.push("Tabela insuficiente");
+  if(dataset.points.some(point=>!point || [point.temperatureC,point.pressureBar,point.pressurePsi].some(value=>!Number.isFinite(value)) || [point.dewPressureBar,point.bubblePressureBar].some(value=>value!==undefined&&!Number.isFinite(value)))) {
+    reasons.push("Tabela contém temperatura ou pressão inválida");
+    return {ok:false,reasons};
+  }
   const ordered=[...dataset.points].sort((a,b)=>a.temperatureC-b.temperatureC);
   for(let i=1;i<ordered.length;i++)if(ordered[i].temperatureC===ordered[i-1].temperatureC)reasons.push("Temperatura duplicada");
   return {ok:reasons.length===0,reasons};
 }
 
 export function interpolatePt(dataset:RefrigerantPtDataset,temperatureC:number){
+  if(!Number.isFinite(temperatureC)) return {ok:false,error:"Informe uma temperatura numérica válida."};
   const validation=validatePtDataset(dataset);
   if(!validation.ok) return {ok:false,error:validation.reasons.join("; ")};
   const points=[...dataset.points].sort((a,b)=>a.temperatureC-b.temperatureC);
