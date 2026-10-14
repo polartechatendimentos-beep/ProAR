@@ -19,3 +19,10 @@ Preserva registros e vínculos antigos. Referências cruzadas por customerId,
 legados ambíguos, ciclos e pais ausentes não permitem seleção indevida.
 A aplicação universal aos demais perfis e a auditoria completa das 520
 melhorias permanecem pendentes.
+
+## MEL-005 — foco de teclado
+
+Regra compartilhada em app/globals.css para botões, links, inputs, selects,
+textareas, summaries, role=button e tabindex usando :focus-visible.
+Outline de 2px #38bdf8 com offset de 2px, preservado contra resets de outline.
+Esta entrega não certifica a acessibilidade WCAG AA de todo o sistema.

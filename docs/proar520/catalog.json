@@ -54,7 +54,13 @@
       "detail": "Aplicar outline de 2px #38bdf8 com offset de 2px em todos os elementos interativos (:focus-visible) para operação sem mouse.",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "implementado",
+      "evidence": {
+        "files": [
+          "app/globals.css"
+        ],
+        "scope": "Anel de foco 2px #38bdf8 e offset 2px em elementos interativos :focus-visible no layout compartilhado. Publicação depende de CI e deploy do lote."
+      }
     },
     {
       "id": "MEL-006",
