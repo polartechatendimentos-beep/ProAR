@@ -1,7 +1,7 @@
 {
   "source": "https://chatgpt.com/share/6acf4bff-1854-83e8-963f-8d6c85cd4fc4?ogimg=plain",
   "asOf": "2026-10-14",
-  "note": "Status inicial conservador: não auditado não significa ausente. Funcionalidades existentes exigem evidência antes de contabilização. A numeração dos dois catálogos é independente.",
+  "note": "Não auditado não significa ausente. Parcial registra uma entrega relacionada sem concluir todos os critérios do item. A numeração dos dois catálogos é independente. PRs são evidências; apenas itens integralmente auditados podem ser contabilizados como publicados.",
   "items": [
     {
       "id": "base500:001",
@@ -211,12 +211,25 @@
     {
       "id": "base500:042",
       "suggestion": "Impedir saldos negativos por transação",
-      "status": "nao_auditado"
+      "status": "parcial",
+      "evidence": {
+        "prs": [
+          92
+        ],
+        "scope": "Saldo de certames segregado por OS; outras transações do sistema ainda não auditadas."
+      }
     },
     {
       "id": "base500:043",
       "suggestion": "Adicionar idempotência a operações críticas",
-      "status": "nao_auditado"
+      "status": "parcial",
+      "evidence": {
+        "prs": [
+          89,
+          90
+        ],
+        "scope": "Há controle de repetição em fluxos mobile; idempotência de todas as operações críticas ainda não auditada."
+      }
     },
     {
       "id": "base500:044",
@@ -3771,7 +3784,13 @@
     {
       "id": "adicional2000:0254",
       "suggestion": "Criar validação contextual dos campos obrigatórios de medição de superaquecimento em visita, com mensagens específicas para dados incompletos.",
-      "status": "nao_auditado"
+      "status": "parcial",
+      "evidence": {
+        "prs": [
+          92
+        ],
+        "scope": "Entradas de interpolação PT validadas; medição completa de superaquecimento em visita ainda pendente."
+      }
     },
     {
       "id": "adicional2000:0255",
@@ -7161,7 +7180,13 @@
     {
       "id": "adicional2000:0932",
       "suggestion": "Especificar os estados intermediários e finais de empenho com saldo distribuído entre OS, impedindo transições incompatíveis com a regra de negócio.",
-      "status": "nao_auditado"
+      "status": "parcial",
+      "evidence": {
+        "prs": [
+          92
+        ],
+        "scope": "Correção relacionada ao saldo de certames por OS; estados completos do fluxo de empenhos ainda pendentes."
+      }
     },
     {
       "id": "adicional2000:0933",
@@ -7171,7 +7196,13 @@
     {
       "id": "adicional2000:0934",
       "suggestion": "Criar validação contextual dos campos obrigatórios de empenho com saldo distribuído entre OS, com mensagens específicas para dados incompletos.",
-      "status": "nao_auditado"
+      "status": "parcial",
+      "evidence": {
+        "prs": [
+          92
+        ],
+        "scope": "Validação de valor unitário e overflow; validações completas do fluxo de empenhos ainda pendentes."
+      }
     },
     {
       "id": "adicional2000:0935",
@@ -9321,7 +9352,13 @@
     {
       "id": "adicional2000:1364",
       "suggestion": "Criar validação contextual dos campos obrigatórios de renderização de 10 mil ordens, com mensagens específicas para dados incompletos.",
-      "status": "nao_auditado"
+      "status": "parcial",
+      "evidence": {
+        "prs": [
+          89
+        ],
+        "scope": "Limite inválido de projeção mobile corrigido; renderização de 10 mil ordens não homologada."
+      }
     },
     {
       "id": "adicional2000:1365",
