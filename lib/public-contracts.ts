@@ -99,7 +99,7 @@ export class CertameBalanceError extends Error {
 const precision = (value: number) => Math.round((value + Number.EPSILON) * 1000) / 1000;
 
 function assertPositiveQuantity(quantity: number) {
-  if (!Number.isFinite(quantity) || quantity <= 0 || precision(quantity) <= 0) {
+  if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(precision(quantity)) || precision(quantity) <= 0) {
     throw new CertameBalanceError("Informe uma quantidade maior que zero.");
   }
 }
@@ -132,6 +132,15 @@ export function calculateCertameItemBalance(
 
 export function createCertameMovement(input: CertameMovementInput): CertameMovement {
   assertPositiveQuantity(input.quantity);
+  if (!Number.isFinite(input.item.contractedQuantity) || input.item.contractedQuantity < 0
+    || !Number.isFinite(input.item.unitValue) || input.item.unitValue < 0
+    || !Number.isFinite(precision(input.item.contractedQuantity * input.item.unitValue))) {
+    throw new CertameBalanceError("O item do Certame possui quantidade ou valor inválido. Regularize o cadastro antes de movimentar.");
+  }
+  if (input.existingMovements.some(movement => movement.certameId === input.item.certameId && movement.itemId === input.item.id
+    && [movement.reservedDelta, movement.executedDelta, movement.cancelledDelta].some(delta => !Number.isFinite(delta)))) {
+    throw new CertameBalanceError("O histórico do item contém uma movimentação numérica inválida. Revise o histórico antes de continuar.");
+  }
   if (!["Reserva", "Execução", "Liberação", "Estorno", "Ajuste autorizado"].includes(input.type)) {
     throw new CertameBalanceError("Tipo de movimentação do Certame inválido.");
   }
@@ -144,12 +153,17 @@ export function createCertameMovement(input: CertameMovementInput): CertameMovem
     ? calculateCertameItemBalance(input.item, input.existingMovements.filter(movement => movement.serviceOrderId === input.serviceOrderId))
     : balance;
 
+  if ([balance, orderBalance].some(current => [current.reservedQuantity, current.executedQuantity, current.cancelledQuantity, current.availableQuantity, current.availableValue].some(value => !Number.isFinite(value))
+    || current.reservedQuantity < 0 || current.executedQuantity < 0 || current.cancelledQuantity < 0)) {
+    throw new CertameBalanceError("O saldo do item está inconsistente. Revise o histórico antes de continuar.");
+  }
+
   let reservedDelta = 0;
   let executedDelta = 0;
   let cancelledDelta = 0;
 
   if (input.type === "Reserva") {
-    if (!input.allowOverConsumption && quantity > balance.availableQuantity) {
+    if (input.allowOverConsumption !== true && quantity > balance.availableQuantity) {
       throw new CertameBalanceError(
         `Saldo do Certame insuficiente. Disponível: ${balance.availableQuantity}.`,
       );
@@ -183,6 +197,9 @@ export function createCertameMovement(input: CertameMovementInput): CertameMovem
     if (!input.reason?.trim()) {
       throw new CertameBalanceError("Informe o motivo do ajuste autorizado.");
     }
+    if (input.allowOverConsumption !== true && quantity > balance.availableQuantity) {
+      throw new CertameBalanceError("O ajuste ultrapassa o saldo disponível do Certame.");
+    }
     cancelledDelta = quantity;
   }
 
@@ -207,6 +224,12 @@ export function assertUniqueMovement(
   movements: CertameMovement[],
   candidate: Pick<CertameMovement, "id" | "correlationId">,
 ) {
+  if (typeof candidate.id !== "string" || !candidate.id.trim()) {
+    throw new CertameBalanceError("Informe um identificador válido para a movimentação.");
+  }
+  if (candidate.correlationId !== undefined && (typeof candidate.correlationId !== "string" || !candidate.correlationId.trim())) {
+    throw new CertameBalanceError("Informe uma correlação válida para a movimentação.");
+  }
   const duplicate = movements.some(movement =>
     movement.id === candidate.id
       || (candidate.correlationId && movement.correlationId === candidate.correlationId),
