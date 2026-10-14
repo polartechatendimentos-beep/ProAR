@@ -1,6 +1,6 @@
 export type TenderStatusInput = { validationStatus?: string; dataEncerramentoProposta?: string; situacaoCompraNome?:string; situacaoNome?:string; status?:string };
 export type TenderSituation = "aberta" | "prazo_encerrado" | "suspensa" | "cancelada" | "concluida" | "validacao";
-const normalize=(value:unknown)=>String(value??"").normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").toLowerCase().trim();
+const normalize=(value:unknown)=>String(value??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
 /** Distinguish proposal deadlines from official lifecycle. A passed deadline is not homologation. */
 export function tenderSituation(t:TenderStatusInput,now:Date=new Date()):TenderSituation {
  const source=normalize(t.situacaoCompraNome||t.situacaoNome||t.status);
