@@ -62,13 +62,15 @@ export function prepareCustomerStructureSave(
   customer: CustomerStructureCustomer,
   draft: CustomerStructureRecord,
   structures: CustomerStructureRecord[],
+  customers?: CustomerStructureCustomer[],
 ) {
   const name = String(draft.name || "").trim();
   if (!customer.id || !customer.name.trim()) throw new Error("Cliente principal inválido.");
   if (!name) throw new Error("Informe o nome da estrutura.");
 
   const existing = draft.id ? structures.find(item => item.id === draft.id) : undefined;
-  if (existing && (!existing.customerId || existing.customerId !== customer.id)) {
+  const legacyOwnerConfirmed = existing && !existing.customerId && existing.client === customer.name && customers?.filter(item => normalizeLevel(item.name) === normalizeLevel(customer.name)).length === 1 && customers.some(item => item.id === customer.id);
+  if (existing && existing.customerId !== customer.id && !legacyOwnerConfirmed) {
     throw new Error("A estrutura existente não possui vínculo confirmado com este cliente. Regularize o cadastro antes de editar.");
   }
 
@@ -79,9 +81,11 @@ export function prepareCustomerStructureSave(
   if (parent && !parent.customerId) throw new Error("A estrutura superior possui vínculo legado sem ID do cliente. Regularize o cadastro antes de criar novos vínculos.");
   if (parentId === draft.id) throw new Error("Uma estrutura não pode ser vinculada a ela mesma.");
   if (draft.id && descendantsOf(draft.id, structures).has(parentId)) throw new Error("Não é permitido criar um ciclo na hierarquia.");
-  validatePublicHierarchy(customer, draft, parent);
+  const unchangedHierarchy = existing && String(existing.parentId || existing.parentStructureId || "") === parentId && normalizeLevel(existing.hierarchyLevel || existing.category) === normalizeLevel(draft.hierarchyLevel || draft.category);
+  if (!unchangedHierarchy) validatePublicHierarchy(customer, draft, parent);
 
   const record: CustomerStructureRecord = {
+    ...existing,
     ...draft,
     name,
     client: customer.name,
@@ -97,4 +101,25 @@ export function prepareCustomerStructureSave(
 
   const unitCount = nextStructures.filter(item => belongsToCustomer(item, customer)).length;
   return { record, nextStructures, unitCount };
+}
+
+/** Inactivation preserves legacy topology and requires an unambiguous owner. */
+export function prepareCustomerStructureInactivation(
+  customer: CustomerStructureCustomer,
+  id: string,
+  structures: CustomerStructureRecord[],
+  customers: CustomerStructureCustomer[],
+  reason: string,
+) {
+  const existing = structures.find(item => item.id === id);
+  if (!existing) throw new Error("A estrutura não existe mais. Atualize o cadastro.");
+  const uniqueOwner = customers.filter(item => normalizeLevel(item.name) === normalizeLevel(customer.name));
+  if (existing.customerId ? existing.customerId !== customer.id : existing.client !== customer.name || uniqueOwner.length !== 1 || uniqueOwner[0].id !== customer.id) {
+    throw new Error("Não foi possível confirmar o cliente desta estrutura.");
+  }
+  if (!reason.trim()) throw new Error("Informe o motivo da inativação.");
+  const record = {...existing, customerId:customer.id, client:customer.name, status:"Inativo", changeReason:reason.trim()};
+  const nextStructures = structures.map(item => item.id === id ? record : item);
+  const unitCount = nextStructures.filter(item => belongsToCustomer(item, customer) && !/inativ|cancelad/i.test(String(item.status || ""))).length;
+  return {record, nextStructures, unitCount};
 }

@@ -58,7 +58,7 @@ import { IntegrityAudit } from "@/components/IntegrityAudit";
 import { calculateCertameItemBalance, createCertameMovement, financialOutstandingValue, financialRealizedValue } from "@/lib/public-contracts";
 import { improveTechnicalText } from "@/lib/text-assist";
 import { WORK_STATUSES, getWorkProgress, getWorkStatusColor, normalizeWorkStatus, type WorkStatus } from "@/lib/work-status";
-import { prepareCustomerStructureSave } from "@/lib/customer-structure";
+import { prepareCustomerStructureSave, prepareCustomerStructureInactivation } from "@/lib/customer-structure";
 import { deriveOperationalActions } from "@/lib/action-center";
 import { OperationsActionCenter } from "@/components/OperationsActionCenter";
 import { DashboardWorkspace } from "@/components/DashboardWorkspace";
@@ -4644,7 +4644,7 @@ export default function Home() {
       return false;
     }
   };
-  const saveCustomerStructure = async (record: ModuleRecord) => {
+  const saveCustomerStructure = async (record: ModuleRecord, inactivateOnly = false) => {
     if (!navigator.onLine) {
       showFeedback("Falha ao salvar estrutura • sem conexão com o banco.", "error", 5000);
       return false;
@@ -4656,7 +4656,9 @@ export default function Home() {
     }
     let prepared;
     try {
-      prepared = prepareCustomerStructureSave(customer, record, moduleRecords["Unidades e setores"] ?? []);
+      prepared = inactivateOnly
+        ? prepareCustomerStructureInactivation(customer,record.id,moduleRecords["Unidades e setores"] ?? [],customerRecords,String(record.changeReason || "Inativação solicitada no cadastro"))
+        : prepareCustomerStructureSave(customer, record, moduleRecords["Unidades e setores"] ?? [], customerRecords);
     } catch (error) {
       showFeedback(error instanceof Error ? error.message : "Vínculo estrutural inválido.", "error", 5000);
       return false;
@@ -4711,49 +4713,23 @@ export default function Home() {
       return true;
     } catch (error) {
       console.error("Falha ao salvar estrutura do cliente", { customerId: customer.id, recordId: record.id, error });
-      showFeedback("Falha ao salvar estrutura • nenhuma confirmação foi registrada.", "error", 6000);
+      showFeedback(error instanceof Error ? error.message : "Falha ao salvar estrutura • nenhuma confirmação foi registrada.", "error", 6000);
       setSyncPhase("idle");
       return false;
     }
   };
   const deleteCustomerStructure = async (record: ModuleRecord) => {
     if (!hasAction("Clientes", "Editar")) return false;
-    const structures = moduleRecords["Unidades e setores"] ?? [];
-    const id = String(record.id);
-    const name = String(record.name || "estrutura");
-    const children = structures.filter(item => String(item.parentId ?? "") === id);
-    const linkedEquipment = (moduleRecords["Equipamentos"] ?? []).filter(item => {
-      const raw = item as unknown as Record<string, unknown>;
-      const ids = [raw.structureId,raw.unitId,raw.sectorId,raw.roomId,raw.environmentId].filter(Boolean).map(String);
-      const names = [raw.unit,raw.equipmentUnit,raw.parentUnit,raw.room,raw.environment,raw.ambiente,raw.installationLocation,raw.sector,raw.setor].filter(Boolean).map(String);
-      return ids.includes(id) || names.includes(name);
-    });
-    const linkedOrders = serviceOrders.filter(order => order.unit === name || String((order as unknown as Record<string,unknown>).structureId ?? "") === id);
-    if (children.length || linkedEquipment.length || linkedOrders.length) {
-      const details = [children.length ? `${children.length} estrutura(s) filha(s)` : "", linkedEquipment.length ? `${linkedEquipment.length} equipamento(s)` : "", linkedOrders.length ? `${linkedOrders.length} OS` : ""].filter(Boolean).join(", ");
-      if (!window.confirm(`“${name}” possui ${details}. A exclusão física foi bloqueada para preservar o histórico. Deseja inativar esta estrutura?`)) return false;
-      return Boolean(await saveCustomerStructure({ ...record, status:"Inativo", changeReason:`Inativada com vínculos preservados: ${details}` }));
-    }
-    if (!window.confirm(`Excluir definitivamente “${name}”? Esta estrutura não possui filhos, equipamentos ou OS vinculados.`)) return false;
-    if (!navigator.onLine) { showFeedback("Falha ao excluir estrutura • sem conexão com o banco.", "error", 5000); return false; }
-    const customer = record.customerId ? customerRecords.find(item=>item.id===record.customerId) : customerRecords.find(item => item.name === record.client);
-    const nextStructures = structures.filter(item => String(item.id) !== id);
-    const updatedCustomers = customer ? customerRecords.map(item => item.id === customer.id ? { ...item, units: nextStructures.filter(structure => structure.customerId === customer.id || structure.client === customer.name).length } : item) : customerRecords;
-    const updatedModules = appendAudit({ ...moduleRecords, "Unidades e setores": nextStructures }, "Estrutura excluída", `Clientes • ${customer?.name || record.client || "Cliente"} • ${name}`, "Exclusão confirmada sem vínculos ativos.");
-    setSyncPhase("syncing");
-    try {
-      const response = await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({companyId:activeCompany.id,customers:updatedCustomers,serviceOrders,moduleRecords:updatedModules,_baseRevision:stateRevision}) });
-      const result = await response.json();
-      if (response.status === 409 && result.state) {
-        setCustomerRecords(result.state.customers ?? customerRecords); setServiceOrders(result.state.serviceOrders ?? serviceOrders); setModuleRecords(mergeImportedServices(result.state.moduleRecords ?? moduleRecords)); setStateRevision(Number(result.state._revision || 0)); setSyncPhase("idle"); showFeedback("Conflito ao excluir • dados mais recentes do servidor foram preservados.", "warning", 6000); return false;
-      }
-      if (!response.ok || !result.state) throw new Error(result.error || "Falha ao excluir.");
-      const confirmedCustomers=result.state.customers??updatedCustomers, confirmedOrders=result.state.serviceOrders??serviceOrders, confirmedModules=mergeImportedServices(result.state.moduleRecords??updatedModules);
-      setCustomerRecords(confirmedCustomers); setServiceOrders(confirmedOrders); setModuleRecords(confirmedModules); setStateRevision(Number(result.state._revision||stateRevision+1));
-      localStorage.setItem(companyStorageKey(activeCompany.id,"customers"),JSON.stringify(confirmedCustomers)); localStorage.setItem(companyStorageKey(activeCompany.id,"service-orders"),JSON.stringify(confirmedOrders)); localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(confirmedModules));
-      setSyncPhase("complete"); window.setTimeout(()=>setSyncPhase("idle"),1000); showFeedback(`Estrutura “${name}” excluída com sucesso.`,"success"); return true;
-    } catch(error) { console.error("Falha ao excluir estrutura",{id,error}); setSyncPhase("idle"); showFeedback("Falha ao excluir estrutura • nenhuma alteração foi confirmada.","error",6000); return false; }
+    const customer = record.customerId ? customerRecords.find(item=>item.id===record.customerId) : customerRecords.find(item=>item.name===record.client);
+    if (!customer) { showFeedback("Cliente desta estrutura não encontrado.","error",5000); return false; }
+    const current = (moduleRecords["Unidades e setores"] ?? []).find(item=>item.id===record.id);
+    if (!current) { showFeedback("A estrutura não existe mais. Atualize o cadastro.","warning",5000); return false; }
+    if (!window.confirm(`Inativar “${current.name}”? Ela deixará de aparecer nos seletores. O registro e seus vínculos serão preservados no histórico.`)) return false;
+    const reason = window.prompt("Motivo da inativação (ex.: setor duplicado):");
+    if (!reason?.trim()) return false;
+    return Boolean(await saveCustomerStructure({...current, customerId:customer.id, client:customer.name, status:"Inativo", changeReason:reason.trim()},true));
   };
+
   const operationalRetryRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const runOperationalCommand = async (command: OperationalCommand) => {
     const fingerprint = JSON.stringify({ action: command.action, recordId: command.recordId, data: command.data });
