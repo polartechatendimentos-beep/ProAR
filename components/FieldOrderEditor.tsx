@@ -6,6 +6,7 @@ import { loadOrderDraft, saveOrderDraft, clearOrderDraft, type OrderDraft } from
 import { LocalFieldAssistant } from "./LocalFieldAssistant";
 import { FieldPhotoCollection } from "./FieldPhotoCollection";
 import { fieldMeasurements, reportTemplates, type FieldMeasurements } from "@/lib/mobile-report-details";
+import { FieldAttendanceControls } from "./FieldAttendanceControls";
 import { FieldOrderTools } from "./FieldOrderTools";
 import styles from "./ProARFieldMobile.module.css";
 
@@ -98,6 +99,7 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
     <button type="button" className={styles.secondaryAction} onClick={()=>{canvas.current?.getContext("2d")?.clearRect(0,0,500,150);setSignature("");}}>Limpar assinatura</button>
     <button type="button" className={styles.primaryAction} disabled={busy||!draftReady||Boolean(olderDraft)} onClick={()=>void execute("save")}>Salvar relatório e evidências</button>
     <button type="button" className={styles.secondaryAction} disabled={busy} onClick={()=>void execute("finish")}>Concluir OS</button>
+    <FieldAttendanceControls order={order} busy={busy||!draftReady||Boolean(olderDraft)} canApprove={canApprove} send={sendExtra}/>
     <LocalFieldAssistant diagnosis={diagnosis} report={report} disabled={busy||!draftReady||Boolean(olderDraft)} onApply={setReport}/>
     <FieldOrderTools order={order} busy={busy||!draftReady||Boolean(olderDraft)} canApprove={canApprove} send={sendExtra}/>
   </article>;
