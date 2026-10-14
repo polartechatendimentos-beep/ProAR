@@ -9,7 +9,7 @@ import { RouteError, validatePoint } from "../../../../lib/work-routes";
 import { prepareOperationalState, independentOperationalRows, OperationError, type ErpState } from "../../../../lib/operational-ledger";
 import { commitNeonOperationalState, PRIMARY_DATABASE_URL, databaseFetch } from "../../../../lib/supabase-rest";
 import { tenantHeaders } from "../../../../lib/tenant-rest";
-import { improveFieldOrder, fieldEquipmentHistory, type ImprovementCommand } from "../../../../lib/mobile-order-improvements";
+import { improveFieldOrder, mobileMutationActions, fieldEquipmentHistory, type ImprovementCommand } from "../../../../lib/mobile-order-improvements";
 import { assignedToSession } from "../../../../lib/mobile-field";
 
 export const runtime="nodejs";
@@ -36,7 +36,7 @@ export async function POST(request:NextRequest) {
         const point=validatePoint(command.point,new Date().toISOString());
         if(!point.reliable || Math.abs(Date.now()-Date.parse(point.capturedAt))>120000)throw new FieldSupportError("Atualize o sinal GPS com precisão de até 100 m.");
       }
-      const improvement=["register-equipment","request-exception","decide-exception"].includes(command.action)?improveFieldOrder(order,state.moduleRecords?.Equipamentos || [],command as ImprovementCommand,{...session,employeeId:c.actor?.employeeId},hasPermission(session,"aprovacoes.aprovar"),new Date().toISOString()):null;
+      const improvement=mobileMutationActions.includes(command.action)?improveFieldOrder(order,state.moduleRecords?.Equipamentos || [],command as ImprovementCommand,{...session,employeeId:c.actor?.employeeId},hasPermission(session,"aprovacoes.aprovar"),new Date().toISOString()):null;
       const nextOrder=improvement?.order || applyFieldOrder(order,command as FieldOrderCommand,{...session,employeeId:c.actor?.employeeId},new Date().toISOString(),state.moduleRecords?.Equipamentos || []);
       const incoming={...state,serviceOrders:state.serviceOrders!.map(item=>item.id===command.orderId?nextOrder:item),...(improvement?{moduleRecords:{...state.moduleRecords,Equipamentos:improvement.equipment}}:{})};
       // Only the server-built, customer/location-scoped equipment record gets this permission.
