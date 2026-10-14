@@ -66,8 +66,8 @@ export function prepareCustomerStructureSave(
   if (!name) throw new Error("Informe o nome da estrutura.");
 
   const existing = draft.id ? structures.find(item => item.id === draft.id) : undefined;
-  if (existing && !belongsToCustomer(existing, customer)) {
-    throw new Error("A estrutura selecionada pertence a outro cliente.");
+  if (existing && (!existing.customerId || existing.customerId !== customer.id)) {
+    throw new Error("A estrutura existente não possui vínculo confirmado com este cliente. Regularize o cadastro antes de editar.");
   }
 
   const parentId = String(draft.parentId || "").trim();
