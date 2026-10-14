@@ -17,7 +17,7 @@ export function FieldOrderTools({order,busy,canApprove,send}:{order:MobileFieldO
       <label className={styles.formLabel}>Marca<input value={brand} onChange={e=>setBrand(e.target.value)} maxLength={100}/></label>
       <label className={styles.formLabel}>Modelo<input value={model} onChange={e=>setModel(e.target.value)} maxLength={100}/></label>
       <label className={styles.formLabel}>Número de série<input value={serial} onChange={e=>setSerial(e.target.value)} maxLength={120}/></label>
-      <label className={styles.formLabel}>Foto de identificação<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={e=>{const file=e.target.files?.[0];if(file)void compressFieldPhoto(file).then(setPhoto).catch(e=>setError(e.message));}}/></label>
+      <label className={styles.formLabel}>Foto de identificação • câmera ou galeria<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>{const file=e.target.files?.[0];if(file)void compressFieldPhoto(file).then(setPhoto).catch(e=>setError(e.message));}}/></label>
       <button type="button" disabled={busy||!name.trim()||!photo} className={styles.primaryAction} onClick={()=>void send("register-equipment",{equipment:{name,brand,model,serialNumber:serial,photo}})}>Cadastrar e vincular equipamento</button>
     </details>
     <details className={styles.journeyPanel}><summary>Exceções e aprovação do gestor</summary>
