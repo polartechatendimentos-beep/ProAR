@@ -4,8 +4,8 @@ import { Building2, ChevronDown, ChevronRight, MapPin, Search } from "lucide-rea
 import { customerHierarchy, filterHierarchy, hierarchySelection, hierarchyCounts, type HierarchyCustomer, type HierarchyRecord, type HierarchySelection } from "@/lib/customer-hierarchy";
 import { useCustomerHierarchy } from "./CustomerHierarchyContext";
 import "./customer-hierarchy.css";
-type Props = { customer: HierarchyCustomer; records: HierarchyRecord[]; customers?: HierarchyCustomer[]; value?: string; onSelect?: (selection: HierarchySelection) => void; includeInactive?: boolean; disabled?: boolean; query?: string };
-export function CustomerHierarchyTree({customer,records,customers,value="",onSelect,includeInactive=false,disabled=false,query:externalQuery}:Props) {
+type Props = { customer: HierarchyCustomer; records: HierarchyRecord[]; customers?: HierarchyCustomer[]; value?: string; onSelect?: (selection: HierarchySelection) => void; onEdit?: (id:string) => void; includeInactive?: boolean; disabled?: boolean; query?: string };
+export function CustomerHierarchyTree({customer,records,customers,value="",onSelect,includeInactive=false,disabled=false,onEdit,query:externalQuery}:Props) {
   const context=useCustomerHierarchy();
   const [query,setQuery]=useState("");
   const [collapsed,setCollapsed]=useState<Set<string>>(()=>new Set());
@@ -25,7 +25,7 @@ export function CustomerHierarchyTree({customer,records,customers,value="",onSel
     <ul className="customer-hierarchy-nodes">{visible.map(node=><li key={node.id} style={{paddingLeft:Math.min(node.depth,8)*16+12}} className={node.id===value?"selected":""}>
       {parents.has(node.id)?<button type="button" className="hierarchy-toggle" aria-label={`${collapsed.has(node.id)?"Expandir":"Recolher"} ${node.name}`} aria-expanded={Boolean(search)||!collapsed.has(node.id)} onClick={()=>toggle(node.id)}>{collapsed.has(node.id)&&!search?<ChevronRight size={14}/>:<ChevronDown size={14}/>}</button>:<span className="hierarchy-toggle"/>}
       {node.kind==="room"?<MapPin size={14}/>:<Building2 size={14}/>}
-      <button type="button" className="hierarchy-node-choice" disabled={disabled || !onSelect || node.issue} aria-pressed={node.id===value} onClick={()=>onSelect?.(hierarchySelection(customer,nodes,node.id))}><span>{node.name}</span><small>{node.kind==="unit"?"Filial/Unidade":node.kind==="sector"?"Setor":node.kind==="room"?"Ambiente":node.level}{node.issue?" · vínculo a revisar":""}{/inativ/i.test(String(node.record.status))?" · inativo":""} · {counts.get(node.id)?.orders || 0} OS · {counts.get(node.id)?.equipment || 0} equipamentos</small></button>
+      <button type="button" className="hierarchy-node-choice" disabled={disabled || !onSelect || node.issue} aria-pressed={node.id===value} onDoubleClick={()=>!disabled && !node.issue && onEdit?.(node.id)} onClick={()=>onSelect?.(hierarchySelection(customer,nodes,node.id))}><span>{node.name}</span><small>{node.kind==="unit"?"Filial/Unidade":node.kind==="sector"?"Setor":node.kind==="room"?"Ambiente":node.level}{node.issue?" · vínculo a revisar":""}{/inativ/i.test(String(node.record.status))?" · inativo":""} · {counts.get(node.id)?.orders || 0} OS · {counts.get(node.id)?.equipment || 0} equipamentos</small></button>
     </li>)}</ul>
     {!nodes.length && <p className="customer-hierarchy-empty">Nenhuma unidade cadastrada nesta Prefeitura.</p>}
     {nodes.length>0&&!visible.length && <p className="customer-hierarchy-empty">Nenhum local encontrado.</p>}

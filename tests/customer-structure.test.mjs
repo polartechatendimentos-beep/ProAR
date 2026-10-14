@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { prepareCustomerStructureSave } from "../lib/customer-structure.ts";
+import { prepareCustomerStructureSave, prepareCustomerStructureInactivation } from "../lib/customer-structure.ts";
 
 test("Prefeitura mantém hierarquia Prefeitura → Secretaria → Unidade → Sala", () => {
   const prefeitura = { id: "CLI-PREF-BALSAMO-TESTE", name: "Prefeitura Municipal de Bálsamo", organizationType:"Prefeitura" };
@@ -79,4 +79,34 @@ test("hierarquia bloqueia auto vínculo e ciclos", () => {
   ];
   assert.throws(() => prepareCustomerStructureSave(cliente, { ...structures[0], parentId: "A" }, structures), /ela mesma/);
   assert.throws(() => prepareCustomerStructureSave(cliente, { ...structures[0], parentId: "B" }, structures), /ciclo/);
+});
+
+
+test("inactivation preserves duplicate legacy sectors by ID without hierarchy validation",()=>{
+ const c={id:"p",name:"Prefeitura A"};
+ const items=[{id:"first",name:"Educação",client:c.name,category:"Setor",status:"Ativo",createdAt:"old"},{id:"duplicate",name:"Educação",client:c.name,category:"Setor",status:"Ativo",extra:"preserved"}];
+ const result=prepareCustomerStructureInactivation(c,"duplicate",items,[c],"Setor duplicado");
+ assert.equal(result.nextStructures[0].status,"Ativo");
+ assert.equal(result.record.status,"Inativo");
+ assert.equal(result.record.extra,"preserved");
+ assert.equal(result.record.customerId,"p");
+ assert.equal(result.unitCount,1);
+ assert.equal(items[1].status,"Ativo");
+});
+test("inactivation rejects ambiguous legacy ownership and foreign explicit IDs",()=>{
+ const c={id:"p",name:"Prefeitura A"};
+ const r={id:"sector",name:"Saúde",client:c.name};
+ assert.throws(()=>prepareCustomerStructureInactivation(c,r.id,[r],[c,{...c,id:"other"}],"duplicado"),/confirmar/);
+ assert.throws(()=>prepareCustomerStructureInactivation(c,r.id,[{...r,customerId:"foreign"}],[c],"duplicado"),/confirmar/);
+ assert.throws(()=>prepareCustomerStructureInactivation(c,r.id,[r],[c]," "),/motivo/);
+});
+test("editing a legacy root sector confirms unique owner and preserves metadata",()=>{
+ const c={id:"p",name:"Prefeitura A"};
+ const r={id:"s",name:"Educação",client:c.name,category:"Setor",createdAt:"original",extra:"keep"};
+ const saved=prepareCustomerStructureSave(c,{...r,name:"Educação Municipal"},[r],[c]);
+ assert.equal(saved.record.customerId,c.id);
+ assert.equal(saved.record.extra,"keep");
+ assert.equal(saved.record.createdAt,"original");
+ assert.throws(()=>prepareCustomerStructureSave(c,{...r,name:"New"},[r],[c,{...c,id:"other"}]),/confirmado/);
+ assert.throws(()=>prepareCustomerStructureSave(c,{...r,id:"new"},[r],[c]),/Unidade/);
 });
