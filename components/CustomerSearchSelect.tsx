@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Search, X } from "lucide-react";
+import { CustomerHierarchyTree } from "./CustomerHierarchyTree";
+import { useCustomerHierarchy } from "./CustomerHierarchyContext";
+import { isMunicipalCustomer, type HierarchySelection } from "@/lib/customer-hierarchy";
 
 export type CustomerSearchOption = {
   id: string;
@@ -11,6 +14,8 @@ export type CustomerSearchOption = {
   doc?: string;
   phone?: string;
   contact?: string;
+  organizationType?: string;
+  address?: string;
 };
 
 type Props = {
@@ -24,6 +29,9 @@ type Props = {
   disabled?: boolean;
   maxResults?: number;
   className?: string;
+  locationId?: string;
+  onLocationChange?: (selection: HierarchySelection) => void;
+  customerIdValue?: string;
 };
 
 const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
@@ -39,8 +47,14 @@ export function CustomerSearchSelect({
   disabled = false,
   maxResults = 8,
   className = "",
+  locationId = "",
+  onLocationChange,
+  customerIdValue,
 }: Props) {
-  const selected = customers.find(item => (valueMode === "id" ? item.id : item.name) === value);
+  const hierarchy = useCustomerHierarchy();
+  const [chosenId,setChosenId]=useState("");
+  const selected = customers.find(item=>item.id===(customerIdValue || chosenId) && (valueMode==="id"?item.id:item.name)===value) || customers.find(item => (valueMode === "id" ? item.id : item.name) === value);
+  const hierarchyCustomer = hierarchy.customers.find(item => item.id === selected?.id) || selected;
   const [query, setQuery] = useState(selected?.name ?? (value === emptyValue ? "" : value));
   const [open, setOpen] = useState(false);
 
@@ -77,12 +91,14 @@ export function CustomerSearchSelect({
   }, [customers, maxResults, query]);
 
   const choose = (item: CustomerSearchOption) => {
+    setChosenId(item.id);
     setQuery(item.name);
     setOpen(false);
     onChange(valueMode === "id" ? item.id : item.name, item);
   };
 
   const clear = () => {
+    setChosenId("");
     setQuery("");
     setOpen(true);
     onChange(emptyValue, undefined);
@@ -121,5 +137,6 @@ export function CustomerSearchSelect({
         {(valueMode === "id" ? item.id : item.name) === value && <CheckCircle2 size={15}/>}
       </button>) : <div className="customer-search-no-results"><Search size={15}/><span>Nenhum cliente encontrado</span></div>}
     </div>}
+    {isMunicipalCustomer(hierarchyCustomer) && hierarchyCustomer && <CustomerHierarchyTree key={hierarchyCustomer.id} customer={hierarchyCustomer} records={hierarchy.records} customers={hierarchy.customers.length ? hierarchy.customers : customers} value={locationId} disabled={disabled} onSelect={onLocationChange} />}
   </div>;
 }
