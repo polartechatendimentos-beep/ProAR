@@ -7,13 +7,13 @@ const customerB = { id: "customer-B", name: "Cliente B" };
 
 test("reject editing a structure belonging to another customer", () => {
   const original = { id: "unit-1", name: "Unidade B", client: customerB.name, customerId: customerB.id };
-  assert.throws(() => prepareCustomerStructureSave(customerA, { id: original.id, name: "Unidade tomada" }, [original]), /outro cliente/);
+  assert.throws(() => prepareCustomerStructureSave(customerA, { id: original.id, name: "Unidade tomada" }, [original]), /vínculo confirmado/);
   assert.equal(original.name, "Unidade B");
 });
 
 test("reject cross-customer overwrite even with the same display name", () => {
   const original = { id: "unit-1", name: "Unidade B", client: customerA.name, customerId: customerB.id };
-  assert.throws(() => prepareCustomerStructureSave(customerA, { id: original.id, name: "Unidade tomada" }, [original]), /outro cliente/);
+  assert.throws(() => prepareCustomerStructureSave(customerA, { id: original.id, name: "Unidade tomada" }, [original]), /vínculo confirmado/);
 });
 
 test("allow edits of own structure and preserve its customer ID", () => {
@@ -22,4 +22,9 @@ test("allow edits of own structure and preserve its customer ID", () => {
   assert.equal(result.record.name, "Unidade A editada");
   assert.equal(result.record.customerId, customerA.id);
   assert.equal(result.nextStructures.length, 1);
+});
+
+test("reject editing legacy structure without customer ID", () => {
+  const original = { id: "legacy-1", name: "Unidade antiga", client: customerA.name };
+  assert.throws(() => prepareCustomerStructureSave(customerA, { id: original.id, name: "Unidade alterada" }, [original]), /vínculo confirmado/);
 });
