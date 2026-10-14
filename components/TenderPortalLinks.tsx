@@ -1,0 +1,3 @@
+"use client";
+import {safeTenderOrigin,tenderPncpLink,tenderPncpSearch,type TenderIdentity} from '@/lib/tender-links';
+export function TenderPortalLinks({tender}:{tender:TenderIdentity}) {const origin=safeTenderOrigin(tender.linkSistemaOrigem),pncp=tenderPncpLink(tender);return <div className="dossier-actions" style={{display:'flex',flexWrap:'wrap',gap:8,padding:'12px 0'}}>{origin&&<a className="primary-btn" href={origin} target="_blank" rel="noopener noreferrer">Abrir pregão no portal de origem ↗</a>}<a className="outline-btn" href={pncp||tenderPncpSearch(tender)} target="_blank" rel="noopener noreferrer">{pncp?'Ver edital no PNCP':'Pesquisar correspondência no PNCP'} ↗</a>{!pncp&&<small>Confirme órgão, número e ano antes de vincular outro resultado.</small>}</div>;}
