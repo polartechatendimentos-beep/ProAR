@@ -3,6 +3,12 @@ import {canSeeAllMobileOrders,type MobileFieldSession} from "./mobile-field.ts";
 type Item=Record<string,unknown>;
 export const attendanceActions=["pause-attendance","resume-attendance","visit-no-service","request-material","request-scope","request-reschedule","decide-request","internal-message","report-delay","set-duration","set-warranty"];
 export type AttendanceCommand={action:string;requestId:string;note?:string;date?:string;time?:string;minutes?:number;days?:number;targetId?:string;decision?:string};
+function validSchedule(date:unknown,time:unknown) {
+  return typeof date==="string" && typeof time==="string"
+    && /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(Date.parse(date))
+    && new Date(date).toISOString().slice(0,10)===date
+    && /^([01]\d|2[0-3]):[0-5]\d$/.test(time);
+}
 type Entry={id:string;kind:string;note:string;status:string;requestedBy:string;requestedAt:string;date?:string;time?:string;decidedBy?:string;decidedAt?:string;decisionNote?:string};
 export function applyAttendanceAction(order:Item,command:AttendanceCommand,session:MobileFieldSession,canApprove:boolean,now:string){
   const next={...order};const note=String(command.note||"").trim();
@@ -10,7 +16,7 @@ export function applyAttendanceAction(order:Item,command:AttendanceCommand,sessi
   if(requiresNote.includes(command.action)&&(note.length<5||note.length>2000))throw new FieldSupportError("Informe o motivo ou descrição (5 a 2000 caracteres).");
   const events=Array.isArray(order.fieldEvents)?[...order.fieldEvents]:[];
   const requests:Entry[]=Array.isArray(order.fieldRequests)?(order.fieldRequests as Entry[]).map(item=>({...item})):[];
-  if(events.length>=200 || requests.length>=50)throw new FieldSupportError("Limite de registros desta OS atingido.");
+  if(events.length>=200)throw new FieldSupportError("Limite de registros desta OS atingido.");
   if(command.action==="pause-attendance"){
     if(!order.checkInAt || order.fieldAttendancePaused)throw new FieldSupportError("Inicie o atendimento antes de pausar, ou retome a pausa existente.",409);
     next.fieldAttendancePaused=true;next.status="Aguardando atendimento";
@@ -20,9 +26,10 @@ export function applyAttendanceAction(order:Item,command:AttendanceCommand,sessi
   }else if(command.action==="visit-no-service"){
     next.status="Aguardando reagendamento";next.fieldAttendancePaused=Boolean(order.checkInAt);
   }else if(["request-material","request-scope","request-reschedule"].includes(command.action)){
+    if(requests.length>=50)throw new FieldSupportError("Limite de solicitações desta OS atingido.");
     const entry:Entry={id:command.requestId,kind:command.action,note,status:"Pendente",requestedBy:session.username,requestedAt:now};
     if(command.action==="request-reschedule"){
-      if(!/^\d{4}-\d{2}-\d{2}$/.test(command.date||"") || Number.isNaN(Date.parse(command.date!)) || new Date(command.date!).toISOString().slice(0,10)!==command.date || !/^([01]\d|2[0-3]):[0-5]\d$/.test(command.time||""))throw new FieldSupportError("Informe data e horário válidos para reagendamento.");
+      if(!validSchedule(command.date,command.time))throw new FieldSupportError("Informe data e horário válidos para reagendamento.");
       entry.date=command.date;entry.time=command.time;
     }
     requests.push(entry);
@@ -31,6 +38,7 @@ export function applyAttendanceAction(order:Item,command:AttendanceCommand,sessi
     const entry=requests.find(item=>item.id===command.targetId);
     if(!entry||entry.status!=="Pendente")throw new FieldSupportError("Solicitação já decidida ou não encontrada.",409);
     if(!["Aprovado","Rejeitado"].includes(command.decision||""))throw new FieldSupportError("Decisão inválida.");
+    if(entry.kind==="request-reschedule" && command.decision==="Aprovado" && !validSchedule(entry.date,entry.time))throw new FieldSupportError("A solicitação contém data ou horário inválidos. Rejeite-a e solicite um novo reagendamento.");
     Object.assign(entry,{status:command.decision,decidedBy:session.username,decidedAt:now,decisionNote:note});
     if(entry.kind==="request-reschedule"&&command.decision==="Aprovado"){next.date=entry.date;next.time=entry.time;next.status="Agendada";next.googleCalendarSyncedAt="";}
   }else if(["set-duration","report-delay"].includes(command.action)){
