@@ -3,7 +3,7 @@ export type HierarchyRecord = { id?: unknown; name?: unknown; customerId?: unkno
 export type HierarchyNode = { id: string; name: string; level: string; kind: "unit" | "sector" | "room" | "other"; record: HierarchyRecord; parentId: string; depth: number; path: string[]; issue: boolean };
 export type HierarchySelection = { customerId: string; client: string; unit: string; unitId?: string; sector: string; sectorId?: string; room: string; roomId?: string; structureId?: string; address?: string; path: string[] };
 const normalize = (value: unknown) => String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
-export const isMunicipalCustomer = (customer?: HierarchyCustomer) => normalize(customer?.organizationType) === "prefeitura";
+export const isMunicipalCustomer = (customer?: HierarchyCustomer) => normalize(customer?.organizationType) === "prefeitura" || /^(prefeitura|municipio)\b/.test(normalize(customer?.name));
 export function hierarchyKind(record: HierarchyRecord): HierarchyNode["kind"] {
   const level = normalize(record.hierarchyLevel || record.category || record.type);
   if (/sala|ambiente/.test(level)) return "room";

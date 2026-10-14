@@ -47,9 +47,11 @@ test("new municipal hierarchy is saved through existing records without relinkin
  assert.throws(()=>prepareCustomerStructureSave(customer,{...sector,parentId:undefined},a.nextStructures),/Unidade/);
  assert.equal(prepareCustomerStructureSave(customer,{...unit,id:"filial",hierarchyLevel:"Filial"},[]).record.parentId,undefined);
 });
-test("municipal behavior is limited to the Prefeitura profile",()=>{
+test("municipal behavior recognizes explicit profiles and legacy municipal names",()=>{
  assert.equal(isMunicipalCustomer(customer),true);
- assert.equal(isMunicipalCustomer({...customer,organizationType:"Empresa"}),false);
+ assert.equal(isMunicipalCustomer({...customer,organizationType:"Empresa"}),true);
+ assert.equal(isMunicipalCustomer({id:"legacy",name:"MUNICÍPIO DE BÁLSAMO"}),true);
+ assert.equal(isMunicipalCustomer({id:"business",name:"Serviços para Prefeitura",organizationType:"Empresa"}),false);
 });
 
 test("OS and equipment counters aggregate descendants without counting other customers",()=>{
