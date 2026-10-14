@@ -98,7 +98,7 @@ export function mobileFieldOrders(
       status: short(order.status, 70),
       equipmentIds,
       checkInAt: short(order.checkInAt, 40),
-      fieldVersion: Number.isInteger(order.fieldVersion) ? Number(order.fieldVersion) : 0,
+      fieldVersion: typeof order.fieldVersion === "number" && Number.isSafeInteger(order.fieldVersion) && order.fieldVersion >= 0 ? order.fieldVersion : 0,
       fieldExceptions: Array.isArray(order.fieldExceptions) ? order.fieldExceptions.slice(-20).map(item=>({id:short(item.id,100),kind:item.kind,reason:short(item.reason,1000),status:short(item.status,30),requestedBy:short(item.requestedBy,120),requestedAt:short(item.requestedAt,40),decidedBy:short(item.decidedBy,120),decidedAt:short(item.decidedAt,40),decisionReason:short(item.decisionReason,1000)})) : [],
       attendancePaused:Boolean(order.fieldAttendancePaused),
       estimatedDurationMinutes:Number(order.estimatedDurationMinutes||0),
