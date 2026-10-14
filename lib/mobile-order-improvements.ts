@@ -1,3 +1,5 @@
+export const mobileMutationActions=["register-equipment","request-exception","decide-exception","pause-attendance","resume-attendance","visit-no-service","request-material","request-scope","request-reschedule","decide-request","internal-message","report-delay","set-duration","set-warranty"];
+import { applyAttendanceAction, attendanceActions, type AttendanceCommand } from "./mobile-attendance-actions.ts";
 import { createHash } from "node:crypto";
 import { FieldSupportError } from "./field-support.ts";
 import { assignedToSession, canSeeAllMobileOrders, isOpenMobileOrder, type MobileFieldSession } from "./mobile-field.ts";
@@ -5,11 +7,12 @@ import { applyFieldOrder, eligibleFieldEquipment, fieldOrderFingerprint, type Fi
 
 type Item=Record<string,unknown>;
 export type FieldException={id:string;kind:"signature"|"equipment";reason:string;status:"Pendente"|"Aprovado"|"Rejeitado";requestedBy:string;requestedAt:string;decidedBy?:string;decidedAt?:string;decisionReason?:string};
-export type ImprovementCommand={requestId:string;orderId:string;expectedVersion:number;expectedToken:string;action:"register-equipment"|"request-exception"|"decide-exception";equipment?:{name:string;brand?:string;model?:string;serialNumber?:string;photo?:string};kind?:FieldException["kind"];reason?:string;exceptionId?:string;decision?:"Aprovado"|"Rejeitado"};
+export type ImprovementCommand={requestId:string;orderId:string;expectedVersion:number;expectedToken:string;action:string;note?:string;date?:string;time?:string;minutes?:number;days?:number;targetId?:string;equipment?:{name:string;brand?:string;model?:string;serialNumber?:string;photo?:string};kind?:FieldException["kind"];reason?:string;exceptionId?:string;decision?:"Aprovado"|"Rejeitado"};
 export function improveFieldOrder(order:Item,equipment:Item[],command:ImprovementCommand,session:MobileFieldSession,canApprove:boolean,now:string){
   if(!assignedToSession(order,session))throw new FieldSupportError("OS não atribuída a este colaborador.",403);
   if(!isOpenMobileOrder(order.status))throw new FieldSupportError("A OS já foi concluída ou cancelada.",409);
   if(Number(order.fieldVersion||0)!==command.expectedVersion || fieldOrderFingerprint(order)!==command.expectedToken)throw new FieldSupportError("Esta OS foi alterada. Atualize antes de continuar.",409);
+  if(attendanceActions.includes(command.action))return {order:applyAttendanceAction(order,command as AttendanceCommand,session,canApprove,now),equipment};
   const next={...order},all=[...equipment];
   const exceptions=Array.isArray(order.fieldExceptions)?(order.fieldExceptions as FieldException[]).map(item=>({...item})):[];
   if(command.action==="register-equipment"){
