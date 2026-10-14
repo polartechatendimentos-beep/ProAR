@@ -654,7 +654,7 @@ function Header({ title, subtitle, onMenu, searchItems, pendingItems, onSearchSe
       <div className="headline-copy"><div className="eyebrow"><span>PROAR</span><ChevronRight size={10}/><b>Central de operações</b><i>BY TAV's</i></div><h1>{title}</h1><p>{subtitle}</p></div>
     </div>
     <div className="top-actions top-actions-user-only">
-      <a href="/mobile" className="header-tool-button" aria-label="Abrir ProAR Field no celular" title="ProAR Field — versão mobile"><Smartphone size={16}/></a>
+      <a href="/mobile" className="header-tool-button" aria-label="Abrir ProAR Mobile no celular" title="ProAR Mobile — versão mobile"><Smartphone size={16}/></a>
       <div className="header-global-search">
         <button className="header-tool-button" aria-label="Busca global" title="Busca global" onClick={()=>{setSearchOpen(value=>!value);setPendingOpen(false)}}><Search size={16}/></button>
         {searchOpen&&<div className="header-popover search-popover"><label><Search size={14}/><input autoFocus value={query} onChange={event=>setQuery(event.target.value)} placeholder="Cliente, CNPJ, OS, série, NF..."/></label>{query.trim().length<2?<small>Digite pelo menos 2 caracteres.</small>:matches.length?<div className="header-result-list">{matches.map(item=><button key={`${item.module}-${item.id}`} onClick={()=>{onSearchSelect(item);setSearchOpen(false);setQuery("")}}><b>{item.title}</b><span>{item.detail||item.module}</span><em>{item.module}</em></button>)}</div>:<small>Nenhum registro encontrado nos dados carregados.</small>}</div>}
