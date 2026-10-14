@@ -2,6 +2,7 @@ import type { WorkRoute } from "./work-routes";
 import { FieldSupportError } from "./field-support.ts";
 import { assignedToSession, isOpenMobileOrder, type MobileFieldSession } from "./mobile-field.ts";
 import { mobileChecklist, checklistProgress } from "./mobile-service-checklists.ts";
+import { validateFieldMeasurements, type FieldMeasurements } from "./mobile-report-details.ts";
 import { createHash } from "node:crypto";
 export function fieldOrderFingerprint(order:Record<string,unknown>){return createHash("sha256").update(JSON.stringify(order)).digest("hex");}
 
@@ -14,7 +15,7 @@ export function requireActiveJourney(routes: WorkRoute[], now: string) {
   if(!active)throw new FieldSupportError("Inicie a jornada ou registre o retorno da pausa antes de atuar na OS.",403);
   return active;
 }
-export type FieldOrderCommand = { requestId:string; action:"start"|"save"|"finish"; orderId:string; expectedVersion:number; expectedToken?:string; report?:string; diagnosis?:string; checklist?:Record<string,boolean>; beforePhoto?:string; afterPhoto?:string; signature?:string; signerName?:string; equipmentIds?:string[]; point?:{id:string;capturedAt:string;latitude:number;longitude:number;accuracy:number} };
+export type FieldOrderCommand = { requestId:string; action:"start"|"save"|"finish"; orderId:string; expectedVersion:number; expectedToken?:string; report?:string; diagnosis?:string; observations?:string; measurements?:FieldMeasurements; beforePhotos?:string[]; afterPhotos?:string[]; checklist?:Record<string,boolean>; beforePhoto?:string; afterPhoto?:string; signature?:string; signerName?:string; equipmentIds?:string[]; point?:{id:string;capturedAt:string;latitude:number;longitude:number;accuracy:number} };
 function image(value:unknown) {
   if(value == null || value === "")return "";
   if(typeof value !== "string" || value.length > 350000 || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(value))throw new FieldSupportError("Imagem inválida ou maior que o limite de 250 KB.");
@@ -45,9 +46,12 @@ export function applyFieldOrder(order:Record<string,unknown>, command:FieldOrder
   if(command.report != null)next.executedService=String(command.report).trim().slice(0,8000);
   if(command.diagnosis != null)next.diagnosis=String(command.diagnosis).trim().slice(0,4000);
   if(command.checklist){if(typeof command.checklist !== "object" || Array.isArray(command.checklist))throw new FieldSupportError("Checklist inválido.");next.mobileChecklist=Object.fromEntries(Object.entries(command.checklist).filter(([key,value])=>/^[A-Za-z0-9_-]{1,60}$/.test(key)&&typeof value === "boolean").slice(0,40));}
+  if(command.observations!==undefined){if(typeof command.observations!=="string"||command.observations.length>4000)throw new FieldSupportError("Observações devem ter até 4000 caracteres.");next.fieldObservations=command.observations.trim();}
+  if(command.measurements!==undefined)next.fieldMeasurements=validateFieldMeasurements(command.measurements);
   const photos={...((order.photos||{}) as Record<string,string[]>)};
   if(command.beforePhoto)photos.before=[image(command.beforePhoto)];
   if(command.afterPhoto)photos.after=[image(command.afterPhoto)];
+  for(const [key,values] of [["before",command.beforePhotos],["after",command.afterPhotos]] as const){if(values!==undefined){if(!Array.isArray(values)||values.length>3||values.some(value=>!value))throw new FieldSupportError("Envie até 3 fotos válidas por etapa.");const existing=Array.isArray(photos[key])?photos[key]:[];const added=values.map(image);if(existing.length+added.length>10)throw new FieldSupportError("Limite de 10 fotos por etapa atingido.");photos[key]=[...existing,...added];}}
   next.photos=photos;
   if(command.signature){if(!String(command.signerName||"").trim())throw new FieldSupportError("Identifique quem assinou o aceite.");next.customerSignature=image(command.signature);next.customerSignatureName=String(command.signerName).trim().slice(0,120);next.customerSignatureAt=now;}
   if(command.action === "start"){next.status="Em andamento";next.checkInAt=order.checkInAt||now;}
