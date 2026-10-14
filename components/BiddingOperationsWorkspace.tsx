@@ -82,7 +82,7 @@ export function BiddingOperationsWorkspace({ tenders, onOpen, diagnostics=[] }: 
   const [floorPrice, setFloorPrice] = useState(0);
   const [manualBid, setManualBid] = useState("");
   const [bidNotice, setBidNotice] = useState("");
-  const sourceHealth=useMemo<SourceHealth[]>(()=>{const names=["PNCP","Compras.gov.br","BLL Compras","BEC-SP","Portal de Compras Públicas","Licitações-e","Portal Municipal"];return names.map(name=>{const prefix=name==="Portal Municipal"?"Municipal":name;const runs=diagnostics.filter(d=>d.source.startsWith(prefix));return{name,status:runs.length&&runs.every(d=>d.status==="ok")?"online":"attention",detail:runs.length?`${runs.filter(d=>d.status==="ok").length}/${runs.length} consultas responderam • ${runs.reduce((sum,d)=>sum+(d.count||0),0)} registros recebidos`:"Sem consulta direta nesta rotina. Resultados podem vir do PNCP."};});},[diagnostics]);
+  const sourceHealth=useMemo<SourceHealth[]>(()=>{const names=["PNCP","Compras.gov.br","BLL Compras","BEC-SP","Portal de Compras Públicas","Licitações-e","Portal Municipal"];return names.map(name=>{const prefix=name;const runs=diagnostics.filter(d=>d.source.startsWith(prefix));return{name,status:runs.length&&runs.every(d=>d.status==="ok")?"online":"attention",detail:runs.length?`${runs.filter(d=>d.status==="ok").length}/${runs.length} consultas responderam • ${runs.reduce((sum,d)=>sum+(d.count||0),0)} registros recebidos`:"Sem consulta direta nesta rotina. Resultados podem vir do PNCP."};});},[diagnostics]);
   const confirmedCount=tenders.filter(t=>t.validationStatus==="active_confirmed").length; const incompleteCount=tenders.filter(t=>t.validationStatus==="incomplete").length; const historyCount=tenders.filter(t=>t.validationStatus==="history").length;
 
   useEffect(() => {

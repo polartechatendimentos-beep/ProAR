@@ -1,3 +1,4 @@
+import { municipalTenderDate } from "@/lib/tender-date";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseRest } from "../../../lib/supabase-rest";
 import { municipalityDistances, municipalityNameDistances } from "../../../lib/municipality-distances";
@@ -12,7 +13,7 @@ const MUNICIPAL_SOURCES = [
 const UFS = ["SP", "MG", "MS", "PR", "GO"] as const;
 const MODALITIES = [4, 5, 6, 7, 8, 9, 12] as const;
 const TARGETED_PNCP_PAGES = 60;
-const PNCP_PAGE_SIZE = 500;
+const PNCP_PAGE_SIZE = 50;
 export const maxDuration = 120;
 const REQUEST_TIMEOUT_MS = 9000;
 const COMPRAS_TIMEOUT_MS = 7000;
@@ -243,11 +244,11 @@ async function fetchMunicipalSource(source: typeof MUNICIPAL_SOURCES[number]) {
       if(!climateTerms.test(block) || excludedTerms.test(block)) continue;
       const number=block.match(/Preg[aã]o Eletr[oô]nico\s*(?:n[º°o.]*)?\s*(\d+)\/(\d{4})/i);
       const process=block.match(/N[º°o.]?\s*Processo\s*:?\s*(\d+)\/(\d{4})/i);
-      const date=block.match(/(?:Realiza[cç][aã]o|Encerramento)\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})(?:\s*[aà]s\s*(\d{2}):(\d{2}))?/i);
+
       const value=block.match(/Valor\s*Estimado\s*:?\s*R\$\s*([\d.]+,\d{2})/i);
       const status=block.match(/Situa[cç][aã]o\s*:?\s*([A-Za-zÀ-ÿ ]{3,30})/i);
       if(!number) continue;
-      const closing=date?new Date(`${date[3]}-${date[2]}-${date[1]}T${date[4]??"23"}:${date[5]??"59"}:00-03:00`).toISOString():undefined;
+      const closing=municipalTenderDate(block);
       items.push(validateTender({
         numeroControlePNCP:`MUNICIPAL-${normalize(source.city)}-${number[1]}-${number[2]}`,
         anoCompra:Number(number[2]), sequencialCompra:Number(number[1]),
@@ -334,7 +335,7 @@ async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radi
     const published = item.dataPublicacaoPncp ? new Date(item.dataPublicacaoPncp).getTime() : 0;
     // O conjunto do Compras.gov.br nem sempre informa o encerramento. Nesses casos,
     // mantém publicações recentes; registros com encerramento conhecido e vencido saem.
-    if (closing ? (closing < startTime || closing > endTime) : (!published || published < today.getTime() - 60 * 86400000)) return false;
+    if (closing ? (closing < startTime || closing > endTime) : (item.sourcePortal!=="Portal Municipal" && (!published || published < today.getTime() - 60 * 86400000))) return false;
     const municipalityName = normalize(item.unidadeOrgao?.municipioNome ?? "");
     const municipalityKey = `${municipalityName}|${String(item.unidadeOrgao?.ufSigla ?? "").toUpperCase()}`;
     const distance = municipalityDistances[String(item.unidadeOrgao?.codigoIbge ?? "")] ?? municipalityNameDistances[municipalityKey] ?? CITY_CODES[municipalityName]?.distance ?? cityDistances[municipalityName];
