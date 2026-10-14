@@ -59,3 +59,17 @@ Identificador de movimentação e correlação opcional não podem ser vazios.
 A validação ocorre na criação de movimentos; a consulta e os registros
 históricos permanecem preservados. Testes:
 tests/certame-mutation-integrity.test.mjs.
+
+## Lote Mobile — resolução de solicitações
+
+O limite de 50 solicitações agora bloqueia apenas novos pedidos; não impede
+a gestão de decidir pedidos existentes nem o técnico de retomar o atendimento.
+O limite de 200 eventos de auditoria permanece preservado.
+
+Reagendamento pendente legado só pode ser aprovado se data e horário forem
+válidos. O gestor pode rejeitar a solicitação inválida para que seja corrigida,
+sem alterar a agenda da OS.
+
+Oito testes novos em tests/mobile-request-resolution.test.mjs; 18 testes
+direcionados de Mobile/API aprovados localmente. Este lote não altera os
+contadores de itens amplos concluídos do catálogo.
