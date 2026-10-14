@@ -79,6 +79,7 @@ export function mobileFieldOrders(
   max = 300,
 ): MobileFieldOrder[] {
   if (!Array.isArray(orders)) return [];
+  const limit = typeof max === "number" && Number.isFinite(max) ? Math.max(1, Math.min(500, Math.floor(max))) : 300;
   const results: MobileFieldOrder[] = [];
   const seen = new Set<string>();
   for (const entry of orders) {
@@ -102,7 +103,7 @@ export function mobileFieldOrders(
       status: short(order.status, 70),
       equipmentIds,
       checkInAt: short(order.checkInAt, 40),
-      fieldVersion: Number.isInteger(order.fieldVersion) ? Number(order.fieldVersion) : 0,
+      fieldVersion: typeof order.fieldVersion === "number" && Number.isSafeInteger(order.fieldVersion) && order.fieldVersion >= 0 ? order.fieldVersion : 0,
       fieldExceptions: Array.isArray(order.fieldExceptions) ? order.fieldExceptions.filter(isRecord).slice(-20).map(item=>({id:short(item.id,100),kind:item.kind === "equipment" ? "equipment" as const : "signature" as const,reason:short(item.reason,1000),status:short(item.status,30),requestedBy:short(item.requestedBy,120),requestedAt:short(item.requestedAt,40),decidedBy:short(item.decidedBy,120),decidedAt:short(item.decidedAt,40),decisionReason:short(item.decisionReason,1000)})) : [],
       attendancePaused:Boolean(order.fieldAttendancePaused),
       estimatedDurationMinutes:Number(order.estimatedDurationMinutes||0),
@@ -118,7 +119,7 @@ export function mobileFieldOrders(
       mobileChecklist: Object.fromEntries(Object.entries(isRecord(order.mobileChecklist) ? order.mobileChecklist : {}).filter(([,value])=>typeof value === "boolean")) as Record<string,boolean>,
       evidence: { before: Boolean((order.photos as Record<string,unknown[]>|undefined)?.before?.length), after: Boolean((order.photos as Record<string,unknown[]>|undefined)?.after?.length), signature: Boolean(order.customerSignature) },
     });
-    if (results.length >= Math.max(1, Math.min(500, max))) break;
+    if (results.length >= limit) break;
   }
   return results.sort((a, b) => {
     const left = `${a.date || "9999-99-99"} ${a.time || "99:99"}`;
