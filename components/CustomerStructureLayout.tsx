@@ -1,6 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { CustomerHierarchyTree } from "./CustomerHierarchyTree";
+import { isMunicipalCustomer } from "@/lib/customer-hierarchy";
+import { useCustomerHierarchy } from "./CustomerHierarchyContext";
 import { Building2, CheckCircle2, ChevronRight, Edit3, MapPin, Plus, Save, Search, Trash2, Wrench, X } from "lucide-react";
 
 type RecordItem = Record<string, unknown>;
@@ -31,15 +34,18 @@ const dateLabel = (raw: unknown) => {
 };
 
 export function CustomerStructureLayout({ canEdit, customer, structures, serviceOrders, equipment, roomQuery, setRoomQuery, onOpen, onUpdateStructure, onDeleteStructure }: Props) {
+  const hierarchyContext=useCustomerHierarchy();
   const [selectedId, setSelectedId] = useState(String(structures[0]?.id ?? ""));
   const [detailTab, setDetailTab] = useState("Ambiente");
   const [structureForm, setStructureForm] = useState<null | { id?: string; name: string; hierarchyLevel: string; parentId: string; responsible: string; phone: string; email: string; description: string }>(null);
-  const publicCustomer=/Prefeitura|Órgão Público|Autarquia|Fundação|Entidade Pública/i.test(String(customer.organizationType ?? ""));
+  const publicCustomer=isMunicipalCustomer({id:customer.id,name:customer.name,organizationType:String(customer.organizationType || "")});
   const hierarchyParents: Record<string, string[]> = publicCustomer ? {
     Secretaria: [],
     Unidade: ["Secretaria"],
-    Sala: ["Unidade"],
-    Ambiente: ["Unidade"],
+    Filial: [],
+    Setor: ["Unidade","Filial"],
+    Sala: ["Setor","Unidade"],
+    Ambiente: ["Setor","Unidade"],
   } : {
     Secretaria: [],
     Diretoria: ["Secretaria"],
@@ -54,8 +60,9 @@ export function CustomerStructureLayout({ canEdit, customer, structures, service
   const canonicalPublicLevel=(item:RecordItem)=>{
     const level=normalizeLevel(item).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR");
     if(["secretaria","diretoria","departamento","orgao"].includes(level)) return "Secretaria";
-    if(level==="unidade") return "Unidade";
-    if(["sala","ambiente","setor"].includes(level)) return "Sala";
+    if(["unidade","filial"].includes(level)) return level==="filial"?"Filial":"Unidade";
+    if(level==="setor") return "Setor";
+    if(["sala","ambiente"].includes(level)) return "Sala";
     return normalizeLevel(item);
   };
   const allowedParents = (level: string) => {
@@ -134,6 +141,33 @@ export function CustomerStructureLayout({ canEdit, customer, structures, service
   const openOrders = serviceOrders.filter(order => order.client === customer.name && /aberta|pendente|andamento/i.test(order.status));
   const environmentName = text(selected, "name", "unit");
 
+  const formDialog = structureForm && <div className="modal-backdrop" role="presentation"><section className="modal-card" role="dialog" aria-modal="true" aria-label="Cadastro da estrutura do cliente"><header><div><span className="section-kicker">ESTRUTURA VINCULADA</span><h3>Novo cadastro em {customer.name}</h3><p>O registro ficará subordinado ao cliente e poderá ser reutilizado em Orçamentos, OS, Equipamentos e PMOC.</p></div><button type="button" className="icon-btn" onClick={() => setStructureForm(null)} aria-label="Fechar"><X size={18}/></button></header><div className="profile-form-grid">
+      <label>Tipo / nível<select value={structureForm.hierarchyLevel} onChange={event => setStructureForm(current => current ? {...current, hierarchyLevel:event.target.value, parentId:""} : current)}>{(publicCustomer ? [...new Set(["Unidade","Filial","Setor","Ambiente",...(structureForm.id ? [structureForm.hierarchyLevel] : [])])] : ["Secretaria","Diretoria","Departamento","Órgão","Unidade","Setor","Sala","Ambiente"]).map(level=><option key={level}>{level}</option>)}</select></label>
+      <label>Nome<input autoFocus value={structureForm.name} onChange={event => setStructureForm(current => current ? {...current, name:event.target.value} : current)} placeholder="Ex.: Diretoria de Saúde"/></label>
+      <label className="wide">Vinculado a<select value={structureForm.parentId} disabled={structureForm.hierarchyLevel==="Secretaria"} onChange={event => setStructureForm(current => current ? {...current, parentId:event.target.value} : current)}><option value="">{structureForm.hierarchyLevel === "Secretaria" ? "Prefeitura / cliente principal" : ["Unidade","Filial"].includes(structureForm.hierarchyLevel) ? "Matriz / Prefeitura" : "Selecione o nível superior"}</option>{allowedParents(structureForm.hierarchyLevel).map(item => <option key={String(item.id)} value={String(item.id)}>{`${publicCustomer ? canonicalPublicLevel(item) : normalizeLevel(item)} • ${text(item,"name","unit")}`}</option>)}</select>{publicCustomer&&["Setor","Sala","Ambiente"].includes(structureForm.hierarchyLevel)&&!allowedParents(structureForm.hierarchyLevel).length&&<small className="structure-parent-warning">{structureForm.hierarchyLevel==="Setor"?"Cadastre primeiro uma Unidade.":"Cadastre primeiro o Setor dentro de uma Unidade."}</small>}</label>
+      <label>Responsável<input value={structureForm.responsible} onChange={event => setStructureForm(current => current ? {...current, responsible:event.target.value} : current)} placeholder="Nome do responsável"/></label>
+      <label>Telefone<input value={structureForm.phone} onChange={event => setStructureForm(current => current ? {...current, phone:event.target.value} : current)} placeholder="(17) 0000-0000"/></label>
+      <label className="wide">E-mail<input type="email" value={structureForm.email} onChange={event => setStructureForm(current => current ? {...current, email:event.target.value} : current)} placeholder="email@prefeitura.sp.gov.br"/></label>
+      <label className="wide">Observações<textarea value={structureForm.description} onChange={event => setStructureForm(current => current ? {...current, description:event.target.value} : current)} placeholder="Informações complementares do órgão, unidade, setor ou ambiente."/></label>
+    </div><footer><button type="button" className="outline-btn" onClick={() => setStructureForm(null)}>Cancelar</button><button type="button" className="primary-btn" disabled={!canEdit || !structureForm.name.trim() || (publicCustomer && ["Setor","Sala","Ambiente"].includes(structureForm.hierarchyLevel) && !structureForm.parentId)} onClick={saveStructureForm}><Save size={14}/> Salvar vínculo</button></footer></section></div>;
+  if (publicCustomer) {
+    const active = structures.find(item=>String(item.id)===selectedId);
+    const children = structures.filter(item=>String(item.parentId || item.parentStructureId || "") === (active ? String(active.id) : ""));
+    const kind = active ? canonicalPublicLevel(active) : "Matriz";
+    const nextLevel = !active ? "Unidade" : ["Unidade","Filial"].includes(kind) ? "Setor" : ["Setor","Secretaria"].includes(kind) ? "Ambiente" : "";
+    const edit = (item:RecordItem) => setStructureForm({id:String(item.id),name:String(item.name||""),hierarchyLevel:String(item.hierarchyLevel||item.category||"Unidade"),parentId:String(item.parentId||""),responsible:String(item.responsible||item.contact||""),phone:String(item.phone||""),email:String(item.email||""),description:String(item.description||"")});
+    return <div className="customer-structure-screen">
+      <div className="customer-structure-title"><div><h3>Matriz → Filial/Unidade → Setor → Ambiente</h3><p>Expanda a Prefeitura e selecione o local para consultar ou gerenciar seus vínculos.</p></div></div>
+      <div className="municipal-tree-layout">
+        <CustomerHierarchyTree customer={{id:customer.id,name:customer.name,organizationType:String(customer.organizationType||"")}} customers={hierarchyContext.customers.length?hierarchyContext.customers:undefined} records={structures} value={active?String(active.id):""} query={roomQuery} includeInactive onSelect={selection=>setSelectedId(selection.structureId||"")} />
+        <section className="municipal-tree-details"><header><div><h3>{active?String(active.name):customer.name}</h3><small>{active?String(active.hierarchyLevel||active.category):"Matriz · Prefeitura"}</small></div>{canEdit&&nextLevel&&<button type="button" className="primary-btn" onClick={()=>openStructureForm(nextLevel,active?String(active.id):"")}><Plus size={14}/> {nextLevel==="Unidade"?"Nova Unidade":nextLevel==="Setor"?"Novo Setor":"Novo Ambiente"}</button>}</header>
+          <label className="structure-search"><Search size={15}/><input aria-label="Pesquisar estrutura da Prefeitura" placeholder="Pesquisar na árvore" value={roomQuery} onChange={event=>setRoomQuery(event.target.value)}/></label>
+          {active&&<><p>{String(active.description||active.address||"Selecione um vínculo abaixo ou use as ações deste local.")}</p><div className="municipal-tree-actions">{canEdit&&<><button type="button" className="outline-btn" onClick={()=>edit(active)}><Edit3 size={14}/> Editar local</button><button type="button" className="outline-btn" onClick={()=>void onDeleteStructure(active)}><Trash2 size={14}/> Excluir / inativar</button></>}</div></>}
+          <div className="municipal-tree-children">{children.map(item=><div className="municipal-tree-child" key={String(item.id)}><button type="button" onClick={()=>setSelectedId(String(item.id))}><b>{String(item.name)}</b><small>{String(item.hierarchyLevel||item.category||"Estrutura")}</small></button>{canEdit&&<button type="button" className="icon-btn" aria-label={`Editar ${String(item.name)}`} onClick={()=>edit(item)}><Edit3 size={14}/></button>}</div>)}{!children.length&&<p>Nenhum vínculo abaixo deste local.</p>}</div>
+        </section>
+      </div>{formDialog}
+    </div>;
+  }
   return <div className="customer-structure-screen unified-master-detail">
     <div className="customer-structure-toolbar">
       <div className="customer-breadcrumb"><span>Cliente</span><ChevronRight size={13}/><strong>Unidades & Setores</strong></div>
@@ -161,15 +195,7 @@ export function CustomerStructureLayout({ canEdit, customer, structures, service
       </main>
     </div>
     <div className="structure-global-summary"><span><b>Resumo da Estrutura</b></span><span>1 Cliente</span><span>{unitCandidates.length} Unidades / Secretarias</span><span>{structures.filter(item => /setor|sala|ambiente/.test(structureLevel(item))).length} Setores / Salas</span><span>{equipment.length} Equipamentos</span></div>
-    {structureForm && <div className="modal-backdrop" role="presentation"><section className="modal-card" role="dialog" aria-modal="true" aria-label="Cadastro da estrutura do cliente"><header><div><span className="section-kicker">ESTRUTURA VINCULADA</span><h3>Novo cadastro em {customer.name}</h3><p>O registro ficará subordinado ao cliente e poderá ser reutilizado em Orçamentos, OS, Equipamentos e PMOC.</p></div><button type="button" className="icon-btn" onClick={() => setStructureForm(null)} aria-label="Fechar"><X size={18}/></button></header><div className="profile-form-grid">
-      <label>Tipo / nível<select value={structureForm.hierarchyLevel} onChange={event => setStructureForm(current => current ? {...current, hierarchyLevel:event.target.value, parentId:""} : current)}>{(publicCustomer ? ["Secretaria","Unidade","Sala","Ambiente"] : ["Secretaria","Diretoria","Departamento","Órgão","Unidade","Setor","Sala","Ambiente"]).map(level=><option key={level}>{level}</option>)}</select></label>
-      <label>Nome<input autoFocus value={structureForm.name} onChange={event => setStructureForm(current => current ? {...current, name:event.target.value} : current)} placeholder="Ex.: Diretoria de Saúde"/></label>
-      <label className="wide">Vinculado a<select value={structureForm.parentId} disabled={structureForm.hierarchyLevel==="Secretaria"} onChange={event => setStructureForm(current => current ? {...current, parentId:event.target.value} : current)}><option value="">{structureForm.hierarchyLevel === "Secretaria" ? "Prefeitura / cliente principal" : structureForm.hierarchyLevel === "Unidade" ? "Selecione a Secretaria" : "Selecione a Unidade"}</option>{allowedParents(structureForm.hierarchyLevel).map(item => <option key={String(item.id)} value={String(item.id)}>{`${publicCustomer ? canonicalPublicLevel(item) : normalizeLevel(item)} • ${text(item,"name","unit")}`}</option>)}</select>{publicCustomer&&structureForm.hierarchyLevel!=="Secretaria"&&!allowedParents(structureForm.hierarchyLevel).length&&<small className="structure-parent-warning">{structureForm.hierarchyLevel==="Unidade"?"Cadastre primeiro uma Secretaria.":"Cadastre primeiro uma Unidade vinculada à Secretaria."}</small>}</label>
-      <label>Responsável<input value={structureForm.responsible} onChange={event => setStructureForm(current => current ? {...current, responsible:event.target.value} : current)} placeholder="Nome do responsável"/></label>
-      <label>Telefone<input value={structureForm.phone} onChange={event => setStructureForm(current => current ? {...current, phone:event.target.value} : current)} placeholder="(17) 0000-0000"/></label>
-      <label className="wide">E-mail<input type="email" value={structureForm.email} onChange={event => setStructureForm(current => current ? {...current, email:event.target.value} : current)} placeholder="email@prefeitura.sp.gov.br"/></label>
-      <label className="wide">Observações<textarea value={structureForm.description} onChange={event => setStructureForm(current => current ? {...current, description:event.target.value} : current)} placeholder="Informações complementares do órgão, unidade, setor ou ambiente."/></label>
-    </div><footer><button type="button" className="outline-btn" onClick={() => setStructureForm(null)}>Cancelar</button><button type="button" className="primary-btn" disabled={!canEdit || !structureForm.name.trim()} onClick={saveStructureForm}><Save size={14}/> Salvar vínculo</button></footer></section></div>}
+    {formDialog}
 
   </div>;
 }

@@ -40,14 +40,11 @@ test("Prefeitura mantém hierarquia Prefeitura → Secretaria → Unidade → Sa
   assert.equal(sala.unitCount, 3);
 });
 
-test("Prefeitura bloqueia Unidade sem Secretaria", () => {
-  const prefeitura = { id: "CLI-PREF-A", name: "Prefeitura A", organizationType:"Prefeitura" };
-  assert.throws(() => prepareCustomerStructureSave(prefeitura, {
-    id: "EST-UBS",
-    name: "UBS Central",
-    category: "Unidade",
-    hierarchyLevel: "Unidade",
-  }, []), /Secretaria/);
+test("Prefeitura permite Unidade diretamente na Matriz", () => {
+  const prefeitura={id:"CLI-PREF-A",name:"Prefeitura A",organizationType:"Prefeitura"};
+  const saved=prepareCustomerStructureSave(prefeitura,{id:"EST-UBS",name:"UBS Central",category:"Unidade",hierarchyLevel:"Unidade"},[]);
+  assert.equal(saved.record.parentId,undefined);
+  assert.equal(saved.record.customerId,prefeitura.id);
 });
 
 test("Prefeitura bloqueia Sala vinculada diretamente à Secretaria", () => {

@@ -2,6 +2,8 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { CheckCircle2, Edit3, FileText, Landmark, Plus, Trash2 } from "lucide-react";
+import { hierarchySelection, type HierarchySelection } from "@/lib/customer-hierarchy";
+import { useCustomerHierarchy } from "./CustomerHierarchyContext";
 import { CustomerSearchSelect } from "@/components/CustomerSearchSelect";
 import {
   calculateCertameItemBalance,
@@ -28,6 +30,14 @@ export type PublicContractRecord = {
   value?: number;
   category?: string;
   certameCustomerId?: string;
+  customerId?: string;
+  structureId?: string;
+  unitId?: string;
+  sectorId?: string;
+  roomId?: string;
+  unit?: string;
+  sector?: string;
+  room?: string;
   administrativeProcess?: string;
   modality?: string;
   biddingNumber?: string;
@@ -82,9 +92,11 @@ export function PublicContractsPanel({
   onSave: (record: PublicContractRecord) => Promise<boolean>;
   onDelete: (record: PublicContractRecord) => void;
 }) {
+  const hierarchy=useCustomerHierarchy();
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState("");
   const [customerId, setCustomerId] = useState("");
+  const [location,setLocation]=useState<HierarchySelection | null>(null);
   const [process, setProcess] = useState("");
   const [modality, setModality] = useState("");
   const [biddingNumber, setBiddingNumber] = useState("");
@@ -116,6 +128,7 @@ export function PublicContractsPanel({
   const reset = () => {
     setEditingId("");
     setCustomerId("");
+    setLocation(null);
     setProcess("");
     setModality("");
     setBiddingNumber("");
@@ -179,6 +192,7 @@ export function PublicContractsPanel({
       value: total,
       category: "Certame público",
       certameCustomerId: customer.id,
+      ...(location || {}),
       administrativeProcess: process.trim(),
       modality: modality.trim(),
       biddingNumber: biddingNumber.trim(),
@@ -200,6 +214,7 @@ export function PublicContractsPanel({
 
   const startEdit = (record: PublicContractRecord) => {
     setEditingId(record.id);
+    setLocation(null);
     setCustomerId(record.certameCustomerId || customers.find(item=>item.name===record.client)?.id || "");
     setProcess(record.administrativeProcess || "");
     setModality(record.modality || "");
@@ -242,7 +257,7 @@ export function PublicContractsPanel({
 
     {creating && <form className="public-contract-form panel" onSubmit={save}><div className="public-contract-edit-title"><strong>{editingId?"ALTERAR CERTAME":"NOVO CERTAME"}</strong>{editingId&&<small>As movimentações já registradas permanecem preservadas.</small>}</div>
       <div className="public-contract-fields">
-        <label>Cliente público<CustomerSearchSelect customers={customers} value={customerId} valueMode="id" onChange={value => setCustomerId(value)} placeholder="Pesquisar órgão, Prefeitura ou CNPJ..." /></label>
+        <label>Cliente público<CustomerSearchSelect customers={customers} value={customerId} valueMode="id" locationId={location?location.structureId:records.find(item=>item.id===editingId)?.structureId} onLocationChange={setLocation} onChange={value => {setCustomerId(value);const root=hierarchy.customers.find(item=>item.id===value);setLocation(root?hierarchySelection(root,[]):null);}} placeholder="Pesquisar órgão, Prefeitura ou CNPJ..." /></label>
         <label>Processo administrativo<input value={process} onChange={event => setProcess(event.target.value)} /></label>
         <label>Modalidade<input value={modality} onChange={event => setModality(event.target.value)} placeholder="Pregão eletrônico, concorrência..." /></label>
         <label>Número da licitação<input value={biddingNumber} onChange={event => setBiddingNumber(event.target.value)} /></label>

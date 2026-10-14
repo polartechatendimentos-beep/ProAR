@@ -25,8 +25,9 @@ const isPublicCustomer = (customer: CustomerStructureCustomer) => /prefeitura|or
 const canonicalPublicLevel = (record: CustomerStructureRecord | undefined) => {
   const level=normalizeLevel(record?.hierarchyLevel || record?.category);
   if (["secretaria","diretoria","departamento","orgao"].includes(level)) return "Secretaria";
-  if (level === "unidade") return "Unidade";
-  if (["sala","ambiente","setor"].includes(level)) return "Sala";
+  if (["unidade","filial"].includes(level)) return "Unidade";
+  if (level === "setor") return "Setor";
+  if (["sala","ambiente"].includes(level)) return "Sala";
   return "";
 };
 
@@ -37,10 +38,11 @@ const validatePublicHierarchy = (
 ) => {
   if (!isPublicCustomer(customer)) return;
   const level=canonicalPublicLevel(draft);
-  if (!level) throw new Error("Para Prefeitura, use a hierarquia Secretaria → Unidade → Sala/Ambiente.");
+  if (!level) throw new Error("Para Prefeitura, use Matriz → Filial/Unidade → Setor → Ambiente.");
   if (level === "Secretaria" && parent) throw new Error("Secretaria deve ficar vinculada diretamente à Prefeitura.");
-  if (level === "Unidade" && canonicalPublicLevel(parent) !== "Secretaria") throw new Error("Unidade deve ser vinculada a uma Secretaria.");
-  if (level === "Sala" && canonicalPublicLevel(parent) !== "Unidade") throw new Error("Sala/Ambiente deve ser vinculada a uma Unidade.");
+  if (level === "Unidade" && parent && canonicalPublicLevel(parent) !== "Secretaria") throw new Error("Unidade deve ficar na Matriz ou na Secretaria legada.");
+  if (level === "Setor" && canonicalPublicLevel(parent) !== "Unidade") throw new Error("Setor deve ser vinculado a uma Unidade.");
+  if (level === "Sala" && !["Unidade","Setor"].includes(canonicalPublicLevel(parent))) throw new Error("Sala/Ambiente deve ser vinculada a uma Unidade ou Setor.");
 };
 
 const descendantsOf = (id: string, structures: CustomerStructureRecord[]) => {

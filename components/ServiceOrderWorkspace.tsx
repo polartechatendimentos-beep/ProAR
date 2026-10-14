@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Camera, Check, ChevronRight, Clock3, FileText, History, ImagePlus, MapPin, Plus, Save, Sparkles, Wrench, X } from "lucide-react";
 import { improveTechnicalText } from "@/lib/text-assist";
 import { mobileChecklist, checklistProgress } from "@/lib/mobile-service-checklists";
+import { isMunicipalCustomer } from "@/lib/customer-hierarchy";
 import { CustomerSearchSelect } from "@/components/CustomerSearchSelect";
 import { HvacDiagnosticWorkspace } from "@/components/HvacDiagnosticWorkspace";
 import { EquipmentLabelControl } from "@/components/EquipmentLabelControl";
@@ -115,12 +116,14 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
     doc: text(item, "doc", "cnpj", "cpf"),
     phone: text(item, "phone", "whatsapp"),
     contact: text(item, "contact", "responsible"),
+    organizationType:text(item,"organizationType"),
   })).filter(item => item.id && item.name);
   const customerById = draft.customerId ? customers.find(item => text(item, "id", "customerId", "uuid") === String(draft.customerId)) : undefined;
   const draftClientKey = normalizeCustomerKey(draft.client);
   const customerByName = customers.find(item => [text(item, "name"), text(item, "legalName", "razaoSocial"), text(item, "tradeName", "nomeFantasia")].some(value => normalizeCustomerKey(value) === draftClientKey));
   const customer = customerById || customerByName;
   const selectedCustomerId = text(customer, "id", "customerId", "uuid") || String(draft.customerId || "");
+  const municipal=isMunicipalCustomer({id:selectedCustomerId,name:draft.client,organizationType:String(customer?.organizationType||"")});
   const selectedCustomerName = text(customer, "name", "legalName", "tradeName", "client") || draft.client;
   const customerStructures = structures.filter(item => {
     const structureCustomerId = text(item, "customerId", "clientId");
@@ -280,9 +283,9 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
     </header>
 
     <div className="os-location-bar">
-      <label>Cliente<CustomerSearchSelect customers={customerOptions} value={selectedCustomerId} valueMode="id" onChange={(value, selected) => setDraft(current => ({ ...current, client:selected?.name || "", customerId:value || undefined, unit:"", unitId:undefined, sector:"", sectorId:undefined, room:"", roomId:undefined, structureId:undefined }))} /></label>
-      <ChevronRight size={15}/><label>Unidade / setor<select value={draft.unit} onChange={event => setField("unit", event.target.value)}><option>{draft.unit || "Selecionar"}</option>{customerStructures.map(item => <option key={text(item, "id", "name")} value={text(item, "name", "unit")}>{text(item, "name", "unit")}</option>)}</select></label>
-      <ChevronRight size={15}/><label>Sala / ambiente<input value={selectedRoom} onChange={event => setField("environment", event.target.value)} placeholder="Sala ou ambiente"/></label>
+      <label>Cliente<CustomerSearchSelect customers={customerOptions} value={selectedCustomerId} valueMode="id" disabled={!canEdit} locationId={String(draft.structureId || draft.roomId || draft.sectorId || draft.unitId || "")} onLocationChange={selection=>setDraft(current=>({...current,...selection,equipmentIds:[]}))} onChange={(value, selected) => setDraft(current => ({ ...current, client:selected?.name || "", customerId:value || undefined, unit:"", unitId:undefined, sector:"", sectorId:undefined, room:"", roomId:undefined, structureId:undefined, equipmentIds:[] }))} /></label>
+      <ChevronRight size={15}/><label className={municipal?"municipal-legacy-location":""}>Unidade / setor<select value={draft.unit} onChange={event => setField("unit", event.target.value)}><option>{draft.unit || "Selecionar"}</option>{customerStructures.map(item => <option key={text(item, "id", "name")} value={text(item, "name", "unit")}>{text(item, "name", "unit")}</option>)}</select></label>
+      <ChevronRight size={15}/><label className={municipal?"municipal-legacy-location":""}>Sala / ambiente<input value={selectedRoom} onChange={event => setField("environment", event.target.value)} placeholder="Sala ou ambiente"/></label>
       <div className="os-location-summary"><MapPin size={15}/><span>{draft.unit || "Local não informado"} <b>›</b> {selectedRoom}</span></div>
     </div>
 

@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { CustomerHierarchyTree } from "./CustomerHierarchyTree";
+import { isMunicipalCustomer } from "@/lib/customer-hierarchy";
 import { Building2, CheckCircle2, ChevronRight, LoaderCircle, MapPin, Plus, Search, X } from "lucide-react";
 
-type QuickCustomer = { id: string; name: string; doc: string; legalName?: string; tradeName?: string; phone?: string; email?: string; city?: string; state?: string };
-type QuickStructure = { id: string; name: string; client: string; category?: string; parentId?: string; hierarchyLevel?: string; environmentType?: string };
+type QuickCustomer = { organizationType?:string; id: string; name: string; doc: string; legalName?: string; tradeName?: string; phone?: string; email?: string; city?: string; state?: string };
+type QuickStructure = { customerId?:string; id: string; name: string; client: string; category?: string; parentId?: string; hierarchyLevel?: string; environmentType?: string };
 
 type CustomerDraft = { name: string; legalName: string; tradeName: string; doc: string; phone: string; email: string; city: string; state: string };
 type StructureDraft = { kind: "Setor" | "Unidade" | "Ambiente"; name: string; parentId: string; environmentType: string; roomNumber: string; description: string };
@@ -36,19 +38,21 @@ export function BudgetQuickCreateDrawer({
   const [feedback, setFeedback] = useState("");
 
   const customer = customers.find(item => item.name === customerName);
-  const customerStructures = useMemo(() => structures.filter(item => item.client === customerName), [structures, customerName]);
+  const municipal=isMunicipalCustomer(customer);
+  const customerStructures = useMemo(() => structures.filter(item => item.customerId ? item.customerId===customer?.id : item.client === customerName), [structures, customerName,customer?.id]);
   const parentOptions = useMemo(() => {
+    if(municipal) return customerStructures.filter(item=>structureDraft.kind==="Setor"?/unidade|filial/i.test(String(item.hierarchyLevel||item.category)):structureDraft.kind==="Ambiente"?/setor/i.test(String(item.hierarchyLevel||item.category)):false);
     if (structureDraft.kind === "Setor") return customerStructures.filter(item => !item.parentId && /setor|secretaria|área|departamento/i.test(`${item.category ?? ""} ${item.hierarchyLevel ?? ""}`));
     if (structureDraft.kind === "Unidade") return customerStructures.filter(item => /setor|secretaria|área|departamento/i.test(`${item.category ?? ""} ${item.hierarchyLevel ?? ""}`));
     return customerStructures.filter(item => /unidade|hospital|escola|ubs|clínica|filial/i.test(`${item.category ?? ""} ${item.hierarchyLevel ?? ""}`) || item.parentId);
-  }, [customerStructures, structureDraft.kind]);
+  }, [customerStructures, structureDraft.kind,municipal]);
 
   useEffect(() => {
     if (!open) return;
     setFeedback("");
     setLookupState("idle");
-    setStructureDraft(current => ({ ...current, parentId: "" }));
-  }, [open, mode]);
+    setStructureDraft(current => ({ ...current, kind:municipal?"Unidade":current.kind,parentId: "" }));
+  }, [open, mode,municipal]);
 
   useEffect(() => {
     if (open && mode === "structure" && !customerName) setFeedback("Selecione um cliente antes de cadastrar a estrutura.");
@@ -104,9 +108,10 @@ export function BudgetQuickCreateDrawer({
         <footer><button type="button" className="outline-btn" onClick={onClose}>Cancelar</button><button type="submit" className="primary-btn"><CheckCircle2 size={15}/> Salvar e selecionar</button></footer>
       </form> : <form className="budget-quick-form" onSubmit={submitStructure}>
         <div className="budget-quick-context"><Building2 size={16}/><span><small>CLIENTE PRINCIPAL</small><b>{customer?.name || customerName || "Selecione um cliente"}</b></span></div>
-        <label>Tipo de estrutura<select value={structureDraft.kind} onChange={event => setStructureDraft(current => ({ ...current, kind: event.target.value as StructureDraft["kind"], parentId: "" }))}><option value="Setor">Setor / Secretaria</option><option value="Unidade">Unidade / Filial</option><option value="Ambiente">Sala / Ambiente</option></select></label>
+        <label>Tipo de estrutura<select value={structureDraft.kind} onChange={event => setStructureDraft(current => ({ ...current, kind: event.target.value as StructureDraft["kind"], parentId: "" }))}><option value="Setor">{municipal?"Setor":"Setor / Secretaria"}</option><option value="Unidade">Unidade / Filial</option><option value="Ambiente">Sala / Ambiente</option></select></label>
+        {municipal&&customer&&<CustomerHierarchyTree customer={customer} records={customerStructures} customers={customers} value={structureDraft.parentId} onSelect={selection=>{if(!selection.structureId&&structureDraft.kind==="Unidade")setStructureDraft(current=>({...current,parentId:""}));else if(parentOptions.some(item=>item.id===selection.structureId))setStructureDraft(current=>({...current,parentId:selection.structureId||""}));else setFeedback("Escolha o nível superior: Unidade para Setor; Setor para Ambiente.");}}/>}
         <label>Nome<input required value={structureDraft.name} onChange={event => setStructureDraft(current => ({ ...current, name: event.target.value }))} placeholder={structureDraft.kind === "Setor" ? "Ex.: Secretaria da Saúde" : structureDraft.kind === "Unidade" ? "Ex.: UBS Central" : "Ex.: Consultório 01"} autoFocus/></label>
-        {structureDraft.kind !== "Setor" && <label>Vincular a<select value={structureDraft.parentId} onChange={event => setStructureDraft(current => ({ ...current, parentId: event.target.value }))}><option value="">Selecionar vínculo</option>{parentOptions.map(item => <option key={item.id} value={item.id}>{item.name} • {item.category || item.hierarchyLevel || "Estrutura"}</option>)}</select></label>}
+        {(municipal?structureDraft.kind!=="Unidade":structureDraft.kind !== "Setor") && <label>Vincular a<select value={structureDraft.parentId} onChange={event => setStructureDraft(current => ({ ...current, parentId: event.target.value }))}><option value="">Selecionar vínculo</option>{parentOptions.map(item => <option key={item.id} value={item.id}>{item.name} • {item.category || item.hierarchyLevel || "Estrutura"}</option>)}</select></label>}
         {structureDraft.kind === "Ambiente" && <><label>Tipo de ambiente<select value={structureDraft.environmentType} onChange={event => setStructureDraft(current => ({ ...current, environmentType: event.target.value }))}>{["Sala","Consultório","Recepção","Sala técnica","CPD","Laboratório","Farmácia","Outro"].map(item => <option key={item}>{item}</option>)}</select></label><label>Número da sala<input value={structureDraft.roomNumber} onChange={event => setStructureDraft(current => ({ ...current, roomNumber: event.target.value }))}/></label></>}
         <label className="budget-quick-wide">Observação<textarea value={structureDraft.description} onChange={event => setStructureDraft(current => ({ ...current, description: event.target.value }))} placeholder="Informações úteis para o orçamento..."/></label>
         {feedback && <p className="budget-quick-feedback"><CheckCircle2 size={14}/>{feedback}</p>}
