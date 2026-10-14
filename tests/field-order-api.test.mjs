@@ -5,7 +5,7 @@ import {stripTypeScriptTypes} from 'node:module';
 import {runInNewContext} from 'node:vm';
 import {createHash} from 'node:crypto';
 import {applyFieldOrder,technicianRole,fieldOrderFingerprint} from '../lib/mobile-workday.ts';
-import {improveFieldOrder,fieldEquipmentHistory} from '../lib/mobile-order-improvements.ts';
+import {improveFieldOrder,mobileMutationActions,fieldEquipmentHistory} from '../lib/mobile-order-improvements.ts';
 import {assignedToSession} from '../lib/mobile-field.ts';
 import {FieldSupportError} from '../lib/field-support.ts';
 import {RouteError,validatePoint} from '../lib/work-routes.ts';
