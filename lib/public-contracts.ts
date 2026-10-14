@@ -140,6 +140,9 @@ export function createCertameMovement(input: CertameMovementInput): CertameMovem
   assertUniqueMovement(input.existingMovements, { id: input.id, correlationId: input.correlationId });
   const quantity = precision(input.quantity);
   const balance = calculateCertameItemBalance(input.item, input.existingMovements);
+  const orderBalance = input.serviceOrderId
+    ? calculateCertameItemBalance(input.item, input.existingMovements.filter(movement => movement.serviceOrderId === input.serviceOrderId))
+    : balance;
 
   let reservedDelta = 0;
   let executedDelta = 0;
@@ -155,7 +158,7 @@ export function createCertameMovement(input: CertameMovementInput): CertameMovem
   }
 
   if (input.type === "Execução") {
-    if (quantity > balance.reservedQuantity) {
+    if (quantity > orderBalance.reservedQuantity) {
       throw new CertameBalanceError("A quantidade executada é maior que a quantidade reservada na OS.");
     }
     reservedDelta = -quantity;
@@ -163,14 +166,14 @@ export function createCertameMovement(input: CertameMovementInput): CertameMovem
   }
 
   if (input.type === "Liberação") {
-    if (quantity > balance.reservedQuantity) {
+    if (quantity > orderBalance.reservedQuantity) {
       throw new CertameBalanceError("A quantidade liberada é maior que a quantidade reservada na OS.");
     }
     reservedDelta = -quantity;
   }
 
   if (input.type === "Estorno") {
-    if (quantity > balance.executedQuantity) {
+    if (quantity > orderBalance.executedQuantity) {
       throw new CertameBalanceError("A quantidade estornada é maior que a quantidade executada.");
     }
     executedDelta = -quantity;
@@ -240,10 +243,16 @@ export function validateEmpenhoAllocations(
   if (allocations.some(allocation => allocation.quantity !== undefined && (!Number.isFinite(allocation.quantity) || allocation.quantity <= 0))) {
     throw new CertameBalanceError("A quantidade vinculada ao item do Certame deve ser maior que zero.");
   }
+  if (allocations.some(allocation => allocation.unitValue !== undefined && (!Number.isFinite(allocation.unitValue) || allocation.unitValue < 0))) {
+    throw new CertameBalanceError("O valor unitário vinculado ao Empenho deve ser um número válido e não negativo.");
+  }
   if (new Set(allocations.map(allocation => allocation.id)).size !== allocations.length) {
     throw new CertameBalanceError("Existem vínculos duplicados neste Empenho.");
   }
   const allocated = calculateEmpenhoAllocatedAmount(allocations);
+  if (!Number.isFinite(allocated) || !Number.isFinite(precision(empenhoValue))) {
+    throw new CertameBalanceError("Os valores do Empenho excedem a faixa numérica suportada.");
+  }
   if (allocated > precision(empenhoValue)) {
     throw new CertameBalanceError("O total vinculado às OS ultrapassa o valor do Empenho.");
   }
