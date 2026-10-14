@@ -5,7 +5,7 @@ import {stripTypeScriptTypes} from 'node:module';
 import {runInNewContext} from 'node:vm';
 import {createHash} from 'node:crypto';
 import {applyFieldOrder,technicianRole,fieldOrderFingerprint} from '../lib/mobile-workday.ts';
-import {improveFieldOrder,fieldEquipmentHistory} from '../lib/mobile-order-improvements.ts';
+import {improveFieldOrder,mobileMutationActions,fieldEquipmentHistory} from '../lib/mobile-order-improvements.ts';
 import {assignedToSession} from '../lib/mobile-field.ts';
 import {FieldSupportError} from '../lib/field-support.ts';
 import {RouteError,validatePoint} from '../lib/work-routes.ts';
@@ -18,7 +18,7 @@ function setup({session={username:'tecnico',role:'Técnico'},journey=true,initia
   const fn=runInNewContext(source+'\nPOST;',{
     NextResponse:{json:(body,{status=200}={})=>({body,status})},createHash,sessionFromRequest:()=>session,hasPermission:()=>true,
     routeContext:async()=>context,activeJourneyContext:async()=>{if(!journey)throw new FieldSupportError('Jornada inativa',403);return context;},
-    technicianRole,applyFieldOrder,improveFieldOrder,fieldEquipmentHistory,assignedToSession,FieldSupportError,RouteError,validatePoint,prepareOperationalState,OperationError,independentOperationalRows,
+    technicianRole,applyFieldOrder,improveFieldOrder,mobileMutationActions,fieldEquipmentHistory,assignedToSession,FieldSupportError,RouteError,validatePoint,prepareOperationalState,OperationError,independentOperationalRows,
     PRIMARY_DATABASE_URL:'neon://test',commitNeonOperationalState:async(_id,_revision,payload)=>{saved=payload;context.state=payload;return payload;},
   });
   return {fn,get saved(){return saved;}};
