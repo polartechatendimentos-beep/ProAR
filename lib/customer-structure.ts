@@ -69,6 +69,7 @@ export function prepareCustomerStructureSave(
   const parent = parentId ? structures.find(item => item.id === parentId) : undefined;
   if (parentId && !parent) throw new Error("A estrutura superior selecionada não existe mais.");
   if (parent && !belongsToCustomer(parent, customer)) throw new Error("A estrutura superior pertence a outro cliente.");
+  if (parent && !parent.customerId) throw new Error("A estrutura superior possui vínculo legado sem ID do cliente. Regularize o cadastro antes de criar novos vínculos.");
   if (parentId === draft.id) throw new Error("Uma estrutura não pode ser vinculada a ela mesma.");
   if (draft.id && descendantsOf(draft.id, structures).has(parentId)) throw new Error("Não é permitido criar um ciclo na hierarquia.");
   validatePublicHierarchy(customer, draft, parent);
