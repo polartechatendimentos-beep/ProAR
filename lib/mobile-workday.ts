@@ -58,6 +58,7 @@ export function applyFieldOrder(order:Record<string,unknown>, command:FieldOrder
   if(command.point && command.action === "start")next.checkInGps={latitude:command.point.latitude,longitude:command.point.longitude,accuracy:command.point.accuracy,capturedAt:command.point.capturedAt};
   if(command.point && command.action === "finish")next.checkOutGps={latitude:command.point.latitude,longitude:command.point.longitude,accuracy:command.point.accuracy,capturedAt:command.point.capturedAt};
   if(command.action === "finish") {
+    if(order.fieldAttendancePaused)throw new FieldSupportError("Retome o atendimento pausado antes de concluir.",409);
     const ids=Array.isArray(next.equipmentIds)?next.equipmentIds:next.equipmentId?[next.equipmentId]:[];
     if(!order.checkInAt || (!ids.length&&!approvedFieldException(order,"equipment")) || !String(next.diagnosis||"").trim() || !String(next.executedService||"").trim() || !photos.before?.length || !photos.after?.length || (!next.customerSignature&&!approvedFieldException(order,"signature")))throw new FieldSupportError("Conclusão exige check-in, equipamento vinculado, diagnóstico, serviço executado, fotos antes/depois e assinatura do cliente. Exceções de equipamento ou assinatura precisam de aprovação do gestor.");
     const checks=next.mobileChecklist as Record<string,boolean>|undefined;
