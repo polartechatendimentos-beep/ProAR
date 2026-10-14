@@ -55,6 +55,7 @@ export function ProARFieldMobile() {
   const [tab, setTab] = useState<Tab>("inicio");
   const [data, setData] = useState<FieldData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sunlightMode, setSunlightMode] = useState(false);
   const [error, setError] = useState("");
   const [loginRequired, setLoginRequired] = useState(false);
   const [online, setOnline] = useState(true);
@@ -114,11 +115,12 @@ export function ProARFieldMobile() {
     { id:"central", label:"Central", icon:ShieldCheck },
     { id:"mais", label:"Mais", icon:Menu },
   ];
-  return <div className={styles.app}>
+  return <div className={`${styles.app} ${sunlightMode ? styles.sunlightMode : ""}`}>
     <div className={styles.shell}>
       <header className={styles.header}>
         <div className={styles.brand}><span className={styles.brandIcon}><Wrench size={19}/></span><span><strong>ProAR <b>Mobile</b></strong><small>OPERAÇÃO EM CAMPO</small></span></div>
         <div className={styles.headerRight}>
+          <button type="button" className={styles.iconButton} aria-label={sunlightMode ? "Desativar modo sol forte" : "Ativar modo sol forte"} aria-pressed={sunlightMode} title="Modo sol forte" onClick={()=>setSunlightMode(value=>!value)}><span aria-hidden="true">☀</span></button>
           <span className={`${styles.connection} ${online && !error ? styles.connectionOn : styles.connectionOff}`}><span className={styles.connectionDot}/>{online && !error ? "Conectado" : "Sem sincronização"}</span>
           <button type="button" className={styles.iconButton} aria-label="Atualizar dados" onClick={()=>void refresh()} disabled={loading}><RefreshCw size={19} className={loading ? styles.spin : ""}/></button>
         </div>
