@@ -9,5 +9,5 @@ export function tenderPncpLink(t:TenderIdentity) {
  if(m){cnpj=m[1];sequence=Number(m[2]);year=Number(m[3]);}
  return /^\d{14}$/.test(cnpj) && Number.isInteger(year) && Number(year)>=2000 && Number(year)<=2100 && Number.isSafeInteger(sequence) && Number(sequence)>0 ? `https://pncp.gov.br/app/editais/${cnpj}/${year}/${sequence}` : '';
 }
-export function tenderPncpSearch(t:TenderIdentity) {return `https://pncp.gov.br/app/editais?q=${encodeURIComponent(t.numeroControlePNCP||t.orgaoEntidade?.razaoSocial||t.objetoCompra||'')}`;}
+export function tenderPncpSearch(t:TenderIdentity) {return `https://pncp.gov.br/app/editais?q=${encodeURIComponent((t.numeroControlePNCP?.startsWith("MUNICIPAL-")?"":t.numeroControlePNCP)||t.orgaoEntidade?.razaoSocial||t.objetoCompra||'')}`;}
 export function importedTenderId(url:string) {let hash=2166136261;for(const ch of url)hash=Math.imul(hash^ch.charCodeAt(0),16777619)>>>0;return `LIC-LINK-${hash.toString(16)}`;}
