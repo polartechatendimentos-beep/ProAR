@@ -225,10 +225,14 @@
       "status": "parcial",
       "evidence": {
         "prs": [
-          89,
-          90
+          76,
+          79
         ],
-        "scope": "Há controle de repetição em fluxos mobile; idempotência de todas as operações críticas ainda não auditada."
+        "files": [
+          "app/api/mobile/orders/route.ts",
+          "tests/field-order-api.test.mjs"
+        ],
+        "scope": "Controle de repetição por requestId/fingerprint nas mutações de OS Mobile; demais operações críticas ainda não auditadas."
       }
     },
     {
