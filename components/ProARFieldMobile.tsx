@@ -64,7 +64,7 @@ export function ProARFieldMobile() {
   const refresh = useCallback(async () => {
     setLoading(true); setError("");
     try {
-      if (!navigator.onLine) throw new Error("Sem conexão. O ProAR Field ainda não possui sincronização offline segura.");
+      if (!navigator.onLine) throw new Error("Sem conexão. O ProAR Mobile ainda não possui sincronização offline segura.");
       const response = await fetch("/api/mobile/bootstrap", { cache:"no-store", credentials:"same-origin" });
       const result = await response.json();
       if (!response.ok) {
@@ -113,7 +113,7 @@ export function ProARFieldMobile() {
   return <div className={styles.app}>
     <div className={styles.shell}>
       <header className={styles.header}>
-        <div className={styles.brand}><span className={styles.brandIcon}><Wrench size={19}/></span><span><strong>ProAR <b>Field</b></strong><small>OPERAÇÃO EM CAMPO</small></span></div>
+        <div className={styles.brand}><span className={styles.brandIcon}><Wrench size={19}/></span><span><strong>ProAR <b>Mobile</b></strong><small>OPERAÇÃO EM CAMPO</small></span></div>
         <div className={styles.headerRight}>
           <span className={`${styles.connection} ${online && !error ? styles.connectionOn : styles.connectionOff}`}><span className={styles.connectionDot}/>{online && !error ? "Conectado" : "Sem sincronização"}</span>
           <button type="button" className={styles.iconButton} aria-label="Atualizar dados" onClick={()=>void refresh()} disabled={loading}><RefreshCw size={19} className={loading ? styles.spin : ""}/></button>
@@ -155,7 +155,7 @@ export function ProARFieldMobile() {
               <h1 className={styles.title}>Olá, {firstName}<span className={styles.titleAccent}>.</span></h1>
               <p className={styles.subtitle}>Seus atendimentos em aberto conectados ao ProAR.</p>
               <div className={styles.hero}>
-                <span className={styles.heroTop}><Smartphone size={18}/> PROAR FIELD · DADOS REAIS</span>
+                <span className={styles.heroTop}><Smartphone size={18}/> PROAR MOBILE · DADOS REAIS</span>
                 <strong>{data.summary.today}</strong>
                 <span>ordens programadas para hoje</span>
                 <div className={styles.heroBottom}><span>Somente OS em aberto</span><span>{todayISO().split("-").reverse().join("/")}</span></div>
@@ -194,10 +194,10 @@ export function ProARFieldMobile() {
           </>}
         </>}
       </main>
-      <nav className={styles.bottomNav} aria-label="Navegação ProAR Field">
+      <nav className={styles.bottomNav} aria-label="Navegação ProAR Mobile">
         {tabs.map(item=>{const Icon=item.icon;return <button key={item.id} type="button" aria-current={tab===item.id&&!selected?"page":undefined} className={`${styles.navItem} ${tab===item.id&&!selected?styles.navActive:""}`} onClick={()=>{setSelected(null);setTab(item.id)}}><Icon size={22}/><span>{item.label}</span></button>})}
       </nav>
-      <footer className={styles.footer}><span><Wifi size={12}/> {online ? "Rede disponível" : "Offline"}</span><span>ProAR Field · operação integrada</span></footer>
+      <footer className={styles.footer}><span><Wifi size={12}/> {online ? "Rede disponível" : "Offline"}</span><span>ProAR Mobile · operação integrada</span></footer>
     </div>
   </div>;
 }
