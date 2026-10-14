@@ -20,7 +20,7 @@ const belongsToCustomer = (record: CustomerStructureRecord, customer: CustomerSt
   record.customerId ? record.customerId === customer.id : record.client === customer.name;
 
 const normalizeLevel = (value?: string) => String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
-const isPublicCustomer = (customer: CustomerStructureCustomer) => /prefeitura|orgao publico|autarquia|fundacao|entidade publica/i.test(normalizeLevel(customer.organizationType));
+const isPublicCustomer = (customer: CustomerStructureCustomer) => /^(prefeitura|municipio)\b/.test(normalizeLevel(customer.name)) || /prefeitura|orgao publico|autarquia|fundacao|entidade publica/i.test(normalizeLevel(customer.organizationType));
 
 const canonicalPublicLevel = (record: CustomerStructureRecord | undefined) => {
   const level=normalizeLevel(record?.hierarchyLevel || record?.category);
