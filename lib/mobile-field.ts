@@ -103,7 +103,7 @@ export function mobileFieldOrders(
       equipmentIds,
       checkInAt: short(order.checkInAt, 40),
       fieldVersion: Number.isInteger(order.fieldVersion) ? Number(order.fieldVersion) : 0,
-      fieldExceptions: Array.isArray(order.fieldExceptions) ? order.fieldExceptions.filter(isRecord).slice(-20).map(item=>({id:short(item.id,100),kind:item.kind,reason:short(item.reason,1000),status:short(item.status,30),requestedBy:short(item.requestedBy,120),requestedAt:short(item.requestedAt,40),decidedBy:short(item.decidedBy,120),decidedAt:short(item.decidedAt,40),decisionReason:short(item.decisionReason,1000)})) : [],
+      fieldExceptions: Array.isArray(order.fieldExceptions) ? order.fieldExceptions.filter(isRecord).slice(-20).map(item=>({id:short(item.id,100),kind:item.kind === "equipment" ? "equipment" as const : "signature" as const,reason:short(item.reason,1000),status:short(item.status,30),requestedBy:short(item.requestedBy,120),requestedAt:short(item.requestedAt,40),decidedBy:short(item.decidedBy,120),decidedAt:short(item.decidedAt,40),decisionReason:short(item.decisionReason,1000)})) : [],
       attendancePaused:Boolean(order.fieldAttendancePaused),
       estimatedDurationMinutes:Number(order.estimatedDurationMinutes||0),
       requests:Array.isArray(order.fieldRequests)?order.fieldRequests.filter(isRecord).slice(-50).map(item=>({id:short(item.id,100),kind:short(item.kind,50),note:short(item.note,2000),status:short(item.status,30),date:short(item.date,10),time:short(item.time,5),decidedBy:short(item.decidedBy,120),decisionNote:short(item.decisionNote,2000)})):[],
