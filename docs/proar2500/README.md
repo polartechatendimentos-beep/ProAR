@@ -37,3 +37,25 @@ Verificar integridade e autorização no servidor antes de melhorias visuais,
 seguir por itens reproduzíveis e registrar commit, CI e deploy em cada lote.
 Integrações dependentes de serviços externos devem registrar a dependência;
 não fabricar credenciais, fatos técnicos, dados operacionais ou confirmações.
+
+## Atualização do acompanhamento — 14/10/2026
+
+PRs #92 e #93 publicados. Deploy confirmado no commit
+b2d2e5881b29a11138739da4e4c66c90846baf39, com CI completo aprovado.
+Incluem saldo segregado por OS, unitários/overflow de empenhos, entradas PT
+e projeção de duração/atraso/garantia no Mobile.
+
+O catálogo agora identifica seis itens como parciais, com referência aos PRs.
+Os demais 2.494 continuam não auditados. Nenhum item amplo é marcado
+como integralmente concluído apenas por associação a uma correção.
+
+### Lote de proteção das mutações de certames
+
+Bloqueia comando com item/histórico numérico inválido, acumulados negativos
+ou quantidade que estoura a precisão. Ajuste não pode ultrapassar o disponível
+sem o parâmetro booleano de autorização excepcional já existente.
+Identificador de movimentação e correlação opcional não podem ser vazios.
+
+A validação ocorre na criação de movimentos; a consulta e os registros
+históricos permanecem preservados. Testes:
+tests/certame-mutation-integrity.test.mjs.
