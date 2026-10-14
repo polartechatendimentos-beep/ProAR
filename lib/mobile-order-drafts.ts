@@ -1,4 +1,4 @@
-export type OrderDraft={version:number;report:string;diagnosis:string;checklist:Record<string,boolean>;equipmentIds:string[];before:string;after:string;signature:string;signerName:string;savedAt:number};
+export type OrderDraft={version:number;observations?:string;measurements?:Record<string,string>;beforePhotos?:string[];afterPhotos?:string[];report:string;diagnosis:string;checklist:Record<string,boolean>;equipmentIds:string[];before:string;after:string;signature:string;signerName:string;savedAt:number};
 type DraftRow={id:string;iv:Uint8Array;cipher:ArrayBuffer};
 const pending=new Map<string,Promise<unknown>>();
 function open(){return new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open("proar-order-drafts-v1",1);r.onupgradeneeded=()=>{r.result.createObjectStore("drafts",{keyPath:"id"});r.result.createObjectStore("keys");};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
