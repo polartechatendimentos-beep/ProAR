@@ -12,6 +12,8 @@ import { tenantHeaders } from "../../../../lib/tenant-rest";
 import { improveFieldOrder, mobileMutationActions, fieldEquipmentHistory, type ImprovementCommand } from "../../../../lib/mobile-order-improvements";
 import { assignedToSession } from "../../../../lib/mobile-field";
 
+import { fieldCustomerHistory, fieldOrderReceipt } from "../../../../lib/mobile-order-records";
+
 export const runtime="nodejs";
 const reply=(body:unknown,status=200)=>NextResponse.json(body,{status,headers:{"Cache-Control":"private, no-store"}});
 export async function POST(request:NextRequest) {
@@ -25,10 +27,16 @@ export async function POST(request:NextRequest) {
     if(!/^[a-f0-9]{64}$/.test(command.expectedToken||""))throw new FieldSupportError("Atualize os dados da OS antes de salvar.",409);
     const fingerprint=createHash("sha256").update(JSON.stringify({command,username:session.username})).digest("hex");
     for(let attempt=0;attempt<3;attempt++){
-      const c=technicianRole(session.role)?await activeJourneyContext(session):await routeContext(session);
+      const c=await routeContext(session);
       const state=c.state as ErpState;
       const replay=state._mobileFieldOps?.[command.requestId];
-      if(replay){if(replay!==fingerprint)throw new FieldSupportError("Identificador já usado em outra operação.",409);return reply({saved:true,replay:true});}
+      if(replay){
+        if(replay!==fingerprint)throw new FieldSupportError("Identificador já usado em outra operação.",409);
+        const confirmed=(state.serviceOrders||[]).find(item=>item.id===command.orderId);
+        if(!confirmed||!assignedToSession(confirmed,{...session,employeeId:c.actor?.employeeId}))throw new FieldSupportError("OS não disponível para este perfil.",403);
+        return reply({saved:true,replay:true,orderId:command.orderId,version:confirmed.fieldVersion,status:confirmed.status,equipmentIds:confirmed.equipmentIds||[],completedAt:confirmed.checkOutAt||null});
+      }
+      if(technicianRole(session.role))await activeJourneyContext(session);
       if(Object.keys(state._mobileFieldOps||{}).length>=10000)throw new FieldSupportError("Limite de auditoria mobile atingido. Solicite arquivamento.",409);
       const order=(state.serviceOrders||[]).find(item=>item.id===command.orderId);if(!order)throw new FieldSupportError("OS não encontrada.",404);
       if(technicianRole(session.role) && ["start","finish"].includes(command.action)){
@@ -60,6 +68,10 @@ export async function GET(request:NextRequest){
     const c=await routeContext(session),state=c.state as ErpState;
     const order=(state.serviceOrders||[]).find(item=>item.id===request.nextUrl.searchParams.get("orderId"));
     if(!order || !assignedToSession(order,{...session,employeeId:c.actor?.employeeId}))return reply({error:"OS não disponível para este perfil."},403);
+    if(request.nextUrl.searchParams.get("view")==="customer-history")return reply({history:fieldCustomerHistory(order,state.serviceOrders||[])});
+    if(request.nextUrl.searchParams.get("view")==="receipt"){
+      const receipt=fieldOrderReceipt(order);return receipt?reply({receipt}):reply({error:"A OS ainda não possui conclusão confirmada."},409);
+    }
     return reply({history:fieldEquipmentHistory(order,request.nextUrl.searchParams.get("equipmentId")||"",state.moduleRecords?.Equipamentos||[],state.serviceOrders||[])});
   }catch(error){return error instanceof FieldSupportError?reply({error:error.message},error.status):reply({error:"Histórico indisponível."},503);}
 }

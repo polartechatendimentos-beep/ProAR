@@ -29,6 +29,7 @@ export type MobileFieldOrder = {
   observations?:string;
   measurements?:Record<string,string>;
   photoCounts?:{before:number;after:number};
+  appliedMaterials?:{name:string;quantity:number}[];
   editToken?: string;
   equipmentOptions?: { id: string; label: string }[];
   fieldExceptions?: { id:string;kind:"signature"|"equipment";reason:string;status:string;requestedBy:string;requestedAt:string;decidedBy?:string;decidedAt?:string;decisionReason?:string }[];
@@ -120,6 +121,7 @@ export function mobileFieldOrders(
       observations: short(order.fieldObservations,4000),
       measurements: Object.fromEntries(["pressure","temperature","voltage","current"].filter(key=>typeof (order.fieldMeasurements as Record<string,unknown>|undefined)?.[key]==="string").map(key=>[key,short((order.fieldMeasurements as Record<string,unknown>)[key],30)])),
       photoCounts:{before:Array.isArray((order.photos as Record<string,unknown>|undefined)?.before)?(order.photos as Record<string,string[]>).before.length:0,after:Array.isArray((order.photos as Record<string,unknown>|undefined)?.after)?(order.photos as Record<string,string[]>).after.length:0},
+      appliedMaterials:Array.isArray(order.catalogItems)?order.catalogItems.filter(isRecord).filter(item=>item.kind==="Produto").slice(0,100).map(item=>({name:short(item.name,150),quantity:typeof item.quantity==="number"&&Number.isFinite(item.quantity)&&item.quantity>0?item.quantity:1})):[],
       diagnosis: short(order.diagnosis, 4000),
       executedService: short(order.executedService, 8000),
       mobileChecklist: Object.fromEntries(Object.entries(isRecord(order.mobileChecklist) ? order.mobileChecklist : {}).filter(([,value])=>typeof value === "boolean")) as Record<string,boolean>,
@@ -144,4 +146,5 @@ export function mobileFieldSummary(orders: MobileFieldOrder[], date: string) {
     pending: openOrders.filter(item => !active(item.status)).length,
   };
 }
+
 

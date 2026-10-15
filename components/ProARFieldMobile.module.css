@@ -80,6 +80,33 @@
 .formLabel{display:grid;gap:6px;margin:13px 0;font-size:12px;color:#bfeaff}.formLabel input,.formLabel select,.formLabel textarea{width:100%;box-sizing:border-box;background:#0c2541;color:#fff;border:1px solid #31577a;border-radius:9px;padding:10px;font:inherit;color-scheme:dark}.formLabel textarea{min-height:100px}.checkLabel{display:flex;gap:9px;align-items:center;margin:10px 0;font-size:12px}.signatureCanvas{width:100%;height:150px;background:white;border-radius:10px;touch-action:none}.supportItem{border-bottom:1px solid #31577a;padding:14px 0;font-size:12px;overflow-wrap:anywhere}.supportItem a{color:#8ae6fb}.sosButton{position:fixed;right:max(16px,calc((100vw - 820px)/2 + 16px));bottom:100px;z-index:20;background:#a81930;color:white;border:1px solid #ff6177;padding:11px 17px;border-radius:22px;font-weight:800;box-shadow:0 4px 18px #0005}.sosButton:disabled{opacity:.6}.journeyPanel{margin-bottom:18px;border:1px solid #31577a;border-radius:12px;padding:13px;font-size:12px}.journeyPanel summary{cursor:pointer;font-weight:800;color:#9decf6}.journeyPanel :global(.work-routes){background:#102944;color:#d8e9ff}.journeyPanel :global(button),.journeyPanel :global(select){max-width:100%}.primaryAction:disabled,.secondaryAction:disabled{opacity:.5;cursor:wait}
 
 
+/* Semantic field palette: every color is paired with text or a state label. */
+.hero{background:radial-gradient(ellipse at 100% 0%,#6752a8 0%,transparent 65%),linear-gradient(125deg,#075b8c,#174470);border-color:#4d9ac4}
+.metrics>div:first-child{background:linear-gradient(130deg,#123e61,#12304d);border-color:#348ac0;border-top:4px solid #41b9ff}
+.metrics>div:last-child{background:linear-gradient(130deg,#513c23,#302b29);border-color:#9f7332;border-top:4px solid #ffc15b}
+.metrics>div:first-child strong{color:#90d7ff}.metrics>div:last-child strong{color:#ffd18a}.metrics span{color:#d5e4f1}
+.blueCard{border-left:5px solid #48bbff}.greenCard{border-left:5px solid #4ce3a3}.amberCard{border-left:5px solid #ffc15b}.violetCard{border-left:5px solid #b5a0ff}.redCard{border-left:5px solid #ff8c9b}
+.statusActive{background:#103f65;color:#a8dfff}.statusPending{background:#4e3820;color:#ffe0a5}.statusDone{background:#104638;color:#9bf0c8}.statusAlert{background:#532a37;color:#ffc0cb}
+.primaryAction{border:1px solid #67cff7;background:linear-gradient(120deg,#58cded,#58b2ff);color:#061b30;cursor:pointer}
+.finishAction{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:48px;border-radius:12px;padding:12px 15px;margin-top:12px;font-size:13px;font-weight:850;background:linear-gradient(120deg,#63e5ae,#8ce2a0);border:1px solid #a7ffd6;color:#062c22;cursor:pointer}
+.finishAction:disabled{opacity:.5;cursor:wait}.secondaryAction{cursor:pointer}
+.app :is(button,a,input,textarea,select):focus-visible{outline:3px solid #85dfff;outline-offset:3px}
+.formLabel input,.formLabel textarea,.formLabel select{min-height:44px}.formLabel textarea{line-height:1.6}
+.checkLabel input{accent-color:#5ed8af;min-width:20px;min-height:20px}
+.journeyPanel{background:linear-gradient(110deg,#172b4e,#152a40);border-left:4px solid #a99bff}.journeyPanel summary{min-height:24px;color:#d8ceff}
+.navItem:nth-child(1){--tab-accent:#67d5f1}.navItem:nth-child(2){--tab-accent:#bfa9ff}.navItem:nth-child(3){--tab-accent:#79c7ff}.navItem:nth-child(4){--tab-accent:#ffa9bd}.navItem:nth-child(5){--tab-accent:#86e4c2}
+.navItem svg{color:var(--tab-accent)}.navActive{color:var(--tab-accent);background:#213754;border-radius:12px;box-shadow:inset 0 3px var(--tab-accent)}
+.syncBanner{padding:10px 12px;border:1px solid #467a97;border-radius:10px;background:#17374e;color:#ceecff!important}
+.progressPanel{background:#112f48;border:1px solid #347390;border-radius:14px;padding:14px;margin:16px 0}.progressPanel progress{width:100%;height:12px;accent-color:#53d8ad}.progressPanel .secondaryAction{min-height:42px;justify-content:flex-start;text-align:left;border-color:#a07637;background:#49371f;color:#ffe4b0}
+.successPanel,.pendingPanel,.reviewPanel,.receiptPanel{border-radius:16px;padding:18px;margin:16px 0;border:1px solid;overflow-wrap:anywhere}
+.successPanel{background:#123c36;border-color:#41bc8b;border-left-width:5px}.successPanel h2{color:#a7f5d3}.pendingPanel{background:#3f321f;border-color:#bf8e43;border-left-width:5px;color:#ffe2a9}.reviewPanel{background:#242f50;border-color:#9a8dd9;border-left-width:5px}.receiptPanel{background:#102e36;border-color:#398b87}
+.successPanel p,.pendingPanel p,.reviewPanel p,.receiptPanel p{color:inherit;font-size:13px}
+.editorFields{border:0;margin:0;padding:0;min-width:0}.editorFields:disabled{opacity:.65}.editorFields h3{border-left:3px solid #90afff;padding-left:10px}.editorFields h3 small{font-weight:400;font-size:11px;color:#bbcee1}
+.filterChips{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.filterChips button{min-height:42px;border:1px solid #42678d;border-radius:22px;background:#132e51;color:#d3eaff;padding:8px 14px;font-weight:750;cursor:pointer}.filterChips button[aria-pressed="true"]{background:#345d87;border-color:#85c9ff;color:#fff}.filterChips button:nth-child(3){border-color:#b67745}.filterChips button:nth-child(4){border-color:#8b74b9}
+.photoGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:12px}.receiptPhoto{display:flex;flex-direction:column;gap:6px;border:1px solid #477c87;padding:8px;border-radius:10px}.receiptPhoto img{width:100%;object-fit:contain}.receiptPhoto span{font-size:12px}
+@media(max-width:390px){.connection{max-width:74px;white-space:normal}.headerRight{gap:5px}.brandIcon{width:32px;height:32px}.brand{gap:6px}.detailCard{padding:14px}.header{height:auto;min-height:75px}}
+@media(prefers-reduced-motion:reduce){.spin{animation:none}.app *{scroll-behavior:auto!important}}
+
 /* Field sunlight mode: opt-in, local to the Mobile app, no persisted customer data. */
 .sunlightMode { background: #fff !important; color: #000 !important; }
 .sunlightMode :is(header, main, section, article, button, input, textarea, select, nav) { color: #000 !important; border-color: #000 !important; }
@@ -87,3 +114,4 @@
 .sunlightMode :is(button, input, textarea, select) { background-color: #fff !important; }
 .sunlightMode :is(button, a):focus-visible { outline: 3px solid #000 !important; outline-offset: 2px; }
 .sunlightMode :is(p, span, small, label, strong, h1, h2, h3, dt, dd) { color: #000 !important; }
+
