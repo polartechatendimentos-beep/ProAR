@@ -7,6 +7,7 @@ on:
     paths:
       - 'android-shell/**'
       - 'scripts/prepare-android-tracking.py'
+      - 'scripts/prepare-android-brand.mjs'
       - 'capacitor.config.ts'
       - '.github/workflows/android-apk.yml'
   push:
@@ -17,6 +18,7 @@ on:
       - 'android/**'
       - 'android-shell/**'
       - 'scripts/prepare-android-tracking.py'
+      - 'scripts/prepare-android-brand.mjs'
       - 'capacitor.config.ts'
       - '.github/workflows/android-apk.yml'
 
@@ -46,6 +48,8 @@ jobs:
         run: |
           if [ ! -d android ]; then npx cap add android; fi
           npx cap sync android
+      - name: Apply ProAR Mobile identity
+        run: node scripts/prepare-android-brand.mjs
       - name: Integrate work route service
         run: python3 scripts/prepare-android-tracking.py
       - name: Build debug APK
