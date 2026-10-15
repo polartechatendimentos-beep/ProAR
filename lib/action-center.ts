@@ -1,3 +1,4 @@
+import { certificateHealth, brazilDay, type ProcurementData } from "./procurement-readiness.ts";
 export type OperationalActionTone = "blue" | "amber" | "red";
 
 export type OperationalAction = {
@@ -78,6 +79,14 @@ export function deriveOperationalActions(
 ): OperationalAction[] {
   const today = now.toISOString().slice(0, 10);
   const actions: OperationalAction[] = [];
+  for (const record of modules["Documentação / Habilitação"] || []) {
+    const data=record.procurement as ProcurementData | undefined;
+    if(data?.type!=="certificate" || ["Inativo","Cancelado"].includes(String(record.status||""))) continue;
+    const health=certificateHealth(data,brazilDay(now));
+    if(health.level==="ok") continue;
+    actions.push({id:`certificate-${record.id}`,title:`Certidão ${data.kind||"de habilitação"} • ${health.label}`,detail:String(record.name||record.id),module:"Licitações",tone:health.level==="critical"?"red":"amber",priority:health.level==="critical"?1:2,category:"Operação",dueDate:data.expiresAt,recordId:String(record.id)});
+  }
+
 
   for (const order of serviceOrders || []) {
     const status = String(order.status || "");

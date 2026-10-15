@@ -1,3 +1,5 @@
+import { nextPmocDate, type PmocPlan } from "./technical-compliance.ts";
+import { validateProcurementData, priceComposition, qualificationReadiness, brazilDay } from "./procurement-readiness.ts";
 import { prepareOrderSignatures, safeSignatureImage } from "./service-order-signatures.ts";
 /* eslint-disable @typescript-eslint/no-explicit-any, @next/next/no-assign-module-variable */
 // Dynamic records retain the fields of the historical ERP snapshots.
@@ -41,7 +43,7 @@ const permissionFor: Record<string, string> = {
   Financeiro: "financeiro.editar", "Contas financeiras": "financeiro.editar",
   Produtos: "estoque.editar", Estoque: "estoque.editar", Compras: "compras.editar",
   Equipamentos: "equipamentos.editar", "Unidades e setores": "clientes.editar",
-  Funcionários: "configuracoes.editar", Certames: "licitacoes.editar", Empenhos: "licitacoes.editar",
+  "Documentação / Habilitação": "licitacoes.editar", "Composições de licitação": "licitacoes.editar", Funcionários: "configuracoes.editar", Certames: "licitacoes.editar", Empenhos: "licitacoes.editar",
   Obras: "obras.editar", Orçamentos: "comercial.editar", Vendas: "comercial.editar", Serviços: "catalogo.editar", Fornecedores: "compras.editar", "Conciliações": "financeiro.conciliar", Lembretes: "os.editar", Aprovações: "aprovacoes.aprovar",
 };
 export const defaultFinancialAccounts = () => [
@@ -126,6 +128,28 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
   for (const module of new Set([...Object.keys(oldModules), ...Object.keys(modules)])) {
     if (managed.has(module) || module === "Auditoria") continue;
     validateRecords(list(oldModules[module]), list(modules[module]), module, actor);
+  }
+  for (const record of list(modules["Documentação / Habilitação"])) {
+    const before = list(oldModules["Documentação / Habilitação"]).find(item => item.id === record.id);
+    if (same(before, record) || !record.procurement) continue;
+    try { validateProcurementData(record.procurement); } catch (error) { throw new OperationError(error instanceof Error ? error.message : "Documento inválido."); }
+  }
+  for (const record of list(modules["Composições de licitação"])) {
+    const before = list(oldModules["Composições de licitação"]).find(item => item.id === record.id);
+    if (same(before, record)) continue;
+    try { if (!record.pricing || priceComposition(record.pricing).direct <= 0) throw new Error("Informe os custos da composição."); } catch (error) { throw new OperationError(error instanceof Error ? error.message : "Composição inválida."); }
+  }
+  for (const record of list(modules.PMOC)) {
+    const before = list(oldModules.PMOC).find(item => item.id === record.id);
+    if (same(before, record) || (!record.startsAt && !record.lastServiceAt)) continue;
+    if (!nextPmocDate(record as PmocPlan)) throw new OperationError("Revise a data e a periodicidade do plano PMOC.");
+    if (record.lastServiceAt && (record.lastServiceAt > brazilDay(new Date(now)) || record.startsAt && record.lastServiceAt < record.startsAt)) throw new OperationError("A última manutenção deve estar entre o início do plano e hoje.");
+  }
+  for (const record of list(modules.Certames)) {
+    const before = list(oldModules.Certames).find(item => item.id === record.id);
+    if (before?.status === record.status || !["Participaremos", "Proposta enviada"].includes(record.status)) continue;
+    const readiness = qualificationReadiness(list(modules["Documentação / Habilitação"]).map(item=>({id:String(item.id),name:String(item.name),status:item.status,procurement:item.procurement})), brazilDay(new Date(now)));
+    if (!readiness.eligible) throw new OperationError(`Habilitação pendente: ${readiness.items.filter(item=>!item.eligible).map(item=>item.kind).join(", ")}.`);
   }
   assertUnique(list(next.customers), list(old.customers), "doc", digits);
   assertUnique(list(modules.Fornecedores), list(oldModules.Fornecedores), "doc", digits);
