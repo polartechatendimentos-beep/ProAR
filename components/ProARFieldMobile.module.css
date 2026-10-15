@@ -87,3 +87,22 @@
 .sunlightMode :is(button, input, textarea, select) { background-color: #fff !important; }
 .sunlightMode :is(button, a):focus-visible { outline: 3px solid #000 !important; outline-offset: 2px; }
 .sunlightMode :is(p, span, small, label, strong, h1, h2, h3, dt, dd) { color: #000 !important; }
+
+/* ProAR Field: ergonomic touch targets, compact phones, accessible motion (catalog 005, 019, 021, 028, 029, 031, 052). */
+@media (max-width: 420px) {
+  .header { height: auto; min-height: 58px; padding: 9px 12px; gap: 6px; }
+  .headerRight { gap: 4px; }
+  .bottomNav { padding-inline: 3px; }
+  .navItem { min-width: 0; min-height: 48px; padding: 6px 2px; }
+  .orderCard { padding: 12px; margin-bottom: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app *, .app *::before, .app *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+@media (prefers-contrast: more) {
+  .orderCard, .detailCard, .navItem, .iconButton { border-width: 2px; }
+  .navActive { text-decoration: underline; text-underline-offset: 3px; }
+}
+.app :is(button, a, input, select, textarea):focus-visible { outline: 3px solid #54dcff; outline-offset: 3px; }
+.iconButton { min-width: 44px; min-height: 44px; }
+.navItem { min-height: 48px; }
