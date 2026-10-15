@@ -20,6 +20,10 @@ export function diffAuditRecord(before:Record<string,unknown>|undefined,next:Rec
   if(!before||!next) return [];
   const keys=new Set([...Object.keys(before),...Object.keys(next)]);
   return [...keys].filter(key=>!ignored.has(key)&&!/(password|token|secret|hash)/i.test(key)).flatMap(key=>{
+    if(["employeeSignature","clientSignature","customerSignature","technicianSignature","signature","receiptSignatures"].includes(key)){
+      if(JSON.stringify(before[key])===JSON.stringify(next[key]))return [];
+      return [{field:key==="employeeSignature"?"Assinatura padrão":key,before:before[key]?"Registrada":"Não registrada",after:next[key]?(before[key]?"Atualizada":"Registrada"):"Removida"}];
+    }
     const a=printable(before[key]),b=printable(next[key]);
     if(a===b) return [];
     return [{field:labelMap[key]??key,before:a,after:b}];

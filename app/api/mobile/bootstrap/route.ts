@@ -6,6 +6,8 @@ import { mobileFieldOrders, mobileFieldSummary } from "../../../../lib/mobile-fi
 import { routeContext } from "../../../../lib/work-route-store";
 import { fieldOrderFingerprint, eligibleFieldEquipment } from "../../../../lib/mobile-workday";
 
+import { assignedSignatureEmployee, safeSignatureImage } from "../../../../lib/service-order-signatures";
+
 export const dynamic = "force-dynamic";
 
 const privateHeaders = { "Cache-Control": "private, no-store, max-age=0", "X-Robots-Tag": "noindex, nofollow" };
@@ -47,7 +49,7 @@ export async function GET(request: NextRequest) {
       displayName: session.displayName,
       role: session.role,
       employeeId: employeeContext.actor?.employeeId,
-    }).map(order=>({...order,editToken:fieldOrderFingerprint(records.get(order.id)!),equipmentOptions:eligibleFieldEquipment(records.get(order.id)!,employeeContext.state.moduleRecords?.Equipamentos || []).map(item=>({id:String(item.id),label:String(item.physicalCode || item.name || item.serialNumber || item.id).slice(0,150)}))}));
+    }).map(order=>({...order,editToken:fieldOrderFingerprint(records.get(order.id)!),technicianSignaturePreview:safeSignatureImage(assignedSignatureEmployee(records.get(order.id)!,employeeContext.state.moduleRecords?.Funcionários||[])?.employeeSignature),equipmentOptions:eligibleFieldEquipment(records.get(order.id)!,employeeContext.state.moduleRecords?.Equipamentos || []).map(item=>({id:String(item.id),label:String(item.physicalCode || item.name || item.serialNumber || item.id).slice(0,150)}))}));
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
     return NextResponse.json({
       connected: true,
