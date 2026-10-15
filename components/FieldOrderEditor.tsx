@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { MobileFieldOrder } from "@/lib/mobile-field";
 import { mobileChecklist } from "@/lib/mobile-service-checklists";
 import { loadOrderDraft, saveOrderDraft, clearOrderDraft, type OrderDraft } from "@/lib/mobile-order-drafts";
+import {enqueuePendingSave,getPendingSave,clearPendingSave} from "@/lib/mobile-pending-save";
 import { LocalFieldAssistant } from "./LocalFieldAssistant";
 import { FieldPhotoCollection } from "./FieldPhotoCollection";
 import { fieldMeasurements, reportTemplates, type FieldMeasurements } from "@/lib/mobile-report-details";
@@ -26,12 +27,13 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
 
   const requirements=[...new Map([{key:"diagnosis",label:"Diagnóstico e medições",required:true},...mobileChecklist(order.service)].map(item=>[item.key,item])).values()];
   const pendingRequirements=requirements.filter(item=>item.required&&!done[item.key as keyof typeof done]);
+  const [pendingSave,setPendingSave]=useState(false);
   const [draftReady,setDraftReady]=useState(false),[draftNotice,setDraftNotice]=useState(""),[olderDraft,setOlderDraft]=useState<OrderDraft|null>(null);
   const latestDraft=useRef<OrderDraft|null>(null),suppressDraft=useRef(false);
   function restoreDraft(value:OrderDraft){setReport(value.report);setDiagnosis(value.diagnosis);setChecklist(value.checklist);setEquipmentIds(value.equipmentIds);setBefore(value.before);setAfter(value.after);setSignature(value.signature);setSignerName(value.signerName);setObservations(value.observations||"");setMeasurements(value.measurements||{});setBeforePhotos(value.beforePhotos||[]);setAfterPhotos(value.afterPhotos||[]);}
   useEffect(()=>{
     let cancelled=false;
-    void loadOrderDraft(scope,order.id).then(value=>{if(cancelled)return;if(value){if(value.version===order.fieldVersion){restoreDraft(value);setDraftNotice("Rascunho recuperado neste aparelho.");}else{setOlderDraft(value);setDraftNotice("A OS mudou no servidor. Revise antes de recuperar o rascunho anterior.");}}setDraftReady(true);}).catch(()=>{if(!cancelled){setDraftNotice("Não foi possível acessar o rascunho local. Salve no servidor para preservar os dados.");setDraftReady(true);}});
+    void loadOrderDraft(scope,order.id).then(value=>{if(cancelled)return;if(value){if(value.version===order.fieldVersion){restoreDraft(value);setDraftNotice("Rascunho recuperado neste aparelho.");}else{setOlderDraft(value);setDraftNotice("A OS mudou no servidor. Revise antes de recuperar o rascunho anterior.");}}void getPendingSave(scope,order.id).then(p=>{if(!cancelled)setPendingSave(Boolean(p));}).catch(()=>{});setDraftReady(true);}).catch(()=>{if(!cancelled){setDraftNotice("Não foi possível acessar o rascunho local. Salve no servidor para preservar os dados.");setDraftReady(true);}});
     return()=>{cancelled=true;};
   },[scope,order.id,order.fieldVersion]);
   useEffect(()=>{
@@ -63,16 +65,27 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
     }
     if(action==="finish"&&!window.confirm("Concluir esta OS com o relatório, checklist, fotos e aceite registrados?"))return;
     setBusy(true);setNotice("");try{
-      if(!navigator.onLine)throw new Error("Sem conexão. Rascunho preservado; a conclusão exige confirmação do servidor.");
+      if(!navigator.onLine){
+        if(action!=="save")throw new Error("Sem conexão. Rascunho preservado; a conclusão exige confirmação do servidor.");
+        if(!latestDraft.current)throw new Error("Aguarde a preparação do rascunho.");
+        await saveOrderDraft(scope,order.id,latestDraft.current);
+        await enqueuePendingSave(scope,order.id,order.fieldVersion);
+        setPendingSave(true);
+        setNotice("Salvamento pendente neste aparelho. Conecte-se e toque em Enviar pendência. A OS não foi alterada no servidor.");
+        return;
+      }
+      const pending=action==="save"?await getPendingSave(scope,order.id):null;
+      if(pending&&pending.version!==order.fieldVersion)throw new Error("A OS mudou no servidor. Revise o rascunho antes de enviar.");
       const point=requiresJourney&&(action==="start"||action==="finish")?await gps():undefined;
-      const response=await fetch("/api/mobile/orders",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({requestId:crypto.randomUUID(),action,orderId:order.id,expectedVersion:order.fieldVersion,expectedToken:order.editToken,report,diagnosis,observations,measurements,beforePhotos:[...(before?[before]:[]),...beforePhotos],afterPhotos:[...(after?[after]:[]),...afterPhotos],equipmentIds,checklist:done,signature,signerName,point})});
-      const body=await response.json();if(!response.ok)throw new Error(body.error||"Gravação não confirmada.");suppressDraft.current=true;await clearOrderDraft(scope,order.id).catch(()=>{});setNotice("OS confirmada no servidor.");await onSaved(action==="finish"?{orderId:order.id,completedAt:body.completedAt||new Date().toISOString()}:undefined);
+      const response=await fetch("/api/mobile/orders",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({requestId:pending?.requestId||crypto.randomUUID(),action,orderId:order.id,expectedVersion:order.fieldVersion,expectedToken:order.editToken,report,diagnosis,observations,measurements,beforePhotos:[...(before?[before]:[]),...beforePhotos],afterPhotos:[...(after?[after]:[]),...afterPhotos],equipmentIds,checklist:done,signature,signerName,point})});
+      const body=await response.json();if(!response.ok)throw new Error(body.error||"Gravação não confirmada.");suppressDraft.current=true;await clearOrderDraft(scope,order.id).catch(()=>{});if(action==="save"){await clearPendingSave(scope,order.id).catch(()=>{});setPendingSave(false);}setNotice("OS confirmada no servidor.");await onSaved(action==="finish"?{orderId:order.id,completedAt:body.completedAt||new Date().toISOString()}:undefined);
     }catch(error){setNotice(error instanceof Error?error.message:"Não foi possível confirmar a OS.");}finally{setBusy(false);}
   }
   function pointer(event:React.PointerEvent<HTMLCanvasElement>,start:boolean){const c=canvas.current;if(!c)return;const rect=c.getBoundingClientRect(),ctx=c.getContext("2d")!,x=(event.clientX-rect.left)*c.width/rect.width,y=(event.clientY-rect.top)*c.height/rect.height;ctx.strokeStyle="#122b47";ctx.lineWidth=2;
     if(start){drawing.current=true;drew.current=false;c.setPointerCapture(event.pointerId);ctx.beginPath();ctx.moveTo(x,y);}else if(drawing.current){ctx.lineTo(x,y);ctx.stroke();drew.current=true;}}
   return <article className={styles.detailCard}><h2>Executar atendimento</h2>
     <p role="status">{draftNotice||"Preparando rascunho…"}</p>
+    {pendingSave&&<div role="status"><strong>Envio pendente</strong> — a OS ainda não foi atualizada no servidor. <button type="button" disabled={busy||!draftReady||Boolean(olderDraft)} onClick={()=>void execute("save")}>Enviar pendência</button></div>}
     {olderDraft&&<button type="button" className={styles.secondaryAction} onClick={()=>{restoreDraft(olderDraft);setOlderDraft(null);}}>Recuperar rascunho para revisão</button>}
     {olderDraft&&<button type="button" className={styles.secondaryAction} onClick={()=>{suppressDraft.current=true;void clearOrderDraft(scope,order.id).then(()=>{setOlderDraft(null);setDraftNotice("Rascunho anterior descartado.");});}}>Descartar rascunho anterior</button>}
     <p><strong>{requirements.filter(item=>item.required).length-pendingRequirements.length} de {requirements.filter(item=>item.required).length} requisitos preenchidos</strong></p>
