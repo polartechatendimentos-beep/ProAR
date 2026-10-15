@@ -6,6 +6,7 @@ import {runInNewContext} from 'node:vm';
 import {createHash} from 'node:crypto';
 import {applyFieldOrder,technicianRole,fieldOrderFingerprint} from '../lib/mobile-workday.ts';
 import {improveFieldOrder,mobileMutationActions,fieldEquipmentHistory} from '../lib/mobile-order-improvements.ts';
+import {fieldCustomerHistory,fieldOrderReceipt} from '../lib/mobile-order-records.ts';
 import {assignedToSession} from '../lib/mobile-field.ts';
 import {FieldSupportError} from '../lib/field-support.ts';
 import {RouteError,validatePoint} from '../lib/work-routes.ts';
@@ -14,14 +15,14 @@ const source=stripTypeScriptTypes(await readFile(new URL('../app/api/mobile/orde
 const order={id:'OS-1',tech:'tecnico',client:'Cliente',status:'Aberta',fieldVersion:0};
 const state=()=>({customers:[],serviceOrders:[structuredClone(order)],moduleRecords:{},_revision:1});
 function setup({session={username:'tecnico',role:'Técnico'},journey=true,initialState}={}){
-  let saved;const context={company:'empresa',state:initialState || state(),db:{url:'neon://test',key:'test-only'},actor:{employeeId:'FUN-1'}};
-  const fn=runInNewContext(source+'\nPOST;',{
+  let saved,journeyActive=journey;const context={company:'empresa',state:initialState || state(),db:{url:'neon://test',key:'test-only'},actor:{employeeId:'FUN-1'}};
+  const handlers=runInNewContext(source+'\n({post:POST,get:GET});',{
     NextResponse:{json:(body,{status=200}={})=>({body,status})},createHash,sessionFromRequest:()=>session,hasPermission:()=>true,
-    routeContext:async()=>context,activeJourneyContext:async()=>{if(!journey)throw new FieldSupportError('Jornada inativa',403);return context;},
-    technicianRole,applyFieldOrder,improveFieldOrder,mobileMutationActions,fieldEquipmentHistory,assignedToSession,FieldSupportError,RouteError,validatePoint,prepareOperationalState,OperationError,independentOperationalRows,
+    routeContext:async()=>context,activeJourneyContext:async()=>{if(!journeyActive)throw new FieldSupportError('Jornada inativa',403);return context;},
+    technicianRole,applyFieldOrder,improveFieldOrder,mobileMutationActions,fieldEquipmentHistory,fieldCustomerHistory,fieldOrderReceipt,assignedToSession,FieldSupportError,RouteError,validatePoint,prepareOperationalState,OperationError,independentOperationalRows,
     PRIMARY_DATABASE_URL:'neon://test',commitNeonOperationalState:async(_id,_revision,payload)=>{saved=payload;context.state=payload;return payload;},
   });
-  return {fn,get saved(){return saved;}};
+  return {fn:handlers.post,get:handlers.get,setJourney(value){journeyActive=value;},get saved(){return saved;}};
 }
 function request(body={},origin='https://app.test'){return{headers:new Headers({origin}),nextUrl:{origin:'https://app.test'},text:async()=>JSON.stringify(body)}}
 const command=()=>({requestId:'save-order-12345',action:'save',orderId:'OS-1',expectedVersion:0,expectedToken:fieldOrderFingerprint(order),report:'Serviço registrado'});
@@ -55,7 +56,12 @@ test('mobile links eligible equipment and completes the OS atomically',async()=>
   assert.deepEqual(api.saved.serviceOrders[0].equipmentIds,['EQ-1']);
   assert.ok(api.saved.serviceOrders[0].checkOutAt);
   const revision=api.saved._revision;
-  assert.equal((await api.fn(request(finish))).body.replay,true);
+  api.setJourney(false);
+  const replay=await api.fn(request(finish));
+  assert.equal(replay.body.replay,true);
+  assert.equal(replay.body.orderId,'OS-1');
+  assert.equal(replay.body.status,'Concluída');
+  assert.equal(replay.body.completedAt,api.saved.serviceOrders[0].checkOutAt);
   assert.equal(api.saved._revision,revision);
 });
 test('mobile completes without equipment or managerial exception even with equipment available',async()=>{
@@ -72,7 +78,12 @@ test('mobile completes without equipment or managerial exception even with equip
   assert.deepEqual(api.saved.serviceOrders[0].equipmentIds,[]);
   assert.ok(api.saved.serviceOrders[0].checkOutAt);
   const revision=api.saved._revision;
-  assert.equal((await api.fn(request(finish))).body.replay,true);
+  api.setJourney(false);
+  const replay=await api.fn(request(finish));
+  assert.equal(replay.body.replay,true);
+  assert.equal(replay.body.orderId,'OS-1');
+  assert.equal(replay.body.status,'Concluída');
+  assert.equal(replay.body.completedAt,api.saved.serviceOrders[0].checkOutAt);
   assert.equal(api.saved._revision,revision);
 });
 test('mobile rejects equipment belonging to another customer',async()=>{
@@ -83,4 +94,16 @@ test('mobile rejects equipment belonging to another customer',async()=>{
   const result=await api.fn(request({...command(),expectedToken:fieldOrderFingerprint(initial.serviceOrders[0]),equipmentIds:['EQ-OTHER']}));
   assert.equal(result.status,403);
   assert.equal(api.saved,undefined);
+});
+
+test('GET history and receipt authorize the requested order before projecting client data',async()=>{
+  const initial=state();initial.serviceOrders[0].customerId='CLI-1';
+  const completed={id:'OS-HISTORY',customerId:'CLI-1',tech:'tecnico',status:'Concluída',checkOutAt:'2026-10-15T15:00:00Z',executedService:'Serviço',privateNote:'secret'};
+  initial.serviceOrders.push(completed,{...completed,id:'OS-FOREIGN',customerId:'CLI-2',tech:'outro'});
+  const api=setup({initialState:initial});
+  const get=(orderId,view)=>api.get({nextUrl:{searchParams:new URLSearchParams({orderId,view})}});
+  const history=await get('OS-1','customer-history');assert.equal(history.status,200);assert.equal(history.body.history.length,1);assert.ok(!JSON.stringify(history.body).includes('secret'));
+  assert.equal((await get('OS-FOREIGN','receipt')).status,403);
+  assert.equal((await get('OS-1','receipt')).status,409);
+  const receipt=await get('OS-HISTORY','receipt');assert.equal(receipt.status,200);assert.equal(receipt.body.receipt.report,'Serviço');assert.equal(receipt.body.receipt.privateNote,undefined);
 });

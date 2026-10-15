@@ -9,6 +9,10 @@ import {
 } from "lucide-react";
 import { MobileRouteControls } from "./MobileRouteControls";
 import { FieldSupportPanel } from "./FieldSupportPanel";
+import { FieldOrderReceipt } from "./FieldOrderReceipt";
+import { listPendingOrderDrafts } from "@/lib/mobile-order-drafts";
+import { MOBILE_RELEASE } from "@/lib/mobile-release";
+import { filterFieldOrders, fieldOrderTone, type OrderFilter } from "@/lib/mobile-order-display";
 import { FieldOrderEditor } from "./FieldOrderEditor";
 import { mobileWeekDates } from "@/lib/mobile-agenda";
 import type { MobileFieldOrder } from "@/lib/mobile-field";
@@ -22,6 +26,7 @@ type FieldData = {
   summary: { today: number; inProgress: number; pending: number };
   lastReadAt: string; notice: string;
 };
+const EMPTY_ORDERS:FieldOrder[]=[];
 type Tab = "inicio" | "agenda" | "ordens" | "central" | "mais";
 
 function todayISO() {
@@ -42,7 +47,7 @@ function displayTime(value: string) {
   return /^\d{2}:\d{2}/.test(value) ? value.slice(0, 5) : value || "A definir";
 }
 function OrderCard({ order, onOpen }: { order: FieldOrder; onOpen: () => void }) {
-  return <button type="button" className={styles.orderCard} onClick={onOpen} aria-label={`Consultar ${order.id}`}>
+  return <button type="button" className={`${styles.orderCard} ${styles[`${fieldOrderTone(order,todayISO())}Card`]}`} onClick={onOpen} aria-label={`Consultar ${order.id}`}>
     <span className={styles.orderTop}><strong>{order.id}</strong><span className={`${styles.status} ${statusTone(order.status)}`}>{order.status || "Sem status"}</span></span>
     <span className={styles.orderTitle}>{order.service || "Atendimento técnico"}</span>
     <span className={styles.orderClient}>{order.client || "Cliente não identificado"}</span>
@@ -60,6 +65,7 @@ export function ProARFieldMobile() {
   const [loginRequired, setLoginRequired] = useState(false);
   const [online, setOnline] = useState(true);
   const [query, setQuery] = useState("");
+  const [orderFilter,setOrderFilter]=useState<OrderFilter>("all"),[pendingState,setPendingState]=useState<{scope:string;orders:FieldOrder[]}>({scope:"",orders:[]}),[versionNotice,setVersionNotice]=useState(""),[updateAvailable,setUpdateAvailable]=useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [day, setDay] = useState(todayISO);
   const [agendaMode,setAgendaMode]=useState<"day"|"week">("day");
@@ -68,7 +74,7 @@ export function ProARFieldMobile() {
   const refresh = useCallback(async () => {
     setLoading(true); setError("");
     try {
-      if (!navigator.onLine) throw new Error("Sem conexão. O ProAR Mobile ainda não possui sincronização offline segura.");
+      if (!navigator.onLine) throw new Error("Sem conexão. Os rascunhos e envios pendentes permanecem no aparelho; conecte para confirmar o envio.");
       const response = await fetch("/api/mobile/bootstrap", { cache:"no-store", credentials:"same-origin" });
       const result = await response.json();
       if (!response.ok) {
@@ -98,15 +104,21 @@ export function ProARFieldMobile() {
       window.removeEventListener("focus", focus);
     };
   }, [refresh]);
-  const orders = data?.orders ?? [];
-  const filtered = useMemo(() => {
-    const term = query.trim().toLocaleLowerCase("pt-BR");
-    return orders.filter(order => !term || [order.id, order.client, order.service, order.unit, order.status, ...order.equipmentIds].join(" ").toLocaleLowerCase("pt-BR").includes(term));
-  }, [orders, query]);
+  const orders = data?.orders ?? EMPTY_ORDERS;
+  const pendingOrders=pendingState.scope===data?.user.scope?pendingState.orders:EMPTY_ORDERS;
+  const filtered = useMemo(()=>filterFieldOrders(orders,query,orderFilter,todayISO()),[orders,query,orderFilter]);
+  const pendingScope=data?.user.scope;
+  useEffect(()=>{
+    if(!pendingScope)return;
+    let cancelled=false;
+    void listPendingOrderDrafts(pendingScope).then(rows=>{if(!cancelled)setPendingState({scope:pendingScope,orders:rows.map(row=>row.orderSnapshot!)});}).catch(()=>{if(!cancelled)setPendingState({scope:pendingScope,orders:[]});});
+    return()=>{cancelled=true;};
+  },[pendingScope,selected,data?.lastReadAt]);
+  async function checkVersion(){try{const response=await fetch("/api/mobile/version",{cache:"no-store"});if(!response.ok)throw new Error();const result=await response.json();const changed=result.version!==MOBILE_RELEASE;setUpdateAvailable(changed);setVersionNotice(changed?"Nova versão disponível. Seus rascunhos permanecem neste aparelho.":"Você está usando a versão atual.");}catch{setVersionNotice("Não foi possível consultar a versão. Tente novamente com conexão.");}}
   const todayOrders = useMemo(() => orders.filter(order => order.date === todayISO()), [orders]);
   const week=useMemo(()=>mobileWeekDates(day),[day]);
   const agendaOrders = useMemo(() => orders.filter(order => agendaMode==="week"?week.includes(order.date):order.date === day), [orders, day,agendaMode,week]);
-  const current = orders.find(order => order.id === selected);
+  const current = orders.find(order => order.id === selected)||pendingOrders.find(order=>order.id===selected);
   const firstName = data?.user.displayName?.split(" ")[0] || "equipe";
   const tabs: { id: Tab; label: string; icon: typeof Home }[] = [
     { id:"inicio", label:"Início", icon:Home },
@@ -126,11 +138,12 @@ export function ProARFieldMobile() {
         </div>
       </header>
       <main className={styles.content}>
-        {!online && <div className={styles.warning}><CloudOff size={19}/>Sem conexão. Você pode preencher o rascunho da OS neste aparelho. A gravação no servidor e a conclusão precisam de conexão.</div>}
-        {completion&&<div role="status" className={styles.detailCard}><h2>OS concluída • {completion.orderId}</h2><p>Confirmada no servidor em {new Date(completion.completedAt).toLocaleString("pt-BR")}.</p><button type="button" className={styles.secondaryAction} onClick={()=>setCompletion(null)}>Fechar confirmação</button></div>}
+        {!online && <div className={styles.warning}><CloudOff size={19}/>Sem conexão. Você pode preencher o rascunho da OS neste aparelho. Você também pode deixar o envio preparado e sincronizar ao retornar a conexão. A conclusão só é confirmada pelo servidor.</div>}
+        {completion&&<div role="status" className={styles.successPanel}><h2>OS concluída • {completion.orderId}</h2><p>Confirmada no servidor em {new Date(completion.completedAt).toLocaleString("pt-BR")}.</p><FieldOrderReceipt orderId={completion.orderId}/><button type="button" className={styles.secondaryAction} onClick={()=>setCompletion(null)}>Fechar confirmação</button></div>}
         {error && <div role="alert" className={styles.error}>{error}{loginRequired && <Link href="/">Entrar no ProAR</Link>}{!loginRequired && <button type="button" onClick={()=>void refresh()}>Tentar novamente</button>}</div>}
         {loading && !data && <div role="status" className={styles.loading}>Conectando aos atendimentos reais do ProAR...</div>}
         {data && <>
+          {pendingOrders.length>0&&!current&&<section className={styles.pendingPanel}><h2>{pendingOrders.length} envio(s) aguardando confirmação</h2><p>Retome cada envio para sincronizar ou consultar a confirmação, sem duplicar o registro.</p>{pendingOrders.map(order=><button key={order.id} type="button" className={styles.secondaryAction} onClick={()=>setSelected(order.id)}>Retomar envio • {order.id}</button>)}</section>}
           <details className={styles.journeyPanel}><summary>Minha jornada • entrada, pausa e saída</summary><MobileRouteControls /></details>
           <FieldSupportPanel visible={tab === "central" && !current}/>
           {tab==="central"&&!current&&data.user.manager&&<section className={styles.detailCard}><h2>Solicitações e atrasos de atendimento</h2>{orders.filter(order=>order.requests?.some(item=>item.status==="Pendente")||order.delay).map(order=><button key={order.id} type="button" className={styles.secondaryAction} onClick={()=>setSelected(order.id)}>Revisar {order.id} • {order.delay?`Atraso ${order.delay.minutes} min`:"Solicitação pendente"}</button>)}{!orders.some(order=>order.requests?.some(item=>item.status==="Pendente")||order.delay)&&<p>Nenhuma solicitação ou atraso registrado.</p>}</section>}
@@ -154,7 +167,7 @@ export function ProARFieldMobile() {
             </div>
             {current.address && <><label className={styles.formLabel}>Aplicativo de navegação<select value={mapApp} onChange={e=>setMapApp(e.target.value)}><option value="google">Google Maps</option><option value="waze">Waze</option></select></label><a className={styles.primaryAction} href={mapApp==="waze"?`https://www.waze.com/ul?q=${encodeURIComponent(current.address)}&navigate=yes`:`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(current.address)}`} target="_blank" rel="noopener noreferrer"><MapPin size={18}/> Abrir navegação <ArrowRight size={18}/></a></>}
             {!data.user.canEdit && <p role="alert" className={styles.warning}>Seu perfil não tem permissão para alterar esta OS. Solicite a liberação ao administrador.</p>}
-            {data.user.canEdit && <FieldOrderEditor key={`${current.id}:${current.fieldVersion}`} scope={data.user.scope} canApprove={data.user.canApprove} order={current} requiresJourney={/tecnico|prestador/i.test(data.user.role.normalize("NFD").replace(/[\u0300-\u036f]/g,""))} onSaved={async result=>{if(result){setCompletion(result);setSelected(null);setTab("ordens");setData(previous=>previous?{...previous,orders:previous.orders.filter(order=>order.id!==result.orderId)}:previous);}await refresh();}}/>}
+            {data.user.canEdit && <FieldOrderEditor key={`${current.id}:${current.fieldVersion}:${current.editToken}`} scope={data.user.scope} canApprove={data.user.canApprove} order={current} requiresJourney={/tecnico|prestador/i.test(data.user.role.normalize("NFD").replace(/[\u0300-\u036f]/g,""))} onSaved={async result=>{if(result){setCompletion(result);setSelected(null);setTab("ordens");setData(previous=>previous?{...previous,orders:previous.orders.filter(order=>order.id!==result.orderId)}:previous);}await refresh();}}/>}
             <p className={styles.disclaimer}>Alterações são confirmadas no banco. Durante a pausa ou fora da jornada, técnicos podem apenas consultar.</p>
           </section> : <>
             {tab === "inicio" && <section className={styles.screen}>
@@ -185,8 +198,9 @@ export function ProARFieldMobile() {
             </section>}
             {tab === "ordens" && <section className={styles.screen}>
               <p className={styles.eyebrow}>OPERAÇÃO</p><h1 className={styles.title}>Ordens de serviço</h1>
-              <p className={styles.subtitle}>Busque por OS, cliente, serviço ou equipamento.</p>
+              <p className={styles.subtitle}>Busque por OS, cliente, endereço, serviço ou equipamento.</p>
               <label className={styles.search}><Search size={19}/><input type="search" value={query} onChange={event=>setQuery(event.target.value)} placeholder="Buscar atendimento" aria-label="Buscar atendimento"/></label>
+              <div className={styles.filterChips} role="group" aria-label="Filtrar ordens">{([["all","Todas"],["today","Hoje"],["overdue","Atrasadas"],["upcoming","Próximas"]] as const).map(([key,label])=><button key={key} type="button" aria-pressed={orderFilter===key} onClick={()=>setOrderFilter(key)}>{label}</button>)}</div>
               <div className={styles.sectionHeading}><h2>{filtered.length} resultado(s)</h2></div>
               {filtered.length ? filtered.map(order=><OrderCard key={order.id} order={order} onOpen={()=>setSelected(order.id)}/>) : <div className={styles.empty}>Nenhuma OS encontrada com esse filtro.</div>}
             </section>}
@@ -194,8 +208,9 @@ export function ProARFieldMobile() {
               <p className={styles.eyebrow}>PERFIL E CONTROLE</p><h1 className={styles.title}>Mais</h1>
               <div className={styles.profile}><div className={styles.avatar}><UserRound size={26}/></div><div><strong>{data.user.displayName}</strong><span>{data.user.role}</span></div></div>
               <div className={styles.detailCard}><h2><ShieldCheck size={20}/> Integração segura</h2><p>O aplicativo utiliza sua sessão do ProAR, respeita a empresa e mostra somente as OS permitidas para o perfil. Não há usuários ou atendimentos fictícios.</p>
-              <p><strong>Sincronização:</strong> OS e jornada com confirmação online; checklist da frota, abastecimento e solicitações de ajuste podem aguardar na fila local.</p>
+              <p><strong>Sincronização:</strong> OS podem ser preparadas offline e ficam pendentes até sincronizar. Jornada, GPS, permissões e conflitos são validados no envio; checklist da frota, abastecimento e ajustes também usam fila local.</p>
               <p><strong>Última leitura:</strong> {new Date(data.lastReadAt).toLocaleString("pt-BR")}</p></div>
+              <div className={styles.detailCard}><h2>Versão do aplicativo</h2><p>ProAR Mobile • {MOBILE_RELEASE}</p><button type="button" className={styles.secondaryAction} onClick={()=>void checkVersion()}>Verificar atualizações</button>{versionNotice&&<p role="status">{versionNotice}</p>}{updateAvailable&&<button type="button" className={styles.primaryAction} onClick={()=>window.location.reload()}>Carregar nova versão</button>}</div>
               <div className={styles.detailCard}><h2>Recursos de campo</h2><p>Abra a Central para consultar frota, abastecimentos, marcações operacionais e ajustes. A gestão acompanha jornadas e recebe SOS. Localização em segundo plano exige APK Android atualizado.</p><p>Reconhecimento facial, ponto legal REP-P, OCR, áudio SOS, IA por voz e comunicação entre aparelhos dependem das integrações específicas.</p></div>
               <Link className={styles.secondaryAction} href="/">Abrir ProAR completo <ArrowRight size={17}/></Link>
             </section>}
@@ -209,4 +224,5 @@ export function ProARFieldMobile() {
     </div>
   </div>;
 }
+
 
