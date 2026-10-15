@@ -115,3 +115,5 @@
 .sunlightMode :is(button, a):focus-visible { outline: 3px solid #000 !important; outline-offset: 2px; }
 .sunlightMode :is(p, span, small, label, strong, h1, h2, h3, dt, dd) { color: #000 !important; }
 
+
+.brandIcon img{display:block;width:100%;height:100%;border-radius:inherit}

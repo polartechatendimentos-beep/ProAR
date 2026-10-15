@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   ArrowLeft, ArrowRight, CalendarDays, ChevronRight,
   ClipboardList, CloudOff, Home, MapPin, Menu, RefreshCw,
-  Search, ShieldCheck, Smartphone, UserRound, Wrench, Wifi,
+  Search, ShieldCheck, Smartphone, UserRound, Wifi,
 } from "lucide-react";
 import { MobileRouteControls } from "./MobileRouteControls";
 import { FieldSupportPanel } from "./FieldSupportPanel";
@@ -130,7 +130,7 @@ export function ProARFieldMobile() {
   return <div className={`${styles.app} ${sunlightMode ? styles.sunlightMode : ""}`}>
     <div className={styles.shell}>
       <header className={styles.header}>
-        <div className={styles.brand}><span className={styles.brandIcon}><Wrench size={19}/></span><span><strong>ProAR <b>Mobile</b></strong><small>OPERAÇÃO EM CAMPO</small></span></div>
+        <div className={styles.brand}><span className={styles.brandIcon}><img src="/brand/proar-mobile.svg?v=20261015" alt="" width={39} height={39}/></span><span><strong>ProAR <b>Mobile</b></strong><small>OPERAÇÃO EM CAMPO</small></span></div>
         <div className={styles.headerRight}>
           <button type="button" className={styles.iconButton} aria-label={sunlightMode ? "Desativar modo sol forte" : "Ativar modo sol forte"} aria-pressed={sunlightMode} title="Modo sol forte" onClick={()=>setSunlightMode(value=>!value)}><span aria-hidden="true">☀</span></button>
           <span className={`${styles.connection} ${online && !error ? styles.connectionOn : styles.connectionOff}`}><span className={styles.connectionDot}/>{online && !error ? "Conectado" : "Sem sincronização"}</span>

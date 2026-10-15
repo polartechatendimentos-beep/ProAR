@@ -663,7 +663,7 @@ function Header({ title, subtitle, onMenu, searchItems, pendingItems, onSearchSe
   return <header className="topbar topbar-user-only">
     <div className="headline">
       <button className="menu-toggle" aria-label="Abrir menu" onClick={onMenu}><Menu size={20}/></button>
-      <div className="header-module-mark"><img src="/icon.png" alt="ProAR"/></div>
+      <div className="header-module-mark"><img src="/brand/proar-system-512.png?v=20261015" alt="ProAR"/></div>
       <div className="headline-copy"><div className="eyebrow"><span>PROAR</span><ChevronRight size={10}/><b>Central de operações</b><i>BY TAV's</i></div><h1>{title}</h1><p>{subtitle}</p></div>
     </div>
     <div className="top-actions top-actions-user-only">
@@ -692,7 +692,7 @@ function Sidebar({ current, setCurrent, open, close, permissions, role, entitled
   return <>
     {open && <button className="backdrop" aria-label="Fechar menu" onClick={close} />}
     <aside className={`sidebar ${open ? "open" : ""}`}>
-      <div className="brand"><div className="brand-mark brand-logo"><img src="/icon.png" alt="Ícone ProAR"/></div><div className="brand-copy"><strong>ProAR</strong><small>GESTÃO DE SERVIÇOS</small><em>BY TAV's</em></div></div>
+      <div className="brand"><div className="brand-mark brand-logo"><img src="/brand/proar-system-512.png?v=20261015" alt="Ícone ProAR"/></div><div className="brand-copy"><strong>ProAR</strong><small>GESTÃO DE SERVIÇOS</small><em>BY TAV's</em></div></div>
       <nav>{navGroups.map(group => { const visibleItems = group.items.filter(item => allowed(item.name)); return visibleItems.length ? <div className="nav-group" key={group.label}>
         <p>{group.label}</p>
         {visibleItems.map(({icon: Icon, name, badge}) => <button key={name} className={current === name ? "active" : ""} onClick={() => { setCurrent(name); close(); }}>
@@ -4790,7 +4790,7 @@ export default function Home() {
     setCurrent(item.module);
     setSavedMessage(`Pendência selecionada: ${item.title}.`);
   };
-  if (checkingSession) return <div className="session-loading" data-testid="proar-boot-loading"><div className="brand-mark brand-logo"><img src="/icon.png" alt="ProAR"/></div><p>A carregar o ProAR...</p><small>{bootRunId}</small></div>;
+  if (checkingSession) return <div className="session-loading" data-testid="proar-boot-loading"><div className="brand-mark brand-logo"><img src="/brand/proar-system-512.png?v=20261015" alt="ProAR"/></div><p>A carregar o ProAR...</p><small>{bootRunId}</small></div>;
   if (bootError && !authenticatedUser) return <main className="session-boot-error" data-testid="proar-boot-error"><section><AlertTriangle size={28}/><h2>Não foi possível carregar a sessão</h2><p>{bootError}</p><small>Código de execução: {bootRunId}</small><div><button type="button" className="primary-btn" onClick={()=>setBootAttempt(value=>value+1)}>Tentar novamente</button><button type="button" className="outline-btn" onClick={()=>{localStorage.removeItem("proar-offline-session");setBootError("");}}>Entrar novamente</button><button type="button" className="outline-btn" onClick={()=>window.location.reload()}>Recarregar aplicação</button></div></section></main>;
   if (!authenticatedUser) return <div data-testid="proar-login-screen"><LoginScreen onLogin={handleLogin}/></div>;
   const mobileOperationalModules = new Set(["Painel inicial","Agenda","Ordens de serviço","Clientes","Obras","Funcionários","Equipamentos"]);

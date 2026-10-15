@@ -18,11 +18,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "ProAR Gestão de Serviços — BY TAV's",
   description: "ProAR Gestão de Serviços — BY TAV's | Sistema de Gestão Operacional, Comercial e Financeira.",
-  manifest: "/manifest.webmanifest",
+  manifest: "/manifest-system.webmanifest",
   icons: {
-    icon: "/icon-512.png",
-    shortcut: "/icon-192.png",
-    apple: "/icon-192.png",
+    icon: "/brand/proar-system-32.png?v=20261015",
+    shortcut: "/brand/proar-system-192.png?v=20261015",
+    apple: "/brand/proar-system-180.png?v=20261015",
   },
 };
 
