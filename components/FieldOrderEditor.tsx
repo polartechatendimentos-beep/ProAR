@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { FieldVoiceDictation } from "./FieldVoiceDictation";
 import type { MobileFieldOrder } from "@/lib/mobile-field";
 import { mobileChecklist } from "@/lib/mobile-service-checklists";
 import { loadOrderDraft, saveOrderDraft, clearOrderDraft, type OrderDraft } from "@/lib/mobile-order-drafts";
@@ -82,7 +83,9 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
     {notice&&<p ref={noticeRef} role="alert" className={styles.warning}>{notice}</p>}
     {!order.checkInAt&&<button id={`field-${order.id}-checkin`} className={styles.primaryAction} type="button" disabled={busy||!draftReady||Boolean(olderDraft)} onClick={()=>void execute("start")}>Iniciar atendimento com check-in</button>}
     <label id={`field-${order.id}-diagnosis`} className={styles.formLabel}>Diagnóstico e medições<textarea value={diagnosis} onChange={event=>setDiagnosis(event.target.value)} maxLength={4000}/></label>
+    <FieldVoiceDictation label="Ditar diagnóstico" maxLength={4000} onTranscript={text=>setDiagnosis(value=>[value,text].filter(Boolean).join(" ").slice(0,4000))}/>
     <label id={`field-${order.id}-executedService`} className={styles.formLabel}>Serviço executado<textarea value={report} onChange={event=>setReport(event.target.value)} maxLength={8000}/></label>
+    <FieldVoiceDictation label="Ditar serviço executado" maxLength={8000} onTranscript={text=>setReport(value=>[value,text].filter(Boolean).join(" ").slice(0,8000))}/>
     <label className={styles.formLabel}>Modelo de relatório<select value={template} onChange={e=>setTemplate(e.target.value)}><option value="">Selecionar modelo</option>{reportTemplates.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select></label><button type="button" className={styles.secondaryAction} disabled={!template||busy} onClick={()=>{const chosen=reportTemplates.find(item=>item.id===template);if(chosen)setReport(previous=>[previous,chosen.text].filter(Boolean).join("\n\n").slice(0,8000));}}>Inserir modelo para preencher</button>
     <label className={styles.formLabel}>Observações adicionais<textarea maxLength={4000} value={observations} onChange={e=>setObservations(e.target.value)}/></label>
     <h3>Medições técnicas</h3>{fieldMeasurements.map(item=><label key={item.key} className={styles.formLabel}>{item.label} ({item.unit})<input type="number" inputMode="decimal" step="any" min={item.min} max={item.max} value={measurements[item.key]||""} onChange={e=>setMeasurements({...measurements,[item.key]:e.target.value})}/></label>)}
