@@ -87,7 +87,7 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
   return <article className={styles.detailCard}><h2>Executar atendimento</h2>
     <p role="status">{draftNotice||"Preparando rascunho…"}</p>
     {serverConflict&&<div role="alert">Conflito de versão: rascunho preservado. Revise com a gerência antes de reenviar.</div>}
-    {pendingSave&&<div role="status"><strong>Envio pendente</strong> — a OS ainda não foi atualizada no servidor. <button type="button" disabled={busy||!draftReady||Boolean(olderDraft)} onClick={()=>void execute("save")} disabled={serverConflict}>Enviar pendência</button></div>}
+    {pendingSave&&<div role="status"><strong>Envio pendente</strong> — a OS ainda não foi atualizada no servidor. <button type="button" disabled={busy||!draftReady||Boolean(olderDraft)||serverConflict} onClick={()=>void execute("save")}>Enviar pendência</button></div>}
     {olderDraft&&<button type="button" className={styles.secondaryAction} onClick={()=>{restoreDraft(olderDraft);setOlderDraft(null);}}>Recuperar rascunho para revisão</button>}
     {olderDraft&&<button type="button" className={styles.secondaryAction} onClick={()=>{suppressDraft.current=true;void clearOrderDraft(scope,order.id).then(()=>{setOlderDraft(null);setDraftNotice("Rascunho anterior descartado.");});}}>Descartar rascunho anterior</button>}
     <p><strong>{requirements.filter(item=>item.required).length-pendingRequirements.length} de {requirements.filter(item=>item.required).length} requisitos preenchidos</strong></p>
