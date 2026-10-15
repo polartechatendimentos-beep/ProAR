@@ -30,6 +30,7 @@ export type MobileFieldOrder = {
   measurements?:Record<string,string>;
   photoCounts?:{before:number;after:number};
   appliedMaterials?:{name:string;quantity:number}[];
+  technicianSignaturePreview?:string;
   editToken?: string;
   equipmentOptions?: { id: string; label: string }[];
   fieldExceptions?: { id:string;kind:"signature"|"equipment";reason:string;status:string;requestedBy:string;requestedAt:string;decidedBy?:string;decidedAt?:string;decisionReason?:string }[];

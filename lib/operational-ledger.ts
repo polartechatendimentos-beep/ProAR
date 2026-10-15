@@ -1,3 +1,4 @@
+import { prepareOrderSignatures, safeSignatureImage } from "./service-order-signatures.ts";
 /* eslint-disable @typescript-eslint/no-explicit-any, @next/next/no-assign-module-variable */
 // Dynamic records retain the fields of the historical ERP snapshots.
 export type ErpRecord = Record<string, any>;
@@ -131,6 +132,17 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
   assertUnique(list(modules.Produtos), list(oldModules.Produtos), "sku");
   assertUnique(list(modules.Produtos), list(oldModules.Produtos), "barcode");
   assertUnique(list(modules.Equipamentos), list(oldModules.Equipamentos), "serialNumber");
+  for(const employee of list(modules.Funcionários)) {
+    const before=list(oldModules.Funcionários).find(item=>item.id===employee.id);
+    if(employee.employeeSignature!==before?.employeeSignature){
+      if(employee.employeeSignature && !safeSignatureImage(employee.employeeSignature))throw new OperationError("Assinatura padrão inválida. Use uma imagem PNG, JPEG ou WebP de até 250 KB.");
+      employee.employeeSignatureUpdatedAt=now;employee.employeeSignatureUpdatedBy=actor.username;
+    } else {
+      employee.employeeSignatureUpdatedAt=before?.employeeSignatureUpdatedAt;
+      employee.employeeSignatureUpdatedBy=before?.employeeSignatureUpdatedBy;
+    }
+  }
+  next.serviceOrders=list(next.serviceOrders).map(order=>prepareOrderSignatures(list(old.serviceOrders).find(item=>item.id===order.id),order,list(modules.Funcionários),now));
   const financial = list(modules.Financeiro);
   modules.Financeiro = financial;
   const approvals = structuredClone(list(modules["Aprovações"]));
@@ -213,6 +225,10 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
   const ledger = structuredClone(list(oldModules["Razão financeiro"]));
   const stock = structuredClone(list(oldModules["Livro de estoque"]));
   const audit = structuredClone(list(oldModules["Auditoria operacional"]));
+  for(const employee of list(modules.Funcionários)) {
+    const before=list(oldModules.Funcionários).find(item=>item.id===employee.id);
+    if(employee.employeeSignature!==before?.employeeSignature)audit.push({id:`AUD-${crypto.randomUUID()}`,module:"Funcionários",recordId:employee.id,action:employee.employeeSignature?"Assinatura padrão cadastrada/atualizada":"Assinatura padrão removida",user:actor.username,createdAt:now,reason:"Cadastro de assinatura padrão para próximos atendimentos",changes:{assinaturaPadrao:{before:Boolean(before?.employeeSignature),after:Boolean(employee.employeeSignature)}}});
+  }
   const addMovement = (movement: ErpRecord, collection = ledger) => { if (!collection.some(item => item.id === movement.id)) collection.push(movement); };
   for (const account of accounts) {
     if (!String(account.name || "").trim()) throw new OperationError("Informe o nome da conta financeira.");

@@ -7,7 +7,7 @@ import { technicianRole, applyFieldOrder, type FieldOrderCommand } from "../../.
 import { FieldSupportError } from "../../../../lib/field-support";
 import { RouteError, validatePoint } from "../../../../lib/work-routes";
 import { prepareOperationalState, independentOperationalRows, OperationError, type ErpState } from "../../../../lib/operational-ledger";
-import { commitNeonOperationalState, PRIMARY_DATABASE_URL, databaseFetch } from "../../../../lib/supabase-rest";
+import { commitNeonOperationalState, PRIMARY_DATABASE_URL, databaseFetch, supabaseRest } from "../../../../lib/supabase-rest";
 import { tenantHeaders } from "../../../../lib/tenant-rest";
 import { improveFieldOrder, mobileMutationActions, fieldEquipmentHistory, type ImprovementCommand } from "../../../../lib/mobile-order-improvements";
 import { assignedToSession } from "../../../../lib/mobile-field";
@@ -70,7 +70,14 @@ export async function GET(request:NextRequest){
     if(!order || !assignedToSession(order,{...session,employeeId:c.actor?.employeeId}))return reply({error:"OS não disponível para este perfil."},403);
     if(request.nextUrl.searchParams.get("view")==="customer-history")return reply({history:fieldCustomerHistory(order,state.serviceOrders||[])});
     if(request.nextUrl.searchParams.get("view")==="receipt"){
-      const receipt=fieldOrderReceipt(order);return receipt?reply({receipt}):reply({error:"A OS ainda não possui conclusão confirmada."},409);
+      let company;
+      try {
+        for(const id of [...new Set([c.company,session.companyId].filter(Boolean))]){
+          const response=await supabaseRest(`proar_companies?select=trade_name,legal_name,cnpj,phone,email,address&id=eq.${encodeURIComponent(id!)}&limit=1`);
+          if(response.ok){const row=(await response.json())[0];if(row){company={name:String(row.trade_name||row.legal_name||""),legalName:String(row.legal_name||""),document:String(row.cnpj||""),phone:String(row.phone||""),email:String(row.email||""),address:String(row.address||"")};break;}}
+        }
+      }catch{/* Company header is optional; never substitute another tenant's identity. */}
+      const receipt=fieldOrderReceipt(order,company);return receipt?reply({receipt}):reply({error:"A OS ainda não possui conclusão confirmada."},409);
     }
     return reply({history:fieldEquipmentHistory(order,request.nextUrl.searchParams.get("equipmentId")||"",state.moduleRecords?.Equipamentos||[],state.serviceOrders||[])});
   }catch(error){return error instanceof FieldSupportError?reply({error:error.message},error.status):reply({error:"Histórico indisponível."},503);}
