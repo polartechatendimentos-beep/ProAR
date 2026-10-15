@@ -11,6 +11,7 @@ import { MobileRouteControls } from "./MobileRouteControls";
 import { FieldSupportPanel } from "./FieldSupportPanel";
 import { FieldOrderEditor } from "./FieldOrderEditor";
 import { mobileWeekDates } from "@/lib/mobile-agenda";
+import {loadOfflineSnapshot,saveOfflineSnapshot} from "@/lib/mobile-offline-snapshot";
 import type { MobileFieldOrder } from "@/lib/mobile-field";
 import styles from "./ProARFieldMobile.module.css";
 
@@ -58,6 +59,7 @@ export function ProARFieldMobile() {
   const [sunlightMode, setSunlightMode] = useState(false);
   const [error, setError] = useState("");
   const [loginRequired, setLoginRequired] = useState(false);
+  const [cachedReadOnly,setCachedReadOnly]=useState(false);
   const [online, setOnline] = useState(true);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
@@ -73,13 +75,16 @@ export function ProARFieldMobile() {
       const result = await response.json();
       if (!response.ok) {
         setLoginRequired(response.status === 401);
-        if(response.status===401||response.status===403){setData(null);setSelected(null);}
+        if(response.status===401||response.status===403){setData(null);setSelected(null);sessionStorage.removeItem("proar.mobile.verifiedScope");}
         throw new Error(result.error || "Não foi possível carregar os atendimentos.");
       }
       setLoginRequired(false);
       setData(result as FieldData);
+      setCachedReadOnly(false);
+      if(result.user?.scope){sessionStorage.setItem("proar.mobile.verifiedScope",result.user.scope);void saveOfflineSnapshot(result.user.scope,result as FieldData).catch(()=>{});}
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Falha de conexão com o ProAR.");
+      const message=reason instanceof Error ? reason.message : "Falha de conexão com o ProAR.";
+      if(!navigator.onLine){try{const scope=sessionStorage.getItem("proar.mobile.verifiedScope")||"";const snapshot=await loadOfflineSnapshot(scope);if(snapshot){setData(snapshot as FieldData);setCachedReadOnly(true);setError("Consulta offline: dados da última sincronização, sem permissão para alterar OS.");}else setError(message);}catch{setError(message);}}else setError(message);
     } finally {
       setLoading(false);
     }
@@ -126,6 +131,7 @@ export function ProARFieldMobile() {
         </div>
       </header>
       <main className={styles.content}>
+        {cachedReadOnly&&<div role="status" className={styles.warning}>Modo consulta offline. Confirme os dados no servidor quando a conexão retornar.</div>}
         {!online && <div className={styles.warning}><CloudOff size={19}/>Sem conexão. Você pode preencher o rascunho da OS neste aparelho. A gravação no servidor e a conclusão precisam de conexão.</div>}
         {completion&&<div role="status" className={styles.detailCard}><h2>OS concluída • {completion.orderId}</h2><p>Confirmada no servidor em {new Date(completion.completedAt).toLocaleString("pt-BR")}.</p><button type="button" className={styles.secondaryAction} onClick={()=>setCompletion(null)}>Fechar confirmação</button></div>}
         {error && <div role="alert" className={styles.error}>{error}{loginRequired && <Link href="/">Entrar no ProAR</Link>}{!loginRequired && <button type="button" onClick={()=>void refresh()}>Tentar novamente</button>}</div>}
@@ -154,7 +160,7 @@ export function ProARFieldMobile() {
             </div>
             {current.address && <><label className={styles.formLabel}>Aplicativo de navegação<select value={mapApp} onChange={e=>setMapApp(e.target.value)}><option value="google">Google Maps</option><option value="waze">Waze</option></select></label><a className={styles.primaryAction} href={mapApp==="waze"?`https://www.waze.com/ul?q=${encodeURIComponent(current.address)}&navigate=yes`:`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(current.address)}`} target="_blank" rel="noopener noreferrer"><MapPin size={18}/> Abrir navegação <ArrowRight size={18}/></a></>}
             {!data.user.canEdit && <p role="alert" className={styles.warning}>Seu perfil não tem permissão para alterar esta OS. Solicite a liberação ao administrador.</p>}
-            {data.user.canEdit && <FieldOrderEditor key={`${current.id}:${current.fieldVersion}`} scope={data.user.scope} canApprove={data.user.canApprove} order={current} requiresJourney={/tecnico|prestador/i.test(data.user.role.normalize("NFD").replace(/[\u0300-\u036f]/g,""))} onSaved={async result=>{if(result){setCompletion(result);setSelected(null);setTab("ordens");setData(previous=>previous?{...previous,orders:previous.orders.filter(order=>order.id!==result.orderId)}:previous);}await refresh();}}/>}
+            {data.user.canEdit && !cachedReadOnly && <FieldOrderEditor key={`${current.id}:${current.fieldVersion}`} scope={data.user.scope} canApprove={data.user.canApprove} order={current} requiresJourney={/tecnico|prestador/i.test(data.user.role.normalize("NFD").replace(/[\u0300-\u036f]/g,""))} onSaved={async result=>{if(result){setCompletion(result);setSelected(null);setTab("ordens");setData(previous=>previous?{...previous,orders:previous.orders.filter(order=>order.id!==result.orderId)}:previous);}await refresh();}}/>}
             <p className={styles.disclaimer}>Alterações são confirmadas no banco. Durante a pausa ou fora da jornada, técnicos podem apenas consultar.</p>
           </section> : <>
             {tab === "inicio" && <section className={styles.screen}>
