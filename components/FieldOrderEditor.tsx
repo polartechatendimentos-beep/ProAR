@@ -28,12 +28,13 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
   const requirements=[...new Map([{key:"diagnosis",label:"Diagnóstico e medições",required:true},...mobileChecklist(order.service)].map(item=>[item.key,item])).values()];
   const pendingRequirements=requirements.filter(item=>item.required&&!done[item.key as keyof typeof done]);
   const [pendingSave,setPendingSave]=useState(false);
+  const [serverConflict,setServerConflict]=useState(false);
   const [draftReady,setDraftReady]=useState(false),[draftNotice,setDraftNotice]=useState(""),[olderDraft,setOlderDraft]=useState<OrderDraft|null>(null);
   const latestDraft=useRef<OrderDraft|null>(null),suppressDraft=useRef(false);
   function restoreDraft(value:OrderDraft){setReport(value.report);setDiagnosis(value.diagnosis);setChecklist(value.checklist);setEquipmentIds(value.equipmentIds);setBefore(value.before);setAfter(value.after);setSignature(value.signature);setSignerName(value.signerName);setObservations(value.observations||"");setMeasurements(value.measurements||{});setBeforePhotos(value.beforePhotos||[]);setAfterPhotos(value.afterPhotos||[]);}
   useEffect(()=>{
     let cancelled=false;
-    void loadOrderDraft(scope,order.id).then(value=>{if(cancelled)return;if(value){if(value.version===order.fieldVersion){restoreDraft(value);setDraftNotice("Rascunho recuperado neste aparelho.");}else{setOlderDraft(value);setDraftNotice("A OS mudou no servidor. Revise antes de recuperar o rascunho anterior.");}}void getPendingSave(scope,order.id).then(p=>{if(!cancelled)setPendingSave(Boolean(p));}).catch(()=>{});setDraftReady(true);}).catch(()=>{if(!cancelled){setDraftNotice("Não foi possível acessar o rascunho local. Salve no servidor para preservar os dados.");setDraftReady(true);}});
+    void loadOrderDraft(scope,order.id).then(value=>{if(cancelled)return;if(value){if(value.version===order.fieldVersion){restoreDraft(value);setDraftNotice("Rascunho recuperado neste aparelho.");}else{setOlderDraft(value);setDraftNotice("A OS mudou no servidor. Revise antes de recuperar o rascunho anterior.");}}void getPendingSave(scope,order.id).then(p=>{if(!cancelled)setPendingSave(Boolean(p));setServerConflict(Boolean(p&&p.version!==order.fieldVersion));}).catch(()=>{});setDraftReady(true);}).catch(()=>{if(!cancelled){setDraftNotice("Não foi possível acessar o rascunho local. Salve no servidor para preservar os dados.");setDraftReady(true);}});
     return()=>{cancelled=true;};
   },[scope,order.id,order.fieldVersion]);
   useEffect(()=>{
@@ -75,7 +76,7 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
         return;
       }
       const pending=action==="save"?await getPendingSave(scope,order.id):null;
-      if(pending&&pending.version!==order.fieldVersion)throw new Error("A OS mudou no servidor. Revise o rascunho antes de enviar.");
+      if(pending&&pending.version!==order.fieldVersion){setServerConflict(true);throw new Error("Conflito: a OS mudou no servidor. Rascunho preservado; solicite revisão antes de reenviar.");}
       const point=requiresJourney&&(action==="start"||action==="finish")?await gps():undefined;
       const response=await fetch("/api/mobile/orders",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({requestId:pending?.requestId||crypto.randomUUID(),action,orderId:order.id,expectedVersion:order.fieldVersion,expectedToken:order.editToken,report,diagnosis,observations,measurements,beforePhotos:[...(before?[before]:[]),...beforePhotos],afterPhotos:[...(after?[after]:[]),...afterPhotos],equipmentIds,checklist:done,signature,signerName,point})});
       const body=await response.json();if(!response.ok)throw new Error(body.error||"Gravação não confirmada.");suppressDraft.current=true;await clearOrderDraft(scope,order.id).catch(()=>{});if(action==="save"){await clearPendingSave(scope,order.id).catch(()=>{});setPendingSave(false);}setNotice("OS confirmada no servidor.");await onSaved(action==="finish"?{orderId:order.id,completedAt:body.completedAt||new Date().toISOString()}:undefined);
@@ -85,7 +86,8 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
     if(start){drawing.current=true;drew.current=false;c.setPointerCapture(event.pointerId);ctx.beginPath();ctx.moveTo(x,y);}else if(drawing.current){ctx.lineTo(x,y);ctx.stroke();drew.current=true;}}
   return <article className={styles.detailCard}><h2>Executar atendimento</h2>
     <p role="status">{draftNotice||"Preparando rascunho…"}</p>
-    {pendingSave&&<div role="status"><strong>Envio pendente</strong> — a OS ainda não foi atualizada no servidor. <button type="button" disabled={busy||!draftReady||Boolean(olderDraft)} onClick={()=>void execute("save")}>Enviar pendência</button></div>}
+    {serverConflict&&<div role="alert">Conflito de versão: rascunho preservado. Revise com a gerência antes de reenviar.</div>}
+    {pendingSave&&<div role="status"><strong>Envio pendente</strong> — a OS ainda não foi atualizada no servidor. <button type="button" disabled={busy||!draftReady||Boolean(olderDraft)} onClick={()=>void execute("save")} disabled={serverConflict}>Enviar pendência</button></div>}
     {olderDraft&&<button type="button" className={styles.secondaryAction} onClick={()=>{restoreDraft(olderDraft);setOlderDraft(null);}}>Recuperar rascunho para revisão</button>}
     {olderDraft&&<button type="button" className={styles.secondaryAction} onClick={()=>{suppressDraft.current=true;void clearOrderDraft(scope,order.id).then(()=>{setOlderDraft(null);setDraftNotice("Rascunho anterior descartado.");});}}>Descartar rascunho anterior</button>}
     <p><strong>{requirements.filter(item=>item.required).length-pendingRequirements.length} de {requirements.filter(item=>item.required).length} requisitos preenchidos</strong></p>
