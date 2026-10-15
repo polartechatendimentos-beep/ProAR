@@ -60,7 +60,7 @@ export function applyFieldOrder(order:Record<string,unknown>, command:FieldOrder
   if(command.action === "finish") {
     if(order.fieldAttendancePaused)throw new FieldSupportError("Retome o atendimento pausado antes de concluir.",409);
     const ids=Array.isArray(next.equipmentIds)?next.equipmentIds:next.equipmentId?[next.equipmentId]:[];
-    if(!order.checkInAt || (!ids.length&&!approvedFieldException(order,"equipment")) || !String(next.diagnosis||"").trim() || !String(next.executedService||"").trim() || !photos.before?.length || !photos.after?.length || (!next.customerSignature&&!approvedFieldException(order,"signature")))throw new FieldSupportError("Conclusão exige check-in, equipamento vinculado, diagnóstico, serviço executado, fotos antes/depois e assinatura do cliente. Exceções de equipamento ou assinatura precisam de aprovação do gestor.");
+    if(!order.checkInAt || !String(next.diagnosis||"").trim() || !String(next.executedService||"").trim() || !photos.before?.length || !photos.after?.length || (!next.customerSignature&&!approvedFieldException(order,"signature")))throw new FieldSupportError("Conclusão exige check-in, diagnóstico, serviço executado, fotos antes/depois e assinatura do cliente. Exceções de assinatura precisam de aprovação do gestor.");
     const checks=next.mobileChecklist as Record<string,boolean>|undefined;
     if(!checks || !checklistProgress(mobileChecklist(String(order.service||"")),{...checks,equipment:ids.length>0||approvedFieldException(order,"equipment"),signature:Boolean(next.customerSignature)||approvedFieldException(order,"signature")}).ready)throw new FieldSupportError("Complete o checklist técnico antes de concluir.");
     next.status="Concluída";next.checkOutAt=now;
