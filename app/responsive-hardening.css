@@ -754,3 +754,5 @@ html[data-proar-experience="mobile"] .orders-panel tbody td:nth-child(n+5):not(:
 /* The full ERP keeps all permitted modules on phones/tablets. Field shortcuts belong to /mobile. */
 .proar-full-system{--proar-mobile-nav-space:0px}
 .proar-full-system .mobile-nav{display:none!important}
+
+.proar-skip-link{position:fixed;left:16px;top:-100px;z-index:2000;padding:12px 18px;background:#fff;color:#123b63;border:2px solid #1f96d2;border-radius:8px}.proar-skip-link:focus{top:12px}
