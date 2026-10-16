@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { 
-  Building2, Wrench, BookOpen, FileText, ShoppingCart, DollarSign, UsersRound, Menu, PanelLeftClose, LayoutDashboard,
+  Building2, Wrench, BookOpen, FileText, ShoppingCart, DollarSign, UsersRound, Menu, PanelLeftClose, LayoutDashboard, Sun, Moon,
   ShieldCheck, Landmark, Search, Bell, Settings, LogOut, CheckCircle2
 } from "lucide-react";
 
@@ -28,6 +28,14 @@ export default function HomePage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [compact, setCompact] = useState(true);
+  const [colorTheme, setColorTheme] = useState<"light" | "dark">("light");
+  useEffect(() => {
+    try { if (window.localStorage.getItem("proar:color-theme") === "dark") setColorTheme("dark"); } catch { /* storage unavailable */ }
+  }, []);
+  function changeColorTheme(next: "light" | "dark") {
+    setColorTheme(next);
+    try { window.localStorage.setItem("proar:color-theme", next); } catch { /* storage unavailable */ }
+  }
   const [appHealth, setAppHealth] = useState<"checking" | "running" | "unavailable">("checking");
   useEffect(() => {
     const controller = new AbortController();
@@ -56,7 +64,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col">
+    <div data-proar-theme={colorTheme} className="proar-app min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col">
       <a href="#conteudo-principal" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-white focus:p-3">Pular para o conteúdo</a>
       {/* Top Header Corporativo ProAR */}
       <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40 shadow-md">
@@ -91,6 +99,7 @@ export default function HomePage() {
             </div>
           </div>
 
+          <button type="button" onClick={() => changeColorTheme(colorTheme === "dark" ? "light" : "dark")} aria-label={colorTheme === "dark" ? "Ativar tema claro" : "Ativar tema escuro"} title={colorTheme === "dark" ? "Tema claro" : "Tema escuro"} className="rounded-lg border border-slate-700 p-2 hover:bg-slate-800">{colorTheme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}</button>
           {/* Perfil & Ações Rápidas */}
           <div className="flex items-center gap-3 shrink-0 text-xs">
             <div className="hidden sm:block text-right">
