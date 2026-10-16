@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { 
-  Building2, Wrench, FileText, ShoppingCart, DollarSign, UsersRound,
+  Building2, Wrench, BookOpen, FileText, ShoppingCart, DollarSign, UsersRound,
   ShieldCheck, Landmark, Search, Bell, Settings, LogOut, CheckCircle2
 } from "lucide-react";
 
@@ -14,9 +14,10 @@ import { PdvBalcaoPanel } from "@/components/PdvBalcaoPanel";
 import { FinanceiroPanel } from "@/components/FinanceiroPanel";
 import { PublicContractsPanel } from "@/components/PublicContractsPanel";
 import { TechnicalCompliancePanel } from "@/components/TechnicalCompliancePanel";
+import { TechnicalBasePanel } from "@/components/TechnicalBasePanel";
 import { CustomerProfileWorkspace } from "@/components/CustomerProfileWorkspace";
 
-type TabType = "dashboard" | "clientes" | "os" | "obras" | "orcamento" | "pdv" | "financeiro" | "contratos" | "pmoc";
+type TabType = "dashboard" | "clientes" | "os" | "obras" | "orcamento" | "pdv" | "financeiro" | "contratos" | "pmoc" | "base-tecnica";
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
@@ -135,6 +136,7 @@ export default function HomePage() {
             >
               <Landmark className="w-3.5 h-3.5" /> Licitações IA + Bid Agent
             </button>
+            <button onClick={() => setActiveTab("base-tecnica")} className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${activeTab === "base-tecnica" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white hover:bg-slate-900"}`}><BookOpen className="w-3.5 h-3.5" /> Base Técnica</button>
             <button
               onClick={() => setActiveTab("pmoc")}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
@@ -182,6 +184,7 @@ export default function HomePage() {
         {activeTab === "financeiro" && <FinanceiroPanel />}
         {activeTab === "contratos" && <PublicContractsPanel />}
         {activeTab === "pmoc" && <TechnicalCompliancePanel />}
+        {activeTab === "base-tecnica" && <TechnicalBasePanel />}
       </main>
 
       {/* Rodapé Institucional */}
