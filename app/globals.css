@@ -12,3 +12,21 @@ body {
   background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ProAR desktop ERP density: scoped to the full-system workspace, not /mobile. */
+#conteudo-principal[data-density="compact"] input:not([type="checkbox"]):not([type="radio"]),
+#conteudo-principal[data-density="compact"] select {
+  min-height: 34px;
+}
+#conteudo-principal[data-density="compact"] table th,
+#conteudo-principal[data-density="compact"] table td {
+  padding-top: 0.45rem;
+  padding-bottom: 0.45rem;
+}
+#conteudo-principal[data-density="comfortable"] table th,
+#conteudo-principal[data-density="comfortable"] table td {
+  padding-top: 0.85rem;
+  padding-bottom: 0.85rem;
+}
+#conteudo-principal { overflow-wrap: anywhere; }
+#conteudo-principal :focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
