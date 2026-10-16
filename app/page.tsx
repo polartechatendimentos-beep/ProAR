@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { 
   Building2, Wrench, BookOpen, FileText, ShoppingCart, DollarSign, UsersRound,
   ShieldCheck, Landmark, Search, Bell, Settings, LogOut, CheckCircle2
@@ -19,12 +19,32 @@ import { CustomerProfileWorkspace } from "@/components/CustomerProfileWorkspace"
 
 type TabType = "dashboard" | "clientes" | "os" | "obras" | "orcamento" | "pdv" | "financeiro" | "contratos" | "pmoc" | "base-tecnica";
 
+const validTabs: TabType[] = ["dashboard","clientes","os","obras","orcamento","pdv","financeiro","contratos","pmoc","base-tecnica"];
+const tabLabels: Record<TabType,string> = { dashboard:"Central do Dia",clientes:"Clientes",os:"Ordens de Serviço",obras:"Obras",orcamento:"Orçamentos",pdv:"PDV",financeiro:"Financeiro",contratos:"Licitações",pmoc:"Conformidade e ART","base-tecnica":"Base Técnica" };
+
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
   const [globalSearch, setGlobalSearch] = useState("");
+  useEffect(() => {
+    const syncFromUrl = () => {
+      const requested = new URLSearchParams(window.location.search).get("tab");
+      setActiveTab(requested && validTabs.includes(requested as TabType) ? requested as TabType : "dashboard");
+    };
+    syncFromUrl();
+    window.addEventListener("popstate", syncFromUrl);
+    return () => window.removeEventListener("popstate", syncFromUrl);
+  }, []);
+  function navigateTab(tab: TabType) {
+    setActiveTab(tab);
+    const url = new URL(window.location.href);
+    if (tab === "dashboard") url.searchParams.delete("tab");
+    else url.searchParams.set("tab", tab);
+    window.history.pushState(null, "", url.pathname + url.search + url.hash);
+  }
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col">
+      <a href="#conteudo-principal" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-white focus:p-3">Pular para o conteúdo</a>
       {/* Top Header Corporativo ProAR */}
       <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40 shadow-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
@@ -70,10 +90,10 @@ export default function HomePage() {
         </div>
 
         {/* Barra de Navegação de Módulos Operacionais */}
-        <nav className="bg-slate-950/90 border-t border-slate-800/80 px-4 sm:px-6 lg:px-8 overflow-x-auto">
+        <nav aria-label="Módulos do ProAR completo" className="bg-slate-950/90 border-t border-slate-800/80 px-4 sm:px-6 lg:px-8 overflow-x-auto">
           <div className="max-w-7xl mx-auto flex items-center gap-1 py-1.5 min-w-max">
             <button
-              onClick={() => setActiveTab("clientes")}
+              onClick={() => navigateTab("clientes")}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
                 activeTab === "clientes" ? "bg-blue-600 text-white shadow-sm" : "text-slate-400 hover:text-white hover:bg-slate-900"
               }`}
@@ -81,7 +101,7 @@ export default function HomePage() {
               <UsersRound className="w-3.5 h-3.5" /> Clientes
             </button>
             <button
-              onClick={() => setActiveTab("dashboard")}
+              onClick={() => navigateTab("dashboard")}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
                 activeTab === "dashboard" ? "bg-blue-600 text-white shadow-sm" : "text-slate-400 hover:text-white hover:bg-slate-900"
               }`}
@@ -89,7 +109,7 @@ export default function HomePage() {
               Central do Dia
             </button>
             <button
-              onClick={() => setActiveTab("os")}
+              onClick={() => navigateTab("os")}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
                 activeTab === "os" ? "bg-blue-600 text-white shadow-sm" : "text-slate-400 hover:text-white hover:bg-slate-900"
               }`}
@@ -97,7 +117,7 @@ export default function HomePage() {
               <Wrench className="w-3.5 h-3.5" /> Ordens de Serviço (PMOC)
             </button>
             <button
-              onClick={() => setActiveTab("obras")}
+              onClick={() => navigateTab("obras")}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
                 activeTab === "obras" ? "bg-blue-600 text-white shadow-sm" : "text-slate-400 hover:text-white hover:bg-slate-900"
               }`}
@@ -105,7 +125,7 @@ export default function HomePage() {
               <Building2 className="w-3.5 h-3.5" /> Obras (8 Etapas)
             </button>
             <button
-              onClick={() => setActiveTab("orcamento")}
+              onClick={() => navigateTab("orcamento")}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
                 activeTab === "orcamento" ? "bg-blue-600 text-white shadow-sm" : "text-slate-400 hover:text-white hover:bg-slate-900"
               }`}
@@ -113,7 +133,7 @@ export default function HomePage() {
               <FileText className="w-3.5 h-3.5" /> Orçamentos & KM
             </button>
             <button
-              onClick={() => setActiveTab("pdv")}
+              onClick={() => navigateTab("pdv")}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
                 activeTab === "pdv" ? "bg-blue-600 text-white shadow-sm" : "text-slate-400 hover:text-white hover:bg-slate-900"
               }`}
@@ -121,7 +141,7 @@ export default function HomePage() {
               <ShoppingCart className="w-3.5 h-3.5" /> PDV Balcão [F1-F12]
             </button>
             <button
-              onClick={() => setActiveTab("financeiro")}
+              onClick={() => navigateTab("financeiro")}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
                 activeTab === "financeiro" ? "bg-blue-600 text-white shadow-sm" : "text-slate-400 hover:text-white hover:bg-slate-900"
               }`}
@@ -129,16 +149,16 @@ export default function HomePage() {
               <DollarSign className="w-3.5 h-3.5" /> Financeiro / Baixa Parcial
             </button>
             <button
-              onClick={() => setActiveTab("contratos")}
+              onClick={() => navigateTab("contratos")}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
                 activeTab === "contratos" ? "bg-blue-600 text-white shadow-sm" : "text-slate-400 hover:text-white hover:bg-slate-900"
               }`}
             >
               <Landmark className="w-3.5 h-3.5" /> Licitações IA + Bid Agent
             </button>
-            <button onClick={() => setActiveTab("base-tecnica")} className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${activeTab === "base-tecnica" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white hover:bg-slate-900"}`}><BookOpen className="w-3.5 h-3.5" /> Base Técnica</button>
+            <button onClick={() => navigateTab("base-tecnica")} className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${activeTab === "base-tecnica" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white hover:bg-slate-900"}`}><BookOpen className="w-3.5 h-3.5" /> Base Técnica</button>
             <button
-              onClick={() => setActiveTab("pmoc")}
+              onClick={() => navigateTab("pmoc")}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
                 activeTab === "pmoc" ? "bg-blue-600 text-white shadow-sm" : "text-slate-400 hover:text-white hover:bg-slate-900"
               }`}
@@ -150,12 +170,13 @@ export default function HomePage() {
       </header>
 
       {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
+      <main id="conteudo-principal" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
+        <div className="flex items-center justify-between gap-3"><p aria-live="polite" className="text-xs font-semibold text-slate-500">ProAR completo / <span className="text-slate-900">{tabLabels[activeTab]}</span></p><span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] text-slate-600">Ambiente completo</span></div>
         {/* Visualização de Dashboard / Cockpit do Dia */}
         {activeTab === "dashboard" && (
           <div className="space-y-6">
             <DailyWorkCenter
-              onNavigateTab={(t) => setActiveTab(t)}
+              onNavigateTab={(t) => { if(validTabs.includes(t as TabType)) navigateTab(t as TabType); }}
               osCount={3}
               osAtrasadasCount={1}
               obrasCount={2}
