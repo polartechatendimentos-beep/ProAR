@@ -7,11 +7,13 @@ on:
       - 'app/api/technical-base/**'
       - 'app/api/technical-base/assistant/**'
       - 'app/page.tsx'
+      - 'app/globals.css'
       - 'app/api/health/**'
       - 'tests/proar3-field-foundations.test.mjs'
       - 'tests/technical-base-assistant.test.mjs'
       - 'tests/proar3-navigation.test.mjs'
       - 'tests/proar3-health.test.mjs'
+      - 'tests/proar3-layout.test.mjs'
       - '.github/workflows/proar3-field.yml'
 permissions:
   contents: read
@@ -27,5 +29,5 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: node --test tests/proar3-field-foundations.test.mjs tests/technical-base-assistant.test.mjs tests/proar3-navigation.test.mjs tests/proar3-health.test.mjs
+      - run: node --test tests/proar3-field-foundations.test.mjs tests/technical-base-assistant.test.mjs tests/proar3-navigation.test.mjs tests/proar3-health.test.mjs tests/proar3-layout.test.mjs
       - run: npm run typecheck
