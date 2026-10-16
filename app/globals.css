@@ -30,3 +30,18 @@ body {
 }
 #conteudo-principal { overflow-wrap: anywhere; }
 #conteudo-principal :focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+
+/* Theme is scoped to the ProAR full application; do not alter /mobile. */
+.proar-app[data-proar-theme="dark"] { background: #0b1220; color: #e2e8f0; color-scheme: dark; }
+.proar-app[data-proar-theme="dark"] main { background: #0b1220; color: #e2e8f0; }
+.proar-app[data-proar-theme="dark"] main .bg-white,
+.proar-app[data-proar-theme="dark"] main .bg-slate-50,
+.proar-app[data-proar-theme="dark"] footer { background-color: #172235 !important; color: #e2e8f0; }
+.proar-app[data-proar-theme="dark"] main .text-slate-900,
+.proar-app[data-proar-theme="dark"] main .text-slate-800,
+.proar-app[data-proar-theme="dark"] footer .text-slate-700 { color: #f1f5f9 !important; }
+.proar-app[data-proar-theme="dark"] main .text-slate-500,
+.proar-app[data-proar-theme="dark"] main .text-slate-600 { color: #cbd5e1 !important; }
+.proar-app[data-proar-theme="dark"] main input,
+.proar-app[data-proar-theme="dark"] main select,
+.proar-app[data-proar-theme="dark"] main textarea { background-color: #1e293b; color: #f8fafc; border-color: #475569; }
