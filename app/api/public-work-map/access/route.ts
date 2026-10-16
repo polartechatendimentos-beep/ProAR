@@ -1,4 +1,5 @@
 import { databaseFetch, masterDatabaseConfig } from "../../../../lib/supabase-rest";
+import { resolveTenantDb, tenantHeaders } from "../../../../lib/tenant-rest";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -30,7 +31,27 @@ export async function POST(request: NextRequest) {
   const rows = await response.json() as { payload?: Record<string, unknown> }[];
   const current = rows.find(row => row.payload?.token === token)?.payload;
   if (!current) return NextResponse.json({ error: "Link da obra não localizado." }, { status: 404 });
-  const accesses = Array.isArray(current.externalAccess) ? current.externalAccess as Record<string, unknown>[] : [];
+  // A fonte oficial de credenciais é a mesma utilizada no cadastro interno.
+  // O mapa público é somente uma projeção de acompanhamento e pode estar desatualizado.
+  const companyId = String(current.companyId || "polartech-principal");
+  const workId = String(current.workId || "reserva-imperial");
+  const tenantDb = await resolveTenantDb(companyId).catch(() => null);
+  if (!tenantDb?.url || !tenantDb.key) return NextResponse.json({ error: "Base de acessos externos indisponível." }, { status: 503 });
+  const safe = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, "").slice(0,100);
+  const accessId = tenantDb.dedicated ? `work-access-${safe(workId)}` : `work-access-${safe(companyId)}-${safe(workId)}`;
+  let accessResponse: Response;
+  try {
+    accessResponse = await databaseFetch(`${tenantDb.url}/rest/v1/proar_state?id=eq.${encodeURIComponent(accessId)}&select=payload`, { headers: tenantHeaders(tenantDb.key), cache: "no-store" });
+  } catch {
+    return NextResponse.json({ error: "Não foi possível consultar as credenciais da obra." }, { status: 503 });
+  }
+  if (!accessResponse.ok) return NextResponse.json({ error: "Não foi possível consultar as credenciais da obra." }, { status: 502 });
+  const accessRows = await accessResponse.json() as {payload?:{externalAccess?:Record<string,unknown>[]}}[];
+  const stored = accessRows[0]?.payload;
+  // Compatibilidade com registros anteriores à migração do cadastro dedicado.
+  const accesses = stored
+    ? (Array.isArray(stored.externalAccess) ? stored.externalAccess : [])
+    : (Array.isArray(current.externalAccess) ? current.externalAccess as Record<string, unknown>[] : []);
   const access = accesses.find(item => normalize(item.username) === username && item.active === true && equalHash(String(item.passwordHash ?? ""), hash(password)));
   if (!access) { fail(rateKey); return NextResponse.json({ error: "Login inválido ou acesso inativo." }, { status: 401 }); }
   attempts.delete(rateKey);
