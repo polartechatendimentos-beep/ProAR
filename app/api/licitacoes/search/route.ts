@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { readSession } from "@/lib/proar-auth";
 import { getEffectiveCompanyId } from "@/lib/company-access";
 import { searchPncp } from "@/lib/procurement/pncp";
+import { filterBllViaPncp } from "@/lib/procurement/bll-via-pncp";
+import { filterComprasGovViaPncp } from "@/lib/procurement/compras-gov-via-pncp";
 import { type ProcurementRecord } from "@/lib/procurement/domain";
+import { screenProcurement } from "@/lib/procurement/screening";
 
 const DEFAULT_TERMS = [
   "ar condicionado", "ar-condicionado", "climatização", "climatizacao", "pmoc",
@@ -48,7 +51,13 @@ export async function POST(request: Request) {
     const result = await searchPncp({ uf, days, maxPages, terms, modalityCodes });
     // searchPncp already performs normalized relevance filtering. Do not filter a second
     // time here: double filtering previously hid valid PNCP opportunities.
-    const data = result.data as ProcurementRecord[];
+    const sourceFilter = String(body.source || "all").toLowerCase();
+    if (!["all", "pncp", "bll", "compras-gov"].includes(sourceFilter)) return NextResponse.json({ success: false, error: "Fonte inválida." }, { status: 400 });
+    const allData = result.data as ProcurementRecord[];
+    const data = sourceFilter === "bll" ? filterBllViaPncp(allData)
+      : sourceFilter === "compras-gov" ? filterComprasGovViaPncp(allData) : allData;
+
+    const enrichedData = data.map(record => ({ ...record, screening: screenProcurement(record) }));
 
     const health = {
       ...result.health,
@@ -59,14 +68,16 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: result.success,
-      source: "PNCP",
+      source: sourceFilter === "bll" ? "BLL via PNCP" : sourceFilter === "compras-gov" ? "Compras.gov.br via PNCP" : "PNCP",
+      sourceFilter,
+      sourceHealth: result.health,
       count: data.length,
-      data,
+      data: enrichedData,
       health,
       message: data.length
-        ? `${data.length} oportunidade(s) encontrada(s) no PNCP para ${uf}.`
+        ? `${data.length} oportunidade(s) encontrada(s) ${sourceFilter === "bll" ? "da BLL identificadas no PNCP" : sourceFilter === "compras-gov" ? "do Compras.gov.br identificadas no PNCP" : "no PNCP"} para ${uf}.`
         : result.success
-          ? "Nenhuma oportunidade encontrada no PNCP para os filtros atuais."
+          ? sourceFilter === "bll" ? "Nenhuma licitação com evidência de plataforma BLL nos registros PNCP consultados. Isso não comprova ausência de editais na BLL." : sourceFilter === "compras-gov" ? "Nenhuma licitação com evidência de plataforma Compras.gov.br nos registros PNCP consultados. Isso não comprova ausência de editais no Compras.gov.br." : "Nenhuma oportunidade encontrada no PNCP para os filtros atuais."
           : "Consulta parcial: a fonte PNCP apresentou indisponibilidade durante a coleta.",
       persistence: "Resultados oficiais carregados para conferência; nenhum dado fictício é criado.",
       complementarySources: ["Compras.gov.br", "BLL Compras", "Portal de Compras Públicas", "Licitanet", "BBMNET", "Licitações-e"],

@@ -54,6 +54,7 @@ type Licitacao = {
   margemMinima?: string | null;
   responsavelInterno?: string | null;
   readyToSubmit?: boolean;
+  screening?: { score?: number; classification?: string; deadlineAlert?: string; remainingDays?: number | null };
   statusOriginal?: string | null;
   relevance?: { matchedTerms?: string[]; context?: string; evidence?: string | null };
 };
@@ -139,6 +140,7 @@ export function PublicContractsPanel({ canEdit = true }: { canEdit?: boolean }) 
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [uf, setUf] = useState("SP");
+  const [radarSource, setRadarSource] = useState("all");
   const [status, setStatus] = useState("todas");
   const [activeTab, setActiveTab] = useState<LicTab>("radar");
   const [showNewModal, setShowNewModal] = useState(false);
@@ -223,7 +225,7 @@ export function PublicContractsPanel({ canEdit = true }: { canEdit?: boolean }) 
       const response = await fetch("/api/licitacoes/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uf, days: 14, maxPages: 2, terms: query.trim() ? [query.trim()] : undefined }),
+        body: JSON.stringify({ uf, source: radarSource, days: 14, maxPages: 10, terms: query.trim() ? [query.trim()] : undefined }),
         signal: controller.signal,
       });
       const json = await response.json();
@@ -370,7 +372,8 @@ export function PublicContractsPanel({ canEdit = true }: { canEdit?: boolean }) 
           <div className="flex flex-wrap gap-2">
             {canEdit && <button type="button" onClick={() => setShowNewModal(true)} className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-bold text-slate-950 hover:bg-slate-100"><Plus className="h-4 w-4" /> Nova licitação</button>}
             <button type="button" onClick={() => void loadPersisted()} disabled={loading} className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm font-bold hover:bg-white/20 disabled:opacity-60"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Recarregar ProAR</button>
-            <button type="button" onClick={() => void searchPncp()} disabled={syncing} className="inline-flex items-center gap-2 rounded-lg bg-indigo-500 px-3 py-2 text-sm font-bold hover:bg-indigo-400 disabled:opacity-60"><RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} /> {syncing ? "Consultando..." : "Consultar PNCP"}</button>
+            <label className="flex items-center gap-2 text-xs font-bold text-white">Fonte <select aria-label="Fonte do Radar" value={radarSource} onChange={event => setRadarSource(event.target.value)} className="rounded-lg border border-white/30 bg-slate-900 px-2 py-2 text-white"><option value="all">Todas (PNCP)</option><option value="bll">BLL via PNCP</option><option value="compras-gov">Compras.gov via PNCP</option></select></label>
+            <button type="button" onClick={() => void searchPncp()} disabled={syncing} className="inline-flex items-center gap-2 rounded-lg bg-indigo-500 px-3 py-2 text-sm font-bold hover:bg-indigo-400 disabled:opacity-60"><RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} /> {syncing ? "Consultando..." : "Consultar fonte"}</button>
           </div>
         </div>
 
@@ -411,7 +414,7 @@ export function PublicContractsPanel({ canEdit = true }: { canEdit?: boolean }) 
                 <tbody className="divide-y divide-slate-100">
                   {loading ? <tr><td colSpan={10} className="px-4 py-12 text-center text-slate-500"><Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" /> Carregando...</td></tr> : currentRows.length === 0 ? <tr><td colSpan={10} className="px-4 py-12 text-center text-slate-500">Nenhuma oportunidade encontrada para os filtros atuais.</td></tr> : currentRows.map(item => (
                     <tr key={rowKey(item)} className={selected && rowKey(selected) === rowKey(item) ? "bg-indigo-50" : "hover:bg-slate-50"}>
-                      <td className="px-4 py-3 font-bold text-slate-400">Não calculado</td>
+                      <td className="px-4 py-3 font-bold text-slate-600">{typeof item.screening?.score === "number" ? `${item.screening.score}/100` : "Não calculado"}</td>
                       <td className="px-4 py-3"><span className="rounded-full bg-indigo-100 px-2 py-1 font-bold text-indigo-800">{item.source || item.plataforma || "Manual"}</span><div className="mt-1 text-[10px] text-slate-400">{item.collectedAt ? formatDate(item.collectedAt) : "Origem sem coleta automática"}</div></td>
                       <td className="px-4 py-3"><strong className="block text-slate-800">{item.orgao}</strong><span className="text-slate-500">{item.uf || "Não confirmado"}</span></td>
                       <td className="max-w-[320px] px-4 py-3"><strong className="line-clamp-2 text-slate-800">{item.titulo}</strong><span className="text-slate-500">{item.numeroPregao || item.numeroProcesso || "Número não confirmado"}</span></td>
