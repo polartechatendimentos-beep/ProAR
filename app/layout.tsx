@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "./proar-unified-layout.css";
 import "./global-feedback.css";
+import "./experience-design.css";
+import {SystemAppearance} from "@/components/SystemAppearance";
 import { GlobalFeedback } from "@/components/GlobalFeedback";
 
-const geistSans = Geist({
+const geistSans = Inter({
   variable: "--font-geist-sans",
   subsets: ["latin"],
 });
@@ -38,6 +40,7 @@ export default function RootLayout({
       >
         {children}
         <GlobalFeedback />
+        <SystemAppearance />
       </body>
     </html>
   );

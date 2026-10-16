@@ -1,3 +1,4 @@
+import {identifyProcurementSource} from "./procurement/domain";
 import { supabaseRest } from "./supabase-rest";
 import { NextRequest, NextResponse } from "next/server";
 import { municipalityDistances } from "./municipality-distances";
@@ -80,12 +81,8 @@ async function runLimited<T, R>(items: readonly T[], concurrency: number, worker
   return results;
 }
 
-function identifySource(item: PncpTender): PncpTender["sourcePortal"] {
-  const origin = normalize(`${item.linkSistemaOrigem ?? ""} ${item.usuarioNome ?? ""}`);
-  if (/bllcompras|bll compras|bolsa de licitacoes do brasil/.test(origin)) return "BLL Compras";
-  if (/licitacoes-e|licitacoes e|licitacao-e|bb\.com\.br/.test(origin)) return "Licitações-e";
-  if (/comprasnet|compras\.gov|cnetmobile|serpro/.test(origin)) return "Compras.gov.br";
-  return "PNCP";
+function identifySource(item: PncpTender): NonNullable<PncpTender["sourcePortal"]> {
+  return identifyProcurementSource(item);
 }
 
 async function fetchPage(dataInicial: string, dataFinal: string, uf: string, page = 1) {

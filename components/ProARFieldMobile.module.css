@@ -133,3 +133,9 @@
 .app[data-mobile-theme="light"] :is(button,a,input,select,textarea):focus-visible{outline:3px solid #087bc1;outline-offset:3px}
 .photoComparison{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 @media(max-width:350px){.photoComparison{grid-template-columns:1fr}}
+/* Minimum touch targets apply to every existing field action. */
+.app :is(button,select,input:not([type=checkbox]):not([type=radio])){min-height:48px}
+.app .checkLabel{min-height:48px}.app .checkLabel input{min-width:22px;min-height:22px}
+.skeletonGrid{display:grid;gap:14px}.skeletonCard{height:110px;border:1px solid #31577a;border-radius:16px;background:linear-gradient(100deg,#102944 30%,#214a73 50%,#102944 70%);background-size:200% 100%;animation:fieldSkeleton 1.5s linear infinite}
+@keyframes fieldSkeleton{to{background-position:-200% 0}}
+@media(prefers-reduced-motion:reduce){.skeletonCard{animation:none}}
