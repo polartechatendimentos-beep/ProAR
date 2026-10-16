@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/proar-auth";
+import { assessTechnicalEvidence } from "@/lib/field/technical-diagnosis";
 
 const PROCEDURES = [
   { id:"vacuo", title:"Vácuo e desidratação", keywords:["vacuo","microns","desidratacao"], guidance:"Conferir o procedimento do fabricante; utilizar vacuômetro calibrado e registrar pressão absoluta e teste de subida. Não usar somente tempo de bomba como critério.", source:"Procedimento interno de referência; confirmar manual oficial." },
@@ -13,6 +14,7 @@ export async function POST(request: Request) {
   const body=await request.json().catch(()=>null);
   const question=typeof body?.question==="string"?body.question.trim():"";
   if (!question || question.length>1500) return NextResponse.json({success:false,error:"Informe uma pergunta de até 1500 caracteres."},{status:400});
+  const intake=assessTechnicalEvidence({brand:body?.brand,model:body?.model,code:body?.code,symptoms:question,equipmentType:body?.equipmentType},false);
   const normalized=normalize(question);
   const matches=PROCEDURES.map(p=>({...p,score:p.keywords.filter(k=>normalized.includes(k)).length})).filter(p=>p.score>0).sort((a,b)=>b.score-a.score);
   const match=matches[0];
@@ -21,6 +23,9 @@ export async function POST(request: Request) {
     answer:match ? match.guidance : "Não há documentação técnica homologada suficiente para responder com segurança. Informe fabricante, modelo, código de erro e sintoma; consulte o manual oficial e registre medições verificadas.",
     sources:match?[{title:match.title,reference:match.source}]:[],
     needsTechnicianVerification:true,
+    diagnosticIntake:intake,
+    nextQuestions:intake.missing,
+    diagnosticStatus:"NOT_CONFIRMED",
     notice:"Assistente de consulta técnica baseado em regras. Não utiliza modelo de IA nesta etapa e não deve autorizar intervenções perigosas.",
   });
 }
