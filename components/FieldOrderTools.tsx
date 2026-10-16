@@ -1,4 +1,5 @@
 "use client";
+import {FieldEquipmentLookup} from "./FieldEquipmentLookup";
 import { useState } from "react";
 import type { MobileFieldOrder } from "@/lib/mobile-field";
 import { compressFieldPhoto } from "@/lib/field-media";
@@ -7,6 +8,7 @@ type History={id:string;date:string;service:string;diagnosis:string;report:strin
 export function FieldOrderTools({order,busy,canApprove,send}:{order:MobileFieldOrder;busy:boolean;canApprove:boolean;send:(action:string,data:Record<string,unknown>)=>Promise<void>}){
   const [name,setName]=useState(""),[brand,setBrand]=useState(""),[model,setModel]=useState(""),[serial,setSerial]=useState(""),[photo,setPhoto]=useState(""),[error,setError]=useState("");
   const [kind,setKind]=useState("signature"),[reason,setReason]=useState(""),[decisions,setDecisions]=useState<Record<string,string>>({});
+  const [historyOpen,setHistoryOpen]=useState(false);
   const [history,setHistory]=useState<History[]|null>(null),[historyId,setHistoryId]=useState(""),[historyBusy,setHistoryBusy]=useState(false);
   async function showHistory(id:string){setHistoryId(id);setHistory(null);setHistoryBusy(true);setError("");try{const response=await fetch(`/api/mobile/orders?orderId=${encodeURIComponent(order.id)}${id?`&equipmentId=${encodeURIComponent(id)}`:"&view=customer-history"}`,{cache:"no-store"});const body=await response.json();if(!response.ok)throw new Error(body.error);setHistory(body.history);}catch(e){setError(e instanceof Error?e.message:"Histórico indisponível.");}finally{setHistoryBusy(false);}}
   return <>
@@ -28,7 +30,8 @@ export function FieldOrderTools({order,busy,canApprove,send}:{order:MobileFieldO
       <button type="button" className={styles.secondaryAction} disabled={busy||reason.trim().length<10} onClick={()=>void send("request-exception",{kind,reason})}>Solicitar aprovação</button>
       {(order.fieldExceptions||[]).map(item=><article key={item.id} className={styles.detailCard}><strong>{item.kind==="signature"?"Assinatura":"Equipamento"} • {item.status}</strong><p>{item.reason}</p><small>Solicitado por {item.requestedBy}</small>{item.decisionReason&&<p>Decisão de {item.decidedBy}: {item.decisionReason}</p>}{canApprove&&item.status==="Pendente"&&<><label className={styles.formLabel}>Justificativa da decisão<textarea maxLength={1000} value={decisions[item.id]||""} onChange={e=>setDecisions({...decisions,[item.id]:e.target.value})}/></label>{["Aprovado","Rejeitado"].map(decision=><button key={decision} type="button" disabled={busy||(decisions[item.id]||"").trim().length<10} className={styles.secondaryAction} onClick={()=>void send("decide-exception",{exceptionId:item.id,decision,reason:decisions[item.id]})}>{decision==="Aprovado"?"Aprovar exceção":"Rejeitar exceção"}</button>)}</>}</article>)}
     </details>
-    <details className={styles.journeyPanel}><summary>Histórico do cliente e equipamentos</summary>
+    <details className={styles.journeyPanel} onToggle={event=>setHistoryOpen(event.currentTarget.open)}><summary>Histórico do cliente e equipamentos</summary>
+      {historyOpen&&<FieldEquipmentLookup options={order.equipmentOptions||[]} disabled={busy||historyBusy} onFound={id=>void showHistory(id)}/>}<p>A leitura não altera a etiqueta. A consulta utiliza o histórico real autorizado desta OS. Etiquetas públicas com token podem ser abertas pelo leitor do próprio celular.</p>
       <button type="button" className={styles.secondaryAction} disabled={historyBusy} onClick={()=>void showHistory("")}>Últimos atendimentos do cliente • sem exigir equipamento</button>
       {(order.equipmentOptions||[]).map(item=><button key={item.id} type="button" className={styles.secondaryAction} disabled={historyBusy} onClick={()=>void showHistory(item.id)}>Consultar {item.label}</button>)}
       {!order.equipmentOptions?.length&&<p>Consulte os atendimentos do cliente pelo botão acima. O vínculo com equipamento é opcional.</p>}

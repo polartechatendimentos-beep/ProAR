@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import type { MobileFieldOrder } from "@/lib/mobile-field";
+import {equipmentInspection} from "@/lib/mobile-experience";
+import {FieldPhotoComparison} from "./FieldPhotoComparison";
 import { mobileChecklist } from "@/lib/mobile-service-checklists";
 import { loadOrderDraft, saveOrderDraft, clearOrderDraft, type OrderDraft } from "@/lib/mobile-order-drafts";
 import { LocalFieldAssistant } from "./LocalFieldAssistant";
@@ -31,7 +33,9 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
   const approved=(kind:string)=>order.fieldExceptions?.some(item=>item.kind===kind&&item.status==="Aprovado"&&item.decidedBy&&item.decidedAt);
   const done={...checklist,equipment:equipmentIds.length>0||Boolean(approved("equipment")),checkin:Boolean(order.checkInAt),beforePhoto:Boolean(before||beforePhotos.length||order.evidence.before),afterPhoto:Boolean(after||afterPhotos.length||order.evidence.after),signature:Boolean((signature&&signerName.trim())||order.evidence.signature)||Boolean(approved("signature")),executedService:Boolean(report.trim()),diagnosis:Boolean(diagnosis.trim())};
 
-  const requirements=[...new Map([{key:"diagnosis",label:"Diagnóstico e medições",required:true},...mobileChecklist(order.service)].map(item=>[item.key,item])).values()];
+  const contextualChecklist=equipmentInspection((order.equipmentOptions||[]).filter(item=>equipmentIds.includes(item.id)).map(item=>item.label));
+  const checklistItems=[...mobileChecklist(order.service),...contextualChecklist];
+  const requirements=[...new Map([{key:"diagnosis",label:"Diagnóstico e medições",required:true},...checklistItems].map(item=>[item.key,item])).values()];
   const pendingRequirements=requirements.filter(item=>item.required&&!done[item.key as keyof typeof done]);
   const [draftReady,setDraftReady]=useState(false),[draftNotice,setDraftNotice]=useState(""),[olderDraft,setOlderDraft]=useState<OrderDraft|null>(null);
   const latestDraft=useRef<OrderDraft|null>(null),suppressDraft=useRef(false);
@@ -147,9 +151,10 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
     <h3 id={`field-${order.id}-equipment`}>Equipamentos do atendimento (opcional)</h3>
     {(order.equipmentOptions || []).map(item=><label key={item.id} className={styles.checkLabel}><input type="checkbox" checked={equipmentIds.includes(item.id)} disabled={busy} onChange={event=>setEquipmentIds(event.target.checked?[...equipmentIds,item.id]:equipmentIds.filter(id=>id!==item.id))}/>{item.label}</label>)}
     {!order.equipmentOptions?.length&&!equipmentIds.length&&<p className={styles.warning}>Não há equipamento cadastrado para este cliente e local. Você pode salvar e concluir a OS sem equipamento. Se desejar, use “Cadastrar equipamento nesta OS”.</p>}
-    <h3>Checklist técnico</h3>{mobileChecklist(order.service).map(item=><label id={["equipment","checkin","beforePhoto","afterPhoto","signature","executedService","diagnosis"].includes(item.key)?undefined:`field-${order.id}-${item.key}`} key={item.key} className={styles.checkLabel}><input type="checkbox" checked={Boolean(done[item.key as keyof typeof done])} disabled={["equipment","checkin","beforePhoto","afterPhoto","signature","executedService","diagnosis"].includes(item.key)} onChange={event=>setChecklist({...checklist,[item.key]:event.target.checked})}/>{item.label}</label>)}
+    <h3>Checklist técnico</h3><p>As orientações específicas acompanham os equipamentos selecionados. Itens adicionais de inspeção são opcionais e não substituem o procedimento do fabricante.</p>{checklistItems.map(item=><label id={["equipment","checkin","beforePhoto","afterPhoto","signature","executedService","diagnosis"].includes(item.key)?undefined:`field-${order.id}-${item.key}`} key={item.key} className={styles.checkLabel}><input type="checkbox" checked={Boolean(done[item.key as keyof typeof done])} disabled={["equipment","checkin","beforePhoto","afterPhoto","signature","executedService","diagnosis"].includes(item.key)} onChange={event=>setChecklist({...checklist,[item.key]:event.target.checked})}/>{item.label}</label>)}
     <div id={`field-${order.id}-beforePhoto`}><FieldPhotoCollection label="Fotos antes" onProcessing={value=>setPhotoProcessing(current=>({...current,before:value}))} photos={[...(before?[before]:[]),...beforePhotos]} onChange={values=>{setBefore("");setBeforePhotos(values);}} disabled={busy} existingCount={order.photoCounts?.before||0}/></div>
     <div id={`field-${order.id}-afterPhoto`}><FieldPhotoCollection label="Fotos depois" onProcessing={value=>setPhotoProcessing(current=>({...current,after:value}))} photos={[...(after?[after]:[]),...afterPhotos]} onChange={values=>{setAfter("");setAfterPhotos(values);}} disabled={busy} existingCount={order.photoCounts?.after||0}/></div>
+    <FieldPhotoComparison before={[...(before?[before]:[]),...beforePhotos]} after={[...(after?[after]:[]),...afterPhotos]}/>
     <label id={`field-${order.id}-signature`} className={styles.formLabel}>Nome de quem dá o aceite • obrigatório ao assinar<input value={signerName} onChange={event=>setSignerName(event.target.value)} maxLength={120}/></label>
     <p>Assinatura de aceite do cliente {order.evidence.signature?"(já registrada)":""}</p>
     {signature&&<img src={signature} alt="Assinatura do rascunho" width={250} height={75}/>}
