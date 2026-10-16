@@ -1,3 +1,4 @@
+import { validateTracking, pipelineRecordId } from "./tender-pipeline.ts";
 import { nextPmocDate, type PmocPlan } from "./technical-compliance.ts";
 import { validateProcurementData, priceComposition, qualificationReadiness, brazilDay } from "./procurement-readiness.ts";
 import { prepareOrderSignatures, safeSignatureImage } from "./service-order-signatures.ts";
@@ -43,7 +44,7 @@ const permissionFor: Record<string, string> = {
   Financeiro: "financeiro.editar", "Contas financeiras": "financeiro.editar",
   Produtos: "estoque.editar", Estoque: "estoque.editar", Compras: "compras.editar",
   Equipamentos: "equipamentos.editar", "Unidades e setores": "clientes.editar",
-  "Documentação / Habilitação": "licitacoes.editar", "Composições de licitação": "licitacoes.editar", Funcionários: "configuracoes.editar", Certames: "licitacoes.editar", Empenhos: "licitacoes.editar",
+  "Acompanhamento de licitações": "licitacoes.editar", "Documentação / Habilitação": "licitacoes.editar", "Composições de licitação": "licitacoes.editar", Funcionários: "configuracoes.editar", Certames: "licitacoes.editar", Empenhos: "licitacoes.editar",
   Obras: "obras.editar", Orçamentos: "comercial.editar", Vendas: "comercial.editar", Serviços: "catalogo.editar", Fornecedores: "compras.editar", "Conciliações": "financeiro.conciliar", Lembretes: "os.editar", Aprovações: "aprovacoes.aprovar",
 };
 export const defaultFinancialAccounts = () => [
@@ -144,6 +145,14 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
     if (same(before, record) || (!record.startsAt && !record.lastServiceAt)) continue;
     if (!nextPmocDate(record as PmocPlan)) throw new OperationError("Revise a data e a periodicidade do plano PMOC.");
     if (record.lastServiceAt && (record.lastServiceAt > brazilDay(new Date(now)) || record.startsAt && record.lastServiceAt < record.startsAt)) throw new OperationError("A última manutenção deve estar entre o início do plano e hoje.");
+  }
+  for (const record of list(modules["Acompanhamento de licitações"])) {
+    const before = list(oldModules["Acompanhamento de licitações"]).find(item=>item.id===record.id);
+    if (same(before, record)) continue;
+    if (before?.tracking?.tenderKey && before.tracking.tenderKey !== record.tracking?.tenderKey) throw new OperationError("A identidade do certame não pode ser alterada.");
+    try { validateTracking(record.tracking,list(modules["Documentação / Habilitação"]).map(item=>({id:String(item.id),name:String(item.name),status:item.status,procurement:item.procurement})),brazilDay(new Date(now))); } catch (error) { throw new OperationError(error instanceof Error ? error.message : "Acompanhamento inválido."); }
+    if(record.id !== pipelineRecordId(record.tracking.tenderKey) || list(modules["Acompanhamento de licitações"]).filter(other=>other.id===record.id).length!==1) throw new OperationError("Identificador duplicado ou inválido no acompanhamento.");
+    if (list(modules["Acompanhamento de licitações"]).some(other=>other.id!==record.id && other.tracking?.tenderKey===record.tracking.tenderKey)) throw new OperationError("O edital já possui acompanhamento. Atualize o registro existente.");
   }
   for (const record of list(modules.Certames)) {
     const before = list(oldModules.Certames).find(item => item.id === record.id);
