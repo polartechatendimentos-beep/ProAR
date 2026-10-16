@@ -5,6 +5,7 @@ import { searchPncp } from "@/lib/procurement/pncp";
 import { filterBllViaPncp } from "@/lib/procurement/bll-via-pncp";
 import { filterComprasGovViaPncp } from "@/lib/procurement/compras-gov-via-pncp";
 import { type ProcurementRecord } from "@/lib/procurement/domain";
+import { screenProcurement } from "@/lib/procurement/screening";
 
 const DEFAULT_TERMS = [
   "ar condicionado", "ar-condicionado", "climatização", "climatizacao", "pmoc",
@@ -56,6 +57,8 @@ export async function POST(request: Request) {
     const data = sourceFilter === "bll" ? filterBllViaPncp(allData)
       : sourceFilter === "compras-gov" ? filterComprasGovViaPncp(allData) : allData;
 
+    const enrichedData = data.map(record => ({ ...record, screening: screenProcurement(record) }));
+
     const health = {
       ...result.health,
       accepted: data.length,
@@ -69,7 +72,7 @@ export async function POST(request: Request) {
       sourceFilter,
       sourceHealth: result.health,
       count: data.length,
-      data,
+      data: enrichedData,
       health,
       message: data.length
         ? `${data.length} oportunidade(s) encontrada(s) ${sourceFilter === "bll" ? "da BLL identificadas no PNCP" : sourceFilter === "compras-gov" ? "do Compras.gov.br identificadas no PNCP" : "no PNCP"} para ${uf}.`
