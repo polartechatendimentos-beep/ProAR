@@ -7,10 +7,10 @@ import { runInNewContext } from "node:vm";
 const source = stripTypeScriptTypes(await readFile(new URL("../proxy.ts", import.meta.url), "utf8"))
   .replace(/^import .*;$/gm, "")
   .replace(/export /g, "");
-function route(host, pathname) {
+function route(host, pathname, cookies = {}) {
   const response = (kind, url, options) => ({
     kind, pathname: url?.pathname, requestHeaders: options?.request?.headers,
-    headers: new Headers(), cookies: { set() {} },
+    headers: new Headers(), cookies: { values: [], set(...args) { this.values.push(args); } },
   });
   const proxy = runInNewContext(source + "\nproxy;", {
     Headers,
@@ -25,7 +25,7 @@ function route(host, pathname) {
   return proxy({
     headers: new Headers({ host }),
     nextUrl: { pathname, clone: () => ({ pathname }) },
-    cookies: { get: () => undefined },
+    cookies: { get: name => cookies[name] ? { value: cookies[name] } : undefined },
   });
 }
 test("mobile entry renders its dedicated page rather than desktop", () => {
@@ -41,4 +41,12 @@ test("legacy nested mobile routes and full desktop remain reachable", () => {
   assert.equal(route("polartech.proar.online", "/mobile/relatorios").pathname, "/relatorios");
   assert.equal(route("polartech.proar.online", "/").kind, "next");
   assert.equal(route("mobile.polartech.proar.online", "/api/mobile/bootstrap").kind, "next");
+});
+
+test("full ERP root clears an old mobile cookie without rewriting to the field page", () => {
+  const result=route("polartech.proar.online","/",{"proar-experience":"mobile"});
+  assert.equal(result.kind,"next");
+  assert.equal(result.requestHeaders.get("x-proar-experience"),null);
+  const reset=result.cookies.values.find(item=>item[0]==="proar-experience");
+  assert.equal(reset[1],"");assert.equal(reset[2].maxAge,0);
 });

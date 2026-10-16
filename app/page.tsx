@@ -49,6 +49,7 @@ import { BudgetQuickCreateDrawer, type CustomerDraft, type StructureDraft } from
 import { CustomerSearchSelect } from "@/components/CustomerSearchSelect";
 import { CustomerHierarchyProvider } from "@/components/CustomerHierarchyContext";
 import { customerHierarchy, hierarchySelection, isMunicipalCustomer, matchesHierarchyLocation, type HierarchySelection } from "@/lib/customer-hierarchy";
+import { isMobileInterfacePath } from "@/lib/interface-experience";
 import { TenderPipelinePanel } from "@/components/TenderPipelinePanel";
 import type { TenderTracking } from "@/lib/tender-pipeline";
 import { ProcurementReadinessPanel } from "@/components/ProcurementReadinessPanel";
@@ -3733,6 +3734,13 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
 }
 
 export default function Home() {
+  useEffect(() => {
+    if (!isMobileInterfacePath(window.location.pathname)) {
+      document.documentElement.dataset.proarExperience = "system";
+      document.body.classList.remove("proar-mobile-route");
+    }
+  }, []);
+
   const [authenticatedUser, setAuthenticatedUser] = useState<AuthenticatedUser | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [bootError, setBootError] = useState("");
@@ -4803,17 +4811,14 @@ export default function Home() {
   if (bootError && !authenticatedUser) return <main className="session-boot-error" data-testid="proar-boot-error"><section><AlertTriangle size={28}/><h2>Não foi possível carregar a sessão</h2><p>{bootError}</p><small>Código de execução: {bootRunId}</small><div><button type="button" className="primary-btn" onClick={()=>setBootAttempt(value=>value+1)}>Tentar novamente</button><button type="button" className="outline-btn" onClick={()=>{localStorage.removeItem("proar-offline-session");setBootError("");}}>Entrar novamente</button><button type="button" className="outline-btn" onClick={()=>window.location.reload()}>Recarregar aplicação</button></div></section></main>;
   if (!authenticatedUser) return <div data-testid="proar-login-screen"><LoginScreen onLogin={handleLogin}/></div>;
   const mobileOperationalModules = new Set(["Painel inicial","Agenda","Ordens de serviço","Clientes","Obras","Funcionários","Equipamentos"]);
-  const mobileSubdomain = typeof document !== "undefined" && document.cookie.includes("proar-experience=mobile");
-  const mobilePathExperience = typeof window !== "undefined" && (window.location.pathname==="/mobile" || window.location.pathname.startsWith("/mobile/"));
-  const mobileViewport = typeof window !== "undefined" && window.matchMedia("(max-width: 1024px)").matches;
-  const mobileExperience = mobileSubdomain || mobilePathExperience || mobileViewport;
+  const mobileExperience = typeof window !== "undefined" && isMobileInterfacePath(window.location.pathname);
   const mobileManager = Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.role === "Gerência" || authenticatedUser.permissions?.includes("*") || authenticatedUser.permissions?.includes("rotas.visualizar"));
   const mobileTechnicianModules = new Set(["Painel inicial","Agenda","Ordens de serviço","Clientes","Equipamentos","Estoque","Vendas"]);
   const mobileManagerModules = new Set([...mobileOperationalModules,"Vendas","Estoque"]);
   const mobileAllowedModules = mobileManager ? mobileManagerModules : mobileTechnicianModules;
   const mobileBlocked = mobileExperience && !mobileAllowedModules.has(current);
   const planBlocked = !primaryTenantAccess && Array.isArray(effectiveEntitledModules) && !effectiveEntitledModules.includes(current);
-  return <CustomerHierarchyProvider customers={customerRecords} records={moduleRecords["Unidades e setores"] ?? []} equipment={(moduleRecords.Equipamentos ?? []) as unknown as Record<string,unknown>[]} orders={serviceOrders as unknown as Record<string,unknown>[]}><div className={`app-shell ${mobileExperience?"mobile-operation-policy mobile-dedicated-experience":""}`}><ConnectivityBanner/>
+  return <CustomerHierarchyProvider customers={customerRecords} records={moduleRecords["Unidades e setores"] ?? []} equipment={(moduleRecords.Equipamentos ?? []) as unknown as Record<string,unknown>[]} orders={serviceOrders as unknown as Record<string,unknown>[]}><div className={`app-shell ${mobileExperience?"mobile-operation-policy mobile-dedicated-experience":"proar-full-system"}`}><ConnectivityBanner/>
     <div data-testid="proar-sidebar"><Sidebar current={current} setCurrent={setCurrent} open={menuOpen} close={() => setMenuOpen(false)} permissions={authenticatedUser.permissions} role={authenticatedUser.role} entitledModules={effectiveEntitledModules}/></div>
     <main className="main">
       <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNew={openNew} searchItems={globalSearchItems} pendingItems={pendingItems} onSearchSelect={openGlobalSearch} onPendingSelect={openPending} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onSwitchUser={logout} online={online} syncing={syncing} onPull={() => void pullFromDatabase()} onPush={() => void pushToDatabase()}/>
