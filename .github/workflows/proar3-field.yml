@@ -3,6 +3,9 @@ on:
   pull_request:
     paths:
       - 'lib/field/**'
+      - 'lib/mobile/**'
+      - 'app/mobile/**'
+      - 'tests/proar-mobile-foundation.test.mjs'
       - 'components/TechnicalBasePanel.tsx'
       - 'app/api/technical-base/**'
       - 'app/api/technical-base/assistant/**'
@@ -29,5 +32,5 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: node --test tests/proar3-field-foundations.test.mjs tests/technical-base-assistant.test.mjs tests/proar3-navigation.test.mjs tests/proar3-health.test.mjs tests/proar3-layout.test.mjs
+      - run: node --test tests/proar3-field-foundations.test.mjs tests/technical-base-assistant.test.mjs tests/proar3-navigation.test.mjs tests/proar3-health.test.mjs tests/proar3-layout.test.mjs tests/proar-mobile-foundation.test.mjs
       - run: npm run typecheck
