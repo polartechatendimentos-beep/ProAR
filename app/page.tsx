@@ -25,6 +25,15 @@ const tabLabels: Record<TabType,string> = { dashboard:"Central do Dia",clientes:
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
   const [globalSearch, setGlobalSearch] = useState("");
+  const [appHealth, setAppHealth] = useState<"checking" | "running" | "unavailable">("checking");
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/health", { cache: "no-store", signal: controller.signal })
+      .then((r) => { if (!r.ok) throw new Error("health"); return r.json(); })
+      .then((data) => setAppHealth(data.status === "running" ? "running" : "unavailable"))
+      .catch(() => { if (!controller.signal.aborted) setAppHealth("unavailable"); });
+    return () => controller.abort();
+  }, []);
   useEffect(() => {
     const syncFromUrl = () => {
       const requested = new URLSearchParams(window.location.search).get("tab");
@@ -81,7 +90,7 @@ export default function HomePage() {
           <div className="flex items-center gap-3 shrink-0 text-xs">
             <div className="hidden sm:block text-right">
               <span className="font-bold text-white block">Administrador Matriz</span>
-              <span className="text-[10px] text-emerald-400 font-mono">Operando Online</span>
+              <span className="text-[10px] text-emerald-400 font-mono">{appHealth === "running" ? "Aplicação acessível • Banco não verificado" : appHealth === "checking" ? "Verificando aplicação..." : "Aplicação sem confirmação"}</span>
             </div>
             <div className="w-8 h-8 rounded-full bg-blue-600/30 border border-blue-500 flex items-center justify-center font-bold text-blue-300">
               AD
@@ -175,6 +184,7 @@ export default function HomePage() {
         {/* Visualização de Dashboard / Cockpit do Dia */}
         {activeTab === "dashboard" && (
           <div className="space-y-6">
+            <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-xs text-amber-900">Indicadores do painel em modo demonstrativo: os números abaixo ainda não foram conectados a consultas verificadas do banco real.</p>
             <DailyWorkCenter
               onNavigateTab={(t) => { if(validTabs.includes(t as TabType)) navigateTab(t as TabType); }}
               osCount={3}
