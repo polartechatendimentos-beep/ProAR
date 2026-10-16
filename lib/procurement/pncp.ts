@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { attachBllPncpEvidence } from "./bll-via-pncp";
+import { attachComprasGovPncpEvidence } from "./compras-gov-via-pncp";
 import { HVAC_TERMS, decimalText, normalizedText, normalizeProcurementStatus, procurementFingerprint, safeIsoDate, safeOfficialUrl, safeText, type ProcurementRecord } from "./domain";
 
 const PNCP_ENDPOINT = "https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao";
@@ -71,7 +72,7 @@ export function normalizePncpRecord(raw: unknown, collectedAt: string) {
   };
   normalized.fingerprint = procurementFingerprint(normalized);
   normalized.rawHash = crypto.createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
-  return attachBllPncpEvidence(normalized, item);
+  return attachComprasGovPncpEvidence(attachBllPncpEvidence(normalized, item), item);
 }
 
 async function fetchPage(url: URL, timeoutMs: number, retries: number) {
