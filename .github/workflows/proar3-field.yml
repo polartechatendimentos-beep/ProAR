@@ -5,6 +5,7 @@ on:
       - 'lib/field/**'
       - 'components/TechnicalBasePanel.tsx'
       - 'app/api/technical-base/**'
+      - 'app/api/technical-base/assistant/**'
       - 'app/page.tsx'
       - 'tests/proar3-field-foundations.test.mjs'
       - '.github/workflows/proar3-field.yml'
