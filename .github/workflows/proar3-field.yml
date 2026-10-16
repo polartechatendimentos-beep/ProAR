@@ -9,6 +9,7 @@ on:
       - 'app/page.tsx'
       - 'tests/proar3-field-foundations.test.mjs'
       - 'tests/technical-base-assistant.test.mjs'
+      - 'tests/proar3-navigation.test.mjs'
       - '.github/workflows/proar3-field.yml'
 permissions:
   contents: read
@@ -24,5 +25,5 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: node --test tests/proar3-field-foundations.test.mjs tests/technical-base-assistant.test.mjs
+      - run: node --test tests/proar3-field-foundations.test.mjs tests/technical-base-assistant.test.mjs tests/proar3-navigation.test.mjs
       - run: npm run typecheck
