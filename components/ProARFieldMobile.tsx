@@ -17,6 +17,8 @@ import { FieldOrderEditor } from "./FieldOrderEditor";
 import { mobileWeekDates } from "@/lib/mobile-agenda";
 import type { MobileFieldOrder } from "@/lib/mobile-field";
 import styles from "./ProARFieldMobile.module.css";
+import {MobileThemeControl,useMobileTheme} from "./MobileThemeControl";
+import {mobileSupervision} from "@/lib/mobile-experience";
 
 type FieldOrder = MobileFieldOrder;
 type FieldData = {
@@ -57,6 +59,7 @@ function OrderCard({ order, onOpen }: { order: FieldOrder; onOpen: () => void })
 }
 
 export function ProARFieldMobile() {
+  const appearance=useMobileTheme();
   const [tab, setTab] = useState<Tab>("inicio");
   const [data, setData] = useState<FieldData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -119,6 +122,7 @@ export function ProARFieldMobile() {
   const week=useMemo(()=>mobileWeekDates(day),[day]);
   const agendaOrders = useMemo(() => orders.filter(order => agendaMode==="week"?week.includes(order.date):order.date === day), [orders, day,agendaMode,week]);
   const current = orders.find(order => order.id === selected)||pendingOrders.find(order=>order.id===selected);
+  const supervision=mobileSupervision(orders,todayISO());
   const firstName = data?.user.displayName?.split(" ")[0] || "equipe";
   const tabs: { id: Tab; label: string; icon: typeof Home }[] = [
     { id:"inicio", label:"Início", icon:Home },
@@ -127,7 +131,7 @@ export function ProARFieldMobile() {
     { id:"central", label:"Central", icon:ShieldCheck },
     { id:"mais", label:"Mais", icon:Menu },
   ];
-  return <div className={`${styles.app} ${sunlightMode ? styles.sunlightMode : ""}`}>
+  return <div data-mobile-theme={appearance.resolved} className={`${styles.app} ${sunlightMode ? styles.sunlightMode : ""}`}>
     <div className={styles.shell}>
       <header className={styles.header}>
         <div className={styles.brand}><span className={styles.brandIcon}><img src="/brand/proar-mobile.svg?v=20261015" alt="" width={39} height={39}/></span><span><strong>ProAR <b>Mobile</b></strong><small>OPERAÇÃO EM CAMPO</small></span></div>
@@ -145,6 +149,7 @@ export function ProARFieldMobile() {
         {data && <>
           {pendingOrders.length>0&&!current&&<section className={styles.pendingPanel}><h2>{pendingOrders.length} envio(s) aguardando confirmação</h2><p>Retome cada envio para sincronizar ou consultar a confirmação, sem duplicar o registro.</p>{pendingOrders.map(order=><button key={order.id} type="button" className={styles.secondaryAction} onClick={()=>setSelected(order.id)}>Retomar envio • {order.id}</button>)}</section>}
           <details className={styles.journeyPanel}><summary>Minha jornada • entrada, pausa e saída</summary><MobileRouteControls /></details>
+          {tab === "central" && !current && data.user.manager && <section className={styles.detailCard}><h2>Supervisão • ordens autorizadas</h2><p>Resumo da última leitura do servidor. Envios locais aparecem separadamente e não representam a fila dos outros aparelhos.</p><div className={styles.metrics}>{Object.entries({"Em aberto":supervision.open,"Atrasadas":supervision.overdue,"Com check-in":supervision.active,"Hoje":supervision.today}).map(([label,count])=><div key={label}><strong>{count}</strong><span>{label}</span></div>)}</div><p>{pendingOrders.length} envio(s) pendente(s) neste aparelho e usuário.</p></section>}
           <FieldSupportPanel visible={tab === "central" && !current}/>
           {tab==="central"&&!current&&data.user.manager&&<section className={styles.detailCard}><h2>Solicitações e atrasos de atendimento</h2>{orders.filter(order=>order.requests?.some(item=>item.status==="Pendente")||order.delay).map(order=><button key={order.id} type="button" className={styles.secondaryAction} onClick={()=>setSelected(order.id)}>Revisar {order.id} • {order.delay?`Atraso ${order.delay.minutes} min`:"Solicitação pendente"}</button>)}{!orders.some(order=>order.requests?.some(item=>item.status==="Pendente")||order.delay)&&<p>Nenhuma solicitação ou atraso registrado.</p>}</section>}
           {tab==="central"&&!current&&data.user.canApprove&&<section className={styles.detailCard}><h2>Exceções de OS aguardando aprovação</h2>{orders.filter(order=>order.fieldExceptions?.some(item=>item.status==="Pendente")).map(order=><button key={order.id} type="button" className={styles.secondaryAction} onClick={()=>setSelected(order.id)}>Revisar {order.id} • {order.client}</button>)}{!orders.some(order=>order.fieldExceptions?.some(item=>item.status==="Pendente"))&&<p>Nenhuma solicitação pendente.</p>}</section>}
@@ -206,6 +211,7 @@ export function ProARFieldMobile() {
             </section>}
             {tab === "mais" && <section className={styles.screen}>
               <p className={styles.eyebrow}>PERFIL E CONTROLE</p><h1 className={styles.title}>Mais</h1>
+              <MobileThemeControl theme={appearance.theme} onChange={appearance.changeTheme} notice={appearance.storageNotice}/>
               <div className={styles.profile}><div className={styles.avatar}><UserRound size={26}/></div><div><strong>{data.user.displayName}</strong><span>{data.user.role}</span></div></div>
               <div className={styles.detailCard}><h2><ShieldCheck size={20}/> Integração segura</h2><p>O aplicativo utiliza sua sessão do ProAR, respeita a empresa e mostra somente as OS permitidas para o perfil. Não há usuários ou atendimentos fictícios.</p>
               <p><strong>Sincronização:</strong> OS podem ser preparadas offline e ficam pendentes até sincronizar. Jornada, GPS, permissões e conflitos são validados no envio; checklist da frota, abastecimento e ajustes também usam fila local.</p>

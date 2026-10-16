@@ -1,0 +1,13 @@
+✔ aparência mobile normaliza preferências e acompanha o sistema somente no modo automático (0.918161ms)
+✔ inspeção contextual une tipos conhecidos sem obrigar equipamento ou inventar modelo (1.008467ms)
+✔ etiqueta aceita apenas equipamento já autorizado sem abrir URLs arbitrárias (0.361814ms)
+✔ supervisão conta somente a projeção fornecida e separa encerradas e datas indefinidas (0.482065ms)
+✔ câmera encerra as trilhas quando a reprodução falha e ao fechar o leitor (1.139744ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 133.530389
