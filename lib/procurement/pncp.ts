@@ -151,8 +151,12 @@ export async function searchPncp(options: {
   let rejected = 0;
   let pagesRead = 0;
   let httpStatus = 200;
+  let truncatedModalities = 0;
+  const modalityCoverage: Array<{ modalityCode: number; pagesRead: number; truncated: boolean }> = [];
 
   for (const modalityCode of modalityCodes) {
+    let modalityPages = 0;
+    let truncated = false;
     for (let page = 1; page <= maxPages; page += 1) {
       const url = new URL(PNCP_ENDPOINT);
       url.searchParams.set("dataInicial", dateParam(start));
@@ -164,6 +168,7 @@ export async function searchPncp(options: {
         const { response, payload } = await fetchPage(url, timeoutMs, 2);
         httpStatus = response.status;
         pagesRead += 1;
+        modalityPages += 1;
         const rows = payloadRows(payload);
         for (const row of rows) {
           const normalized = normalizePncpRecord(row, collectedAt);
@@ -175,7 +180,9 @@ export async function searchPncp(options: {
           }
           accepted.push(normalized);
         }
-        if (!hasNextPage(payload, page, rows)) break;
+        const more = hasNextPage(payload, page, rows);
+        if (page === maxPages && more) { truncated = true; truncatedModalities += 1; }
+        if (!more) break;
       } catch (error) {
         return {
           success: false,
@@ -188,6 +195,8 @@ export async function searchPncp(options: {
             durationMs: Date.now() - startedAt,
             httpStatus,
             pagesRead,
+            truncatedModalities,
+            modalityCoverage,
             accepted: accepted.length,
             rejected,
             errorCode: error instanceof Error ? error.message : "PNCP_ERROR",
@@ -197,6 +206,7 @@ export async function searchPncp(options: {
         };
       }
     }
+    modalityCoverage.push({ modalityCode, pagesRead: modalityPages, truncated });
   }
 
   const unique = Array.from(new Map(accepted.map(item => [String(item.numeroControlePncp || item.fingerprint), item])).values());
@@ -205,12 +215,15 @@ export async function searchPncp(options: {
     source: "PNCP",
     data: unique,
     health: {
-      status: "healthy",
+      status: truncatedModalities ? "degraded" : "healthy",
       lastAttemptAt: collectedAt,
       lastSuccessAt: collectedAt,
       durationMs: Date.now() - startedAt,
       httpStatus,
       pagesRead,
+      truncatedModalities,
+      modalityCoverage,
+      coverageWarning: truncatedModalities ? "A paginação atingiu o limite; alguns editais podem não ter sido consultados." : null,
       accepted: unique.length,
       rejected,
       duplicates: accepted.length - unique.length,
