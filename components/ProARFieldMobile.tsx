@@ -111,7 +111,7 @@ export function ProARFieldMobile() {
   const pendingRows=pendingState.scope===data?.user.scope?pendingState.rows:[];
   const pendingOrders=pendingRows.map(row=>row.orderSnapshot).filter((order):order is FieldOrder=>Boolean(order));
   const blockedCount=pendingRows.filter(row=>row.pendingSubmission?.blocked).length;
-  const unsentCount=pendingRows.filter(row=>!row.pendingSubmission?.sentAt).length;
+  const unsentCount=pendingRows.filter(row=>!row.pendingSubmission?.blocked&&!row.pendingSubmission?.sentAt).length;
   const filtered = useMemo(()=>filterFieldOrders(orders,query,orderFilter,todayISO()),[orders,query,orderFilter]);
   const pendingScope=data?.user.scope;
   useEffect(()=>{
