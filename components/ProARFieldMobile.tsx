@@ -10,7 +10,7 @@ import {
 import { MobileRouteControls } from "./MobileRouteControls";
 import { FieldSupportPanel } from "./FieldSupportPanel";
 import { FieldOrderReceipt } from "./FieldOrderReceipt";
-import { listPendingOrderDrafts } from "@/lib/mobile-order-drafts";
+import { listPendingOrderDrafts, type OrderDraft } from "@/lib/mobile-order-drafts";
 import { MOBILE_RELEASE } from "@/lib/mobile-release";
 import { filterFieldOrders, fieldOrderTone, type OrderFilter } from "@/lib/mobile-order-display";
 import { FieldOrderEditor } from "./FieldOrderEditor";
@@ -68,7 +68,7 @@ export function ProARFieldMobile() {
   const [loginRequired, setLoginRequired] = useState(false);
   const [online, setOnline] = useState(true);
   const [query, setQuery] = useState("");
-  const [orderFilter,setOrderFilter]=useState<OrderFilter>("all"),[pendingState,setPendingState]=useState<{scope:string;orders:FieldOrder[]}>({scope:"",orders:[]}),[versionNotice,setVersionNotice]=useState(""),[updateAvailable,setUpdateAvailable]=useState(false);
+  const [orderFilter,setOrderFilter]=useState<OrderFilter>("all"),[pendingState,setPendingState]=useState<{scope:string;rows:OrderDraft[]}>({scope:"",rows:[]}),[versionNotice,setVersionNotice]=useState(""),[updateAvailable,setUpdateAvailable]=useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [day, setDay] = useState(todayISO);
   const [agendaMode,setAgendaMode]=useState<"day"|"week">("day");
@@ -108,13 +108,16 @@ export function ProARFieldMobile() {
     };
   }, [refresh]);
   const orders = data?.orders ?? EMPTY_ORDERS;
-  const pendingOrders=pendingState.scope===data?.user.scope?pendingState.orders:EMPTY_ORDERS;
+  const pendingRows=pendingState.scope===data?.user.scope?pendingState.rows:[];
+  const pendingOrders=pendingRows.map(row=>row.orderSnapshot).filter((order):order is FieldOrder=>Boolean(order));
+  const blockedCount=pendingRows.filter(row=>row.pendingSubmission?.blocked).length;
+  const unsentCount=pendingRows.filter(row=>!row.pendingSubmission?.blocked&&!row.pendingSubmission?.sentAt).length;
   const filtered = useMemo(()=>filterFieldOrders(orders,query,orderFilter,todayISO()),[orders,query,orderFilter]);
   const pendingScope=data?.user.scope;
   useEffect(()=>{
     if(!pendingScope)return;
     let cancelled=false;
-    void listPendingOrderDrafts(pendingScope).then(rows=>{if(!cancelled)setPendingState({scope:pendingScope,orders:rows.map(row=>row.orderSnapshot!)});}).catch(()=>{if(!cancelled)setPendingState({scope:pendingScope,orders:[]});});
+    void listPendingOrderDrafts(pendingScope).then(rows=>{if(!cancelled)setPendingState({scope:pendingScope,rows});}).catch(()=>{if(!cancelled)setPendingState({scope:pendingScope,rows:[]});});
     return()=>{cancelled=true;};
   },[pendingScope,selected,data?.lastReadAt]);
   async function checkVersion(){try{const response=await fetch("/api/mobile/version",{cache:"no-store"});if(!response.ok)throw new Error();const result=await response.json();const changed=result.version!==MOBILE_RELEASE;setUpdateAvailable(changed);setVersionNotice(changed?"Nova versão disponível. Seus rascunhos permanecem neste aparelho.":"Você está usando a versão atual.");}catch{setVersionNotice("Não foi possível consultar a versão. Tente novamente com conexão.");}}
@@ -147,7 +150,7 @@ export function ProARFieldMobile() {
         {error && <div role="alert" className={styles.error}>{error}{loginRequired && <Link href="/">Entrar no ProAR</Link>}{!loginRequired && <button type="button" onClick={()=>void refresh()}>Tentar novamente</button>}</div>}
         {loading && !data && <div role="status" aria-label="Carregando atendimentos" className={styles.skeletonGrid}><p>Conectando aos atendimentos reais do ProAR...</p>{[1,2,3].map(i=><div key={i} className={styles.skeletonCard} aria-hidden="true"/>)}</div>}
         {data && <>
-          {pendingOrders.length>0&&!current&&<section className={styles.pendingPanel}><h2>{pendingOrders.length} envio(s) aguardando confirmação</h2><p>Retome cada envio para sincronizar ou consultar a confirmação, sem duplicar o registro.</p>{pendingOrders.map(order=><button key={order.id} type="button" className={styles.secondaryAction} onClick={()=>setSelected(order.id)}>Retomar envio • {order.id}</button>)}</section>}
+          {pendingOrders.length>0&&!current&&<section className={styles.pendingPanel}><h2>Central de sincronização • {pendingRows.length} pendência(s)</h2><p>Este painel mostra apenas os envios guardados neste aparelho e usuário. Nenhuma pendência equivale a confirmação do servidor.</p><div className={styles.metrics}><div><strong>{unsentCount}</strong><span>Ainda não transmitidos</span></div><div><strong>{blockedCount}</strong><span>Exigem revisão</span></div><div><strong>{pendingRows.length-unsentCount-blockedCount}</strong><span>Aguardando confirmação</span></div></div>{pendingRows.map(row=><button key={row.orderSnapshot?.id||row.pendingSubmission?.command.orderId} type="button" className={styles.secondaryAction} onClick={()=>setSelected(row.orderSnapshot?.id||row.pendingSubmission?.command.orderId||null)}>{row.pendingSubmission?.blocked?"Revisar conflito":row.pendingSubmission?.sentAt?"Consultar confirmação":"Retomar envio"} • OS {row.orderSnapshot?.id||row.pendingSubmission?.command.orderId} {row.pendingSubmission?.error?`• ${row.pendingSubmission.error}`:""}</button>)}</section>}
           <details className={styles.journeyPanel}><summary>Minha jornada • entrada, pausa e saída</summary><MobileRouteControls /></details>
           {tab === "central" && !current && data.user.manager && <section className={styles.detailCard}><h2>Supervisão • ordens autorizadas</h2><p>Resumo da última leitura do servidor. Envios locais aparecem separadamente e não representam a fila dos outros aparelhos.</p><div className={styles.metrics}>{Object.entries({"Em aberto":supervision.open,"Atrasadas":supervision.overdue,"Com check-in":supervision.active,"Hoje":supervision.today}).map(([label,count])=><div key={label}><strong>{count}</strong><span>{label}</span></div>)}</div><p>{pendingOrders.length} envio(s) pendente(s) neste aparelho e usuário.</p></section>}
           <FieldSupportPanel visible={tab === "central" && !current}/>
