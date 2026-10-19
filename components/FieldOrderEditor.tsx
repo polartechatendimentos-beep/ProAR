@@ -107,6 +107,7 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
     if(pendingSubmission.command.action!=="save")return;
     const onReconnect=()=>{if(navigator.onLine&&!operationLock.current&&submissionRef.current&&!submissionRef.current.blocked)void retrySubmission();};
     window.addEventListener("online",onReconnect);
+    if(navigator.onLine)onReconnect();
     return()=>window.removeEventListener("online",onReconnect);
   },[pendingSubmission,draftReady,olderDraft,confirmed]);
   async function retrySubmission(){
