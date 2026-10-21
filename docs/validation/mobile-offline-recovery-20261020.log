@@ -1,21 +1,22 @@
-✔ pacote inclui somente o dia ou atendimentos iniciados e informa limite sem inventar registros (16.388119ms)
-✔ cache exige sessão, não passa da meia-noite de Brasília e não amplia acesso por mais de oito horas (0.760426ms)
-✔ pacote trocado de empresa, expirado, de outro dia ou com validade além da sessão é recusado (0.50643ms)
-✔ identidade de leitura fica na sessão da aba, expira e é removível sem apagar rascunhos (0.649682ms)
-✔ estados de recuperação distinguem rascunho, fila, confirmação pendente e bloqueio (0.1348ms)
-✔ prazo offline usa expiração da sessão já validada e não guarda cookie no pacote (0.299564ms)
-✔ pacote criptografado isola usuários, preserva históricos ao atualizar e retira OS confirmada (19.761217ms)
-✔ central da fila expõe apenas metadados do escopo atual sem abrir comandos de outros usuários (2.063825ms)
-✔ encrypted pending OS survive reload, stay isolated by company/user and clear only after confirmation (10.544838ms)
-✔ preparações pendentes não desaparecem automaticamente após 30 dias (2.510226ms)
-✔ preparo da interface guarda HTML e assets próprios sem solicitar APIs ou sites externos (10.838163ms)
-✔ asset ausente não pode produzir confirmação falsa de acesso offline (1.968303ms)
-✔ navegação offline mantém o sistema completo fora de mobile e não transforma API ou JavaScript em HTML (1.905211ms)
-ℹ tests 13
+✔ pacote inclui somente o dia ou atendimentos iniciados e informa limite sem inventar registros (14.71202ms)
+✔ cache exige sessão, não passa da meia-noite de Brasília e não amplia acesso por mais de oito horas (0.828787ms)
+✔ pacote trocado de empresa, expirado, de outro dia ou com validade além da sessão é recusado (0.498048ms)
+✔ identidade de leitura fica na sessão da aba, expira e é removível sem apagar rascunhos (0.707318ms)
+✔ estados de recuperação distinguem rascunho, fila, confirmação pendente e bloqueio (0.135431ms)
+✔ prazo offline usa expiração da sessão já validada e não guarda cookie no pacote (0.327966ms)
+✔ pacote criptografado isola usuários, preserva históricos ao atualizar e retira OS confirmada (16.49485ms)
+✔ central da fila expõe apenas metadados do escopo atual sem abrir comandos de outros usuários (2.747755ms)
+✔ encrypted pending OS survive reload, stay isolated by company/user and clear only after confirmation (9.567911ms)
+✔ preparações pendentes não desaparecem automaticamente após 30 dias (2.737624ms)
+✔ preparo da interface guarda HTML e assets próprios sem solicitar APIs ou sites externos (6.91354ms)
+✔ asset ausente não pode produzir confirmação falsa de acesso offline (1.950779ms)
+✔ navegação offline mantém o sistema completo fora de mobile e não transforma API ou JavaScript em HTML (2.184956ms)
+✔ ativação preserva caches de outros recursos e remove apenas interfaces ProAR antigas (1.023586ms)
+ℹ tests 14
 ℹ suites 0
-ℹ pass 13
+ℹ pass 14
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 162.075101
+ℹ duration_ms 155.176067

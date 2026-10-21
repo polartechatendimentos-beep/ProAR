@@ -12,3 +12,7 @@ test('navegação offline mantém o sistema completo fora de mobile e não trans
  async function read(path,mode='navigate'){let response;handlers.fetch({request:{method:'GET',url:`https://polartech.proar.online${path}`,mode},respondWith:value=>{response=value;}});return response;}
  assert.equal(await (await read('/?tab=clientes')).text(),'FULL');assert.equal(await (await read('/mobile?dia=hoje')).text(),'MOBILE');assert.equal((await read('/_next/static/not-cached.js','cors')).type,'error');assert.equal(await read('/api/mobile/bootstrap'),undefined);assert.equal(await read('/mobile/api/state'),undefined);
 });
+test('ativação preserva caches de outros recursos e remove apenas interfaces ProAR antigas',async()=>{
+ const handlers={},deleted=[];let claimed=false;runInNewContext(source,{self:{addEventListener:(name,handler)=>handlers[name]=handler,clients:{claim:async()=>{claimed=true;}}},caches:{keys:async()=>['proar-shell-interface-v6','proar-shell-offline-day-v7','manuais-offline'],delete:async key=>deleted.push(key)}});
+ let work;handlers.activate({waitUntil:promise=>{work=promise;}});await work;assert.deepEqual(deleted,['proar-shell-interface-v6']);assert.equal(claimed,true);
+});

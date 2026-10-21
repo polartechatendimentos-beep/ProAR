@@ -11,7 +11,7 @@ async function prepareMobileShell(){
   if(failed)throw new Error('Mobile assets incomplete');
 }
 self.addEventListener("install", event => event.waitUntil((async()=>{await caches.open(CACHE).then(cache=>cache.addAll(SHELL));try{await prepareMobileShell();}catch{}await self.skipWaiting();})()));
-self.addEventListener("activate", event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())));
+self.addEventListener("activate", event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE && key.startsWith("proar-shell-")).map(key => caches.delete(key)))).then(() => self.clients.claim())));
 self.addEventListener("message", event => { if (event.data === "SKIP_WAITING") self.skipWaiting(); if(event.data?.type === "PREPARE_MOBILE_SHELL")event.waitUntil(prepareMobileShell().then(()=>event.ports[0]?.postMessage({ok:true})).catch(()=>event.ports[0]?.postMessage({ok:false}))); });
 self.addEventListener("fetch", event => {
   const pathname=new URL(event.request.url).pathname;
