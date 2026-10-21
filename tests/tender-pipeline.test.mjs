@@ -39,3 +39,16 @@ test('GEM-06: minuta parametrizável mantém ressalvas normativas e aceita rascu
 test('GEM-07: CSV contém BOM, acentos, aspas e neutraliza fórmulas no Excel',()=>{
  const csv=pipelineCsv(filterPipeline([{...tender,objetoCompra:'=HYPERLINK("malicioso")\nAção'}],[],[],filters,now));assert.ok(csv.startsWith('\uFEFF'));assert.ok(csv.includes('Órgão'));assert.ok(csv.includes('"\'=HYPERLINK(""malicioso"")'));assert.ok(csv.includes('\r\n'));
 });
+
+test('BDI vinculado ao edital persiste sem alterar minuta e é validado no servidor',()=>{
+ const pricing={...EMPTY_PRICING,labor:12150,administration:4,profit:12,taxes:8.65};
+ const before={customers:[],serviceOrders:[],moduleRecords:{}},next=structuredClone(before);
+ next.moduleRecords['Acompanhamento de licitações']=[record(track({pricing,proposal}))];
+ const saved=prepareOperationalState(before,next,{username:'analista',can:p=>p==='licitacoes.editar'},now.toISOString());
+ const tracking=JSON.parse(JSON.stringify(saved)).moduleRecords['Acompanhamento de licitações'][0].tracking;
+ assert.deepEqual(tracking.pricing,pricing);assert.equal(tracking.proposal.monthly,proposal.monthly);
+ for(const invalid of [{...pricing,taxes:100},{...pricing,labor:-1},{...pricing,profit:NaN},{labor:100}]){
+  const changed=structuredClone(next);changed.moduleRecords['Acompanhamento de licitações'][0].tracking.pricing=invalid;
+  assert.throws(()=>prepareOperationalState(before,changed,{username:'analista',can:()=>true},now.toISOString()));
+ }
+});
