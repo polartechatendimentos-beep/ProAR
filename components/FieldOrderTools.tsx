@@ -1,16 +1,17 @@
 "use client";
+import {loadDayPackage} from "@/lib/mobile-day-cache";
 import {FieldEquipmentLookup} from "./FieldEquipmentLookup";
 import { useState } from "react";
 import type { MobileFieldOrder } from "@/lib/mobile-field";
 import { compressFieldPhoto } from "@/lib/field-media";
 import styles from "./ProARFieldMobile.module.css";
 type History={id:string;date:string;service:string;diagnosis:string;report:string;before?:string;after?:string;unit?:string};
-export function FieldOrderTools({order,busy,canApprove,send}:{order:MobileFieldOrder;busy:boolean;canApprove:boolean;send:(action:string,data:Record<string,unknown>)=>Promise<void>}){
+export function FieldOrderTools({order,busy,canApprove,send,scope}:{scope:string;order:MobileFieldOrder;busy:boolean;canApprove:boolean;send:(action:string,data:Record<string,unknown>)=>Promise<void>}){
   const [name,setName]=useState(""),[brand,setBrand]=useState(""),[model,setModel]=useState(""),[serial,setSerial]=useState(""),[photo,setPhoto]=useState(""),[error,setError]=useState("");
   const [kind,setKind]=useState("signature"),[reason,setReason]=useState(""),[decisions,setDecisions]=useState<Record<string,string>>({});
   const [historyOpen,setHistoryOpen]=useState(false);
   const [history,setHistory]=useState<History[]|null>(null),[historyId,setHistoryId]=useState(""),[historyBusy,setHistoryBusy]=useState(false);
-  async function showHistory(id:string){setHistoryId(id);setHistory(null);setHistoryBusy(true);setError("");try{const response=await fetch(`/api/mobile/orders?orderId=${encodeURIComponent(order.id)}${id?`&equipmentId=${encodeURIComponent(id)}`:"&view=customer-history"}`,{cache:"no-store"});const body=await response.json();if(!response.ok)throw new Error(body.error);setHistory(body.history);}catch(e){setError(e instanceof Error?e.message:"Histórico indisponível.");}finally{setHistoryBusy(false);}}
+  async function showHistory(id:string){setHistoryId(id);setHistory(null);setHistoryBusy(true);setError("");try{if(!navigator.onLine){const pack=await loadDayPackage(scope),rows=pack?.histories[order.id];if(!rows)throw new Error("Histórico não preparado neste aparelho. Conecte e use o pacote do dia na Central de sincronização.");if(id)throw new Error("Offline: consulte o histórico do cliente desta OS. O filtro por equipamento exige conexão.");setHistory(rows);return;}const response=await fetch(`/api/mobile/orders?orderId=${encodeURIComponent(order.id)}${id?`&equipmentId=${encodeURIComponent(id)}`:"&view=customer-history"}`,{cache:"no-store"});const body=await response.json();if(!response.ok)throw new Error(body.error);setHistory(body.history);}catch(e){setError(e instanceof Error?e.message:"Histórico indisponível.");}finally{setHistoryBusy(false);}}
   return <>
     {error&&<p role="alert" className={styles.warning}>{error}</p>}
     <details className={styles.journeyPanel}><summary>Cadastrar equipamento nesta OS</summary>

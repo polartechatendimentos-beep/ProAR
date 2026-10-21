@@ -23,3 +23,10 @@ test('encrypted pending OS survive reload, stay isolated by company/user and cle
     await clearOrderDraft('empresa:tech','OS-1');assert.equal(await loadOrderDraft('empresa:tech','OS-1'),null);assert.equal((await listPendingOrderDrafts('outra:tech')).length,1);
   }finally{globalThis.indexedDB=original;}
 });
+test('preparações pendentes não desaparecem automaticamente após 30 dias',async()=>{
+ const original=globalThis.indexedDB;globalThis.indexedDB=memoryIdb();try{
+  const draft={version:1,report:'Relatório não enviado',diagnosis:'',checklist:{},equipmentIds:[],before:'',after:'',signature:'',signerName:'',savedAt:Date.now()-45*86400000,pendingSubmission:{command:{requestId:'pending-old',orderId:'OS-OLD',action:'save'},queuedAt:Date.now()-45*86400000},orderSnapshot:{id:'OS-OLD'}};
+  await saveOrderDraft('empresa:tech','OS-OLD',draft);assert.ok(await loadOrderDraft('empresa:tech','OS-OLD'));assert.equal((await listPendingOrderDrafts('empresa:tech')).length,1);
+  await saveOrderDraft('empresa:tech','OS-EMPTY',{...draft,pendingSubmission:undefined});assert.equal(await loadOrderDraft('empresa:tech','OS-EMPTY'),null);
+ }finally{globalThis.indexedDB=original;}
+});

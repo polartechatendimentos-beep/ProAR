@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft, ArrowRight, CalendarDays, ChevronRight,
@@ -10,6 +10,9 @@ import {
 import { MobileRouteControls } from "./MobileRouteControls";
 import { FieldSupportPanel } from "./FieldSupportPanel";
 import { FieldOrderReceipt } from "./FieldOrderReceipt";
+import {MobileRecoveryPanel} from "./MobileRecoveryPanel";
+import {createDayPackage,readOfflineLease,rememberOfflineLease,clearOfflineLease,type MobileDayData} from "@/lib/mobile-day-policy";
+import {loadDayPackage,saveDayPackage,removeDayOrder} from "@/lib/mobile-day-cache";
 import { listPendingOrderDrafts } from "@/lib/mobile-order-drafts";
 import { MOBILE_RELEASE } from "@/lib/mobile-release";
 import { filterFieldOrders, fieldOrderTone, type OrderFilter } from "@/lib/mobile-order-display";
@@ -21,13 +24,7 @@ import {MobileThemeControl,useMobileTheme} from "./MobileThemeControl";
 import {mobileSupervision} from "@/lib/mobile-experience";
 
 type FieldOrder = MobileFieldOrder;
-type FieldData = {
-  connected: boolean; stateFound: boolean; mode: "operational";
-  user: { displayName: string; role: string; canEdit: boolean; canApprove: boolean; scope:string; linkedEmployee: boolean; manager: boolean };
-  orders: FieldOrder[];
-  summary: { today: number; inProgress: number; pending: number };
-  lastReadAt: string; notice: string;
-};
+type FieldData = MobileDayData;
 const EMPTY_ORDERS:FieldOrder[]=[];
 type Tab = "inicio" | "agenda" | "ordens" | "central" | "mais";
 
@@ -60,6 +57,8 @@ function OrderCard({ order, onOpen }: { order: FieldOrder; onOpen: () => void })
 
 export function ProARFieldMobile() {
   const appearance=useMobileTheme();
+  const requestAbort=useRef<AbortController|null>(null),generation=useRef(0);
+  const [offlineNotice,setOfflineNotice]=useState(""),[offlineCopy,setOfflineCopy]=useState(false),[recovery,setRecovery]=useState<{scope:string;order:FieldOrder}|null>(null);
   const [tab, setTab] = useState<Tab>("inicio");
   const [data, setData] = useState<FieldData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,33 +74,45 @@ export function ProARFieldMobile() {
   const [mapApp,setMapApp]=useState("google");
   const [completion,setCompletion]=useState<{orderId:string;completedAt:string}|null>(null);
   const refresh = useCallback(async () => {
+    const run=++generation.current;requestAbort.current?.abort();const controller=new AbortController();requestAbort.current=controller;
     setLoading(true); setError("");
     try {
-      if (!navigator.onLine) throw new Error("Sem conexão. Os rascunhos e envios pendentes permanecem no aparelho; conecte para confirmar o envio.");
-      const response = await fetch("/api/mobile/bootstrap", { cache:"no-store", credentials:"same-origin" });
+      if (!navigator.onLine) {
+        const lease=readOfflineLease(sessionStorage),cached=lease?await loadDayPackage(lease.scope):null;
+        if(run!==generation.current)return;
+        if(!lease||!cached||cached.validUntil>lease.validUntil){setData(null);setSelected(null);throw new Error("Conecte para validar a sessão e preparar as OS do dia. Os rascunhos permanecem no aparelho.");}
+        setData({...cached.data,connected:false});setOfflineCopy(true);setLoginRequired(false);setOfflineNotice(`Cópia local de ${new Date(cached.preparedAt).toLocaleString("pt-BR")}. Atualizações de outros usuários só aparecem com conexão.`);return;
+      }
+      const response = await fetch("/api/mobile/bootstrap", { cache:"no-store", credentials:"same-origin",signal:controller.signal });
       const result = await response.json();
+      if(run!==generation.current||controller.signal.aborted)return;
       if (!response.ok) {
         setLoginRequired(response.status === 401);
-        if(response.status===401||response.status===403){setData(null);setSelected(null);}
+        if(response.status===401||response.status===403){setData(null);setSelected(null);setRecovery(null);try{clearOfflineLease(sessionStorage);}catch{}}
         throw new Error(result.error || "Não foi possível carregar os atendimentos.");
       }
       setLoginRequired(false);
-      setData(result as FieldData);
+      setData(result as FieldData);setOfflineCopy(false);setOfflineNotice("");
+      try{const pack=createDayPackage(result as FieldData);await saveDayPackage(pack);if(run!==generation.current||controller.signal.aborted)return;rememberOfflineLease(sessionStorage,pack);setOfflineNotice(`${pack.data.orders.length} OS preparadas neste aparelho para uso offline.${pack.truncated?" Pacote parcial: limite de 200 OS.":""}`);}catch{setOfflineNotice("Dados carregados do servidor; pacote offline não confirmado. Seus rascunhos continuam separados.");}
     } catch (reason) {
+      if(run!==generation.current||controller.signal.aborted)return;
+      if(!navigator.onLine){setData(null);setSelected(null);setRecovery(null);}
       setError(reason instanceof Error ? reason.message : "Falha de conexão com o ProAR.");
     } finally {
-      setLoading(false);
+      if(run===generation.current)setLoading(false);
     }
   }, []);
   useEffect(() => {
     setOnline(navigator.onLine);
-    const change = () => setOnline(navigator.onLine);
-    const focus = () => { if (navigator.onLine) void refresh(); };
+    const change = () => {setOnline(navigator.onLine);if(navigator.onLine)void refresh();};
+    const focus = () => { void refresh(); };
     window.addEventListener("online", change);
     window.addEventListener("offline", change);
     window.addEventListener("focus", focus);
     void refresh();
+    const expiryTimer=setInterval(()=>{if(!navigator.onLine){let valid=false;try{valid=Boolean(readOfflineLease(sessionStorage));}catch{}if(!valid){setData(null);setSelected(null);setRecovery(null);setError("A leitura offline expirou. Conecte para validar a sessão.");}}},60000);
     return () => {
+      clearInterval(expiryTimer);generation.current++;requestAbort.current?.abort();
       window.removeEventListener("online", change);
       window.removeEventListener("offline", change);
       window.removeEventListener("focus", focus);
@@ -121,7 +132,7 @@ export function ProARFieldMobile() {
   const todayOrders = useMemo(() => orders.filter(order => order.date === todayISO()), [orders]);
   const week=useMemo(()=>mobileWeekDates(day),[day]);
   const agendaOrders = useMemo(() => orders.filter(order => agendaMode==="week"?week.includes(order.date):order.date === day), [orders, day,agendaMode,week]);
-  const current = orders.find(order => order.id === selected)||pendingOrders.find(order=>order.id===selected);
+  const current = orders.find(order => order.id === selected)||pendingOrders.find(order=>order.id===selected)||(recovery?.scope===data?.user.scope&&recovery?.order.id===selected?recovery.order:undefined);
   const supervision=mobileSupervision(orders,todayISO());
   const firstName = data?.user.displayName?.split(" ")[0] || "equipe";
   const tabs: { id: Tab; label: string; icon: typeof Home }[] = [
@@ -142,12 +153,14 @@ export function ProARFieldMobile() {
         </div>
       </header>
       <main className={styles.content}>
+        {offlineNotice&&<p role="status" className={styles.syncBanner}>{offlineCopy?"Leitura offline • ":""}{offlineNotice}</p>}
         {!online && <div className={styles.warning}><CloudOff size={19}/>Sem conexão. Você pode preencher o rascunho da OS neste aparelho. Você também pode deixar o envio preparado e sincronizar ao retornar a conexão. A conclusão só é confirmada pelo servidor.</div>}
         {completion&&<div role="status" className={styles.successPanel}><h2>OS concluída • {completion.orderId}</h2><p>Confirmada no servidor em {new Date(completion.completedAt).toLocaleString("pt-BR")}.</p><FieldOrderReceipt orderId={completion.orderId}/><button type="button" className={styles.secondaryAction} onClick={()=>setCompletion(null)}>Fechar confirmação</button></div>}
         {error && <div role="alert" className={styles.error}>{error}{loginRequired && <Link href="/">Entrar no ProAR</Link>}{!loginRequired && <button type="button" onClick={()=>void refresh()}>Tentar novamente</button>}</div>}
         {loading && !data && <div role="status" aria-label="Carregando atendimentos" className={styles.skeletonGrid}><p>Conectando aos atendimentos reais do ProAR...</p>{[1,2,3].map(i=><div key={i} className={styles.skeletonCard} aria-hidden="true"/>)}</div>}
         {data && <>
           {pendingOrders.length>0&&!current&&<section className={styles.pendingPanel}><h2>{pendingOrders.length} envio(s) aguardando confirmação</h2><p>Retome cada envio para sincronizar ou consultar a confirmação, sem duplicar o registro.</p>{pendingOrders.map(order=><button key={order.id} type="button" className={styles.secondaryAction} onClick={()=>setSelected(order.id)}>Retomar envio • {order.id}</button>)}</section>}
+          <button type="button" className={styles.secondaryAction} onClick={()=>{setSelected(null);setTab("mais");}}>Central de sincronização • pacote offline e rascunhos</button>
           <details className={styles.journeyPanel}><summary>Minha jornada • entrada, pausa e saída</summary><MobileRouteControls /></details>
           {tab === "central" && !current && data.user.manager && <section className={styles.detailCard}><h2>Supervisão • ordens autorizadas</h2><p>Resumo da última leitura do servidor. Envios locais aparecem separadamente e não representam a fila dos outros aparelhos.</p><div className={styles.metrics}>{Object.entries({"Em aberto":supervision.open,"Atrasadas":supervision.overdue,"Com check-in":supervision.active,"Hoje":supervision.today}).map(([label,count])=><div key={label}><strong>{count}</strong><span>{label}</span></div>)}</div><p>{pendingOrders.length} envio(s) pendente(s) neste aparelho e usuário.</p></section>}
           <FieldSupportPanel visible={tab === "central" && !current}/>
@@ -172,7 +185,7 @@ export function ProARFieldMobile() {
             </div>
             {current.address && <><label className={styles.formLabel}>Aplicativo de navegação<select value={mapApp} onChange={e=>setMapApp(e.target.value)}><option value="google">Google Maps</option><option value="waze">Waze</option></select></label><a className={styles.primaryAction} href={mapApp==="waze"?`https://www.waze.com/ul?q=${encodeURIComponent(current.address)}&navigate=yes`:`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(current.address)}`} target="_blank" rel="noopener noreferrer"><MapPin size={18}/> Abrir navegação <ArrowRight size={18}/></a></>}
             {!data.user.canEdit && <p role="alert" className={styles.warning}>Seu perfil não tem permissão para alterar esta OS. Solicite a liberação ao administrador.</p>}
-            {data.user.canEdit && <FieldOrderEditor key={`${current.id}:${current.fieldVersion}:${current.editToken}`} scope={data.user.scope} canApprove={data.user.canApprove} order={current} requiresJourney={/tecnico|prestador/i.test(data.user.role.normalize("NFD").replace(/[\u0300-\u036f]/g,""))} onSaved={async result=>{if(result){setCompletion(result);setSelected(null);setTab("ordens");setData(previous=>previous?{...previous,orders:previous.orders.filter(order=>order.id!==result.orderId)}:previous);}await refresh();}}/>}
+            {data.user.canEdit && <FieldOrderEditor key={`${current.id}:${current.fieldVersion}:${current.editToken}`} scope={data.user.scope} canApprove={data.user.canApprove} order={current} requiresJourney={/tecnico|prestador/i.test(data.user.role.normalize("NFD").replace(/[\u0300-\u036f]/g,""))} onSaved={async result=>{if(result){setCompletion(result);setSelected(null);setTab("ordens");setData(previous=>previous?{...previous,orders:previous.orders.filter(order=>order.id!==result.orderId)}:previous);}if(result){try{await removeDayOrder(data.user.scope,result.orderId);}catch{try{clearOfflineLease(sessionStorage);}catch{}}}await refresh();}}/>}
             <p className={styles.disclaimer}>Alterações são confirmadas no banco. Durante a pausa ou fora da jornada, técnicos podem apenas consultar.</p>
           </section> : <>
             {tab === "inicio" && <section className={styles.screen}>
@@ -212,6 +225,7 @@ export function ProARFieldMobile() {
             {tab === "mais" && <section className={styles.screen}>
               <p className={styles.eyebrow}>PERFIL E CONTROLE</p><h1 className={styles.title}>Mais</h1>
               <MobileThemeControl theme={appearance.theme} onChange={appearance.changeTheme} notice={appearance.storageNotice}/>
+              <MobileRecoveryPanel key={data.user.scope} scope={data.user.scope} orderIds={orders.map(o=>o.id)} readAt={data.lastReadAt} onCentral={()=>setTab("central")} onSessionExpired={()=>void refresh()} onResume={draft=>{if(draft.orderSnapshot){setRecovery({scope:data.user.scope,order:draft.orderSnapshot});setSelected(draft.orderSnapshot.id);setTab("ordens");}}}/>
               <div className={styles.profile}><div className={styles.avatar}><UserRound size={26}/></div><div><strong>{data.user.displayName}</strong><span>{data.user.role}</span></div></div>
               <div className={styles.detailCard}><h2><ShieldCheck size={20}/> Integração segura</h2><p>O aplicativo utiliza sua sessão do ProAR, respeita a empresa e mostra somente as OS permitidas para o perfil. Não há usuários ou atendimentos fictícios.</p>
               <p><strong>Sincronização:</strong> OS podem ser preparadas offline e ficam pendentes até sincronizar. Jornada, GPS, permissões e conflitos são validados no envio; checklist da frota, abastecimento e ajustes também usam fila local.</p>

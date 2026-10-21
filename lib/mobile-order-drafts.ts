@@ -9,11 +9,11 @@ function write(db:IDBDatabase,store:string,value:unknown,id?:string){return new 
 async function key(db:IDBDatabase,scope:string){let value=await read<CryptoKey>(db,"keys",scope);if(value)return value;value=await crypto.subtle.generateKey({name:"AES-GCM",length:256},false,["encrypt","decrypt"]);return new Promise<CryptoKey>((resolve,reject)=>{const tx=db.transaction("keys","readwrite"),store=tx.objectStore("keys"),r=store.get(scope);let chosen=value!;r.onsuccess=()=>{if(r.result)chosen=r.result;else store.put(value,scope);};tx.oncomplete=()=>resolve(chosen);tx.onabort=()=>reject(tx.error);});}
 function serial<T>(id:string,task:()=>Promise<T>):Promise<T>{const next=(pending.get(id)||Promise.resolve()).catch(()=>{}).then(task);pending.set(id,next);void next.finally(()=>{if(pending.get(id)===next)pending.delete(id);}).catch(()=>{});return next;}
 export function saveOrderDraft(scope:string,orderId:string,draft:OrderDraft){const id=`${scope}:${orderId}`;return serial(id,async()=>{const db=await open();try{const iv=crypto.getRandomValues(new Uint8Array(12)),k=await key(db,scope),cipher=await crypto.subtle.encrypt({name:"AES-GCM",iv},k,new TextEncoder().encode(JSON.stringify(draft)));await write(db,"drafts",{id,scope,orderId,iv,cipher});}finally{db.close();}});}
-export function loadOrderDraft(scope:string,orderId:string){const id=`${scope}:${orderId}`;return serial(id,async()=>{const db=await open();try{const row=await read<DraftRow>(db,"drafts",id);if(!row)return null;const k=await key(db,scope),bytes=await crypto.subtle.decrypt({name:"AES-GCM",iv:new Uint8Array(row.iv)},k,row.cipher);const value=JSON.parse(new TextDecoder().decode(bytes)) as OrderDraft;return value.savedAt>Date.now()-30*86400000?value:null;}finally{db.close();}});}
+export function loadOrderDraft(scope:string,orderId:string){const id=`${scope}:${orderId}`;return serial(id,async()=>{const db=await open();try{const row=await read<DraftRow>(db,"drafts",id);if(!row)return null;const k=await key(db,scope),bytes=await crypto.subtle.decrypt({name:"AES-GCM",iv:new Uint8Array(row.iv)},k,row.cipher);const value=JSON.parse(new TextDecoder().decode(bytes)) as OrderDraft;return (Boolean(value.pendingSubmission)||value.savedAt>Date.now()-30*86400000)?value:null;}finally{db.close();}});}
 export function clearOrderDraft(scope:string,orderId:string){const id=`${scope}:${orderId}`;return serial(id,async()=>{const db=await open();try{await new Promise<void>((resolve,reject)=>{const tx=db.transaction("drafts","readwrite");tx.objectStore("drafts").delete(id);tx.oncomplete=()=>resolve();tx.onabort=()=>reject(tx.error);});}finally{db.close();}});}
 
 /** Pending commands remain recoverable after a lost response or reload, scoped to company/user. */
-export async function listPendingOrderDrafts(scope:string) {
+export async function listOrderDrafts(scope:string) {
   const db=await open();
   let ids:string[];
   try {
@@ -23,5 +23,7 @@ export async function listPendingOrderDrafts(scope:string) {
   }
   finally { db.close(); }
   const rows=await Promise.all(ids.map(id=>loadOrderDraft(scope,id)));
-  return rows.filter((row):row is OrderDraft=>Boolean(row?.pendingSubmission&&row.orderSnapshot));
+  return rows.filter((row):row is OrderDraft=>Boolean(row));
 }
+
+export async function listPendingOrderDrafts(scope:string){return (await listOrderDrafts(scope)).filter(row=>Boolean(row.pendingSubmission&&row.orderSnapshot));}

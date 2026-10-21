@@ -1,3 +1,4 @@
+import {expiryOfValidatedSession} from "@/lib/mobile-session-expiry";
 import { NextRequest, NextResponse } from "next/server";
 import { sessionFromRequest, hasPermission, sessionCompany } from "../../../../lib/permissions";
 import { resolveTenantDb, tenantHeaders } from "../../../../lib/tenant-rest";
@@ -52,6 +53,7 @@ export async function GET(request: NextRequest) {
     }).map(order=>({...order,editToken:fieldOrderFingerprint(records.get(order.id)!),technicianSignaturePreview:safeSignatureImage(assignedSignatureEmployee(records.get(order.id)!,employeeContext.state.moduleRecords?.Funcionários||[])?.employeeSignature),equipmentOptions:eligibleFieldEquipment(records.get(order.id)!,employeeContext.state.moduleRecords?.Equipamentos || []).map(item=>({id:String(item.id),label:String(item.physicalCode || item.name || item.serialNumber || item.id).slice(0,150)}))}));
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
     return NextResponse.json({
+      offlineAccessUntil:expiryOfValidatedSession(request.cookies.get("proar_session")?.value||""),
       connected: true,
       stateFound,
       mode: "operational",

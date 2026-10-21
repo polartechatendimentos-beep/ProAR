@@ -10,6 +10,7 @@ import { ProARFieldMobile } from "@/components/ProARFieldMobile";
  */
 export function ProARMobile() {
   useEffect(() => {
+    if("serviceWorker" in navigator&&window.isSecureContext)void navigator.serviceWorker.register("/sw.js",{updateViaCache:"none"}).catch(()=>{});
     document.documentElement.dataset.proarExperience="mobile";
     document.body.classList.add("proar-mobile-route");
     return () => {
