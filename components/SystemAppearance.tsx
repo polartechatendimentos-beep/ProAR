@@ -1,9 +1,11 @@
 "use client";
 import {useEffect,useState} from "react";
+import {clearOfflineLease} from "@/lib/mobile-day-policy";
 import {usePathname} from "next/navigation";
 import {normalizeMobileTheme,resolveMobileTheme,type MobileTheme} from "@/lib/mobile-experience";
 export function SystemAppearance(){
   const path=usePathname(),enabled=path==="/"||path==="/login";
+  useEffect(()=>{if(!path.startsWith("/mobile")&&!window.location.hostname.startsWith("mobile.")){try{clearOfflineLease(sessionStorage);}catch{}}},[path]);
   const [theme,setTheme]=useState<MobileTheme>("dark"),[systemDark,setSystemDark]=useState(true),[compact,setCompact]=useState(false);
   useEffect(()=>{if(!enabled)return;try{const stored=localStorage.getItem("proar-system-theme");if(stored)setTheme(normalizeMobileTheme(stored));}catch{}
     const media=matchMedia("(prefers-color-scheme: dark)"),update=()=>setSystemDark(media.matches);update();media.addEventListener("change",update);return()=>media.removeEventListener("change",update);

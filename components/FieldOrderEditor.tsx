@@ -55,8 +55,10 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
   },[scope,order.id,order.fieldVersion,draftReady,olderDraft,observations,measurements,beforePhotos,afterPhotos,report,diagnosis,checklist,equipmentIds,before,after,signature,signerName,pendingSubmission,order]);
   useEffect(()=>{
     const flush=()=>{if(!suppressDraft.current&&latestDraft.current)void saveOrderDraft(scope,order.id,latestDraft.current).catch(()=>{});};
+    const hidden=()=>{if(document.hidden)flush();};
+    document.addEventListener("visibilitychange",hidden);
     window.addEventListener("pagehide",flush);
-    return()=>{window.removeEventListener("pagehide",flush);flush();};
+    return()=>{document.removeEventListener("visibilitychange",hidden);window.removeEventListener("pagehide",flush);flush();};
   },[scope,order.id]);
   function jumpTo(key:string){const target=document.getElementById(`field-${order.id}-${key}`);target?.scrollIntoView({behavior:"smooth",block:"center"});if(target?.matches("button,input,textarea"))target.focus();else target?.querySelector<HTMLElement>("input,textarea,button")?.focus();}
   async function sendExtra(action:string,data:Record<string,unknown>){
@@ -166,7 +168,7 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
     <button type="button" className={styles.finishAction} disabled={busy||mediaBusy||!draftReady||Boolean(olderDraft)} onClick={()=>{if(mediaBusy)return;if(pendingRequirements.length){setNotice("Complete os requisitos indicados antes de concluir.");jumpTo(pendingRequirements[0].key);}else setReview(true);}}>Revisar e concluir OS</button>
     <FieldAttendanceControls order={order} busy={busy||mediaBusy||!draftReady||Boolean(olderDraft)} canApprove={canApprove} send={sendExtra}/>
     <LocalFieldAssistant diagnosis={diagnosis} report={report} disabled={busy||mediaBusy||!draftReady||Boolean(olderDraft)} onApply={setReport}/>
-    <FieldOrderTools order={order} busy={busy||mediaBusy||!draftReady||Boolean(olderDraft)} canApprove={canApprove} send={sendExtra}/>
+    <FieldOrderTools scope={scope} order={order} busy={busy||mediaBusy||!draftReady||Boolean(olderDraft)} canApprove={canApprove} send={sendExtra}/>
     </fieldset>
     {confirmed&&<button type="button" className={styles.secondaryAction} onClick={()=>void onSaved()}>Atualizar dados após gravação</button>}
     {review&&!pendingSubmission&&!confirmed&&<section className={styles.reviewPanel} aria-label="Revisar conclusão"><h3>Confira antes de concluir</h3><dl className={styles.detailList}><div><dt>Diagnóstico</dt><dd>{diagnosis}</dd></div><div><dt>Serviço executado</dt><dd>{report}</dd></div><div><dt>Equipamentos • opcional</dt><dd>{equipmentIds.map(id=>order.equipmentOptions?.find(item=>item.id===id)?.label||id).join(", ")||"Sem equipamento vinculado"}</dd></div><div><dt>Fotos antes / depois</dt><dd>{(order.photoCounts?.before||0)+beforePhotos.length+Number(Boolean(before))} / {(order.photoCounts?.after||0)+afterPhotos.length+Number(Boolean(after))}</dd></div><div><dt>Aceite</dt><dd>{signature?signerName||"Informe o nome de quem assina":order.evidence.signature?"Assinatura registrada":approved("signature")?"Dispensa aprovada pelo gestor":"Pendente"}</dd></div></dl><h4>Materiais aplicados</h4>{order.appliedMaterials?.length?<ul>{order.appliedMaterials.map((item,index)=><li key={index}>{item.quantity} × {item.name}</li>)}</ul>:<p>Nenhum material aplicado registrado.</p>}<h4>Solicitações</h4>{order.requests?.length?<ul>{order.requests.map(item=><li key={item.id}>{item.note} • {item.status}{item.date?` • ${item.date} ${item.time||""}`:""}</li>)}</ul>:<p>Nenhuma solicitação registrada.</p>}<button type="button" className={styles.finishAction} disabled={busy||mediaBusy} onClick={()=>void execute("finish")}>Confirmar conclusão{typeof navigator!=="undefined"&&!navigator.onLine?" quando sincronizar":""}</button><button type="button" className={styles.secondaryAction} disabled={busy} onClick={()=>setReview(false)}>Voltar para editar</button></section>}

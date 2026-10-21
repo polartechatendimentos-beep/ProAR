@@ -33,3 +33,6 @@ export async function synchronizeFieldQueue(scope:string,send:(command:QueuedFie
     }
   }}finally{db.close();}
 }
+
+/** Metadata only; no command content or credentials leave the encrypted store. */
+export async function fieldQueueSummary(scope:string){const db=await database();try{return (await rows(db)).filter(row=>row.scope===scope).map(row=>({id:row.id,state:row.state,attempts:row.attempts,nextTry:row.nextTry,createdAt:row.createdAt,error:row.error}));}finally{db.close();}}
