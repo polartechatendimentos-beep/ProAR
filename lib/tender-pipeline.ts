@@ -1,11 +1,11 @@
-import {qualificationReadiness,type ProcurementRecord} from './procurement-readiness.ts';
+import {qualificationReadiness,priceComposition,type PricingInput,type ProcurementRecord} from './procurement-readiness.ts';
 import {isTenderClosed} from './tender-visibility.ts';
 export const PIPELINE_STAGES=['RADAR','ANALISE','HABILITACAO','HOMOLOGADO','ENCERRADO'] as const;
 export type PipelineStage=typeof PIPELINE_STAGES[number];
 export const STAGE_LABELS:Record<PipelineStage,string>={RADAR:'Radar / Descoberta',ANALISE:'Em análise técnica',HABILITACAO:'Dossiê / Habilitação pronta',HOMOLOGADO:'Homologado',ENCERRADO:'Encerrado / Não vencido'};
 export type PipelineTender={numeroControlePNCP?:string;objetoCompra?:string;modalidadeNome?:string;dataEncerramentoProposta?:string;dataPublicacaoPncp?:string;valorTotalEstimado?:number;sourcePortal?:string;linkSistemaOrigem?:string;validationStatus?:string;score?:number;orgaoEntidade?:{razaoSocial?:string;cnpj?:string};unidadeOrgao?:{municipioNome?:string;ufSigla?:string};};
 export type ProposalDraft={company:string;cnpj:string;address:string;email:string;monthly:number;months:number;validityDays:number;validityReference:string;notes:string};
-export type TenderTracking={tenderKey:string;stage:PipelineStage;favorite:boolean;checks:Record<string,boolean>;pmocRequired:boolean|null;tender:PipelineTender;proposal?:ProposalDraft;resultEvidence?:string};
+export type TenderTracking={tenderKey:string;stage:PipelineStage;favorite:boolean;checks:Record<string,boolean>;pmocRequired:boolean|null;tender:PipelineTender;proposal?:ProposalDraft;pricing?:PricingInput;resultEvidence?:string};
 export type PipelineRecord={id:string;name:string;tracking?:TenderTracking;createdAt?:string;client?:string;description?:string};
 const norm=(s:unknown)=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 export function tenderIdentity(t:PipelineTender){return t.numeroControlePNCP?.trim()||[t.sourcePortal,t.orgaoEntidade?.cnpj,t.orgaoEntidade?.razaoSocial,t.objetoCompra,t.linkSistemaOrigem].map(norm).join('|');}
@@ -21,6 +21,7 @@ export function validateTracking(tracking:TenderTracking,documents:ProcurementRe
  if(tracking.stage==='HABILITACAO'&&!pipelineChecklist(tracking,documents,today).ready)throw new Error('Conclua a habilitação documental e técnica antes de marcar o dossiê como pronto.');
  if(tracking.stage==='HOMOLOGADO'&&!tracking.resultEvidence?.trim())throw new Error('Informe a referência do resultado oficial da homologação.');
  if(tracking.resultEvidence&&tracking.resultEvidence.length>2000)throw new Error('Referência do resultado muito longa.');
+ if(tracking.pricing)priceComposition(tracking.pricing);
  if(tracking.proposal){const p=tracking.proposal;for(const key of ['company','cnpj','address','email','validityReference','notes'] as const)if(typeof p[key]!=='string'||p[key].length>10000)throw new Error('Texto da minuta inválido.');if(!Number.isFinite(p.monthly)||p.monthly<0||p.monthly>1e10||!Number.isInteger(p.months)||p.months<1||p.months>120||!Number.isInteger(p.validityDays)||p.validityDays<1||p.validityDays>365)throw new Error('Revise os valores da minuta.');}
 }
 export function validateProposal(p:ProposalDraft){
