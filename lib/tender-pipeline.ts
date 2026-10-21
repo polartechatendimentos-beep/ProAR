@@ -3,7 +3,7 @@ import {isTenderClosed} from './tender-visibility.ts';
 export const PIPELINE_STAGES=['RADAR','ANALISE','HABILITACAO','HOMOLOGADO','ENCERRADO'] as const;
 export type PipelineStage=typeof PIPELINE_STAGES[number];
 export const STAGE_LABELS:Record<PipelineStage,string>={RADAR:'Radar / Descoberta',ANALISE:'Em análise técnica',HABILITACAO:'Dossiê / Habilitação pronta',HOMOLOGADO:'Homologado',ENCERRADO:'Encerrado / Não vencido'};
-export type PipelineTender={numeroControlePNCP?:string;objetoCompra?:string;modalidadeNome?:string;dataEncerramentoProposta?:string;dataPublicacaoPncp?:string;valorTotalEstimado?:number;sourcePortal?:string;linkSistemaOrigem?:string;validationStatus?:string;score?:number;orgaoEntidade?:{razaoSocial?:string;cnpj?:string};unidadeOrgao?:{municipioNome?:string;ufSigla?:string};};
+export type PipelineTender={numeroControlePNCP?:string;objetoCompra?:string;modalidadeNome?:string;dataEncerramentoProposta?:string;dataPublicacaoPncp?:string;valorTotalEstimado?:number;sourcePortal?:string;linkSistemaOrigem?:string;validationStatus?:string;score?:number;distanciaMirassol?:number;orgaoEntidade?:{razaoSocial?:string;cnpj?:string};unidadeOrgao?:{municipioNome?:string;ufSigla?:string};};
 export type ProposalDraft={company:string;cnpj:string;address:string;email:string;monthly:number;months:number;validityDays:number;validityReference:string;notes:string};
 export type TenderTracking={tenderKey:string;stage:PipelineStage;favorite:boolean;checks:Record<string,boolean>;pmocRequired:boolean|null;tender:PipelineTender;proposal?:ProposalDraft;pricing?:PricingInput;resultEvidence?:string};
 export type PipelineRecord={id:string;name:string;tracking?:TenderTracking;createdAt?:string;client?:string;description?:string};

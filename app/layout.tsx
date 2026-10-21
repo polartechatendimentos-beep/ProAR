@@ -4,6 +4,7 @@ import "./globals.css";
 import "./proar-unified-layout.css";
 import "./global-feedback.css";
 import "./experience-design.css";
+import "./tender-radar-design.css";
 import {SystemAppearance} from "@/components/SystemAppearance";
 import { GlobalFeedback } from "@/components/GlobalFeedback";
 
