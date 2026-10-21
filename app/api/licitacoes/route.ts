@@ -1,6 +1,8 @@
 import {procurementAccess} from "@/lib/procurement/access";
 import {procurementFilters,filterProcurementResults} from "@/lib/procurement/search-contract";
 import {canonicalProcurementKey,identifyProcurementSource,mergeProcurementEvidence,type ProcurementTender,type SourceDiagnostic as ProcurementSourceDiagnostic} from "@/lib/procurement/domain";
+import {fetchFiorilliTenders} from "@/lib/procurement/fiorilli-connector";
+import {publicationSystem,disputePlatformFromUrl} from "@/lib/procurement/regional-sources";
 import {fetchBllTenders} from "@/lib/procurement/bll-connector";
 import { municipalTenderDate } from "@/lib/tender-date";
 import { NextRequest, NextResponse } from "next/server";
@@ -284,7 +286,7 @@ async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radi
   // Cada UF/modalidade é independente: limitar concorrência evita sobrecarga
   // do PNCP e retryar somente falhas transitórias mantém resultados parciais.
   const startedAt = new Map<string, number>();
-  const [pncpSettled, comprasSettled, municipalSettled,bllResult] = await Promise.all([
+  const [pncpSettled, comprasSettled, municipalSettled,bllResult,fiorilliResult] = await Promise.all([
     runLimited(municipality ? (["SP"] as const) : UFS, PNCP_CONCURRENCY, async uf => {
       const key = `PNCP-${uf}`; startedAt.set(key, Date.now());
       // Pesquisa por município também consulta diretamente o PNCP. Antes, quando
@@ -300,17 +302,22 @@ async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radi
     }),
     Promise.all(MUNICIPAL_SOURCES.filter(source=>source.distance <= (options?.radius??300)).map(fetchMunicipalSource)),
     fetchBllTenders(),
+    fetchFiorilliTenders({year:today.getFullYear(),radius:options?.radius??300}),
   ]);
   const raw = [
-    ...pncpSettled.flatMap(result => result.status === "fulfilled" ? result.value.value.items.map(item=>({...item,sourcePortal:item.sourcePortal??identifySource(item),sourceOrigins:[...new Set(["PNCP",item.sourcePortal??identifySource(item)])],ingestedFrom:["PNCP"]})) : []),
+    ...pncpSettled.flatMap(result => result.status === "fulfilled" ? result.value.value.items.map(item=>({...item,sourcePortal:item.sourcePortal??identifySource(item),publicationSystem:publicationSystem(item.usuarioNome),disputePlatform:disputePlatformFromUrl(item.linkSistemaOrigem),sourceOrigins:[...new Set(["PNCP",item.sourcePortal??identifySource(item),...(publicationSystem(item.usuarioNome)?[publicationSystem(item.usuarioNome)!]:[])])],ingestedFrom:["PNCP"]})) : []),
     ...comprasSettled.flatMap(result => result.status === "fulfilled" ? result.value.value.items : []),
     ...municipalSettled.flatMap(result=>result.items),
     ...bllResult.items,
+    ...fiorilliResult.items,
   ];
   const diagnostics: SourceDiagnostic[] = [
     ...pncpSettled.map((result, index) => result.status === "fulfilled" ? result.value.diagnostic : { source: `PNCP-${UFS[index]}`, status: "error" as const, attempts: MAX_RETRIES + 1, durationMs: Date.now() - (startedAt.get(`PNCP-${UFS[index]}`) ?? Date.now()), count: 0, error: result.reason instanceof Error ? result.reason.message : String(result.reason) }),
     ...comprasSettled.map((result, index) => result.status === "fulfilled" ? result.value.diagnostic : { source: `Compras.gov.br-${MODALITIES[index]}`, status: "error" as const, attempts: MAX_RETRIES + 1, durationMs: Date.now() - (startedAt.get(`Compras.gov.br-${MODALITIES[index]}`) ?? Date.now()), count: 0, error: result.reason instanceof Error ? result.reason.message : String(result.reason) }),
     ...municipalSettled.map(result=>result.diagnostic),
+    ...fiorilliResult.diagnostics,
+    ...["Licitações-e","BEC-SP"].map(name=>({source:`${name} · via PNCP`,status:pncpSettled.length>0&&pncpSettled.every(r=>r.status==="fulfilled"&&!r.value.value.error)?"ok" as const:"error" as const,attempts:0,durationMs:0,count:pncpSettled.flatMap(r=>r.status==="fulfilled"?r.value.value.items:[]).filter(item=>disputePlatformFromUrl(item.linkSistemaOrigem)===name).length,mode:"pncp_bridge" as const,detail:"Plataforma identificada no link oficial retornado pelo PNCP; não houve consulta direta à sala de disputa."})),
+    ...["Fiorilli","Betha","IPM / Atende.net","Equiplano","Aspec","SMARAPD"].map(name=>({source:`${name} · via PNCP`,status:pncpSettled.length>0&&pncpSettled.every(r=>r.status==="fulfilled"&&!r.value.value.error)?"ok" as const:"error" as const,attempts:0,durationMs:0,count:pncpSettled.flatMap(r=>r.status==="fulfilled"?r.value.value.items:[]).filter(item=>publicationSystem(item.usuarioNome)===name).length,mode:"pncp_bridge" as const,detail:"Classificação pelo publicador informado no PNCP. Não comprova consulta direta nem cobertura integral do fornecedor."})),
     ...(bllResult.diagnostic?[bllResult.diagnostic]:[]),
     {source:"BLL Compras · via PNCP",status:pncpSettled.length>0&&pncpSettled.every(r=>r.status==="fulfilled"&&!r.value.value.error)?"ok" as const:"error" as const,attempts:0,durationMs:Math.max(0,...pncpSettled.map(r=>r.status==="fulfilled"?r.value.diagnostic.durationMs:0)),count:pncpSettled.flatMap(r=>r.status==="fulfilled"?r.value.value.items:[]).filter(item=>identifySource(item)==="BLL Compras").length,mode:"pncp_bridge",detail:"Cobertura BLL obtida na consulta PNCP; não comprova disponibilidade direta da BLL."},
   ];

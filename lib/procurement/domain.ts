@@ -5,7 +5,7 @@ export type ProcurementTender = {
   objetoCompra?:string; modalidadeNome?:string; situacaoCompraNome?:string;
   dataPublicacaoPncp?:string; dataEncerramentoProposta?:string; valorTotalEstimado?:number;
   linkSistemaOrigem?:string; usuarioNome?:string; sourcePortal?:ProcurementPortal; sourceOrigins?:string[];
-  ingestedFrom?:string[]; sourceExternalId?:string; distanciaMirassol?:number;
+  publicationSystem?:string; disputePlatform?:string; ingestedFrom?:string[]; sourceExternalId?:string; distanciaMirassol?:number;
   orgaoEntidade?:{cnpj?:string;razaoSocial?:string};
   unidadeOrgao?:{municipioNome?:string;ufSigla?:string;codigoIbge?:string;nomeUnidade?:string};
   canonicalKey?:string; validationStatus?:"active_confirmed"|"history"|"incomplete";
@@ -36,6 +36,7 @@ export function mergeProcurementEvidence<T extends ProcurementTender>(preferred:
     sourceOrigins:[...new Set([...(preferred.sourceOrigins??[]),preferred.sourcePortal??identifyProcurementSource(preferred),...(other.sourceOrigins??[]),other.sourcePortal??identifyProcurementSource(other)])],
     ingestedFrom:[...new Set([...(preferred.ingestedFrom??[]),...(other.ingestedFrom??[])])],
     valorTotalEstimado:preferred.valorTotalEstimado??other.valorTotalEstimado,
+    publicationSystem:preferred.publicationSystem||other.publicationSystem,disputePlatform:preferred.disputePlatform||other.disputePlatform,
     linkSistemaOrigem:preferred.linkSistemaOrigem||other.linkSistemaOrigem};
 }
 export function matchesHvacDomain(text:string,query=""){

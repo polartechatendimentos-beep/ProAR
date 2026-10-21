@@ -19,5 +19,5 @@ export async function GET(request:NextRequest){
     const runs=diagnostics.filter((d:{source:string})=>d.source.startsWith(prefix));
     return {source:prefix,status:!runs.length?"not_checked":runs.every((d:{status:string})=>d.status==="ok")?"online":runs.some((d:{status:string})=>d.status==="ok")?"degraded":"unavailable",count:runs.reduce((sum:number,d:{count?:number})=>sum+(d.count??0),0),checks:runs};
   };
-  return NextResponse.json({...result,success:!result.warning||items.length>0,total:items.length,items,warnings:result.warning?[result.warning]:[],sourcesHealth:{bll:health("BLL Compras"),pncp:health("PNCP")}}, {headers:{"Cache-Control":"private, no-store"}});
+  return NextResponse.json({...result,success:!result.warning||items.length>0,total:items.length,items,warnings:result.warning?[result.warning]:[],sourcesHealth:{bll:health("BLL Compras"),pncp:health("PNCP"),fiorilli:health("Fiorilli"),betha:health("Betha"),ipm:health("IPM / Atende.net"),comprasgov:health("Compras.gov.br")}}, {headers:{"Cache-Control":"private, no-store"}});
 }

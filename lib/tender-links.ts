@@ -1,5 +1,5 @@
 export type TenderIdentity = {linkSistemaOrigem?:string; numeroControlePNCP?:string; anoCompra?:number; sequencialCompra?:number; orgaoEntidade?:{cnpj?:string;razaoSocial?:string}; objetoCompra?:string};
-const hosts = new Set(['bllcompras.com','pncp.gov.br','compras.gov.br','gov.br','bec.sp.gov.br','portaldecompraspublicas.com.br','licitacoes-e.com.br']);
+const hosts = new Set(['transparencia.ibira.sp.gov.br','bllcompras.com','pncp.gov.br','compras.gov.br','gov.br','bec.sp.gov.br','portaldecompraspublicas.com.br','licitacoes-e.com.br']);
 export function safeTenderOrigin(value?:string) {
  try { const u=new URL(value||''); const host=u.hostname.replace(/^www\./,''); if(u.protocol!=='https:' || u.username || u.password || u.port || !hosts.has(host))return '';return u.href; }catch{return '';}
 }
