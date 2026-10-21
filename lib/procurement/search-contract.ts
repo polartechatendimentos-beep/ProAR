@@ -28,7 +28,7 @@ export function filterProcurementResults<T extends ProcurementTender>(items:T[],
 }
 export function normalizeSearchTender(t:ProcurementTender){
   return {canonicalId:canonicalProcurementKey(t),externalIds:{pncp:t.numeroControlePNCP,bll:t.sourcePortal==="BLL Compras"?t.sourceExternalId:undefined},
-    origins:t.sourceOrigins??[t.sourcePortal??"PNCP"],ingestedFrom:t.ingestedFrom??[],primaryPortal:t.sourcePortal??"PNCP",
+    publicationSystem:t.publicationSystem??null,disputePlatform:t.disputePlatform??null,origins:t.sourceOrigins??[t.sourcePortal??"PNCP"],ingestedFrom:t.ingestedFrom??[],primaryPortal:t.sourcePortal??"PNCP",
     code:t.numeroCompra??t.numeroControlePNCP??"",modality:t.modalidadeNome??"",status:t.situacaoCompraNome??t.validationStatus??"incomplete",
     agencyName:t.orgaoEntidade?.razaoSocial??"",agencyCnpj:t.orgaoEntidade?.cnpj??"",city:t.unidadeOrgao?.municipioNome??"",uf:t.unidadeOrgao?.ufSigla??"",
     distanceKm:Number.isFinite(t.distanciaMirassol)?t.distanciaMirassol:null,estimatedValue:t.valorTotalEstimado??null,

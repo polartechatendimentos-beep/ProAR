@@ -1,5 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises';import {stripTypeScriptTypes} from 'node:module';import {runInNewContext} from 'node:vm';
 import {canonicalProcurementKey,identifyProcurementSource,mergeProcurementEvidence,matchesHvacDomain,mentionsPmoc} from '../lib/procurement/domain.ts';
+import {publicationSystem,disputePlatformFromUrl} from '../lib/procurement/regional-sources.ts';
 import {safeTenderOrigin,tenderPncpLink} from '../lib/tender-links.ts';import {hasPermission,sessionCompany} from '../lib/permissions.ts';
 const source=async p=>stripTypeScriptTypes(await readFile(new URL(p,import.meta.url),'utf8')).replace(/^import .*;$/gm,'').replace(/^export /gm,'');
 const bll=runInNewContext(await source('../lib/procurement/bll-connector.ts')+'\n({normalizeBllRecord,fetchBllTenders})',{safeTenderOrigin,URL,AbortSignal,Date,process:{env:{}}});
@@ -47,11 +48,12 @@ test('rota do Radar impede busca sem autorização e rejeita filtros inválidos 
  const result=await denied({nextUrl:new URL('https://polartech.proar.online/api/licitacoes')});assert.equal(result.status,401);assert.equal(result.headers.get('Cache-Control'),'private, no-store');
  const allowed=runInNewContext(code+'\nGET;',{...base,procurementAccess:()=>({ok:true,companyId:'a'})});assert.equal((await allowed({nextUrl:new URL('https://polartech.proar.online/api/licitacoes?raio=NaN')})).status,400);assert.equal(calls,0);
 });
-test('consulta real orquestrada mantém o PNCP quando feed BLL falha e deduplica sem perder proveniência',async()=>{
+test('consulta real orquestrada mantém o PNCP quando BLL e Fiorilli falham e deduplica sem perder proveniência',async()=>{
  const code=await source('../app/api/licitacoes/route.ts');const now=new Date();const closing=new Date(now.getTime()+86400000).toISOString();
- const tender={numeroControlePNCP:'12345678000199-1-000123/2026',objetoCompra:'Manutenção de climatização',modalidadeNome:'Pregão Eletrônico',dataEncerramentoProposta:closing,orgaoEntidade:{cnpj:'12345678000199'},unidadeOrgao:{municipioNome:'Mirassol',ufSigla:'SP'},linkSistemaOrigem:'https://bllcompras.com/Process/x'};
- const search=runInNewContext(code+'\nsearchAutomaticTenders;',{Headers,URL,URLSearchParams,AbortSignal,Date,process:{env:{}},console:{warn(){},error(){}},setTimeout,canonicalProcurementKey,identifyProcurementSource,mergeProcurementEvidence,municipalityDistances:{},municipalityNameDistances:{},municipalTenderDate:()=>undefined,
+ const tender={numeroControlePNCP:'12345678000199-1-000123/2026',objetoCompra:'Manutenção de climatização',usuarioNome:'Fiorilli Software',modalidadeNome:'Pregão Eletrônico',dataEncerramentoProposta:closing,orgaoEntidade:{cnpj:'12345678000199'},unidadeOrgao:{municipioNome:'Mirassol',ufSigla:'SP'},linkSistemaOrigem:'https://bllcompras.com/Process/x'};
+ const search=runInNewContext(code+'\nsearchAutomaticTenders;',{Headers,URL,URLSearchParams,AbortSignal,Date,process:{env:{}},console:{warn(){},error(){}},setTimeout,publicationSystem,disputePlatformFromUrl,canonicalProcurementKey,identifyProcurementSource,mergeProcurementEvidence,municipalityDistances:{},municipalityNameDistances:{},municipalTenderDate:()=>undefined,
+ fetchFiorilliTenders:async()=>({items:[],diagnostics:[{source:'Fiorilli direto · Ibirá',status:'error',attempts:1,durationMs:2,count:0,error:'Indisponível'}]}),
  fetchBllTenders:async()=>({items:[],configured:true,diagnostic:{source:'BLL Compras · feed autorizado',status:'error',attempts:1,durationMs:2,count:0,error:'Feed indisponível'}}),
  fetch:async url=>({ok:true,status:200,json:async()=>String(url).includes('pncp.gov.br')?{data:[tender],totalPaginas:1}:{resultado:[]},text:async()=>''})});
- const result=await search({radius:400,term:'climatização'});assert.equal(result.data.length,1);assert.equal(result.data[0].sourcePortal,'BLL Compras');assert.equal(result.data[0].ingestedFrom[0],'PNCP');assert.ok(result.data[0].sourceOrigins.includes('PNCP'));assert.ok(result.failedSources.includes('BLL Compras · feed autorizado'));assert.ok(result.coverage.duplicates>0);
+ const result=await search({radius:400,term:'climatização'});assert.equal(result.data.length,1);assert.equal(result.data[0].sourcePortal,'BLL Compras');assert.equal(result.data[0].ingestedFrom[0],'PNCP');assert.ok(result.data[0].sourceOrigins.includes('PNCP'));assert.ok(result.failedSources.includes('BLL Compras · feed autorizado'));assert.ok(result.failedSources.includes('Fiorilli direto · Ibirá'));assert.equal(result.data[0].publicationSystem,'Fiorilli');assert.equal(result.data[0].disputePlatform,'BLL Compras');assert.ok(result.coverage.duplicates>0);
 });
