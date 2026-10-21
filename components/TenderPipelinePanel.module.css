@@ -13,3 +13,5 @@
 
 :global(html[data-proar-system-theme=light]) .sourceChips span{color:#92400e}:global(html[data-proar-system-theme=light]) .sourceChips span[data-ok=true]{color:#047857}:global(html[data-proar-system-theme=light]) .urgentRow small{color:#be123c}
 .discard{position:sticky;top:0;z-index:4;box-shadow:0 8px 20px #0002}
+
+.distance{display:flex;align-items:center;gap:6px;color:var(--radar-cyan);font-size:12px}
