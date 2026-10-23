@@ -53,7 +53,7 @@ export function isOpenMobileOrder(status: unknown) {
 }
 
 export function canSeeAllMobileOrders(session: MobileFieldSession) {
-  return ["administrador", "gerencia", "gerente", "gestor", "supervisor"].includes(normalized(session.role));
+  return ["admin", "administrador", "gerencia", "gerente", "gestor", "supervisor"].includes(normalized(session.role));
 }
 
 export function assignedToSession(order: RecordItem, session: MobileFieldSession) {
@@ -87,14 +87,14 @@ export function mobileFieldOrders(
   max = 300,
 ): MobileFieldOrder[] {
   if (!Array.isArray(orders)) return [];
-  const limit = typeof max === "number" && Number.isFinite(max) ? Math.max(1, Math.min(500, Math.floor(max))) : 300;
+  const limit = canSeeAllMobileOrders(session) ? Number.MAX_SAFE_INTEGER : (typeof max === "number" && Number.isFinite(max) ? Math.max(1, Math.min(500, Math.floor(max))) : 300);
   const results: MobileFieldOrder[] = [];
   const seen = new Set<string>();
   for (const entry of orders) {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
     const order = entry as RecordItem;
     const id = short(order.id, 100);
-    if (!id || seen.has(id) || !assignedToSession(order, session) || !isOpenMobileOrder(order.status)) continue;
+    if (!id || seen.has(id) || !assignedToSession(order, session) || (!canSeeAllMobileOrders(session) && !isOpenMobileOrder(order.status))) continue;
     seen.add(id);
     const equipmentIds = (Array.isArray(order.equipmentIds) ? order.equipmentIds : [order.equipmentId])
       .filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
