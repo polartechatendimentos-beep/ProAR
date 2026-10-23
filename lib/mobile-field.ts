@@ -53,7 +53,7 @@ export function isOpenMobileOrder(status: unknown) {
 }
 
 export function canSeeAllMobileOrders(session: MobileFieldSession) {
-  return ["admin", "administrador", "gerencia", "gerente", "gestor", "supervisor"].includes(normalized(session.role));
+  return ["admin", "administrador", "gerencia", "gerente", "gestor", "supervisor", "proprietario", "dono"].includes(normalized(session.role));
 }
 
 export function assignedToSession(order: RecordItem, session: MobileFieldSession) {
