@@ -103,6 +103,15 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
       await persistSubmission(failed);setNotice(failed.error!);
     }
   }
+  useEffect(()=>{
+    if(!pendingSubmission || pendingSubmission.blocked || !navigator.onLine || !draftReady || olderDraft || confirmed)return;
+    // A pending save may retry on reconnection. Check-in and completion require explicit technician confirmation.
+    if(pendingSubmission.command.action!=="save")return;
+    const onReconnect=()=>{if(navigator.onLine&&!operationLock.current&&submissionRef.current&&!submissionRef.current.blocked)void retrySubmission();};
+    window.addEventListener("online",onReconnect);
+    if(navigator.onLine)onReconnect();
+    return()=>window.removeEventListener("online",onReconnect);
+  },[pendingSubmission,draftReady,olderDraft,confirmed]);
   async function retrySubmission(){
     if(operationLock.current||!submissionRef.current||submissionRef.current.blocked)return;
     operationLock.current=true;setBusy(true);
