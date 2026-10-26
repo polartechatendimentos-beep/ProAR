@@ -218,7 +218,7 @@ export function ProARFieldMobile() {
               <p className={styles.eyebrow}>OPERAÇÃO</p><h1 className={styles.title}>Ordens de serviço</h1>
               <p className={styles.subtitle}>Busque por OS, cliente, endereço, serviço ou equipamento.</p>
               <label className={styles.search}><Search size={19}/><input type="search" value={query} onChange={event=>setQuery(event.target.value)} placeholder="Buscar atendimento" aria-label="Buscar atendimento"/></label>
-              <div className={styles.filterChips} role="group" aria-label="Filtrar ordens">{([["all","Todas"],["today","Hoje"],["overdue","Atrasadas"],["upcoming","Próximas"]] as const).map(([key,label])=><button key={key} type="button" aria-pressed={orderFilter===key} onClick={()=>setOrderFilter(key)}>{label}</button>)}</div>
+              <div className={styles.filterChips} role="group" aria-label="Filtrar ordens">{([["all","Todas"],["today","Hoje"],["overdue","Atrasadas"],["upcoming","Próximas"],...(data.user.manager?[["open","Abertas"],["active","Em andamento"],["completed","Concluídas"],["unassigned","Sem técnico"]]:[])] as [OrderFilter,string][]).map(([key,label])=><button key={key} type="button" aria-pressed={orderFilter===key} onClick={()=>setOrderFilter(key)}>{label}</button>)}</div>
               <div className={styles.sectionHeading}><h2>{filtered.length} resultado(s)</h2></div>
               {filtered.length ? filtered.map(order=><OrderCard key={order.id} order={order} onOpen={()=>setSelected(order.id)}/>) : <div className={styles.empty}>Nenhuma OS encontrada com esse filtro.</div>}
             </section>}
