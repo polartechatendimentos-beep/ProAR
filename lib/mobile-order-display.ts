@@ -27,3 +27,15 @@ export function filterFieldOrders(orders:MobileFieldOrder[],query:string,filter:
     return !term||normalize([order.id,order.client,order.address,order.service,order.unit,order.status,...order.equipmentIds].join(" ")).includes(term);
   });
 }
+
+/** Home queue includes every authorized open order, independent of its date. */
+export function openFieldWorkQueue(orders:MobileFieldOrder[],today:string) {
+  const validDate=(date:string)=>/^\d{4}-\d{2}-\d{2}$/.test(date);
+  const priority=(order:MobileFieldOrder)=>{
+    if(/andamento|execucao|iniciad/.test(normalize(order.status)))return 0;
+    if(validDate(order.date)&&order.date<today)return 1;
+    if(order.date===today)return 2;
+    return validDate(order.date)?4:3;
+  };
+  return orders.filter(order=>isOpenMobileOrder(order.status)).sort((a,b)=>priority(a)-priority(b)||a.date.localeCompare(b.date)||a.time.localeCompare(b.time)||a.id.localeCompare(b.id,"pt-BR"));
+}
