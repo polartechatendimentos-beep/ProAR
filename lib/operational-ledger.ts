@@ -1,3 +1,4 @@
+import { calculateCatalogPrice } from "./catalog-cost-engine.ts";
 import { validateTracking, pipelineRecordId } from "./tender-pipeline.ts";
 import { nextPmocDate, type PmocPlan } from "./technical-compliance.ts";
 import { validateProcurementData, priceComposition, qualificationReadiness, brazilDay } from "./procurement-readiness.ts";
@@ -129,6 +130,15 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
   for (const module of new Set([...Object.keys(oldModules), ...Object.keys(modules)])) {
     if (managed.has(module) || module === "Auditoria") continue;
     validateRecords(list(oldModules[module]), list(modules[module]), module, actor);
+  }
+  for (const module of ["Produtos","Serviços"]) for(const record of list(modules[module])) {
+    const before=list(oldModules[module]).find(item=>item.id===record.id);
+    const keys=["costLines","costTaxPercent","costMarginPercent","costCardFeePercent"];
+    if(keys.every(key=>same(before?.[key],record[key]))||keys.every(key=>record[key]===undefined))continue;
+    try {
+      for(const key of keys.slice(1))if(record[key]!==undefined&&(!Number.isFinite(record[key])||record[key]<0||record[key]>=100))throw new Error("Percentual de custo inválido.");
+      calculateCatalogPrice(record.costLines===undefined?[]:record.costLines,{taxPercent:record.costTaxPercent??0,marginPercent:record.costMarginPercent??0,cardFeePercent:record.costCardFeePercent??0});
+    }catch(error){throw new OperationError(error instanceof Error?error.message:"Composição de custos inválida.");}
   }
   for (const record of list(modules["Documentação / Habilitação"])) {
     const before = list(oldModules["Documentação / Habilitação"]).find(item => item.id === record.id);
