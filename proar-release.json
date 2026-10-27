@@ -1,0 +1,15 @@
+{
+  "product": "ProAR",
+  "edition": "complete",
+  "productionBranch": "production",
+  "baselineCommit": "ee787cc7c4f78bb029635443feffa5e9282ec253",
+  "minimumModuleContract": 26,
+  "productionDomain": "polartech.proar.online",
+  "policy": {
+    "allowProductionFrom": ["production"],
+    "rejectReducedBuilds": true,
+    "requireValidation": true,
+    "requireRuntimeSmoke": true,
+    "preserveTenantData": true
+  }
+}

@@ -1,0 +1,2 @@
+export type CapacityInput={technicianId:string;availableMinutes:number;scheduledMinutes:number;soldUnscheduledMinutes?:number};
+export function capacityPlan(rows:CapacityInput[]){return rows.map(x=>{const committed=x.scheduledMinutes+(x.soldUnscheduledMinutes||0);const remaining=x.availableMinutes-committed;const utilization=x.availableMinutes>0?committed/x.availableMinutes*100:0;return{...x,committed,remaining,utilization,status:remaining<0?"overbooked":utilization>=85?"attention":"available"}});}

@@ -1,0 +1,19 @@
+✔ estoque de viatura isola empresa/veículo, deduplica replay e bloqueia conflito de referência (1.792825ms)
+✔ HVAC interpola sem extrapolar e exige tabela do fluido com proveniência (0.595185ms)
+✔ proposta OCR exige imagem, confiança e valores físicos plausíveis, mantendo revisão humana (0.368845ms)
+✔ navegação restaura todas as 26 telas por URL e preserva outros parâmetros e fragmento (1.668548ms)
+✔ atalhos não concedem permissão nem ultrapassam o plano contratado (0.229475ms)
+(node:15) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ consulta técnica exige sessão e escopo da empresa e não concede acesso financeiro (3.350997ms)
+✔ auxiliar não inventa código e sempre pede confirmação, mesmo com marca/modelo (0.695035ms)
+✔ API de consulta recusa JSON inválido e pergunta extensa, e retorna resultados privados (3.886963ms)
+✔ biblioteca consulta a empresa da sessão e só expõe documentos revisados com HTTPS (1.575428ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 193.225748

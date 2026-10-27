@@ -1,0 +1,5 @@
+import test from "node:test";import assert from "node:assert/strict";import {buildWorkTodaySummary,workDailyLog} from "../lib/work-operations.ts";
+const progress=s=>s==="SERVIÇO CONCLUÍDO"?100:s==="INÍCIO DE OBRA"?0:50;
+test("obra resume execução ocorrências e próximas ações",()=>{const now=Date.parse("2026-10-03T12:00:00Z");const r=buildWorkTodaySummary([{status:"SERVIÇO CONCLUÍDO",updatedAt:"2026-10-03T10:00:00Z"},{status:"AG. FRIGORÍGENA",updatedAt:"2026-09-20T10:00:00Z",incidents:[{}]},{status:"INÍCIO DE OBRA"}],progress,now);assert.equal(r.completed,1);assert.equal(r.inProgress,1);assert.equal(r.notStarted,1);assert.equal(r.incidents,1);assert.equal(r.stale,1);assert.equal(r.nextActions.length,2)});
+test("diário inclui somente alterações do dia",()=>{const r=workDailyLog([{status:"x",history:[{createdAt:"2026-10-03T09:00:00.000Z",status:"A"},{createdAt:"2026-10-02T09:00:00.000Z",status:"B"}]}],new Date("2026-10-03T12:00:00Z"));assert.equal(r.length,1);assert.equal(r[0].status,"A")});
+console.log("work-operations.test.mjs: ok");

@@ -1,0 +1,35 @@
+.database-contingency{
+  margin:14px 18px 0;
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto auto;
+  gap:12px;
+  align-items:center;
+  border:1px solid rgba(245,158,11,.38);
+  background:rgba(120,53,15,.18);
+  border-radius:14px;
+  padding:11px 13px;
+  color:#f8fafc;
+}
+.database-contingency.offline{border-color:rgba(148,163,184,.32);background:rgba(30,41,59,.65)}
+.database-contingency>svg{color:#f59e0b}
+.database-contingency.offline>svg{color:#94a3b8}
+.database-contingency div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.database-contingency strong{font-size:13px}
+.database-contingency span,.database-contingency small{font-size:11px;color:#cbd5e1}
+.database-contingency button{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  min-height:32px;
+  border:1px solid rgba(148,163,184,.28);
+  border-radius:9px;
+  background:#0f2744;
+  color:#f8fafc;
+  padding:0 10px;
+  cursor:pointer;
+}
+.database-contingency button:disabled{opacity:.55;cursor:not-allowed}
+@media(max-width:860px){
+  .database-contingency{grid-template-columns:auto 1fr;margin:10px 10px 0}
+  .database-contingency small,.database-contingency button{grid-column:2}
+}

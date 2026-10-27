@@ -1,0 +1,7 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {filterFieldOrders,fieldOrderTone} from '../lib/mobile-order-display.ts';
+const base={id:'OS-1',client:'Prefeitura de Bálsamo',address:'Rua São José, 10',service:'Manutenção',unit:'Saúde',equipmentIds:[],status:'Aberta'};
+const rows=[{...base,date:'2026-10-14'},{...base,id:'OS-2',date:'2026-10-15'},{...base,id:'OS-3',date:'2026-10-16'},{...base,id:'OS-4',date:''}];
+test('mobile search finds addresses and ignores case/diacritics',()=>{assert.equal(filterFieldOrders(rows,'sao jose','all','2026-10-15').length,4);assert.equal(filterFieldOrders(rows,'BALSAMO','today','2026-10-15')[0].id,'OS-2');assert.equal(filterFieldOrders(rows,'not found','all','2026-10-15').length,0);});
+test('date filters do not treat unscheduled OS as overdue',()=>{assert.deepEqual(filterFieldOrders(rows,'','overdue','2026-10-15').map(x=>x.id),['OS-1']);assert.deepEqual(filterFieldOrders(rows,'','upcoming','2026-10-15').map(x=>x.id),['OS-3']);});
+test('order palette distinguishes actionable states',()=>{assert.equal(fieldOrderTone(rows[0],'2026-10-15'),'red');assert.equal(fieldOrderTone(rows[2],'2026-10-15'),'violet');assert.equal(fieldOrderTone({...base,date:'2026-10-15',status:'Aguardando material'},'2026-10-15'),'amber');assert.equal(fieldOrderTone({...base,date:'2026-10-15',status:'Em andamento'},'2026-10-15'),'blue');assert.equal(fieldOrderTone({...base,date:'2026-10-15',status:'Concluída'},'2026-10-15'),'green');});

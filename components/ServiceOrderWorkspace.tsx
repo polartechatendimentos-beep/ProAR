@@ -1,0 +1,329 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { Camera, Check, ChevronRight, Clock3, FileText, History, ImagePlus, MapPin, Plus, Save, Sparkles, Wrench, X } from "lucide-react";
+import { improveTechnicalText } from "@/lib/text-assist";
+import { mobileChecklist, checklistProgress } from "@/lib/mobile-service-checklists";
+import { isMunicipalCustomer } from "@/lib/customer-hierarchy";
+import { CustomerSearchSelect } from "@/components/CustomerSearchSelect";
+import { HvacDiagnosticWorkspace } from "@/components/HvacDiagnosticWorkspace";
+import { EquipmentLabelControl } from "@/components/EquipmentLabelControl";
+import { isEquipmentLabelCode, normalizeEquipmentLabelCode } from "@/lib/equipment-label-associations";
+import "./service-order-workspace.css";
+
+type WorkspaceOrder = {
+  id: string;
+  client: string;
+  unit: string;
+  service: string;
+  tech: string;
+  date: string;
+  time: string;
+  address: string;
+  status: string;
+  tone?: string;
+  catalogItems?: { id: string; name: string; kind: "Serviço" | "Produto"; quantity?: number }[];
+  [key: string]: unknown;
+};
+
+type RecordItem = Record<string, unknown>;
+
+type Props = {
+  order: WorkspaceOrder;
+  customers?: RecordItem[];
+  structures?: RecordItem[];
+  equipment?: RecordItem[];
+  serviceOrders?: RecordItem[];
+  errorCodes?: RecordItem[];
+  manuals?: RecordItem[];
+  catalogSource?: RecordItem[];
+  canEdit: boolean;
+  onSave: (order: WorkspaceOrder) => Promise<unknown>;
+  onSyncEquipmentDiagnostic?: (equipmentId:string, entry:RecordItem) => Promise<unknown>;
+  onToggleEquipmentLabel?: (equipmentId: string, enabled: boolean) => Promise<boolean>;
+  onLinkHistoricalOrder?: (equipmentId: string, orderId: string, linked: boolean) => Promise<boolean>;
+  onAssignEquipmentLabel?: (equipmentId: string, code: string, customerId: string) => Promise<boolean>;
+  canManageLabels?: boolean;
+  onClose?: () => void;
+};
+
+const tabs = ["Resumo", "Serviços", "Equipamentos", "Diagnóstico", "Fotos", "Histórico", "Financeiro", "Docs"] as const;
+type Tab = typeof tabs[number];
+
+function text(record: RecordItem | undefined, ...keys: string[]) {
+  for (const key of keys) {
+    const value = record?.[key];
+    if ((typeof value === "string" || typeof value === "number") && String(value).trim()) return String(value).trim();
+  }
+  return "";
+}
+
+function normalizeCustomerKey(value: unknown) {
+  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
+}
+
+function money(value: number) {
+  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+export function ServiceOrderWorkspace({ order, customers = [], structures = [], equipment = [], serviceOrders = [], errorCodes = [], manuals = [], catalogSource = [], canEdit, onSave, onSyncEquipmentDiagnostic, onToggleEquipmentLabel, onLinkHistoricalOrder, onAssignEquipmentLabel, canManageLabels = false, onClose }: Props) {
+  const [activeTab, setActiveTab] = useState<Tab>("Resumo");
+  const [draft, setDraft] = useState<WorkspaceOrder>(order);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [photos, setPhotos] = useState<Record<string, string[]>>((order.photos as Record<string, string[]>) || {});
+  const [labelCode, setLabelCode] = useState(String(order.equipmentLabelCode || ""));
+  const [labelBusy, setLabelBusy] = useState(false);
+  const [labelNotice, setLabelNotice] = useState("");
+  const [labelNotFound, setLabelNotFound] = useState(false);
+  const [newService, setNewService] = useState("");
+  const [servicePrice, setServicePrice] = useState("0");
+  const [draftReady, setDraftReady] = useState(false);
+  const autosaveKey = `proar-os-draft:${order.id}`;
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(autosaveKey);
+      if (raw) {
+        const saved = JSON.parse(raw) as { savedAt?: string; draft?: WorkspaceOrder; photos?: Record<string,string[]> };
+        const serverTime = new Date(String(order.updatedAt || order.createdAt || 0)).getTime();
+        const draftTime = new Date(String(saved.savedAt || 0)).getTime();
+        if (saved.draft && (!serverTime || draftTime > serverTime)) {
+          setDraft(saved.draft);
+          if (saved.photos) setPhotos(saved.photos);
+          setNotice("Rascunho local recuperado automaticamente. Revise e salve para confirmar no banco.");
+        }
+      }
+    } catch {}
+    setDraftReady(true);
+  }, [autosaveKey, order.createdAt, order.updatedAt]);
+
+  useEffect(() => {
+    if (!draftReady || !canEdit) return;
+    const timer = window.setTimeout(() => {
+      try {
+        localStorage.setItem(autosaveKey, JSON.stringify({ savedAt:new Date().toISOString(), draft, photos }));
+      } catch {}
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [autosaveKey, canEdit, draft, draftReady, photos]);
+
+  const customerOptions = customers.map(item => ({
+    id: text(item, "id", "customerId", "uuid", "name"),
+    name: text(item, "name", "legalName", "tradeName", "client"),
+    legalName: text(item, "legalName", "razaoSocial"),
+    tradeName: text(item, "tradeName", "nomeFantasia"),
+    doc: text(item, "doc", "cnpj", "cpf"),
+    phone: text(item, "phone", "whatsapp"),
+    contact: text(item, "contact", "responsible"),
+    organizationType:text(item,"organizationType"),
+  })).filter(item => item.id && item.name);
+  const customerById = draft.customerId ? customers.find(item => text(item, "id", "customerId", "uuid") === String(draft.customerId)) : undefined;
+  const draftClientKey = normalizeCustomerKey(draft.client);
+  const customerByName = customers.find(item => [text(item, "name"), text(item, "legalName", "razaoSocial"), text(item, "tradeName", "nomeFantasia")].some(value => normalizeCustomerKey(value) === draftClientKey));
+  const customer = customerById || customerByName;
+  const selectedCustomerId = text(customer, "id", "customerId", "uuid") || String(draft.customerId || "");
+  const municipal=isMunicipalCustomer({id:selectedCustomerId,name:draft.client,organizationType:String(customer?.organizationType||"")});
+  const selectedCustomerName = text(customer, "name", "legalName", "tradeName", "client") || draft.client;
+  const customerStructures = structures.filter(item => {
+    const structureCustomerId = text(item, "customerId", "clientId");
+    if (selectedCustomerId && structureCustomerId) return structureCustomerId === selectedCustomerId;
+    const structureCustomerName = text(item, "client", "customer", "customerName");
+    return normalizeCustomerKey(structureCustomerName) === normalizeCustomerKey(selectedCustomerName);
+  });
+  const selectedStructure = customerStructures.find(item => text(item, "name", "unit") === String(draft.room || "")) || customerStructures.find(item => text(item, "name", "unit") === draft.unit) || structures.find(item => text(item, "name", "unit") === draft.unit);
+  const selectedRoom = text(selectedStructure, "room", "environment", "ambiente", "name") || String(draft.environment || draft.room || "Sala/Ambiente não informado");
+  const selectedEquipmentIds = Array.isArray(draft.equipmentIds) ? draft.equipmentIds as string[] : typeof draft.equipmentId === "string" ? [draft.equipmentId] : [];
+  const availableEquipment = equipment.filter(item => {
+    const sameCustomer = draft.customerId && item.customerId ? item.customerId === draft.customerId : text(item, "client", "customer", "customerName") === draft.client;
+    const linkedLocation = text(item, "roomId", "sectorId", "unitId", "structureId");
+    return sameCustomer && (!linkedLocation || [draft.roomId, draft.sectorId, draft.unitId, draft.structureId].includes(linkedLocation));
+  });
+  const linkedEquipment = equipment.filter(item => selectedEquipmentIds.includes(String(item.id)));
+  const suggestedEquipment = availableEquipment.filter(item => {
+    const sameClient = text(item, "client", "customer", "customerName") === draft.client;
+    const sameRoom = text(item, "room", "environment", "ambiente", "installationLocation") === selectedRoom;
+    const sameUnit = text(item, "unit", "location", "equipmentUnit", "parentUnit") === draft.unit;
+    const sameSector = !draft.sector || text(item, "sector", "setor", "secretary", "area") === draft.sector;
+    return (sameClient || sameUnit) && (sameRoom || sameUnit) && sameSector;
+  }).slice(0, 8);
+  const catalog = draft.catalogItems || [];
+  const servicesTotal = Number(draft.servicesTotal || catalog.filter(item => item.kind === "Serviço").reduce((sum, item) => sum + Number((item as unknown as RecordItem).price || 0), 0));
+  const productsTotal = Number(draft.productsTotal || catalog.filter(item => item.kind === "Produto").reduce((sum, item) => sum + Number((item as unknown as RecordItem).price || 0), 0));
+  const discount = Number(draft.discount || 0);
+  const total = Math.max(0, servicesTotal + productsTotal - discount);
+  const materialCost = catalog.filter(item => item.kind === "Produto").reduce((sum,item) => sum + Number((item as unknown as RecordItem).cost || 0) * Number(item.quantity || 1), 0);
+  const laborCost = Number(draft.laborCost || 0);
+  const travelCost = Number(draft.travelCost || 0);
+  const outsourcedCost = Number(draft.outsourcedCost || 0);
+  const taxCost = Number(draft.taxCost || 0);
+  const commissionCost = Number(draft.commissionCost || 0);
+  const totalCost = materialCost + laborCost + travelCost + outsourcedCost + taxCost + commissionCost;
+  const grossMargin = total - totalCost;
+  const marginPercent = total > 0 ? (grossMargin / total) * 100 : 0;
+  const guidedChecklist = mobileChecklist(String(draft.service || ""));
+  const guidedDone = (draft.mobileChecklist as Record<string,boolean>) || {};
+  const guidedProgress = checklistProgress(guidedChecklist,guidedDone);
+  const closeChecks = [
+    { key:"diagnosis", label:"Diagnóstico técnico", ok:Boolean(String(draft.diagnosis || "").trim()) },
+    { key:"executedService", label:"Serviço executado", ok:Boolean(String(draft.executedService || "").trim()) },
+    { key:"photos", label:"Evidência fotográfica", ok:Object.values(photos).some(list => list.length > 0) },
+    { key:"values", label:"Valores revisados", ok:Number.isFinite(total) && total >= 0 },
+  ];
+  const closeReady = closeChecks.every(item => item.ok);
+
+  const setField = (key: string, value: unknown) => setDraft(current => ({ ...current, [key]: value }));
+  const lookupLabel = async () => {
+    const code = normalizeEquipmentLabelCode(labelCode);
+    const customerId = String(draft.customerId || "").trim();
+    setLabelNotice(""); setLabelNotFound(false);
+    if (!isEquipmentLabelCode(code)) { setLabelNotice("Informe o número completo da etiqueta (ex.: PT-000001)."); return; }
+    if (!customerId) { setLabelNotice("Selecione um cliente com cadastro válido antes de vincular a etiqueta."); return; }
+    setLabelBusy(true);
+    try {
+      const response = await fetch(`/api/equipment-maintenance-label?code=${encodeURIComponent(code)}&customerId=${encodeURIComponent(customerId)}`, { cache:"no-store" });
+      const result = await response.json() as { equipmentId?: string; error?: string };
+      if (response.status === 404) {
+        setLabelNotFound(true);
+        setLabelNotice("Etiqueta ainda não cadastrada. Para registrar este número, vincule primeiro o equipamento físico à OS.");
+        return;
+      }
+      if (!response.ok || !result.equipmentId) throw new Error(result.error || "Não foi possível consultar esta etiqueta.");
+      const target = equipment.find(item => String(item.id) === result.equipmentId);
+      if (!target || String(target.customerId || "") !== customerId) throw new Error("O equipamento da etiqueta não está disponível para este cliente nesta OS.");
+      setDraft(current => {
+        const existing = Array.isArray(current.equipmentIds) ? current.equipmentIds.map(String) : typeof current.equipmentId === "string" ? [current.equipmentId] : [];
+        return { ...current, equipmentIds: [...new Set([...existing, String(result.equipmentId)])], equipmentLabelCode: code };
+      });
+      setLabelNotice(`Etiqueta ${code} localizada e vinculada à OS. Clique em Salvar para confirmar o vínculo.`);
+    } catch (reason) {
+      setLabelNotice(reason instanceof Error ? reason.message : "Falha ao localizar etiqueta.");
+    } finally { setLabelBusy(false); }
+  };
+  const registerLabel = async () => {
+    const code = normalizeEquipmentLabelCode(labelCode);
+    const customerId = String(draft.customerId || "").trim();
+    if (!labelNotFound || !isEquipmentLabelCode(code) || !canManageLabels || !onAssignEquipmentLabel || linkedEquipment.length !== 1 || !customerId) return;
+    const target = linkedEquipment[0];
+    if (String(target.customerId || "") !== customerId) { setLabelNotice("O equipamento precisa pertencer ao cliente desta OS."); return; }
+    if (!window.confirm(`Confirma que a etiqueta física ${code} está colada neste equipamento? O número ficará permanente e será usado no QR Code e nas próximas OS.`)) return;
+    setLabelBusy(true);
+    try {
+      const ok = await onAssignEquipmentLabel(String(target.id), code, customerId);
+      if (!ok) throw new Error("Não foi possível registrar: etiqueta já utilizada, cadastro incompatível ou banco indisponível.");
+      setLabelNotFound(false);
+      setField("equipmentLabelCode", code);
+      setLabelNotice(`Etiqueta ${code} registrada no equipamento. Clique em Salvar para confirmar o número na OS.`);
+    } catch (reason) {
+      setLabelNotice(reason instanceof Error ? reason.message : "Falha ao registrar etiqueta.");
+    } finally { setLabelBusy(false); }
+  };
+  const assist = (key: string, kind: "observacao" | "cliente" = "observacao") => {
+    const value = String(draft[key] || "").trim();
+    if (!value) return;
+    setField(key, improveTechnicalText(value, kind));
+    setNotice("Texto melhorado com IA local — revise antes de salvar.");
+  };
+  const save = async () => {
+    if (!canEdit || saving) return;
+    if (/conclu[ií]da/i.test(draft.status) && (!closeReady || !guidedProgress.ready)) {
+      setNotice("Fechamento bloqueado: complete os itens obrigatórios do checklist.");
+      setActiveTab("Resumo");
+      return;
+    }
+    setSaving(true);
+    try {
+      const savedCode = normalizeEquipmentLabelCode(draft.equipmentLabelCode);
+      if (savedCode) {
+        if (!isEquipmentLabelCode(savedCode) || !draft.customerId) throw new Error("Etiqueta inválida ou cliente não selecionado.");
+        const lookup = await fetch(`/api/equipment-maintenance-label?code=${encodeURIComponent(savedCode)}&customerId=${encodeURIComponent(String(draft.customerId))}`, { cache:"no-store" });
+        const resolved = await lookup.json() as { equipmentId?: string; error?: string };
+        if (!lookup.ok || !resolved.equipmentId || !selectedEquipmentIds.includes(resolved.equipmentId)) {
+          throw new Error(resolved.error || "A etiqueta informada não está vinculada a um equipamento desta OS.");
+        }
+      }
+      const result = await onSave({ ...draft, photos, servicesTotal, productsTotal, discount, total, materialCost, laborCost, travelCost, outsourcedCost, taxCost, commissionCost, totalCost, grossMargin, marginPercent, closeChecklist:closeChecks });
+      if (!result) throw new Error("Gravação não confirmada");
+      const diagnosticHistory = Array.isArray(draft.diagnosticHistory) ? draft.diagnosticHistory as RecordItem[] : [];
+      const latestDiagnostic = diagnosticHistory[0];
+      const targetEquipmentId = linkedEquipment[0]?.id;
+      if (latestDiagnostic && typeof targetEquipmentId === "string" && onSyncEquipmentDiagnostic) {
+        await onSyncEquipmentDiagnostic(targetEquipmentId, latestDiagnostic);
+      }
+      try { localStorage.removeItem(autosaveKey); } catch {}
+      setNotice("Alterações salvas com sucesso.");
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "Não foi possível salvar. Verifique a conexão e tente novamente.");
+    } finally {
+      setSaving(false);
+      window.setTimeout(() => setNotice(""), 3000);
+    }
+  };
+  const addPhoto = async (category: string, file?: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setPhotos(current => ({ ...current, [category]: [...(current[category] || []), String(reader.result)] }));
+    reader.readAsDataURL(file);
+  };
+  const addService = () => {
+    if (!newService.trim()) return;
+    const item = { id: `svc-${Date.now()}`, name: newService.trim(), kind: "Serviço" as const, price: Number(servicePrice.replace(",", ".")) || 0 };
+    setDraft(current => ({ ...current, catalogItems: [...(current.catalogItems || []), item] }));
+    setNewService("");
+    setServicePrice("0");
+  };
+  const history = Array.isArray(draft.timeline) ? draft.timeline as RecordItem[] : [];
+  const equipmentHistory = linkedEquipment.flatMap(item=>Array.isArray(item.diagnosticHistory)?item.diagnosticHistory as RecordItem[]:[]).slice(0,5);
+
+  return <section className="os-workspace" aria-label={`Área de trabalho da ${draft.id}`}><div className="mobile-equipment-passport"><b>Passaporte do equipamento</b><small>{linkedEquipment.length?`${linkedEquipment.length} equipamento(s) vinculado(s) • ${equipmentHistory.length} diagnóstico(s) recente(s)`:"Vincule o equipamento para consultar histórico, garantia e diagnósticos."}</small>{linkedEquipment.slice(0,2).map(item=><span key={String(item.id)}>{text(item,"brand")} {text(item,"model")} • Série {text(item,"serialNumber")||"não informada"}</span>)}</div><div className="mobile-guided-checklist"><header><b>Checklist técnico</b><span>{guidedProgress.completed}/{guidedProgress.total} • {guidedProgress.percent}%</span></header><div>{guidedChecklist.map(item=><label key={item.key}><input type="checkbox" checked={Boolean(guidedDone[item.key])} disabled={!canEdit} onChange={e=>setField("mobileChecklist",{...guidedDone,[item.key]:e.target.checked})}/><span>{item.label}</span></label>)}</div>{!guidedProgress.ready&&<small>Complete os itens obrigatórios antes de concluir a OS.</small>}</div>
+    <header className="os-workspace-header">
+      <div className="os-title-block"><button className="os-icon-button" onClick={() => onClose?.()} aria-label="Voltar"><X size={17}/></button><div><span className="os-kicker">ORDEM DE SERVIÇO</span><h2>{draft.id}</h2><p>{selectedCustomerName || "Cliente não informado"}</p></div></div>
+      <div className="os-header-actions"><span className={`os-status ${draft.tone || "blue"}`}><i/> {draft.status}</span><button className="os-primary-button" disabled={!canEdit || saving} onClick={() => void save()}><Save size={15}/> {saving ? "Salvando..." : "Salvar"}</button></div>
+    </header>
+
+    <div className="os-location-bar">
+      <label>Cliente<CustomerSearchSelect customers={customerOptions} value={selectedCustomerId} valueMode="id" disabled={!canEdit} locationId={String(draft.structureId || draft.roomId || draft.sectorId || draft.unitId || "")} onLocationChange={selection=>setDraft(current=>({...current,...selection,equipmentIds:[]}))} onChange={(value, selected) => setDraft(current => ({ ...current, client:selected?.name || "", customerId:value || undefined, unit:"", unitId:undefined, sector:"", sectorId:undefined, room:"", roomId:undefined, structureId:undefined, equipmentIds:[] }))} /></label>
+      <ChevronRight size={15}/><label className={municipal?"municipal-legacy-location":""}>Unidade / setor<select value={draft.unit} onChange={event => setField("unit", event.target.value)}><option>{draft.unit || "Selecionar"}</option>{customerStructures.map(item => <option key={text(item, "id", "name")} value={text(item, "name", "unit")}>{text(item, "name", "unit")}</option>)}</select></label>
+      <ChevronRight size={15}/><label className={municipal?"municipal-legacy-location":""}>Sala / ambiente<input value={selectedRoom} onChange={event => setField("environment", event.target.value)} placeholder="Sala ou ambiente"/></label>
+      <div className="os-location-summary"><MapPin size={15}/><span>{draft.unit || "Local não informado"} <b>›</b> {selectedRoom}</span></div>
+    </div>
+
+    <nav className="os-tabs" aria-label="Abas da ordem de serviço">{tabs.map(tab => <button key={tab} className={activeTab === tab ? "active" : ""} onClick={() => setActiveTab(tab)}>{tab}</button>)}</nav>
+    {notice && <div className="os-notice"><Check size={15}/> {notice}</div>}
+
+    {activeTab === "Resumo" && <div className="os-summary-grid">
+      <div className="os-main-column">
+        <article className="os-card"><div className="os-card-heading"><div><span className="os-section-label">DADOS DO ATENDIMENTO</span><h3>Informações operacionais</h3></div><Wrench size={18}/></div><div className="os-form-grid"><label>Tipo<select value={String(draft.serviceType || "Manutenção corretiva")} onChange={event => setField("serviceType", event.target.value)}><option>Manutenção corretiva</option><option>Manutenção preventiva</option><option>Higienização</option><option>Instalação</option><option>Vistoria técnica</option></select></label><label>Situação<select value={draft.status} onChange={event => setField("status", event.target.value)}><option>Aberta</option><option>Em atendimento</option><option>Aguardando peça</option><option>Concluída</option><option>Cancelada</option></select></label><label>Prioridade<select value={String(draft.priority || "Normal")} onChange={event => setField("priority", event.target.value)}><option>Baixa</option><option>Normal</option><option>Alta</option><option>Urgente</option></select></label><label>Técnico<input value={draft.tech} onChange={event => setField("tech", event.target.value)}/></label><label>Data<input type="date" value={draft.date} onChange={event => setField("date", event.target.value)}/></label><label>Hora<input type="time" value={draft.time} onChange={event => setField("time", event.target.value)}/></label></div></article>
+        <article className="os-card"><div className="os-card-heading"><div><span className="os-section-label">SOLICITAÇÃO DO CLIENTE</span><h3>Problema relatado</h3></div><button className="os-ai-button" onClick={() => assist("request", "cliente")}><Sparkles size={14}/> Melhorar com IA</button></div><textarea value={String(draft.request || draft.customerRequest || "")} onChange={event => setField("request", event.target.value)} placeholder="Descreva o que o cliente solicitou..."/></article>
+        <article className="os-card"><div className="os-card-heading"><div><span className="os-section-label">DIAGNÓSTICO TÉCNICO</span><h3>Conclusão da avaliação</h3></div><button className="os-ai-button" onClick={() => assist("diagnosis")}><Sparkles size={14}/> Auxiliar com IA</button></div><textarea value={String(draft.diagnosis || "")} onChange={event => setField("diagnosis", event.target.value)} placeholder="Registre apenas fatos, medições e conclusões observadas..."/></article>
+        <article className="os-card"><div className="os-card-heading"><div><span className="os-section-label">SERVIÇO EXECUTADO</span><h3>O que foi realizado</h3></div><button className="os-ai-button" onClick={() => assist("executedService")}><Sparkles size={14}/> Auxiliar com IA</button></div><textarea value={String(draft.executedService || "")} onChange={event => setField("executedService", event.target.value)} placeholder="Descreva exatamente o serviço executado..."/></article>
+      </div>
+      <aside className="os-side-column"><article className="os-card os-close-check"><span className="os-section-label">FECHAMENTO INTELIGENTE</span><h3>Checklist antes de concluir</h3><div className="os-close-list">{closeChecks.map(item=><div key={item.key} className={item.ok?"ok":"pending"}><span>{item.ok?"✓":"!"}</span><b>{item.label}</b></div>)}</div><p className="os-helper-text">{closeReady?"OS pronta para conclusão.":"Complete as pendências antes de marcar como concluída."}</p></article><article className="os-card os-room-card"><span className="os-section-label">AMBIENTE SELECIONADO</span><h3>{selectedRoom}</h3><p><MapPin size={14}/> {text(selectedStructure, "address", "location") || draft.address || "Endereço não informado"}</p><dl><div><dt>Código</dt><dd>{text(selectedStructure, "code", "codigo") || "Não informado"}</dd></div><div><dt>Responsável local</dt><dd>{text(selectedStructure, "responsible", "contact") || "Não informado"}</dd></div><div><dt>Equipamentos</dt><dd>{linkedEquipment.length || Number(selectedStructure?.equipmentCount || 0)} cadastrados</dd></div></dl><button className="os-link-button" onClick={() => setActiveTab("Equipamentos")}>Ver equipamentos <ChevronRight size={14}/></button></article><article className="os-card"><span className="os-section-label">REGISTROS COMPLEMENTARES</span><div className="os-quick-links"><button onClick={() => setActiveTab("Serviços")}><Wrench size={15}/> Serviços e materiais</button><button onClick={() => setActiveTab("Fotos")}><Camera size={15}/> Evidências fotográficas</button><button onClick={() => setActiveTab("Histórico")}><History size={15}/> Histórico da OS</button><button onClick={() => setActiveTab("Financeiro")}><FileText size={15}/> Resumo financeiro</button></div></article></aside>
+    </div>}
+
+    {activeTab === "Serviços" && <div className="os-tab-content"><article className="os-card"><h3>Quantidade de produtos aplicados</h3>{catalog.filter(item => item.kind === "Produto").map(item => <label className="erp-equipment-option" key={item.id}>{item.name}<input type="number" min="0.001" step="0.001" disabled={!canEdit || saving} value={item.quantity ?? 1} onChange={event => setField("catalogItems",catalog.map(value => value.id === item.id ? {...value,quantity:Number(event.target.value)} : value))}/></label>)}{!catalog.some(item => item.kind === "Produto") && <p>Nenhum produto aplicado nesta OS.</p>}</article><article className="os-card"><div className="os-card-heading"><div><span className="os-section-label">SERVIÇOS ADICIONADOS</span><h3>Serviços e materiais da OS</h3></div><div className="os-inline-form"><input value={newService} onChange={event => setNewService(event.target.value)} placeholder="Nome do serviço"/><input value={servicePrice} onChange={event => setServicePrice(event.target.value)} inputMode="decimal" placeholder="Preço"/><button className="os-primary-button" onClick={addService}><Plus size={14}/> Adicionar</button></div></div><div className="os-items-table"><div className="os-items-head"><span>Serviço / produto</span><span>Tipo</span><span>Valor</span><span/></div>{catalog.map(item => <div className="os-item-row" key={item.id}><span>{item.name}</span><span>{item.kind}</span><span>{money(Number((item as unknown as RecordItem).price || 0))}</span><button onClick={() => setDraft(current => ({ ...current, catalogItems: (current.catalogItems || []).filter(existing => existing.id !== item.id) }))} aria-label={`Remover ${item.name}`}><X size={14}/></button></div>)}{!catalog.length && <p className="os-empty">Nenhum serviço ou material vinculado.</p>}</div><div className="os-totals"><span>Produtos / materiais <b>{money(productsTotal)}</b></span><span>Serviços <b>{money(servicesTotal)}</b></span><span>Desconto <input value={String(discount)} onChange={event => setField("discount", Number(event.target.value.replace(",", ".")) || 0)}/></span><strong>TOTAL DA OS <b>{money(total)}</b></strong></div></article></div>}
+
+    {activeTab === "Equipamentos" && <div className="os-tab-content"><article className="os-card">
+      <div style={{ padding:"14px", border:"1px solid #cbdff3", borderRadius:12, background:"#f7fbff", marginBottom:12, display:"grid", gap:9 }}>
+        <label htmlFor="os-label-number" style={{ fontWeight:800, color:"#07376b" }}>Número da etiqueta permanente</label>
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+          <input id="os-label-number" value={labelCode} onChange={event=>{setLabelCode(event.target.value.toUpperCase());setLabelNotFound(false);setLabelNotice("");}} onKeyDown={event=>{if(event.key==="Enter"){event.preventDefault();void lookupLabel();}}} placeholder="Ex.: PT-000001" maxLength={15} autoComplete="off" style={{ flex:"1 1 190px", minWidth:160, padding:"10px 12px", border:"1px solid #abc5df", borderRadius:8 }} />
+          <button type="button" className="os-secondary-button" disabled={labelBusy} onClick={()=>void lookupLabel()}>{labelBusy ? "Consultando..." : "Localizar e vincular etiqueta"}</button>
+          {labelNotFound && canManageLabels && onAssignEquipmentLabel && linkedEquipment.length === 1 && <button type="button" className="os-secondary-button" disabled={labelBusy} onClick={()=>void registerLabel()}>Registrar número neste equipamento</button>}
+        </div>
+        <small style={{ color:"#526d87" }}>Digite o número impresso na etiqueta. Se já estiver cadastrado, o equipamento será vinculado à OS e manterá todo o histórico anterior. Para cadastrar uma etiqueta nova, vincule antes o equipamento correto à OS.</small>
+        {labelNotice && <small role="status" style={{ color:"#07376b", fontWeight:600 }}>{labelNotice}</small>}
+      </div>
+      <div className="os-card-heading"><div><span className="os-section-label">EQUIPAMENTO DO ATENDIMENTO (OPCIONAL)</span><h3>{linkedEquipment.length || 0} equipamento(s) relacionado(s)</h3></div><button className="os-secondary-button" onClick={() => setNotice("Cadastro de equipamento será aberto na aba Equipamentos.")}><Plus size={14}/> Adicionar equipamento</button></div><div className="os-equipment-grid">{linkedEquipment.map(item => <div className="os-equipment-card" key={text(item, "id", "name")}><div className="os-equipment-icon"><Wrench size={18}/></div><div><h4>{text(item, "name", "description", "model") || "Equipamento"}</h4><p>{text(item, "brand", "manufacturer")} • {text(item, "capacity", "capacityBtu", "model")}</p><small>Patrimônio: {text(item, "assetCode", "patrimony", "patrimonio") || "Não informado"} • Série: {text(item, "serial", "serialNumber") || "Não informada"}</small></div><div className="os-equipment-actions"><button onClick={() => setActiveTab("Histórico")}>Histórico</button><button onClick={() => setActiveTab("Fotos")}>Fotos</button></div><EquipmentLabelControl equipmentId={String(item.id)} registeredCode={String(item.permanentLabelCode || "")} enabled={item.publicMaintenanceHistoryEnabled === true} canManage={canManageLabels} onToggle={onToggleEquipmentLabel} customerId={String(item.customerId || "")} historicalOrderIds={Array.isArray(item.historicalServiceOrderIds) ? item.historicalServiceOrderIds as string[] : []} orders={serviceOrders} onLinkHistoricalOrder={onLinkHistoricalOrder}/></div>)}{!linkedEquipment.length && <div className="os-empty"><Wrench size={22}/><p>Nenhum equipamento foi vinculado a esta OS.</p><button className="os-secondary-button" onClick={() => setNotice("Vincule um equipamento pelo cadastro do cliente e ambiente.")}>Vincular equipamento</button></div>}</div></article></div>}
+
+    {activeTab === "Diagnóstico" && <div className="os-tab-content"><HvacDiagnosticWorkspace order={draft as unknown as RecordItem} linkedEquipment={linkedEquipment} errorCodes={errorCodes} manuals={manuals} catalog={catalogSource} canEdit={canEdit} onApply={payload=>setDraft(current=>({...current,...payload}))} onPatch={payload=>setDraft(current=>({...current,...payload}))}/></div>}
+
+    {activeTab === "Fotos" && <div className="os-tab-content"><article className="os-card"><div className="os-card-heading"><div><span className="os-section-label">REGISTRO FOTOGRÁFICO</span><h3>Evidências por categoria</h3></div></div><div className="os-photo-categories">{["Antes", "Durante", "Depois", "Equipamento", "Etiqueta", "Defeito", "Medições", "Outros"].map(category => <div className="os-photo-category" key={category}><div><b>{category}</b><span>{(photos[category] || []).length} foto(s)</span></div><label><Camera size={17}/> Tirar ou escolher foto<input type="file" accept="image/*" capture="environment" onChange={event => void addPhoto(category, event.target.files?.[0])}/></label><div className="os-photo-thumbs">{(photos[category] || []).map((src, index) => <img key={index} src={src} alt={`${category} ${index + 1}`}/>)}</div></div>)}</div><p className="os-helper-text"><ImagePlus size={14}/> Cada evidência deve permanecer associada à OS, técnico, data/hora, equipamento e ambiente.</p></article></div>}
+
+    {activeTab === "Histórico" && <div className="os-tab-content os-history-layout"><article className="os-card"><div className="os-card-heading"><div><span className="os-section-label">HISTÓRICO DESTA OS</span><h3>Linha do tempo operacional</h3></div><History size={18}/></div>{history.length ? <div className="os-timeline">{history.map((event, index) => <div className="os-timeline-item" key={String(event.id || index)}><i/><div><b>{text(event, "status", "action") || "Atualização registrada"}</b><small><Clock3 size={12}/> {text(event, "createdAt", "date") || "Data não informada"}</small><p>{text(event, "internalNote", "customerNote", "description")}</p></div></div>)} </div> : <p className="os-empty">Ainda não há eventos registrados nesta OS.</p>}</article><article className="os-card"><div className="os-card-heading"><div><span className="os-section-label">HISTÓRICO DO AMBIENTE</span><h3>{selectedRoom}</h3></div></div><p className="os-helper-text">As ordens anteriores do ambiente aparecerão aqui quando estiverem vinculadas ao mesmo cadastro.</p><button className="os-link-button" onClick={() => setNotice("Histórico completo do ambiente disponível após o vínculo do cadastro.")}>Ver histórico completo <ChevronRight size={14}/></button></article></div>}
+
+    {activeTab === "Financeiro" && <div className="os-tab-content"><article className="os-card"><span className="os-section-label">RESUMO FINANCEIRO</span><h3>Receita, custos e margem real</h3><div className="os-finance-grid"><div><small>Serviços</small><b>{money(servicesTotal)}</b></div><div><small>Produtos / materiais</small><b>{money(productsTotal)}</b></div><div><small>Desconto</small><b>{money(discount)}</b></div><div className="highlight"><small>Total da OS</small><b>{money(total)}</b></div></div><div className="os-cost-grid"><label>Mão de obra<input type="number" min="0" step="0.01" value={laborCost || ""} onChange={event=>setField("laborCost",Number(event.target.value)||0)}/></label><label>Deslocamento<input type="number" min="0" step="0.01" value={travelCost || ""} onChange={event=>setField("travelCost",Number(event.target.value)||0)}/></label><label>Terceiros<input type="number" min="0" step="0.01" value={outsourcedCost || ""} onChange={event=>setField("outsourcedCost",Number(event.target.value)||0)}/></label><label>Impostos<input type="number" min="0" step="0.01" value={taxCost || ""} onChange={event=>setField("taxCost",Number(event.target.value)||0)}/></label><label>Comissão<input type="number" min="0" step="0.01" value={commissionCost || ""} onChange={event=>setField("commissionCost",Number(event.target.value)||0)}/></label><label>Materiais (custo)<input readOnly value={materialCost.toFixed(2)}/></label></div><div className="os-margin-summary"><span><small>Custo total</small><b>{money(totalCost)}</b></span><span><small>Margem bruta</small><b>{money(grossMargin)}</b></span><span className={marginPercent<15?"risk":marginPercent<30?"attention":"healthy"}><small>Margem</small><b>{marginPercent.toFixed(1)}%</b></span></div><p className="os-helper-text">A margem considera os custos informados na OS e o custo cadastrado dos materiais aplicados.</p></article></div>}
+
+    {activeTab === "Docs" && <div className="os-tab-content"><article className="os-card"><span className="os-section-label">DOCUMENTOS</span><h3>Documentos relacionados</h3><div className="os-doc-row"><FileText size={18}/><span><b>Ordem de Serviço {draft.id}</b><small>Documento operacional e relatório técnico</small></span><button className="os-secondary-button" onClick={() => setNotice("Use o botão de impressão da OS para gerar o documento.")}>Abrir / imprimir</button></div></article></div>}
+  </section>;
+}

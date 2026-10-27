@@ -1,0 +1,18 @@
+✔ GEM-01: identidade estável e união de fonte real com acompanhamento salvo sem duplicação (1.207289ms)
+✔ GEM-02: pipeline validado no servidor, preservado após serialização e protegido por permissão e identidade (24.040161ms)
+✔ GEM-03: oito de dez documentos resultam em 80%, sem liberar habilitação incompleta (0.836281ms)
+✔ GEM-04: BDI usa parcelas multiplicativas, e global usa valor mensal arredondado (4.614337ms)
+✔ GEM-05: PMOC exige confirmação no edital, filtros combinam favorito, portal, prazo e busca (0.612312ms)
+✔ GEM-06: minuta parametrizável mantém ressalvas normativas e aceita rascunho incompleto sem gerar proposta (0.656938ms)
+✔ GEM-07: CSV contém BOM, acentos, aspas e neutraliza fórmulas no Excel (0.447028ms)
+✔ BDI vinculado ao edital persiste sem alterar minuta e é validado no servidor (3.567965ms)
+✔ preferências separam usuários e empresas sem escopo anônimo (0.770786ms)
+✔ filtros restauram valores válidos e rejeitam corrupção ou opções desconhecidas (0.926044ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 203.950439
