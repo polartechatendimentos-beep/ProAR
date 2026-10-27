@@ -193,3 +193,5 @@
 @media(max-width:350px){.workflowSteps{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:12px}}
 
 .libraryTable{overflow-x:auto;border:1px solid var(--field-line);border-radius:12px}.libraryTable table{width:100%;border-collapse:collapse;background:var(--field-card);color:var(--field-text);font-size:14px}.libraryTable :is(th,td){padding:10px;text-align:right;border-bottom:1px solid var(--field-line);font-variant-numeric:tabular-nums}.libraryTable caption{padding:10px;text-align:left}.librarySource{display:flex;flex-wrap:wrap;gap:8px;border-top:1px solid var(--field-line);padding:12px 0;margin-top:10px}.librarySource a{color:var(--field-accent);overflow-wrap:anywhere}.librarySource small{flex-basis:100%;color:var(--field-muted)}.librarySource button{border:1px solid var(--field-line);background:var(--field-soft);color:var(--field-text);border-radius:8px;padding:8px}
+
+.mobileLogin{max-width:460px;margin:24px auto;padding:24px}.mobileLogin form>.primaryAction{width:100%;margin-top:12px}.mobileLogin input{font-size:16px!important}.mobileLogin .title{font-size:26px}
