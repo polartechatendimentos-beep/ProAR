@@ -156,3 +156,5 @@
 .search{padding:8px 11px;min-height:44px}
 .search input{min-height:28px}
 @media(max-width:420px){.orderToolbar{gap:5px}.orderToolbar select{max-width:125px}.orderStats strong{font-size:18px}}
+
+.orderGroupTitle{font-size:13px;font-weight:800;color:var(--mobile-muted,#91a9c4);margin:14px 0 8px;padding-bottom:6px;border-bottom:1px solid #31577a}
