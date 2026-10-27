@@ -1,4 +1,6 @@
+import {additionalErrorSources,additionalErrorCodes} from "./mobile-error-catalog.ts";
 export const technicalSources={
+ ...additionalErrorSources,
  pt:{title:'Arkema Forane — Quick Reference Guide, tabela P–T',url:'https://forane.arkema.com/files/live/sites/fluorogases_forane_arkema/files/downloads/literature/forane-quick-reference-guide.pdf',checkedAt:'2026-10-27'},
  daikin:{title:'Daikin ABQ-A — OM-NET3C-0411(0)-SIESTA / ARCWA, páginas impressas 53–54',url:'https://www.daikin.eu/content/dam/document-library/operation-manuals/ac/sky-air/abq-a/ABQ-A_OM_PT_Operation%20manuals_Portuguese.pdf',checkedAt:'2026-10-27'},
  safety:{title:'Chemours — A Closer Look at A2L Refrigerants',url:'https://www.chemours.com/en/-/media/files/opteon/2023-ahr-expo-present-a2ls.pdf?rev=dced81be9faa49bcb4a79237e30bb49b',checkedAt:'2026-10-27'}
@@ -23,7 +25,7 @@ export function referenceTemperature(pressure:number,key:RefrigerantKey){
  for(let i=0;i<ptReference.length;i++){const b=ptReference[i];if(pressure===b[key])return (b.f-32)*5/9;if(!i)continue;const a=ptReference[i-1];if(pressure>a[key]&&pressure<b[key])return (a.f+(pressure-a[key])/(b[key]-a[key])*(b.f-a.f)-32)*5/9;}
  return null;
 }
-export const technicalCodes=[
+const daikinCodes=[
  {code:'A1',meaning:'Indicação relacionada à placa eletrônica da unidade interna.'},
  {code:'A3',meaning:'Indicação de funcionamento irregular da bomba de drenagem.'},
  {code:'A6',meaning:'Indicação relacionada ao motor de ventilação da unidade interna.'},
@@ -35,7 +37,8 @@ export const technicalCodes=[
  {code:'U2',meaning:'Indicação de tensão do circuito de corrente contínua fora da faixa.'},
  {code:'U4',meaning:'Indicação de falha na troca de informações entre componentes do sistema.'}
 ].map(row=>({...row,id:`daikin-abqa-${row.code}`,brand:'Daikin',family:'ABQ-A / controlador ARCWA',source:'daikin' as const}));
-export function searchTechnicalCodes(brand:string,family:string,code:string){return technicalCodes.filter(r=>r.brand===brand&&r.family===family&&(!code.trim()||r.code===code.trim().toUpperCase().replace(/\s/g,'')));}
+export const technicalCodes=[...daikinCodes,...additionalErrorCodes];
+export function searchTechnicalCodes(brand:string,family:string,code:string){return technicalCodes.filter(r=>r.brand===brand&&r.family===family&&(!code.trim()||r.code.toUpperCase().replace(/\s/g,'')===code.trim().toUpperCase().replace(/\s/g,'')));}
 export function technicalDifference(kind:'superheat'|'subcool',line:number,saturation:number){if(!Number.isFinite(line)||!Number.isFinite(saturation)||Math.abs(line)>300||Math.abs(saturation)>300)throw new Error('Informe temperaturas válidas em °C.');return kind==='superheat'?line-saturation:saturation-line;}
 export function convertTechnicalUnit(value:number,kind:'psi-bar'|'bar-psi'|'f-c'|'c-f'|'btu-kw'|'kw-btu'){
  if(!Number.isFinite(value)||Math.abs(value)>1e9)throw new Error('Valor inválido.');

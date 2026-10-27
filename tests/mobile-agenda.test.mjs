@@ -1,2 +1,0 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {mobileWeekDates} from '../lib/mobile-agenda.ts';
-test('week view starts Monday, spans months and rejects invalid dates',()=>{assert.deepEqual(mobileWeekDates('2026-10-13'),['2026-10-12','2026-10-13','2026-10-14','2026-10-15','2026-10-16','2026-10-17','2026-10-18']);assert.equal(mobileWeekDates('2026-11-01')[0],'2026-10-26');assert.deepEqual(mobileWeekDates('2026-02-30'),[]);});

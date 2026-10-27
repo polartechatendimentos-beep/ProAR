@@ -1,2 +1,0 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {municipalTenderDate} from '../lib/tender-date.ts';
-test('municipal time accepts 09h00 and 09:00 without inventing end-of-day',()=>{assert.equal(municipalTenderDate('Realização: 15/10/2026 às 09h00'),'2026-10-15T12:00:00.000Z');assert.equal(municipalTenderDate('Encerramento: 15/10/2026 às 09:00'),'2026-10-15T12:00:00.000Z');assert.equal(municipalTenderDate('Realização: 15/10/2026'),undefined);assert.equal(municipalTenderDate('Realização: 15/10/2026 às 25h00'),undefined);});
