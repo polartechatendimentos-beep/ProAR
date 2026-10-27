@@ -1,17 +1,20 @@
+import {isOpenMobileOrder} from "./mobile-field.ts";
 import type {MobileFieldOrder} from "./mobile-field";
 export const OFFLINE_LEASE_KEY="proar-mobile-offline-lease-v1";
 export type MobileDayData={connected:boolean;stateFound:boolean;mode:"operational";user:{displayName:string;role:string;canEdit:boolean;canApprove:boolean;scope:string;linkedEmployee:boolean;manager:boolean};orders:MobileFieldOrder[];summary:{today:number;inProgress:number;pending:number};lastReadAt:string;notice:string;offlineAccessUntil?:number};
 export type CachedHistory={id:string;date:string;service:string;diagnosis:string;report:string;unit?:string};
-export type MobileDayPackage={version:1;scope:string;day:string;preparedAt:number;validUntil:number;truncated:boolean;data:MobileDayData;histories:Record<string,CachedHistory[]>};
+export type MobileDayPackage={version:1;scope:string;day:string;preparedAt:number;validUntil:number;truncated:boolean;selectedOrderIds?:string[];data:MobileDayData;histories:Record<string,CachedHistory[]>};
 export const mobileCivilDay=(now=Date.now())=>new Date(now).toLocaleDateString("en-CA",{timeZone:"America/Sao_Paulo"});
-export function createDayPackage(data:MobileDayData,now=Date.now()):MobileDayPackage{
+export function createDayPackage(data:MobileDayData,now=Date.now(),selectedIds?:string[]):MobileDayPackage{
   const day=mobileCivilDay(now),scope=data.user?.scope;
   if(data.mode!=="operational"||!scope||scope.length>240||!Array.isArray(data.orders)||!Number.isFinite(data.offlineAccessUntil)||Number(data.offlineAccessUntil)<=now)throw new Error("Sessão online válida necessária para preparar o pacote.");
   const nextDay=new Date(`${day}T12:00:00-03:00`);nextDay.setUTCDate(nextDay.getUTCDate()+1);
   const midnight=Date.parse(`${mobileCivilDay(nextDay.getTime())}T00:00:00-03:00`);
-  const eligible=data.orders.filter(o=>o.date===day||Boolean(o.checkInAt));
+  if(selectedIds&&(!Array.isArray(selectedIds)||selectedIds.length>200||selectedIds.some(id=>typeof id!=="string")))throw new Error("Selecione até 200 OS autorizadas.");
+  const selected=selectedIds?new Set(selectedIds):null;
+  const eligible=data.orders.filter(o=>selected?selected.has(o.id)&&isOpenMobileOrder(o.status):o.date===day||Boolean(o.checkInAt));
   const orders=eligible.slice(0,200);
-  return {version:1,scope,day,preparedAt:now,validUntil:Math.min(Number(data.offlineAccessUntil),now+8*3600000,midnight),truncated:eligible.length>200,
+  return {version:1,scope,day,preparedAt:now,validUntil:Math.min(Number(data.offlineAccessUntil),now+8*3600000,midnight),truncated:eligible.length>200,...(selected?{selectedOrderIds:orders.map(o=>o.id)}:{}),
     data:{...data,orders,summary:{today:orders.filter(o=>o.date===day).length,inProgress:orders.filter(o=>Boolean(o.checkInAt)).length,pending:orders.filter(o=>!o.checkInAt).length}},histories:{}};
 }
 export function validDayPackage(value:MobileDayPackage|null,scope:string,now=Date.now()):value is MobileDayPackage{

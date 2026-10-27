@@ -1,3 +1,4 @@
+import {matchesFieldSearch} from "./mobile-workflow-insights.ts";
 import {isOpenMobileOrder,type MobileFieldOrder} from "./mobile-field.ts";
 export type OrderFilter="all"|"today"|"overdue"|"upcoming"|"open"|"active"|"completed"|"unassigned"|"cancelled";
 export type OrderTone="blue"|"green"|"amber"|"violet"|"red";
@@ -24,7 +25,7 @@ export function filterFieldOrders(orders:MobileFieldOrder[],query:string,filter:
     if(filter==="today"&&order.date!==today)return false;
     if(filter==="overdue"&&(!isOpenMobileOrder(order.status)||!validDate||order.date>=today))return false;
     if(filter==="upcoming"&&(!validDate||order.date<=today))return false;
-    return !term||normalize([order.id,order.client,order.address,order.service,order.unit,order.status,...order.equipmentIds].join(" ")).includes(term);
+    return !term||matchesFieldSearch([order.id,order.client,order.address,order.service,order.unit,order.status,...order.equipmentIds].join(" "),term);
   });
 }
 
