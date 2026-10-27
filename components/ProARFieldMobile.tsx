@@ -9,6 +9,7 @@ import {
   ClipboardList, CloudOff, Home, MapPin, Menu, RefreshCw,
   Search, ShieldCheck, Smartphone, UserRound, Wifi,
 } from "lucide-react";
+import {MobileLogin} from "./MobileLogin";
 import {useMobilePreferences} from "./useMobilePreferences";
 import {MobileWorkQueueInsights} from "./MobileWorkQueueInsights";
 import { MobileRouteControls } from "./MobileRouteControls";
@@ -142,6 +143,9 @@ export function ProARFieldMobile() {
     void listPendingOrderDrafts(pendingScope).then(rows=>{if(!cancelled)setPendingState({scope:pendingScope,orders:rows.map(row=>row.orderSnapshot!)});}).catch(()=>{if(!cancelled)setPendingState({scope:pendingScope,orders:[]});});
     return()=>{cancelled=true;};
   },[pendingScope,selected,data?.lastReadAt]);
+  async function signOutMobile(){
+    setError("");try{const response=await fetch("/api/auth",{method:"DELETE",credentials:"same-origin",cache:"no-store"});if(!response.ok)throw new Error("Não foi possível encerrar a sessão. Tente novamente com conexão.");generation.current++;requestAbort.current?.abort();setLoading(false);try{clearOfflineLease(sessionStorage);}catch{}setData(null);setRecovery(null);setSelected(null);setCompletion(null);setTab("inicio");setQuery("");setOrderFilter("open");setLoginRequired(true);}catch(error){setError(error instanceof Error?error.message:"Não foi possível sair.");}
+  }
   async function checkVersion(){try{const response=await fetch("/api/mobile/version",{cache:"no-store"});if(!response.ok)throw new Error();const result=await response.json();const changed=result.version!==MOBILE_RELEASE;setUpdateAvailable(changed);setVersionNotice(changed?"Nova versão disponível. Seus rascunhos permanecem neste aparelho.":"Você está usando a versão atual.");}catch{setVersionNotice("Não foi possível consultar a versão. Tente novamente com conexão.");}}
   const openOrders = useMemo(() => openFieldWorkQueue(orders,todayISO()), [orders]);
   const week=useMemo(()=>mobileWeekDates(day),[day]);
@@ -170,7 +174,8 @@ export function ProARFieldMobile() {
         {offlineNotice&&<p role="status" className={styles.syncBanner}>{offlineCopy?"Leitura offline • ":""}{offlineNotice}</p>}
         {!online && <div className={styles.warning}><CloudOff size={19}/>Sem conexão. Você pode preencher o rascunho da OS neste aparelho. Você também pode deixar o envio preparado e sincronizar ao retornar a conexão. A conclusão só é confirmada pelo servidor.</div>}
         {completion&&<div role="status" className={styles.successPanel}><h2>OS concluída • {completion.orderId}</h2><p>Confirmada no servidor em {new Date(completion.completedAt).toLocaleString("pt-BR")}.</p><FieldOrderReceipt orderId={completion.orderId}/><button type="button" className={styles.secondaryAction} onClick={()=>setCompletion(null)}>Fechar confirmação</button></div>}
-        {error && <div role="alert" className={styles.error}>{error}{loginRequired && <Link href="/">Entrar no ProAR</Link>}{!loginRequired && <button type="button" onClick={()=>void refresh()}>Tentar novamente</button>}</div>}
+        {error && !loginRequired && <div role="alert" className={styles.error}>{error}<button type="button" onClick={()=>void refresh()}>Tentar novamente</button><button type="button" onClick={()=>{setData(null);setSelected(null);setLoginRequired(true);}}>Entrar com outra conta</button></div>}
+        {loginRequired&&!data&&<MobileLogin onAuthenticated={refresh}/>}
         {loading && !data && <div role="status" aria-label="Carregando atendimentos" className={styles.skeletonGrid}><p>Conectando aos atendimentos reais do ProAR...</p>{[1,2,3].map(i=><div key={i} className={styles.skeletonCard} aria-hidden="true"/>)}</div>}
         {data && <>
           {pendingOrders.length>0&&!current&&<section className={styles.pendingPanel}><h2>{pendingOrders.length} envio(s) aguardando confirmação</h2><p>Retome cada envio para sincronizar ou consultar a confirmação, sem duplicar o registro.</p>{pendingOrders.map(order=><button key={order.id} type="button" className={styles.secondaryAction} onClick={()=>setSelected(order.id)}>Retomar envio • {order.id}</button>)}</section>}
@@ -262,6 +267,8 @@ export function ProARFieldMobile() {
               <p><strong>Última leitura:</strong> {new Date(data.lastReadAt).toLocaleString("pt-BR")}</p></div>
               <div className={styles.detailCard}><h2>Versão do aplicativo</h2><p>ProAR Mobile • {MOBILE_RELEASE}</p><button type="button" className={styles.secondaryAction} onClick={()=>void checkVersion()}>Verificar atualizações</button>{versionNotice&&<p role="status">{versionNotice}</p>}{updateAvailable&&<button type="button" className={styles.primaryAction} onClick={()=>window.location.reload()}>Carregar nova versão</button>}</div>
               <div className={styles.detailCard}><h2>Recursos de campo</h2><p>Abra a Central para consultar frota, abastecimentos, marcações operacionais e ajustes. A gestão acompanha jornadas e recebe SOS. Localização em segundo plano exige APK Android atualizado.</p><p>Reconhecimento facial, ponto legal REP-P, OCR, áudio SOS, IA por voz e comunicação entre aparelhos dependem das integrações específicas.</p></div>
+              <button type="button" className={styles.secondaryAction} onClick={()=>void signOutMobile()}>Sair / entrar com outro usuário</button>
+              <p className={styles.disclaimer}>Sair encerra o acesso offline desta sessão. Rascunhos ficam preservados por usuário no aparelho.</p>
               <Link className={styles.secondaryAction} href="/">Abrir ProAR completo <ArrowRight size={17}/></Link>
             </section>}
           </>}

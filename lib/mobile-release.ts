@@ -1,1 +1,1 @@
-export const MOBILE_RELEASE="2026.10.27.2";
+export const MOBILE_RELEASE="2026.10.27.3";
