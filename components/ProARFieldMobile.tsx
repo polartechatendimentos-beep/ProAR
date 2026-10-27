@@ -68,7 +68,7 @@ export function ProARFieldMobile() {
   const [online, setOnline] = useState(true);
   const [query, setQuery] = useState("");
   const [visibleLimit,setVisibleLimit]=useState(100);
-  const [orderFilter,setOrderFilter]=useState<OrderFilter>("all"),[pendingState,setPendingState]=useState<{scope:string;orders:FieldOrder[]}>({scope:"",orders:[]}),[versionNotice,setVersionNotice]=useState(""),[updateAvailable,setUpdateAvailable]=useState(false);
+  const [orderFilter,setOrderFilter]=useState<OrderFilter>("open"),[pendingState,setPendingState]=useState<{scope:string;orders:FieldOrder[]}>({scope:"",orders:[]}),[versionNotice,setVersionNotice]=useState(""),[updateAvailable,setUpdateAvailable]=useState(false);
   const [orderSort,setOrderSort]=useState<"date"|"recent"|"client">("date");
   const [compactOrders,setCompactOrders]=useState(true);
   const [favoriteFilter,setFavoriteFilter]=useState<OrderFilter|null>(null);
