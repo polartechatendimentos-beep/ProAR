@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {technicalSources,technicalCodes,ptReference,referenceTemperature,searchTechnicalCodes,convertTechnicalUnit,technicalDifference} from '../lib/mobile-technical-library.ts';
 test('error meaning requires matching manufacturer and documented family, not code alone',()=>{
- assert.equal(searchTechnicalCodes('Daikin','','U4').length,0);assert.equal(searchTechnicalCodes('Samsung','ABQ-A / controlador ARCWA','U4').length,0);assert.equal(searchTechnicalCodes('Daikin','ABQ-A / controlador ARCWA','u 4')[0].code,'U4');assert.equal(technicalCodes.length,10);
+ assert.equal(searchTechnicalCodes('Daikin','','U4').length,0);assert.equal(searchTechnicalCodes('Samsung','ABQ-A / controlador ARCWA','U4').length,0);assert.equal(searchTechnicalCodes('Daikin','ABQ-A / controlador ARCWA','u 4')[0].code,'U4');assert.equal(technicalCodes.filter(c=>c.brand==='Daikin').length,10);assert.equal(new Set(technicalCodes.map(c=>c.brand)).size,8);
  for(const s of Object.values(technicalSources))assert.equal(new URL(s.url).protocol,'https:');
 });
 test('pressure reference preserves primary source anchors and rejects extrapolation',()=>{
