@@ -15,7 +15,7 @@ import {createDayPackage,readOfflineLease,rememberOfflineLease,clearOfflineLease
 import {loadDayPackage,saveDayPackage,removeDayOrder} from "@/lib/mobile-day-cache";
 import { listPendingOrderDrafts } from "@/lib/mobile-order-drafts";
 import { MOBILE_RELEASE } from "@/lib/mobile-release";
-import { filterFieldOrders, fieldOrderTone, type OrderFilter } from "@/lib/mobile-order-display";
+import { filterFieldOrders, fieldOrderTone, openFieldWorkQueue, type OrderFilter } from "@/lib/mobile-order-display";
 import { FieldOrderEditor } from "./FieldOrderEditor";
 import { mobileWeekDates } from "@/lib/mobile-agenda";
 import { isOpenMobileOrder,type MobileFieldOrder } from "@/lib/mobile-field";
@@ -137,7 +137,7 @@ export function ProARFieldMobile() {
     return()=>{cancelled=true;};
   },[pendingScope,selected,data?.lastReadAt]);
   async function checkVersion(){try{const response=await fetch("/api/mobile/version",{cache:"no-store"});if(!response.ok)throw new Error();const result=await response.json();const changed=result.version!==MOBILE_RELEASE;setUpdateAvailable(changed);setVersionNotice(changed?"Nova versão disponível. Seus rascunhos permanecem neste aparelho.":"Você está usando a versão atual.");}catch{setVersionNotice("Não foi possível consultar a versão. Tente novamente com conexão.");}}
-  const todayOrders = useMemo(() => orders.filter(order => order.date === todayISO()), [orders]);
+  const openOrders = useMemo(() => openFieldWorkQueue(orders,todayISO()), [orders]);
   const week=useMemo(()=>mobileWeekDates(day),[day]);
   const agendaOrders = useMemo(() => orders.filter(order => agendaMode==="week"?week.includes(order.date):order.date === day), [orders, day,agendaMode,week]);
   const current = orders.find(order => order.id === selected)||pendingOrders.find(order=>order.id===selected)||(recovery?.scope===data?.user.scope&&recovery?.order.id===selected?recovery.order:undefined);
@@ -204,17 +204,18 @@ export function ProARFieldMobile() {
               <p className={styles.subtitle}>Seus atendimentos em aberto conectados ao ProAR.</p>
               <div className={styles.hero}>
                 <span className={styles.heroTop}><Smartphone size={18}/> PROAR MOBILE · DADOS REAIS</span>
-                <strong>{data.summary.today}</strong>
-                <span>ordens programadas para hoje</span>
+                <strong>{openOrders.length}</strong>
+                <span>ordens em aberto • todas as datas</span>
                 <div className={styles.heroBottom}><span>Somente OS em aberto</span><span>{todayISO().split("-").reverse().join("/")}</span></div>
               </div>
               <div className={styles.metrics}>
                 <div><strong>{data.summary.inProgress}</strong><span>Em andamento</span></div>
                 <div><strong>{data.summary.pending}</strong><span>Pendentes</span></div>
               </div>
-              <div className={styles.sectionHeading}><h2>Atendimentos de hoje</h2><button type="button" onClick={()=>setTab("agenda")}>Ver agenda <ArrowRight size={14}/></button></div>
-              {todayOrders.length ? todayOrders.slice(0, 8).map(order=><OrderCard key={order.id} order={order} onOpen={()=>setSelected(order.id)}/>) : <div className={styles.empty}>Nenhuma OS vinculada a você para hoje.</div>}
-              <button type="button" className={styles.secondaryAction} onClick={()=>setTab("ordens")}>Consultar ordens em aberto <ArrowRight size={17}/></button>
+              <div className={styles.sectionHeading}><h2>Atendimentos em aberto</h2><button type="button" onClick={()=>setTab("agenda")}>Ver agenda <ArrowRight size={14}/></button></div>
+              <p className={styles.subtitle}>Em andamento primeiro, depois atrasados e demais atendimentos.{openOrders.length>8?` Mostrando 8 de ${openOrders.length}.`:""}</p>
+              {openOrders.length ? openOrders.slice(0, 8).map(order=><OrderCard key={order.id} order={order} onOpen={()=>setSelected(order.id)}/>) : <div className={styles.empty}>Nenhuma OS em aberto disponível para o seu perfil.</div>}
+              <button type="button" className={styles.secondaryAction} onClick={()=>{setOrderFilter("open");setQuery("");setVisibleLimit(100);setTab("ordens");}}>Consultar todas as ordens em aberto <ArrowRight size={17}/></button>
             </section>}
             {tab === "agenda" && <section className={styles.screen}>
               <p className={styles.eyebrow}>PLANEJAMENTO</p><h1 className={styles.title}>Agenda</h1>
