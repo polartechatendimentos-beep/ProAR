@@ -113,4 +113,4 @@ Integrado no Início, em Mais e dentro da OS: cinco fluidos em tabela de referê
 
 Sem migrações, seeds ou alterações de estoque/preços/dados reais. Preferências não contêm relatórios ou dados técnicos de clientes. A central de atenção deriva apenas da projeção autorizada. Cronômetro é estimativa operacional baseada no histórico disponível, não espelho de ponto. Comparação de conflito não envia automaticamente. Seleção offline respeita escopo, prazo de sessão, oito horas e mudança de dia.
 
-472 testes passaram antes do último ajuste de acesso ao Acervo dentro da OS; validação final e CI devem aprovar o commit. Teste visual autenticado em dispositivo ainda não executado.
+472 testes e TypeScript aprovados; build local concluído e lint sem erros. A revisão final e CI devem aprovar o commit. Teste visual autenticado em dispositivo ainda não executado.
