@@ -15,7 +15,8 @@ export function simulateBatch(input:BatchScenario){
  if(!Number.isInteger(input.units)||input.units<=0||!Number.isFinite(input.fixedProjectCost??0)||(input.fixedProjectCost??0)<0)throw Error("Quantidade ou custo fixo inválido");
  const unit=calculateCatalogPrice(input.costLines,input.pricing);
  const totalCost=Math.round((unit.cost*input.units+(input.fixedProjectCost??0))*100)/100;
- const suggestedRevenue=unit.suggestedPrice===null?null:Math.round((unit.suggestedPrice*input.units+(input.fixedProjectCost??0)/(1-(input.pricing.taxPercent+input.pricing.marginPercent+(input.pricing.cardFeePercent??0))/100))*100)/100;
+ const rate=(input.pricing.taxPercent+input.pricing.marginPercent+(input.pricing.cardFeePercent??0))/100;
+ const suggestedRevenue=unit.suggestedPrice===null||rate>=1?null:Math.round((unit.suggestedPrice*input.units+(input.fixedProjectCost??0)/(1-rate))*100)/100;
  const revenue=input.negotiatedRevenue??suggestedRevenue;
  if(revenue!==null&&(!Number.isFinite(revenue)||revenue<0))throw Error("Receita inválida");
  const taxAndFee=(input.pricing.taxPercent+(input.pricing.cardFeePercent??0))/100;
