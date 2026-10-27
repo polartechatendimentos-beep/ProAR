@@ -2,11 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+const MobileTechnicalLibrary=dynamic(()=>import("./MobileTechnicalLibrary").then(m=>m.MobileTechnicalLibrary));
 import {
   ArrowLeft, ArrowRight, CalendarDays, ChevronRight,
   ClipboardList, CloudOff, Home, MapPin, Menu, RefreshCw,
   Search, ShieldCheck, Smartphone, UserRound, Wifi,
 } from "lucide-react";
+import {useMobilePreferences} from "./useMobilePreferences";
+import {MobileWorkQueueInsights} from "./MobileWorkQueueInsights";
 import { MobileRouteControls } from "./MobileRouteControls";
 import { FieldSupportPanel } from "./FieldSupportPanel";
 import { FieldOrderReceipt } from "./FieldOrderReceipt";
@@ -26,7 +30,7 @@ import {mobileSupervision} from "@/lib/mobile-experience";
 type FieldOrder = MobileFieldOrder;
 type FieldData = MobileDayData;
 const EMPTY_ORDERS:FieldOrder[]=[];
-type Tab = "inicio" | "agenda" | "ordens" | "central" | "mais";
+type Tab = "inicio" | "agenda" | "ordens" | "central" | "mais" | "acervo";
 
 function todayISO() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
@@ -69,10 +73,12 @@ export function ProARFieldMobile() {
   const [query, setQuery] = useState("");
   const [visibleLimit,setVisibleLimit]=useState(100);
   const [orderFilter,setOrderFilter]=useState<OrderFilter>("open"),[pendingState,setPendingState]=useState<{scope:string;orders:FieldOrder[]}>({scope:"",orders:[]}),[versionNotice,setVersionNotice]=useState(""),[updateAvailable,setUpdateAvailable]=useState(false);
-  const [orderSort,setOrderSort]=useState<"date"|"recent"|"client">("date");
-  const [compactOrders,setCompactOrders]=useState(true);
-  const [favoriteFilter,setFavoriteFilter]=useState<OrderFilter|null>(null);
-  const [groupOrders,setGroupOrders]=useState(false);
+  const preferences=useMobilePreferences(data?.user.scope);
+  const {sort:orderSort,compact:compactOrders,favorite:favoriteFilter,group:groupOrders}=preferences.value;
+  const setOrderSort=(sort:typeof orderSort)=>preferences.update({sort});
+  const setCompactOrders=(compact:boolean)=>preferences.update({compact});
+  const setFavoriteFilter=(favorite:OrderFilter)=>preferences.update({favorite});
+  const setGroupOrders=(group:boolean)=>preferences.update({group});
   const [showMoreOrderFilters,setShowMoreOrderFilters]=useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [day, setDay] = useState(todayISO);
@@ -99,7 +105,7 @@ export function ProARFieldMobile() {
       }
       setLoginRequired(false);
       setData(result as FieldData);setOfflineCopy(false);setOfflineNotice("");
-      try{const pack=createDayPackage(result as FieldData);await saveDayPackage(pack);if(run!==generation.current||controller.signal.aborted)return;rememberOfflineLease(sessionStorage,pack);setOfflineNotice(`${pack.data.orders.length} OS preparadas neste aparelho para uso offline.${pack.truncated?" Pacote parcial: limite de 200 OS.":""}`);}catch{setOfflineNotice("Dados carregados do servidor; pacote offline não confirmado. Seus rascunhos continuam separados.");}
+      try{const previous=await loadDayPackage(result.user.scope);const pack=createDayPackage(result as FieldData,Date.now(),previous?.selectedOrderIds);await saveDayPackage(pack);if(run!==generation.current||controller.signal.aborted)return;rememberOfflineLease(sessionStorage,pack);setOfflineNotice(`${pack.data.orders.length} OS preparadas neste aparelho para uso offline.${pack.truncated?" Pacote parcial: limite de 200 OS.":""}`);}catch{setOfflineNotice("Dados carregados do servidor; pacote offline não confirmado. Seus rascunhos continuam separados.");}
     } catch (reason) {
       if(run!==generation.current||controller.signal.aborted)return;
       if(!navigator.onLine){setData(null);setSelected(null);setRecovery(null);}
@@ -150,7 +156,7 @@ export function ProARFieldMobile() {
     { id:"central", label:"Central", icon:ShieldCheck },
     { id:"mais", label:"Mais", icon:Menu },
   ];
-  return <div data-mobile-theme={appearance.resolved} className={`${styles.app} ${sunlightMode ? styles.sunlightMode : ""}`}>
+  return <div data-mobile-text={preferences.value.textScale} data-mobile-theme={appearance.resolved} className={`${styles.app} ${sunlightMode ? styles.sunlightMode : ""}`}>
     <div className={styles.shell}>
       <header className={styles.header}>
         <div className={styles.brand}><span className={styles.brandIcon}><img src="/brand/proar-mobile.svg?v=20261015" alt="" width={39} height={39}/></span><span><strong>ProAR <b>Mobile</b></strong><small>OPERAÇÃO EM CAMPO</small></span></div>
@@ -171,6 +177,7 @@ export function ProARFieldMobile() {
           <button type="button" className={styles.secondaryAction} onClick={()=>{setSelected(null);setTab("mais");}}>Central de sincronização • pacote offline e rascunhos</button>
           <details className={styles.journeyPanel}><summary>Minha jornada • entrada, pausa e saída</summary><MobileRouteControls /></details>
           {tab === "central" && !current && data.user.manager && <section className={styles.detailCard}><h2>Supervisão • ordens autorizadas</h2><p>Resumo da última leitura do servidor. Envios locais aparecem separadamente e não representam a fila dos outros aparelhos.</p><div className={styles.metrics}>{Object.entries({"Em aberto":supervision.open,"Atrasadas":supervision.overdue,"Com check-in":supervision.active,"Hoje":supervision.today}).map(([label,count])=><div key={label}><strong>{count}</strong><span>{label}</span></div>)}</div><p>{pendingOrders.length} envio(s) pendente(s) neste aparelho e usuário.</p></section>}
+          {tab==="acervo"&&!current&&<MobileTechnicalLibrary key={data.user.scope} scope={data.user.scope}/>}
           <FieldSupportPanel visible={tab === "central" && !current}/>
           {tab==="central"&&!current&&data.user.manager&&<section className={styles.detailCard}><h2>Solicitações e atrasos de atendimento</h2>{orders.filter(order=>order.requests?.some(item=>item.status==="Pendente")||order.delay).map(order=><button key={order.id} type="button" className={styles.secondaryAction} onClick={()=>setSelected(order.id)}>Revisar {order.id} • {order.delay?`Atraso ${order.delay.minutes} min`:"Solicitação pendente"}</button>)}{!orders.some(order=>order.requests?.some(item=>item.status==="Pendente")||order.delay)&&<p>Nenhuma solicitação ou atraso registrado.</p>}</section>}
           {tab==="central"&&!current&&data.user.canApprove&&<section className={styles.detailCard}><h2>Exceções de OS aguardando aprovação</h2>{orders.filter(order=>order.fieldExceptions?.some(item=>item.status==="Pendente")).map(order=><button key={order.id} type="button" className={styles.secondaryAction} onClick={()=>setSelected(order.id)}>Revisar {order.id} • {order.client}</button>)}{!orders.some(order=>order.fieldExceptions?.some(item=>item.status==="Pendente"))&&<p>Nenhuma solicitação pendente.</p>}</section>}
@@ -212,6 +219,8 @@ export function ProARFieldMobile() {
                 <div><strong>{data.summary.inProgress}</strong><span>Em andamento</span></div>
                 <div><strong>{data.summary.pending}</strong><span>Pendentes</span></div>
               </div>
+              <button type="button" className={styles.secondaryAction} onClick={()=>setTab("acervo")}>Acervo técnico • fluidos, códigos e manuais</button>
+              <MobileWorkQueueInsights key={data.user.scope} orders={orders} scope={data.user.scope} manager={data.user.manager} today={todayISO()} onOpen={id=>setSelected(id)} onFilter={filter=>{setOrderFilter(filter);setQuery("");setVisibleLimit(100);setTab("ordens");}}/>
               <div className={styles.sectionHeading}><h2>Atendimentos em aberto</h2><button type="button" onClick={()=>setTab("agenda")}>Ver agenda <ArrowRight size={14}/></button></div>
               <p className={styles.subtitle}>Em andamento primeiro, depois atrasados e demais atendimentos.{openOrders.length>8?` Mostrando 8 de ${openOrders.length}.`:""}</p>
               {openOrders.length ? openOrders.slice(0, 8).map(order=><OrderCard key={order.id} order={order} onOpen={()=>setSelected(order.id)}/>) : <div className={styles.empty}>Nenhuma OS em aberto disponível para o seu perfil.</div>}
@@ -237,14 +246,16 @@ export function ProARFieldMobile() {
                 {([["all","Todas"],["today","Hoje"],["open","Abertas"],["active","Em andamento"],...(data.user.manager?[["completed","Concluídas"],["cancelled","Canceladas"]]:[]),...(showMoreOrderFilters?[["overdue","Atrasadas"],["upcoming","Próximas"],...(data.user.manager?[["unassigned","Sem técnico"]]:[])]:[])] as [OrderFilter,string][]).map(([key,label])=><button key={key} type="button" aria-pressed={orderFilter===key} onClick={()=>{setOrderFilter(key);setVisibleLimit(100);}}>{label}</button>)}
                 <button type="button" aria-expanded={showMoreOrderFilters} onClick={()=>setShowMoreOrderFilters(v=>!v)}>{showMoreOrderFilters?"Menos filtros":"Mais filtros"}</button>
               </div>
-              <div className={styles.orderToolbar}><strong>{filtered.length} resultado(s)</strong><button type="button" onClick={()=>setFavoriteFilter(orderFilter)} title="Salvar filtro favorito">★ {favoriteFilter===orderFilter?"Favorito":"Salvar filtro"}</button>{favoriteFilter&&<button type="button" onClick={()=>{setOrderFilter(favoriteFilter);setVisibleLimit(100);}}>Meu filtro</button>}<button type="button" aria-pressed={groupOrders} onClick={()=>setGroupOrders(v=>!v)}>{groupOrders?"Lista":"Agrupar"}</button><label>Ordenar <select value={orderSort} onChange={e=>setOrderSort(e.target.value as typeof orderSort)}><option value="date">Mais antigas</option><option value="recent">Mais recentes</option><option value="client">Cliente</option></select></label><button type="button" aria-pressed={compactOrders} onClick={()=>setCompactOrders(v=>!v)}>{compactOrders?"Detalhado":"Compacto"}</button></div>
+              <div className={styles.orderToolbar}><strong>{filtered.length} resultado(s)</strong><button type="button" onClick={()=>setFavoriteFilter(orderFilter)} title="Salvar filtro favorito">★ {favoriteFilter===orderFilter?"Favorito":"Salvar filtro"}</button>{favoriteFilter&&<button type="button" onClick={()=>{setOrderFilter(favoriteFilter);setVisibleLimit(100);}}>Meu filtro</button>}<button type="button" aria-pressed={groupOrders} onClick={()=>setGroupOrders(!groupOrders)}>{groupOrders?"Lista":"Agrupar"}</button><label>Ordenar <select value={orderSort} onChange={e=>setOrderSort(e.target.value as typeof orderSort)}><option value="date">Mais antigas</option><option value="recent">Mais recentes</option><option value="client">Cliente</option></select></label><button type="button" aria-pressed={compactOrders} onClick={()=>setCompactOrders(!compactOrders)}>{compactOrders?"Detalhado":"Compacto"}</button></div>
               {sortedOrders.length ? (groupOrders?groupedOrders.map(group=><div key={group.label}><h2 className={styles.orderGroupTitle}>{group.label} · {group.orders.length}</h2>{group.orders.map(order=><OrderCard key={order.id} order={order} compact={compactOrders} onOpen={()=>setSelected(order.id)}/>)}</div>):sortedOrders.slice(0,visibleLimit).map(order=><OrderCard key={order.id} order={order} compact={compactOrders} onOpen={()=>setSelected(order.id)}/>)) : <div className={styles.empty}>Nenhuma OS encontrada com esse filtro.</div>}
               {filtered.length>visibleLimit&&<button className={styles.secondaryAction} type="button" onClick={()=>setVisibleLimit(limit=>limit+100)}>Carregar mais OS ({filtered.length-visibleLimit} restantes)</button>}
             </section>}
             {tab === "mais" && <section className={styles.screen}>
               <p className={styles.eyebrow}>PERFIL E CONTROLE</p><h1 className={styles.title}>Mais</h1>
+              <button type="button" className={styles.primaryAction} onClick={()=>setTab("acervo")}>Abrir Acervo Técnico</button>
+              <section className={styles.detailCard}><h2>Leitura e preferências</h2><label className={styles.formLabel}>Tamanho do texto<select value={preferences.value.textScale} onChange={e=>preferences.update({textScale:e.target.value==="large"?"large":"normal"})}><option value="normal">Padrão</option><option value="large">Ampliado</option></select></label><p>Filtro favorito, ordenação, agrupamento e densidade são guardados neste navegador por empresa e usuário.</p>{preferences.notice&&<p role="status">{preferences.notice}</p>}</section>
               <MobileThemeControl theme={appearance.theme} onChange={appearance.changeTheme} notice={appearance.storageNotice}/>
-              <MobileRecoveryPanel key={data.user.scope} scope={data.user.scope} orderIds={orders.map(o=>o.id)} readAt={data.lastReadAt} onCentral={()=>setTab("central")} onSessionExpired={()=>void refresh()} onResume={draft=>{if(draft.orderSnapshot){setRecovery({scope:data.user.scope,order:draft.orderSnapshot});setSelected(draft.orderSnapshot.id);setTab("ordens");}}}/>
+              <MobileRecoveryPanel key={data.user.scope} data={data} scope={data.user.scope} orderIds={orders.map(o=>o.id)} readAt={data.lastReadAt} onCentral={()=>setTab("central")} onSessionExpired={()=>void refresh()} onResume={draft=>{if(draft.orderSnapshot){setRecovery({scope:data.user.scope,order:draft.orderSnapshot});setSelected(draft.orderSnapshot.id);setTab("ordens");}}}/>
               <div className={styles.profile}><div className={styles.avatar}><UserRound size={26}/></div><div><strong>{data.user.displayName}</strong><span>{data.user.role}</span></div></div>
               <div className={styles.detailCard}><h2><ShieldCheck size={20}/> Integração segura</h2><p>O aplicativo utiliza sua sessão do ProAR, respeita a empresa e mostra somente as OS permitidas para o perfil. Não há usuários ou atendimentos fictícios.</p>
               <p><strong>Sincronização:</strong> OS podem ser preparadas offline e ficam pendentes até sincronizar. Jornada, GPS, permissões e conflitos são validados no envio; checklist da frota, abastecimento e ajustes também usam fila local.</p>
