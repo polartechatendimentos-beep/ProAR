@@ -160,3 +160,30 @@
 .orderGroupTitle{font-size:13px;font-weight:800;color:var(--mobile-muted,#91a9c4);margin:14px 0 8px;padding-bottom:6px;border-bottom:1px solid #31577a}
 
 .orderToolbar button,.orderToolbar select,.filterChips button{min-height:48px}
+
+/* Mobile layout v3: contain ERP cascade and pair every surface with readable text. */
+.app{--field-bg:#081a32;--field-card:#102944;--field-soft:#163451;--field-text:#f1f7ff;--field-muted:#bed0e3;--field-line:#365a7d;--field-accent:#78d7ff;font-family:var(--font-geist-sans),Arial,sans-serif}
+.app[data-mobile-theme="light"]{--field-bg:#f3f7fb;--field-card:#fff;--field-soft:#eaf3fc;--field-text:#18334d;--field-muted:#526b83;--field-line:#c8d8e7;--field-accent:#086da4}
+.app:not(.sunlightMode) :is(input:not([type=checkbox]):not([type=radio]),select,textarea){background:var(--field-card)!important;color:var(--field-text)!important;border:1px solid var(--field-line)!important;color-scheme:inherit;font-size:16px;max-width:100%;box-sizing:border-box}
+.app:not(.sunlightMode) :is(input,textarea)::placeholder{color:var(--field-muted)!important;opacity:1}
+.app .search input{background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important;min-height:40px}
+.app:not(.sunlightMode) :is(.orderStats span,.orderToolbar button,.filterChips button,.progressPanel,.syncBanner){background:var(--field-soft);color:var(--field-text)!important;border-color:var(--field-line)}
+.app:not(.sunlightMode) .filterChips button[aria-pressed="true"]{background:#086da4;color:#fff!important;border-color:#086da4;box-shadow:0 3px 8px #086da426}
+.app:not(.sunlightMode) .orderStats strong{color:var(--field-accent);font-variant-numeric:tabular-nums}
+.app:not(.sunlightMode) .navActive{background:var(--field-soft);color:var(--field-accent);box-shadow:inset 0 3px var(--field-accent)}
+.app[data-mobile-theme="light"]:not(.sunlightMode) .warning{background:#fff6df;color:#73510b!important;border-color:#e7cc88}
+.app[data-mobile-theme="light"]:not(.sunlightMode) :is(.pendingPanel,.reviewPanel,.successPanel,.receiptPanel){background:#eef7f5;color:#183f38;border-color:#a4c9bd}
+.app[data-mobile-theme="light"]:not(.sunlightMode) .editorFields h3 small{color:#526b83}
+.app .shell{width:100%;min-width:0}.content,.screen,.detailCard{min-width:0}.content{padding:18px 16px 28px}.title{font-size:27px;letter-spacing:-.8px}.header{min-height:68px;height:auto;padding:10px 16px}.brand small{letter-spacing:1.2px}
+.orderToolbar{justify-content:flex-start;gap:8px}.orderToolbar>strong{flex:1 0 100%;color:var(--field-muted)}.orderToolbar button,.orderToolbar select{font-size:12px;border-radius:10px}.orderStats{gap:8px}.orderStats span{border-radius:14px;padding:12px 6px}.orderStats strong{font-size:25px}
+.orderCard{box-shadow:0 2px 5px #10385708}.orderCompact{padding:14px;gap:5px}.orderTitle{font-weight:750}.orderCompact .orderTitle{font-size:14px}.orderBottom{border-color:var(--field-line);font-variant-numeric:tabular-nums}.filterChips{margin:12px 0;gap:6px}
+.orderEditor{padding:18px}.orderEditor>h2{font-size:20px;font-weight:800;margin:0 0 14px}.orderEditor h3{font-size:15px;font-weight:750;margin:22px 0 10px}.formLabel{font-size:13px;font-weight:600;gap:7px}.formLabel textarea{min-height:112px}.formLabel :is(input,select,textarea){padding:12px;border-radius:12px}.measurementGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px}.measurementGrid .formLabel{margin:8px 0}.checklistGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.checklistGrid .checkLabel{margin:0;padding:10px;border:1px solid var(--field-line);border-radius:10px;background:var(--field-soft);color:var(--field-text);line-height:1.4}.checkLabel input{flex:0 0 22px}
+.progressPanel{padding:14px;margin:14px 0 20px}.progressPanel p{margin:0 0 8px;color:var(--field-text)!important}.progressPanel progress{display:block;height:9px;border-radius:20px;overflow:hidden}.requirementsList{margin-top:12px}.requirementsList summary{cursor:pointer;font-size:13px;font-weight:700;min-height:36px;padding:8px 0}.requirementsList>div{display:flex;flex-wrap:wrap;gap:8px;padding-top:8px}.requirementsList .secondaryAction{margin:0;max-width:100%;font-size:12px;padding:9px 12px;background:var(--field-card);color:var(--field-text);border-color:var(--field-line)}
+.signatureFrame{border:1px dashed #96abc2;border-radius:14px;padding:12px;background:#fff;margin:10px 0 20px;overflow:hidden}.signatureFrame>span{display:block;color:#526b83;font-size:12px;margin-bottom:8px}.signatureFrame .signatureCanvas{display:block;width:100%!important;height:160px!important;max-height:160px;background:#fff!important;border:0;border-bottom:1px solid #d2dce6;border-radius:0;touch-action:none}
+.app input[type=file]{padding:10px;font-size:12px!important;white-space:normal}.app input[type=file]::file-selector-button{background:var(--field-soft);color:var(--field-text);border:1px solid var(--field-line);border-radius:8px;padding:10px;margin-right:8px;font:inherit;cursor:pointer}
+.orderEditor .primaryAction,.orderEditor .finishAction{width:100%;margin-top:12px;font-weight:750}.bottomNav{padding-top:8px}.navItem{font-size:11px}.sosButton{bottom:calc(86px + env(safe-area-inset-bottom));padding:10px 14px;font-size:12px}
+@media(max-width:600px){.shell{box-shadow:none}.screen{max-width:none}.orderEditor{padding:14px}.detailCard{padding:16px}.headerRight{gap:6px}.connection{font-size:10px}.orderToolbar label{flex:1}.orderToolbar select{flex:1;min-width:0}.checklistGrid{grid-template-columns:1fr}.orderEditor .detailCard{padding:12px}.sosButton{right:12px}}
+@media(min-width:680px){.content{padding:24px}.screen{max-width:760px}}
+@media(max-width:350px){.measurementGrid{grid-template-columns:1fr}.connection{max-width:58px;white-space:normal}}
+
+@media(max-width:1024px){.shell{max-width:100%;box-shadow:none}.screen{max-width:none}}
