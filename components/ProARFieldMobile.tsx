@@ -18,7 +18,7 @@ import { MOBILE_RELEASE } from "@/lib/mobile-release";
 import { filterFieldOrders, fieldOrderTone, type OrderFilter } from "@/lib/mobile-order-display";
 import { FieldOrderEditor } from "./FieldOrderEditor";
 import { mobileWeekDates } from "@/lib/mobile-agenda";
-import type { MobileFieldOrder } from "@/lib/mobile-field";
+import { isOpenMobileOrder,type MobileFieldOrder } from "@/lib/mobile-field";
 import styles from "./ProARFieldMobile.module.css";
 import {MobileThemeControl,useMobileTheme} from "./MobileThemeControl";
 import {mobileSupervision} from "@/lib/mobile-experience";
@@ -67,6 +67,7 @@ export function ProARFieldMobile() {
   const [loginRequired, setLoginRequired] = useState(false);
   const [online, setOnline] = useState(true);
   const [query, setQuery] = useState("");
+  const [visibleLimit,setVisibleLimit]=useState(100);
   const [orderFilter,setOrderFilter]=useState<OrderFilter>("all"),[pendingState,setPendingState]=useState<{scope:string;orders:FieldOrder[]}>({scope:"",orders:[]}),[versionNotice,setVersionNotice]=useState(""),[updateAvailable,setUpdateAvailable]=useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [day, setDay] = useState(todayISO);
@@ -181,11 +182,13 @@ export function ProARFieldMobile() {
                 <div><dt>Endereço</dt><dd>{current.address || "Não informado"}</dd></div>
                 <div><dt>Equipamentos vinculados</dt><dd>{current.equipmentIds.length ? current.equipmentIds.join(", ") : "Nenhum vínculo informado"}</dd></div>
                 {current.checkInAt && <div><dt>Check-in registrado</dt><dd>{current.checkInAt}</dd></div>}
+                {!isOpenMobileOrder(current.status)&&<><div><dt>Diagnóstico</dt><dd>{current.diagnosis||"Não informado"}</dd></div><div><dt>Serviço executado</dt><dd>{current.executedService||"Não informado"}</dd></div></>}
               </dl>
             </div>
             {current.address && <><label className={styles.formLabel}>Aplicativo de navegação<select value={mapApp} onChange={e=>setMapApp(e.target.value)}><option value="google">Google Maps</option><option value="waze">Waze</option></select></label><a className={styles.primaryAction} href={mapApp==="waze"?`https://www.waze.com/ul?q=${encodeURIComponent(current.address)}&navigate=yes`:`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(current.address)}`} target="_blank" rel="noopener noreferrer"><MapPin size={18}/> Abrir navegação <ArrowRight size={18}/></a></>}
+            {!isOpenMobileOrder(current.status)&&<p className={styles.disclaimer}>OS encerrada: consulta do histórico. Os dados de execução permanecem preservados.</p>}
             {!data.user.canEdit && <p role="alert" className={styles.warning}>Seu perfil não tem permissão para alterar esta OS. Solicite a liberação ao administrador.</p>}
-            {data.user.canEdit && <FieldOrderEditor key={`${current.id}:${current.fieldVersion}:${current.editToken}`} scope={data.user.scope} canApprove={data.user.canApprove} order={current} requiresJourney={/tecnico|prestador/i.test(data.user.role.normalize("NFD").replace(/[\u0300-\u036f]/g,""))} onSaved={async result=>{if(result){setCompletion(result);setSelected(null);setTab("ordens");setData(previous=>previous?{...previous,orders:previous.orders.filter(order=>order.id!==result.orderId)}:previous);}if(result){try{await removeDayOrder(data.user.scope,result.orderId);}catch{try{clearOfflineLease(sessionStorage);}catch{}}}await refresh();}}/>}
+            {data.user.canEdit && isOpenMobileOrder(current.status) && <FieldOrderEditor key={`${current.id}:${current.fieldVersion}:${current.editToken}`} scope={data.user.scope} canApprove={data.user.canApprove} order={current} requiresJourney={/tecnico|prestador/i.test(data.user.role.normalize("NFD").replace(/[\u0300-\u036f]/g,""))} onSaved={async result=>{if(result){setCompletion(result);setSelected(null);setTab("ordens");setData(previous=>previous?{...previous,orders:previous.orders.filter(order=>order.id!==result.orderId)}:previous);}if(result){try{await removeDayOrder(data.user.scope,result.orderId);}catch{try{clearOfflineLease(sessionStorage);}catch{}}}await refresh();}}/>}
             <p className={styles.disclaimer}>Alterações são confirmadas no banco. Durante a pausa ou fora da jornada, técnicos podem apenas consultar.</p>
           </section> : <>
             {tab === "inicio" && <section className={styles.screen}>
@@ -218,9 +221,10 @@ export function ProARFieldMobile() {
               <p className={styles.eyebrow}>OPERAÇÃO</p><h1 className={styles.title}>Ordens de serviço</h1>
               <p className={styles.subtitle}>Busque por OS, cliente, endereço, serviço ou equipamento.</p>
               <label className={styles.search}><Search size={19}/><input type="search" value={query} onChange={event=>setQuery(event.target.value)} placeholder="Buscar atendimento" aria-label="Buscar atendimento"/></label>
-              <div className={styles.filterChips} role="group" aria-label="Filtrar ordens">{([["all","Todas"],["today","Hoje"],["overdue","Atrasadas"],["upcoming","Próximas"]] as const).map(([key,label])=><button key={key} type="button" aria-pressed={orderFilter===key} onClick={()=>setOrderFilter(key)}>{label}</button>)}</div>
+              <div className={styles.filterChips} role="group" aria-label="Filtrar ordens">{([["all","Todas"],["today","Hoje"],["overdue","Atrasadas"],["upcoming","Próximas"],...(data.user.manager?[["open","Abertas"],["active","Em andamento"],["completed","Concluídas"],["cancelled","Canceladas"],["unassigned","Sem técnico"]]:[])] as [OrderFilter,string][]).map(([key,label])=><button key={key} type="button" aria-pressed={orderFilter===key} onClick={()=>{setOrderFilter(key);setVisibleLimit(100);}}>{label}</button>)}</div>
               <div className={styles.sectionHeading}><h2>{filtered.length} resultado(s)</h2></div>
-              {filtered.length ? filtered.map(order=><OrderCard key={order.id} order={order} onOpen={()=>setSelected(order.id)}/>) : <div className={styles.empty}>Nenhuma OS encontrada com esse filtro.</div>}
+              {filtered.length ? filtered.slice(0,visibleLimit).map(order=><OrderCard key={order.id} order={order} onOpen={()=>setSelected(order.id)}/>) : <div className={styles.empty}>Nenhuma OS encontrada com esse filtro.</div>}
+              {filtered.length>visibleLimit&&<button className={styles.secondaryAction} type="button" onClick={()=>setVisibleLimit(limit=>limit+100)}>Carregar mais OS ({filtered.length-visibleLimit} restantes)</button>}
             </section>}
             {tab === "mais" && <section className={styles.screen}>
               <p className={styles.eyebrow}>PERFIL E CONTROLE</p><h1 className={styles.title}>Mais</h1>
