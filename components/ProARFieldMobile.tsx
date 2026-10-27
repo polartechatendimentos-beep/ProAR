@@ -45,8 +45,8 @@ function statusTone(value: string) {
 function displayTime(value: string) {
   return /^\d{2}:\d{2}/.test(value) ? value.slice(0, 5) : value || "A definir";
 }
-function OrderCard({ order, onOpen }: { order: FieldOrder; onOpen: () => void }) {
-  return <button type="button" className={`${styles.orderCard} ${styles[`${fieldOrderTone(order,todayISO())}Card`]}`} onClick={onOpen} aria-label={`Consultar ${order.id}`}>
+function OrderCard({ order, onOpen, compact=false }: { order: FieldOrder; onOpen: () => void; compact?:boolean }) {
+  return <button type="button" className={`${styles.orderCard} ${compact?styles.orderCompact:""} ${styles[`${fieldOrderTone(order,todayISO())}Card`]}`} onClick={onOpen} aria-label={`Consultar ${order.id}`}>
     <span className={styles.orderTop}><strong>{order.id}</strong><span className={`${styles.status} ${statusTone(order.status)}`}>{order.status || "Sem status"}</span></span>
     <span className={styles.orderTitle}>{order.service || "Atendimento técnico"}</span>
     <span className={styles.orderClient}>{order.client || "Cliente não identificado"}</span>
@@ -68,6 +68,9 @@ export function ProARFieldMobile() {
   const [online, setOnline] = useState(true);
   const [query, setQuery] = useState("");
   const [orderFilter,setOrderFilter]=useState<OrderFilter>("all"),[pendingState,setPendingState]=useState<{scope:string;orders:FieldOrder[]}>({scope:"",orders:[]}),[versionNotice,setVersionNotice]=useState(""),[updateAvailable,setUpdateAvailable]=useState(false);
+  const [orderSort,setOrderSort]=useState<"date"|"recent"|"client">("date");
+  const [compactOrders,setCompactOrders]=useState(true);
+  const [showMoreOrderFilters,setShowMoreOrderFilters]=useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [day, setDay] = useState(todayISO);
   const [agendaMode,setAgendaMode]=useState<"day"|"week">("day");
@@ -121,6 +124,7 @@ export function ProARFieldMobile() {
   const orders = data?.orders ?? EMPTY_ORDERS;
   const pendingOrders=pendingState.scope===data?.user.scope?pendingState.orders:EMPTY_ORDERS;
   const filtered = useMemo(()=>filterFieldOrders(orders,query,orderFilter,todayISO()),[orders,query,orderFilter]);
+  const sortedOrders=useMemo(()=>[...filtered].sort((a,b)=>orderSort==="client"?(a.client||"").localeCompare(b.client||"","pt-BR"):orderSort==="recent"?(b.date||"").localeCompare(a.date||""):(a.date||"").localeCompare(b.date||"")),[filtered,orderSort]);
   const pendingScope=data?.user.scope;
   useEffect(()=>{
     if(!pendingScope)return;
@@ -216,11 +220,18 @@ export function ProARFieldMobile() {
             </section>}
             {tab === "ordens" && <section className={styles.screen}>
               <p className={styles.eyebrow}>OPERAÇÃO</p><h1 className={styles.title}>Ordens de serviço</h1>
-              <p className={styles.subtitle}>Busque por OS, cliente, endereço, serviço ou equipamento.</p>
-              <label className={styles.search}><Search size={19}/><input type="search" value={query} onChange={event=>setQuery(event.target.value)} placeholder="Buscar atendimento" aria-label="Buscar atendimento"/></label>
-              <div className={styles.filterChips} role="group" aria-label="Filtrar ordens">{([["all","Todas"],["today","Hoje"],["overdue","Atrasadas"],["upcoming","Próximas"],...(data.user.manager?[["open","Abertas"],["active","Em andamento"],["completed","Concluídas"],["unassigned","Sem técnico"]]:[])] as [OrderFilter,string][]).map(([key,label])=><button key={key} type="button" aria-pressed={orderFilter===key} onClick={()=>setOrderFilter(key)}>{label}</button>)}</div>
-              <div className={styles.sectionHeading}><h2>{filtered.length} resultado(s)</h2></div>
-              {filtered.length ? filtered.map(order=><OrderCard key={order.id} order={order} onOpen={()=>setSelected(order.id)}/>) : <div className={styles.empty}>Nenhuma OS encontrada com esse filtro.</div>}
+              <div className={styles.orderStats} aria-label="Resumo de ordens">
+                <span><strong>{orders.filter(o=>/abert|pendente|aguardando/i.test(o.status)).length}</strong>Abertas</span>
+                <span><strong>{orders.filter(o=>/andamento|execu[cç][aã]o|iniciad/i.test(o.status)).length}</strong>Em andamento</span>
+                <span><strong>{orders.filter(o=>/conclu[ií]d|finalizad|encerrad/i.test(o.status)).length}</strong>Concluídas</span>
+              </div>
+              <label className={styles.search}><Search size={18}/><input type="search" value={query} onChange={event=>setQuery(event.target.value)} placeholder="Buscar OS, cliente ou equipamento" aria-label="Buscar atendimento"/></label>
+              <div className={styles.filterChips} role="group" aria-label="Filtrar ordens">
+                {([["all","Todas"],["today","Hoje"],["open","Abertas"],["active","Em andamento"],["completed","Concluídas"],...(showMoreOrderFilters?[["overdue","Atrasadas"],["upcoming","Próximas"],...(data.user.manager?[["unassigned","Sem técnico"]]:[])]:[])] as [OrderFilter,string][]).map(([key,label])=><button key={key} type="button" aria-pressed={orderFilter===key} onClick={()=>setOrderFilter(key)}>{label}</button>)}
+                <button type="button" aria-expanded={showMoreOrderFilters} onClick={()=>setShowMoreOrderFilters(v=>!v)}>{showMoreOrderFilters?"Menos filtros":"Mais filtros"}</button>
+              </div>
+              <div className={styles.orderToolbar}><strong>{filtered.length} resultado(s)</strong><label>Ordenar <select value={orderSort} onChange={e=>setOrderSort(e.target.value as typeof orderSort)}><option value="date">Mais antigas</option><option value="recent">Mais recentes</option><option value="client">Cliente</option></select></label><button type="button" aria-pressed={compactOrders} onClick={()=>setCompactOrders(v=>!v)}>{compactOrders?"Detalhado":"Compacto"}</button></div>
+              {sortedOrders.length ? sortedOrders.map(order=><OrderCard key={order.id} order={order} compact={compactOrders} onOpen={()=>setSelected(order.id)}/>) : <div className={styles.empty}>Nenhuma OS encontrada com esse filtro.</div>}
             </section>}
             {tab === "mais" && <section className={styles.screen}>
               <p className={styles.eyebrow}>PERFIL E CONTROLE</p><h1 className={styles.title}>Mais</h1>
