@@ -45,8 +45,14 @@ export function hasPermission(session: ProarSession | null, permission: Permissi
   if (!session) return false;
   if (session.role === "Administrador" || session.permissions.includes("*")) return true;
   const [module] = permission.split(".");
-  const explicit = session.permissions.includes(permission);
-  const legacyModule = (legacy[module] || []).some(item => session.permissions.includes(item));
+  // The employee matrix stores module:action labels. Match those exact actions
+  // independently: a Visualizar grant must never imply Editar.
+  const employeeOsAction = permission === "os.visualizar" ? "visualizar" : permission === "os.editar" ? "editar" : null;
+  const matrixGrant = employeeOsAction !== null && session.permissions.some(item =>
+    item.trim().toLocaleLowerCase("pt-BR") === `ordens de serviço:${employeeOsAction}`);
+  const explicit = session.permissions.includes(permission) || matrixGrant;
+  const legacyModule = (legacy[module] || []).some(item => session.permissions.includes(item))
+    || (permission === "os.visualizar" && session.permissions.includes("Ordens de serviço"));
   if (!explicit && !legacyModule) return false;
   // Perfis externos nunca herdam mutações sensíveis apenas por permissão legada de módulo.
   if (["Fiscal", "Engenheiro"].includes(session.role) && /\.editar$|\.alterar$|\.baixar$|\.estornar$|\.registrar$|\.ajustar$|\.receber$|\.conciliar$|\.preparar$|\.emitir$|\.cancelar$|\.configurar$/.test(permission)) {
