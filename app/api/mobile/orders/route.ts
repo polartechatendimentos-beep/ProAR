@@ -1,3 +1,4 @@
+import { fieldServiceCatalog } from "../../../../lib/mobile-service-catalog";
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { hasPermission, sessionFromRequest, type Permission } from "../../../../lib/permissions";
@@ -44,7 +45,7 @@ export async function POST(request:NextRequest) {
         const point=validatePoint(command.point,new Date().toISOString());
         if(!point.reliable || Math.abs(Date.now()-Date.parse(point.capturedAt))>120000)throw new FieldSupportError("Atualize o sinal GPS com precisão de até 100 m.");
       }
-      const improvement=mobileMutationActions.includes(command.action)?improveFieldOrder(order,state.moduleRecords?.Equipamentos || [],command as ImprovementCommand,{...session,employeeId:c.actor?.employeeId},hasPermission(session,"aprovacoes.aprovar"),new Date().toISOString()):null;
+      const improvement=mobileMutationActions.includes(command.action)?improveFieldOrder(order,state.moduleRecords?.Equipamentos || [],command as ImprovementCommand,{...session,employeeId:c.actor?.employeeId},hasPermission(session,"aprovacoes.aprovar"),new Date().toISOString(),state.moduleRecords?.Serviços||[]):null;
       const nextOrder=improvement?.order || applyFieldOrder(order,command as FieldOrderCommand,{...session,employeeId:c.actor?.employeeId},new Date().toISOString(),state.moduleRecords?.Equipamentos || []);
       const incoming={...state,serviceOrders:state.serviceOrders!.map(item=>item.id===command.orderId?nextOrder:item),...(improvement?{moduleRecords:{...state.moduleRecords,Equipamentos:improvement.equipment}}:{})};
       // Only the server-built, customer/location-scoped equipment record gets this permission.
@@ -68,6 +69,7 @@ export async function GET(request:NextRequest){
     const c=await routeContext(session),state=c.state as ErpState;
     const order=(state.serviceOrders||[]).find(item=>item.id===request.nextUrl.searchParams.get("orderId"));
     if(!order || !assignedToSession(order,{...session,employeeId:c.actor?.employeeId}))return reply({error:"OS não disponível para este perfil."},403);
+    if(request.nextUrl.searchParams.get("view")==="service-catalog")return reply(fieldServiceCatalog(state.moduleRecords?.Serviços||[],request.nextUrl.searchParams.get("q")||"",Number(request.nextUrl.searchParams.get("offset")||0)));
     if(request.nextUrl.searchParams.get("view")==="customer-history")return reply({history:fieldCustomerHistory(order,state.serviceOrders||[])});
     if(request.nextUrl.searchParams.get("view")==="receipt"){
       let company;
