@@ -3448,6 +3448,13 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
           <div className="os-create-head-actions"><button type="button" onClick={() => setDescription(improveTechnicalText(description))}><Sparkles size={14}/> Sugerir com IA</button><button type="button" className="icon-only" onClick={close} aria-label="Fechar"><X size={17}/></button></div>
         </header>
 
+        <section className="os-create-card os-create-schedule" aria-label="Data e horário do atendimento" style={{margin:"0 20px 12px",flexShrink:0}}>
+          <div className="os-create-card-head"><span><CalendarDays size={15}/> Data e horário do atendimento</span></div>
+          <div className="os-create-location-grid">
+            <label>Data do atendimento • para agendar<input id="os-create-date" type="date" value={date} disabled={orderSaveBusy} onInput={event=>{setDate(event.currentTarget.value);setOrderSaveError("");}} onChange={event=>{setDate(event.target.value);setOrderSaveError("");}}/></label>
+            <label>Horário de início<input id="os-create-time" type="time" value={time} disabled={orderSaveBusy} onInput={event=>setTime(event.currentTarget.value)} onChange={event=>setTime(event.target.value)}/></label>
+          </div>
+        </section>
         <nav className="os-create-tabs" aria-label="Etapas da nova ordem">
           <button type="button" className={orderTab === "Geral" ? "active" : ""} onClick={() => setOrderTab("Geral")}><FileText size={14}/><span>1. Geral & Agendamento</span></button>
           <button type="button" className={orderTab === "Equipamentos" ? "active" : ""} onClick={() => setOrderTab("Equipamentos")}><Boxes size={14}/><span>2. Equipamentos ({selectedEquipmentIds.length})</span></button>
@@ -3480,10 +3487,10 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
               </article>
 
               <article className="os-create-card">
-                <div className="os-create-card-head"><span><CalendarDays size={15}/> Agendamento & Janela</span></div>
-                <div className={`os-create-location-grid ${isMunicipalCustomer(selectedClientData)?"municipal-legacy-location":""}`}>
-                  <label>Data do atendimento<input type="date" value={date} onChange={event => setDate(event.target.value)}/></label>
-                  <label>Horário início<input type="time" value={time} onChange={event => setTime(event.target.value)}/></label>
+                <div className="os-create-card-head"><span><CalendarDays size={15}/> Duração e lembretes</span></div>
+                <div className="os-create-location-grid">
+                  
+                  
                   <label>Duração estimada<input type="time" value={orderEstimatedDuration} onChange={event => setOrderEstimatedDuration(event.target.value)}/></label>
                   <label>Lembrete WhatsApp<select value={orderReminderHours} onChange={event => setOrderReminderHours(Number(event.target.value))}><option value={2}>2 horas antes</option><option value={6}>6 horas antes</option><option value={12}>12 horas antes</option><option value={24}>24 horas antes</option><option value={48}>48 horas antes</option></select></label>
                 </div>
