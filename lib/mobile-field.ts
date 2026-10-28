@@ -30,6 +30,7 @@ export type MobileFieldOrder = {
   observations?:string;
   measurements?:Record<string,string>;
   photoCounts?:{before:number;after:number};
+  appliedServices?:{id:string;name:string;quantity:number}[];
   appliedMaterials?:{name:string;quantity:number}[];
   technicianSignaturePreview?:string;
   editToken?: string;
@@ -124,6 +125,7 @@ export function mobileFieldOrders(
       observations: short(order.fieldObservations,4000),
       measurements: Object.fromEntries(["pressure","temperature","voltage","current"].filter(key=>typeof (order.fieldMeasurements as Record<string,unknown>|undefined)?.[key]==="string").map(key=>[key,short((order.fieldMeasurements as Record<string,unknown>)[key],30)])),
       photoCounts:{before:Array.isArray((order.photos as Record<string,unknown>|undefined)?.before)?(order.photos as Record<string,string[]>).before.length:0,after:Array.isArray((order.photos as Record<string,unknown>|undefined)?.after)?(order.photos as Record<string,string[]>).after.length:0},
+      appliedServices:Array.isArray(order.catalogItems)?order.catalogItems.filter(isRecord).filter(item=>item.kind==="Serviço").slice(0,100).map(item=>({id:short(item.id,120),name:short(item.name,200),quantity:typeof item.quantity==="number"&&Number.isFinite(item.quantity)&&item.quantity>0?item.quantity:1})):[],
       appliedMaterials:Array.isArray(order.catalogItems)?order.catalogItems.filter(isRecord).filter(item=>item.kind==="Produto").slice(0,100).map(item=>({name:short(item.name,150),quantity:typeof item.quantity==="number"&&Number.isFinite(item.quantity)&&item.quantity>0?item.quantity:1})):[],
       diagnosis: short(order.diagnosis, 4000),
       executedService: short(order.executedService, 8000),
