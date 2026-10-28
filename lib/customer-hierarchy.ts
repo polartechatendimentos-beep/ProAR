@@ -82,3 +82,9 @@ export function hierarchyCounts(customer:HierarchyCustomer,nodes:HierarchyNode[]
   add(orders,"orders");add(equipment,"equipment");
   return counts;
 }
+
+/** Collapse state applies after search filtering and can also close the root. */
+export function visibleHierarchyNodes(nodes:HierarchyNode[],collapsed:ReadonlySet<string>,rootCollapsed=false):HierarchyNode[]{
+ if(rootCollapsed)return [];
+ return nodes.filter(node=>!node.path.slice(0,-1).some(id=>collapsed.has(id)));
+}
