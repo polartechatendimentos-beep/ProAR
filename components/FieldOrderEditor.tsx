@@ -1,4 +1,5 @@
 "use client";
+import {FieldServicePicker} from "./FieldServicePicker";
 import dynamic from "next/dynamic";
 const MobileTechnicalLibrary=dynamic(()=>import("./MobileTechnicalLibrary").then(m=>m.MobileTechnicalLibrary));
 import {MobileOrderWorkflow} from "./MobileOrderWorkflow";
@@ -178,6 +179,7 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
     <details className={styles.journeyPanel} onToggle={e=>setAcervoOpen(e.currentTarget.open)}><summary>Acervo técnico • consultar sem sair da OS</summary>{acervoOpen&&<MobileTechnicalLibrary scope={scope}/>}</details>
     <FieldAttendanceControls order={order} busy={busy||mediaBusy||!draftReady||Boolean(olderDraft)} canApprove={canApprove} send={sendExtra}/>
     <LocalFieldAssistant diagnosis={diagnosis} report={report} disabled={busy||mediaBusy||!draftReady||Boolean(olderDraft)} onApply={setReport}/>
+    <FieldServicePicker order={order} busy={busy||mediaBusy||!draftReady||Boolean(olderDraft)||Boolean(pendingSubmission)||confirmed} send={sendExtra}/>
     <FieldOrderTools scope={scope} order={order} busy={busy||mediaBusy||!draftReady||Boolean(olderDraft)} canApprove={canApprove} send={sendExtra}/>
     </fieldset>
     {confirmed&&<button type="button" className={styles.secondaryAction} onClick={()=>void onSaved()}>Atualizar dados após gravação</button>}
