@@ -29,6 +29,7 @@ type Props = {
   disabled?: boolean;
   maxResults?: number;
   className?: string;
+  showHierarchy?: boolean;
   locationId?: string;
   onLocationChange?: (selection: HierarchySelection) => void;
   customerIdValue?: string;
@@ -47,6 +48,7 @@ export function CustomerSearchSelect({
   disabled = false,
   maxResults = 8,
   className = "",
+  showHierarchy = true,
   locationId = "",
   onLocationChange,
   customerIdValue,
@@ -137,6 +139,6 @@ export function CustomerSearchSelect({
         {(valueMode === "id" ? item.id : item.name) === value && <CheckCircle2 size={15}/>}
       </button>) : <div className="customer-search-no-results"><Search size={15}/><span>Nenhum cliente encontrado</span></div>}
     </div>}
-    {isMunicipalCustomer(hierarchyCustomer) && hierarchyCustomer && <CustomerHierarchyTree key={hierarchyCustomer.id} customer={hierarchyCustomer} records={hierarchy.records} customers={hierarchy.customers.length ? hierarchy.customers : customers} value={locationId} disabled={disabled} onSelect={onLocationChange} />}
+    {showHierarchy && isMunicipalCustomer(hierarchyCustomer) && hierarchyCustomer && <CustomerHierarchyTree key={hierarchyCustomer.id} customer={hierarchyCustomer} records={hierarchy.records} customers={hierarchy.customers.length ? hierarchy.customers : customers} value={locationId} disabled={disabled} onSelect={onLocationChange} />}
   </div>;
 }
