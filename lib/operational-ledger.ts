@@ -177,6 +177,7 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
   assertUnique(list(modules.Equipamentos), list(oldModules.Equipamentos), "serialNumber");
   for(const employee of list(modules.Funcionários)) {
     const before=list(oldModules.Funcionários).find(item=>item.id===employee.id);
+    if(before && (!same(employee.employeePermissions,before.employeePermissions)||employee.employeeRole!==before.employeeRole||employee.accessProfile!==before.accessProfile))requireAction(actor,"configuracoes.usuarios");
     const loginChanged=String(employee.employeeUsername||"")!==String(before?.employeeUsername||"")||String(employee.employeePasswordHash||"")!==String(before?.employeePasswordHash||"");
     if(loginChanged){
       requireAction(actor,"configuracoes.usuarios");
