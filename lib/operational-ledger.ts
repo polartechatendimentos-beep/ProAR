@@ -177,6 +177,14 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
   assertUnique(list(modules.Equipamentos), list(oldModules.Equipamentos), "serialNumber");
   for(const employee of list(modules.Funcionários)) {
     const before=list(oldModules.Funcionários).find(item=>item.id===employee.id);
+    const loginChanged=String(employee.employeeUsername||"")!==String(before?.employeeUsername||"")||String(employee.employeePasswordHash||"")!==String(before?.employeePasswordHash||"");
+    if(loginChanged){
+      requireAction(actor,"configuracoes.usuarios");
+      const username=String(employee.employeeUsername||"").trim().toLocaleLowerCase("pt-BR");
+      if(!/^[a-z0-9._@+-]{3,120}$/.test(username))throw new OperationError("Usuário de login inválido: use de 3 a 120 caracteres sem espaços.");
+      if(list(modules.Funcionários).some(other=>other.id!==employee.id&&String(other.employeeUsername||"").trim().toLocaleLowerCase("pt-BR")===username))throw new OperationError("Este usuário já pertence a outro funcionário.");
+      employee.employeeUsername=username;
+    }
     if(employee.employeeSignature!==before?.employeeSignature){
       if(employee.employeeSignature && !safeSignatureImage(employee.employeeSignature))throw new OperationError("Assinatura padrão inválida. Use uma imagem PNG, JPEG ou WebP de até 250 KB.");
       employee.employeeSignatureUpdatedAt=now;employee.employeeSignatureUpdatedBy=actor.username;
