@@ -27,7 +27,7 @@ test("manager can see all OS but only allowlisted fields", () => {
   const orders = mobileFieldOrders(records, manager);
   assert.equal(orders.length, 4);
   assert.deepEqual(Object.keys(orders[0]).sort(), [
-    "address","appliedMaterials","attendancePaused","checkInAt","client","date","delay","diagnosis","equipmentIds","estimatedDurationMinutes","events","evidence","executedService","fieldExceptions","fieldVersion","id","measurements","mobileChecklist","observations","photoCounts","requests","service","status","tech","technicianAssigned","time","unit","warranty",
+    "address","appliedMaterials","appliedServices","attendancePaused","checkInAt","client","date","delay","diagnosis","equipmentIds","estimatedDurationMinutes","events","evidence","executedService","fieldExceptions","fieldVersion","id","measurements","mobileChecklist","observations","photoCounts","requests","service","status","tech","technicianAssigned","time","unit","warranty",
   ]);
 });
 
