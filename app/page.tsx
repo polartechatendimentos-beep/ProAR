@@ -3392,7 +3392,7 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
   const [orderSaveBusy,setOrderSaveBusy]=useState(false),[orderSaveError,setOrderSaveError]=useState("");
   const orderSaveLock=useRef(false);
   const saveNewOrder = async (status: "Agendada" | "Rascunho") => {
-    if(orderSaveLock.current)return;
+    if(orderSaveLock.current||quickSectorBusy)return;
     const issue=orderCreationIssue({client:selectedClient,date,financialStatus:selectedClientData?.financialStatus,draft:status==="Rascunho"});
     if(issue){setOrderSaveError(issue);setOrderTab("Geral");return;}
     orderSaveLock.current=true;setOrderSaveBusy(true);setOrderSaveError("");
@@ -3572,8 +3572,8 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
 
         {orderSaveError&&<p role="alert" style={{color:"#991b1b",background:"#fef2f2",border:"1px solid #f87171",padding:12,margin:"0 20px"}}><strong>Não foi salvo.</strong> {orderSaveError}</p>}
         <footer className="os-create-footer">
-          <div><button type="button" className="outline-btn" onClick={close}>Cancelar</button><button type="button" className="outline-btn" disabled={orderSaveBusy} onClick={() => void saveNewOrder("Rascunho")}>Salvar como rascunho</button></div>
-          <div className="os-create-footer-summary"><span>{selectedOrderItems.length} item(ns) • {selectedEquipmentIds.length} equipamento(s)</span><strong>R$ {orderTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong><button type="button" className="primary-btn" disabled={orderSaveBusy} onClick={() => void saveNewOrder("Agendada")}><CheckCircle2 size={15}/>{orderSaveBusy?"Salvando…":"Salvar e agendar OS"}</button></div>
+          <div><button type="button" className="outline-btn" onClick={close}>Cancelar</button><button type="button" className="outline-btn" disabled={orderSaveBusy||quickSectorBusy} onClick={() => void saveNewOrder("Rascunho")}>Salvar como rascunho</button></div>
+          <div className="os-create-footer-summary"><span>{selectedOrderItems.length} item(ns) • {selectedEquipmentIds.length} equipamento(s)</span><strong>R$ {orderTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong><button type="button" className="primary-btn" disabled={orderSaveBusy||quickSectorBusy} onClick={() => void saveNewOrder("Agendada")}><CheckCircle2 size={15}/>{orderSaveBusy?"Salvando…":"Salvar e agendar OS"}</button></div>
         </footer>
       </section>
     </div>
