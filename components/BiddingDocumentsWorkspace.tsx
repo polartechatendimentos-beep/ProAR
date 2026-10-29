@@ -56,6 +56,12 @@ export function BiddingDocumentsWorkspace({companyName}:{companyName:string}){
  };
  const scoped=documents.filter(doc=>tenderId?doc.tenderId===tenderId:!doc.tenderId);
  const checklist=documentChecklist(documents,tenderId);
+ const today=new Date().toLocaleDateString("en-CA",{timeZone:"America/Sao_Paulo"});
+ const expiring=scoped.filter(doc=>doc.uploaded&&doc.validUntil&&doc.validUntil>=today&&Math.ceil((Date.parse(doc.validUntil+"T12:00:00Z")-Date.parse(today+"T12:00:00Z"))/86400000)<=30);
+ const expired=scoped.filter(doc=>doc.uploaded&&doc.validUntil&&doc.validUntil<today);
+ const report=()=>{const lines=["PROAR — RELATÓRIO PRELIMINAR DE HABILITAÇÃO","Empresa: "+companyName,"Edital: "+(tenders.find(t=>t.id===tenderId)?.name||"Cofre da empresa"),"Emissão: "+new Date().toLocaleString("pt-BR"),"",...scoped.map(doc=>[doc.name,doc.category,doc.status,doc.validUntil||"Validade não informada",doc.reviewedBy||"Sem revisão"].join(" | ")),"","CHECKLIST DE REFERÊNCIA",...checklist.map(item=>item.category+": "+(item.approved?"Conferido":"Pendente")),"","Este relatório não substitui a análise do edital e a verificação de autenticidade."];const blob=new Blob([lines.join("\n")],{type:"text/plain;charset=utf-8"}),url=URL.createObjectURL(blob),link=document.createElement("a");link.href=url;link.download="proar-auditoria-documental.txt";link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+ const suggestCategory=(name:string):DocumentCategory=>{const n=name.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();if(/fgts|crf/.test(n))return "FGTS";if(/cndt|trabalhist/.test(n))return "Trabalhista";if(/federal|receita|uniao/.test(n))return "CND Federal";if(/estadual|sefaz/.test(n))return "CND Estadual";if(/municipal|prefeitura/.test(n))return "CND Municipal";if(/crea|cft/.test(n))return "CREA / CFT";if(/atestado|capacidade/.test(n))return "Atestado técnico";if(/\bart\b|anotacao.responsabilidade/.test(n))return "ART";return "Outros";};
+
  return <section className="panel bidding-private-documents" aria-label="Arquivos reais de habilitação" style={{padding:18,marginBottom:18}}>
   <h3>Arquivos e conferência de habilitação</h3><p><strong>Empresa: {companyName}</strong>. Arquivos privados por empresa. Anexar não significa aprovar; cada documento exige revisão humana.</p>
   {!configured&&<p role="status">Armazenamento privado não confirmado nesta instalação. O envio ficará bloqueado até a configuração estar disponível.</p>}
@@ -66,12 +72,12 @@ export function BiddingDocumentsWorkspace({companyName}:{companyName:string}){
     <label className="wide">Arquivos reais • PDF, JPG ou PNG • até 10 MB cada<input type="file" multiple accept=".pdf,.jpg,.jpeg,.png" disabled={!configured||!canEdit} onChange={event=>{
      const batch=Array.from(event.target.files||[]);event.target.value="";
      const valid=batch.filter(file=>file.size>0&&file.size<=DOCUMENT_LIMIT&&["application/pdf","image/png","image/jpeg"].includes(file.type));
-     setFiles(valid.slice(0,10));setNotice(valid.length!==batch.length||batch.length>10?"Selecione até 10 arquivos PDF/JPG/PNG, com até 10 MB por arquivo. Os demais não foram selecionados.":"Arquivos selecionados apenas neste aparelho; use Enviar para salvar no servidor.");
+     setFiles(valid.slice(0,10));if(valid.length>0){const guess=suggestCategory(valid[0].name);if(guess!=="Outros")setCategory(guess);}setNotice(valid.length!==batch.length||batch.length>10?"Selecione até 10 arquivos PDF/JPG/PNG, com até 10 MB por arquivo. Os demais não foram selecionados.":"Arquivos selecionados apenas neste aparelho; use Enviar para salvar no servidor.");
     }}/></label>
    </div><ul>{files.map((file,index)=><li key={file.name+index}>{file.name} • {(file.size/1024/1024).toFixed(2)} MB</li>)}</ul>
    <button type="button" className="primary-btn" disabled={!canEdit||!configured||!files.length||busy} onClick={()=>void send()}>{busy?"Processando…":"Enviar arquivos privados"}</button>
   </fieldset>
-  <p role="status" aria-live="polite">{notice}</p>
+  <p role="status" aria-live="polite">{notice}</p><div role="status" style={{padding:12,border:"1px solid #527493",borderRadius:8,marginTop:12}}><strong>Alertas documentais:</strong> {expired.length} vencido(s) • {expiring.length} com vencimento em até 30 dias. {expired.length>0&&<p>Vencidos: {expired.map(doc=>doc.name).join(" · ")}</p>}{expiring.length>0&&<p>Próximos do vencimento: {expiring.map(doc=>doc.name+" ("+doc.validUntil+")").join(" · ")}</p>}<button type="button" className="outline-btn" disabled={!scoped.length||hasMore} onClick={report}>Exportar relatório preliminar</button>{hasMore&&<small> Carregue todos os registros antes de exportar.</small>}</div>
   <p style={{fontSize:12}}>Recebido confirma o arquivo no servidor. Aprovado exige conferência registrada. Validade é verificada diariamente pela data informada. A verificação de formato não é antivírus nem validação automática do conteúdo legal.</p>
   <button type="button" className="outline-btn" disabled={busy} onClick={()=>void load().catch(error=>setNotice(error.message))}>Atualizar documentos</button>
   <div style={{overflowX:"auto",marginTop:14}}><table style={{width:"100%",minWidth:720}}><thead><tr><th>Documento</th><th>Edital</th><th>Situação</th><th>Validade</th><th>Arquivo / Conferência</th></tr></thead><tbody>{scoped.map(doc=><tr key={doc.id}>
