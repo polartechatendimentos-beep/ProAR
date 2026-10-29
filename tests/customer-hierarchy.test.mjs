@@ -44,7 +44,10 @@ test("new municipal hierarchy is saved through existing records without relinkin
  const b=prepareCustomerStructureSave(customer,sector,a.nextStructures);
  const c=prepareCustomerStructureSave(customer,room,b.nextStructures);
  assert.equal(c.record.parentId,"sector");assert.equal(c.record.customerId,"pref-A");
- assert.throws(()=>prepareCustomerStructureSave(customer,{...sector,parentId:undefined},a.nextStructures),/Unidade/);
+ const rootSector=prepareCustomerStructureSave(customer,{...sector,parentId:undefined},a.nextStructures);
+ assert.equal(rootSector.record.parentId,undefined);
+ assert.equal(b.record.parentId,"unit");
+ assert.equal(a.nextStructures.length,1);
  assert.equal(prepareCustomerStructureSave(customer,{...unit,id:"filial",hierarchyLevel:"Filial"},[]).record.parentId,undefined);
 });
 test("municipal behavior recognizes explicit profiles and legacy municipal names",()=>{
