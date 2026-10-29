@@ -12,6 +12,13 @@ export function pncpProposalQuery(end:string,uf:string,modality:number,page:numb
  if(municipality)query.set("codigoMunicipioIbge",municipality);return query;
 }
 export function withinTenderWindow(closing:string|undefined,published:string|undefined,start:number,end:number,municipal=false){
- const deadline=Date.parse(closing??"");if(Number.isFinite(deadline))return deadline>=start&&deadline<=end;
- const publication=Date.parse(published??"");return municipal||(Number.isFinite(publication)&&publication>=start-366*86400000);
+ const deadline=Date.parse(procurementDateIso(closing)??"");if(Number.isFinite(deadline))return deadline>=start&&deadline<=end;
+ const publication=Date.parse(procurementDateIso(published)??"");return municipal||(Number.isFinite(publication)&&publication>=start-366*86400000);
+}
+
+/** PNCP civil timestamps without an offset refer to Brazilian local procurement time. */
+export function procurementDateIso(value:string|undefined){
+ if(!value)return undefined;
+ const input=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(value)?value+"-03:00":value;
+ const millis=Date.parse(input);return Number.isFinite(millis)?new Date(millis).toISOString():undefined;
 }
