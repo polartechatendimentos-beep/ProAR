@@ -25,7 +25,7 @@ export function validDocumentDate(value:unknown){
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date)throw new Error("Validade inválida.");
  return date;
 }
-export function documentStatus(doc:BiddingDocument,today=new Date().toLocaleDateString("en-CA",{timeZone:"America/Sao_Paulo"})){
+export function documentStatus(doc:Pick<BiddingDocument,"uploaded"|"validUntil"|"review">,today=new Date().toLocaleDateString("en-CA",{timeZone:"America/Sao_Paulo"})){
  if(!doc.uploaded)return "Pendente";
  if(doc.validUntil&&doc.validUntil<today)return "Vencido";
  if(doc.review==="rejected")return "Rejeitado";
@@ -47,7 +47,7 @@ export function reviewDocument(doc:BiddingDocument,input:{review:unknown;note:un
  if(doc.audit.length>=200)throw new Error("Limite de revisões atingido. Anexe uma nova versão sem apagar o histórico.");
  return {...doc,_revision:doc._revision+1,review:review as ReviewState,reviewNote:note,validUntil,noExpiry,reviewedAt:now.toISOString(),reviewedBy:actor,audit:[...doc.audit,{at:now.toISOString(),actor,action:review,note}]};
 }
-export function documentChecklist(documents:BiddingDocument[],tenderId:string,today?:string){
+export function documentChecklist(documents:Pick<BiddingDocument,"category"|"tenderId"|"uploaded"|"validUntil"|"review">[],tenderId:string,today?:string){
  const scoped=documents.filter(doc=>tenderId?doc.tenderId===tenderId:!doc.tenderId);
  return DOCUMENT_CATEGORIES.filter(category=>category!=="Outros").map(category=>({category,received:scoped.filter(doc=>doc.category===category&&doc.uploaded).length,approved:scoped.some(doc=>doc.category===category&&documentStatus(doc,today)==="Aprovado")}));
 }
