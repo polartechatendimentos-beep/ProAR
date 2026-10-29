@@ -13,5 +13,6 @@ export function tenantEmployeeCandidate(payload:unknown,companyId:string,usernam
  if(!Array.isArray(employees))return null;
  const normalized=username.trim().toLocaleLowerCase("pt-BR");
  const matches=employees.filter((item):item is EmployeeAuthRecord=>Boolean(item&&typeof item==="object"&&!Array.isArray(item)&&String(item.employeeUsername||"").trim().toLocaleLowerCase("pt-BR")===normalized));
- return matches.length===1?matches[0]:null;
+ if(matches.length>1)throw new Error("Cadastro de login duplicado. Solicite revisão do acesso.");
+ return matches[0]||null;
 }
