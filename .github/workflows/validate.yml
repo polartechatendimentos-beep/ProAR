@@ -65,6 +65,10 @@ jobs:
           echo "$POST_STATUS" | grep -Eq "^(401|403|500|503)$"
           grep -qi "^content-type: application/json" /tmp/auth-post.headers
           node -e 'const body=JSON.parse(require("fs").readFileSync("/tmp/auth-post.json","utf8")); if(!body || typeof body!=="object") process.exit(1); if(typeof body.error!=="string") process.exit(1)'
+      - name: Public procurement source probe
+        continue-on-error: true
+        timeout-minutes: 2
+        run: node --experimental-strip-types scripts/probe-procurement-public.mjs
       - name: Production database probe
         if: always()
         continue-on-error: true
