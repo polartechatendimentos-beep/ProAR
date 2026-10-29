@@ -4,6 +4,7 @@ import { EMPLOYEE_ACCESS_MODULES, EMPLOYEE_ACCESS_PROFILES, employeeAccessPreset
 import { employeePasswordIssue } from "@/lib/employee-password-validation";
 import { orderCreationIssue } from "@/lib/order-create-validation";
 import { orderLocationOptions } from "@/lib/order-location-options";
+import { stateSaveOutcome } from "@/lib/state-save-confirmation";
 import type { CostLine } from "@/lib/catalog-cost-engine";
 import { CatalogBidSimulator } from "@/components/CatalogBidSimulator";
 import { CatalogAdvancedSimulators } from "@/components/CatalogAdvancedSimulators";
@@ -3804,7 +3805,7 @@ export default function Home() {
   const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null);
   const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>(orders);
   const [customerRecords, setCustomerRecords] = useState<Customer[]>(customers);
-  const [moduleRecords, setModuleRecords] = useState<Record<string, ModuleRecord[]>>({ Funcionários: [tiagoEmployee] });
+  const [moduleRecords, setModuleRecords] = useState<Record<string, ModuleRecord[]>>({});
   const [savedMessage, setSavedMessage] = useState("");
   const [companies, setCompanies] = useState<TenantCompany[]>([DEFAULT_COMPANY]);
   const [activeCompany, setActiveCompany] = useState<TenantCompany>(DEFAULT_COMPANY);
@@ -3975,7 +3976,7 @@ export default function Home() {
           const loadedModules = mergeImportedServices(state.moduleRecords ?? {});
           const blockedFictitious = ["João Carlos", "Caio Henrique", "Thiago Souza", "Lucas Mendes"];
           const realEmployees = (loadedModules.Funcionários ?? []).filter((employee: ModuleRecord) => !blockedFictitious.includes(employee.name));
-          const employees = realEmployees.some((employee: ModuleRecord) => employee.name === "Tiago Viana") ? realEmployees : [tiagoEmployee, ...realEmployees];
+          const employees = realEmployees;
           const migratedModules = { ...loadedModules, Funcionários: employees };
           setModuleRecords(migratedModules);
           localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(state.serviceOrders ?? []));
@@ -4005,7 +4006,7 @@ export default function Home() {
         const cachedAt = localStorage.getItem(companyStorageKey(activeCompany.id, "last-successful-sync")) || "";
         setServiceOrders(localOrders);
         setCustomerRecords(localCustomers);
-        setModuleRecords({ ...localModules, Funcionários: localModules.Funcionários?.length ? localModules.Funcionários : [tiagoEmployee] });
+        setModuleRecords({ ...localModules, Funcionários: localModules.Funcionários ?? [] });
         setLastSuccessfulSyncAt(cachedAt);
         if (navigator.onLine) {
           setDatabaseMode("degraded");
@@ -4032,31 +4033,31 @@ export default function Home() {
     notifyFeedback({ message:savedMessage, tone });
     setSavedMessage("");
   }, [savedMessage]);
-  const persistSharedState = (nextCustomers: Customer[], nextOrders: ServiceOrder[], nextModules: Record<string, ModuleRecord[]>) => {
-    if (databaseMode === "degraded") {
-      setSavedMessage("Modo contingência: alterações estão temporariamente bloqueadas até o banco voltar a responder.");
-      return;
+  const persistSharedState = async (nextCustomers:Customer[],nextOrders:ServiceOrder[],nextModules:Record<string,ModuleRecord[]>):Promise<boolean>=>{
+    if(databaseMode==="degraded"){setSavedMessage("Não foi salvo: banco em contingência. O formulário permanece aberto.");return false;}
+    const payload={companyId:activeCompany.id,customers:nextCustomers,serviceOrders:nextOrders,moduleRecords:nextModules,_baseRevision:stateRevision};
+    if(!navigator.onLine){
+      try{
+        const queue=JSON.parse(localStorage.getItem("proar-offline-queue")||"[]");
+        localStorage.setItem("proar-offline-queue",JSON.stringify([...queue.filter((item:{companyId:string})=>item.companyId!==activeCompany.id),{companyId:activeCompany.id,payload,createdAt:new Date().toISOString()}]));
+      }catch{setSavedMessage("Não foi salvo: sem conexão e não foi possível guardar a tentativa neste aparelho.");return false;}
+      setSavedMessage("Rascunho local: aguardando conexão. A gravação no banco ainda não foi confirmada.");return false;
     }
-    localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(nextCustomers));
-    localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(nextOrders));
-    localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(nextModules));
-    const payload = { companyId: activeCompany.id, customers: nextCustomers, serviceOrders: nextOrders, moduleRecords: nextModules, _baseRevision: stateRevision };
-    if (!navigator.onLine) {
-      const queue = JSON.parse(localStorage.getItem("proar-offline-queue") || "[]");
-      localStorage.setItem("proar-offline-queue", JSON.stringify([...queue.filter((item: { companyId: string }) => item.companyId !== activeCompany.id), { companyId: activeCompany.id, payload, createdAt: new Date().toISOString() }]));
-      setSavedMessage("Sem internet: alteração guardada somente neste aparelho."); return;
-    }
-    fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }).then(async response => {
-      const result=await response.json();
-      if (response.status===409 && result.state) { const serverCustomers=result.state.customers??[]; const serverOrders=result.state.serviceOrders??[]; const serverModules=mergeImportedServices(result.state.moduleRecords??{}); setCustomerRecords(serverCustomers);setServiceOrders(serverOrders);setModuleRecords(serverModules);setStateRevision(Number(result.state._revision||0));localStorage.setItem(companyStorageKey(activeCompany.id,"customers"),JSON.stringify(serverCustomers));localStorage.setItem(companyStorageKey(activeCompany.id,"service-orders"),JSON.stringify(serverOrders));localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(serverModules));setSavedMessage("Conflito detectado: a versão mais recente do banco online foi preservada. Refaça apenas a alteração pendente.");return; }
-      if (!response.ok) throw new Error(result.error || "Falha ao confirmar a gravação"); const confirmedModules = mergeImportedServices(result.state?.moduleRecords ?? nextModules); setModuleRecords(confirmedModules); localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(confirmedModules)); setStateRevision(Number(result.state?._revision||stateRevision+1));
-    }).catch((error) => {
-      setSavedMessage(friendlyErrorMessage(error, { fallback:"Não foi possível sincronizar com o banco online. Seus dados locais foram preservados." }));
-    });
+    const applyConfirmed=(state:{customers?:unknown;serviceOrders?:unknown;moduleRecords?:unknown;_revision?:unknown})=>{
+      const confirmedCustomers=state.customers as Customer[],confirmedOrders=state.serviceOrders as ServiceOrder[],confirmedModules=mergeImportedServices(state.moduleRecords as Record<string,ModuleRecord[]>);
+      setCustomerRecords(confirmedCustomers);setServiceOrders(confirmedOrders);setModuleRecords(confirmedModules);setStateRevision(Number(state._revision||0));
+      try{localStorage.setItem(companyStorageKey(activeCompany.id,"customers"),JSON.stringify(confirmedCustomers));localStorage.setItem(companyStorageKey(activeCompany.id,"service-orders"),JSON.stringify(confirmedOrders));localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(confirmedModules));}catch{/* Server confirmation remains valid if the local cache is full. */}
+    };
+    setSyncPhase("syncing");setSavedMessage("Enviando alterações para confirmação no banco…");
+    try{
+      const response=await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+      const body=await response.json().catch(()=>null),outcome=stateSaveOutcome(response.status,body,stateRevision);
+      if(!outcome.confirmed){
+        if(outcome.conflict&&Array.isArray(body?.state?.customers)&&Array.isArray(body?.state?.serviceOrders)&&body?.state?.moduleRecords)applyConfirmed(body.state);
+        setSavedMessage("Não foi salvo: "+outcome.error);setSyncPhase("idle");return false;
+      }
+      applyConfirmed(outcome.state);setSyncPhase("complete");window.setTimeout(()=>setSyncPhase("idle"),1000);return true;
+    }catch(error){setSavedMessage(friendlyErrorMessage(error,{fallback:"Não foi salvo: falha de conexão. Os campos permanecem em edição."}));setSyncPhase("idle");return false;}
   };
   const pullFromDatabase = async () => {
     if (!online) { setSavedMessage("Sem internet. Não foi possível atualizar do banco."); return; }
@@ -4276,7 +4277,11 @@ export default function Home() {
     }
     setSavedMessage(`Orçamento convertido em ${target}.`); window.setTimeout(() => setSavedMessage(""),2500);
   };
+  const recordSaveLock=useRef(false);
   const saveRecord = async (data: ModalSave) => {
+    if(recordSaveLock.current)return;
+    recordSaveLock.current=true;
+    try{
     if (data.title.startsWith("Nova unidade, filial ou setor") || data.title.startsWith("Novo setor") || data.title.startsWith("Nova sala") || data.title.startsWith("Nova sala ou ambiente")) {
       const parentCustomer = data.title.split("•")[1]?.trim() || data.client;
       const structure: ModuleRecord = { id:`SET-${Date.now().toString().slice(-6)}`, name:data.name, client:parentCustomer, description:data.description || data.doc, doc:data.doc, contact:data.contact, phone:data.phone, address:data.address, category:data.category || "Setor", parentId:data.parentId || undefined, parentUnit:data.parentUnit || undefined, hierarchyLevel:data.hierarchyLevel || undefined, environmentType:data.environmentType, roomNumber:data.roomNumber, floor:data.floor, block:data.block, localResponsible:data.localResponsible, extension:data.extension, criticality:data.criticality, priorityAttendance:data.priorityAttendance, status:"Ativo", createdAt:new Date().toLocaleString("pt-BR"), legalName:data.legalName, tradeName:data.tradeName, email:data.email, zipCode:data.zipCode, street:data.street, addressNumber:data.addressNumber, complement:data.complement, neighborhood:data.neighborhood, city:data.city, state:data.state, stateRegistration:data.stateRegistration, municipalRegistration:data.municipalRegistration, cnaeMain:data.cnaeMain, taxStatus:data.taxStatus };
@@ -4287,14 +4292,10 @@ export default function Home() {
       const updatedModules = { ...moduleRecords, "Unidades e setores":[structure,...(moduleRecords["Unidades e setores"] ?? [])] };
       const updatedCustomers = customerRecords.map(customer => customer.name === parentCustomer ? {...customer,units:(Number(customer.units) || 0)+1} : customer);
       try {
-        setModuleRecords(updatedModules);
-        setCustomerRecords(updatedCustomers);
-        persistSharedState(updatedCustomers,serviceOrders,updatedModules);
+        if(!await persistSharedState(updatedCustomers,serviceOrders,updatedModules))return;
         setSavedMessage(`${data.category || "Setor"} vinculado a ${parentCustomer} com sucesso.`);
         window.setTimeout(() => setSavedMessage(""), 3000);
       } catch (error) {
-        setModuleRecords(moduleRecords);
-        setCustomerRecords(customerRecords);
         setSavedMessage(error instanceof Error ? `Falha ao salvar setor: ${error.message}` : "Falha ao salvar setor. Os dados anteriores foram preservados.");
         return;
       }
@@ -4330,10 +4331,7 @@ export default function Home() {
       };
       const updatedCustomers = [newCustomer, ...customerRecords];
       const updatedModules=appendAudit(moduleRecords,"Cliente criado",`Clientes • ${newCustomer.name}`,"Novo cadastro de cliente.",{moduleName:"Clientes",recordId:newCustomer.id,after:newCustomer as unknown as Record<string,unknown>});
-      setCustomerRecords(updatedCustomers);
-      setModuleRecords(updatedModules);
-      localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(updatedCustomers));
-      persistSharedState(updatedCustomers, serviceOrders, updatedModules);
+      if(!await persistSharedState(updatedCustomers, serviceOrders, updatedModules))return;
       setCurrent("Clientes");
       setSavedMessage(`Cliente ${newCustomer.name} cadastrado com sucesso.`);
     } else if (data.title === "Nova ordem de serviço") {
@@ -4384,10 +4382,7 @@ export default function Home() {
       };
       const updatedOrders = [newOrder, ...serviceOrders];
       const updatedModules=appendAudit(moduleRecords,"OS criada",`Ordens de serviço • ${newOrder.id}`,"Nova ordem de serviço cadastrada.",{moduleName:"Ordens de serviço",recordId:newOrder.id,after:newOrder as unknown as Record<string,unknown>});
-      setServiceOrders(updatedOrders);
-      setModuleRecords(updatedModules);
-      localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(updatedOrders));
-      persistSharedState(customerRecords, updatedOrders, updatedModules);
+      if(!await persistSharedState(customerRecords, updatedOrders, updatedModules))return;
       setCurrent("Ordens de serviço");
       setSavedMessage(`Ordem ${newOrder.id} gravada com sucesso.`);
     } else {
@@ -4518,14 +4513,13 @@ export default function Home() {
         });
         updatedRecords = { ...updatedRecords, Financeiro: [...payables, ...(moduleRecords.Financeiro ?? [])] };
       }
-      setModuleRecords(updatedRecords);
-      localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(updatedRecords));
-      persistSharedState(customerRecords, serviceOrders, updatedRecords);
+      if(!await persistSharedState(customerRecords, serviceOrders, updatedRecords))return;
       setCurrent(moduleName);
       setSavedMessage(moduleName === "Compras" && data.paymentType === "A prazo" ? `Compra gravada e ${Math.max(1, data.paymentInstallments.length || data.installments)} parcela(s) lançada(s) em Contas a Pagar.` : "Registro gravado com sucesso.");
     }
     setModal("");
     window.setTimeout(() => setSavedMessage(""), 3500);
+    }finally{recordSaveLock.current=false;}
   };
   useEffect(() => {
     const handleProfileCustomerUpdate = (event: Event) => {
@@ -4907,7 +4901,7 @@ export default function Home() {
       <div className="page-content">{planBlocked ? <section className="mobile-module-blocked"><LockKeyhole size={28}/><h2>Módulo não contratado</h2><p>Este módulo não faz parte do plano ativo desta empresa. A liberação é feita pelo ProAR Manager conforme o contrato.</p><button className="primary-btn" onClick={()=>setCurrent(effectiveEntitledModules?.[0]||"Painel inicial")}>Voltar para módulos liberados</button></section> : mobileBlocked ? <section className="mobile-module-blocked"><ShieldCheck size={28}/><h2>Módulo disponível no computador</h2><p>No celular e tablet o ProAR é focado na operação de trabalho. Para gestão administrativa completa, utilize a versão desktop.</p><button className="primary-btn" onClick={()=>setCurrent("Painel inicial")}>Voltar para operação</button></section> : current === "PMOC e conformidade" ? null : current === "Integridade do Sistema" ? <IntegrityAudit/> : current === "Atividades" ? <ActivityCenter records={moduleRecords.Auditoria ?? []}/> : current === "Painel inicial" && mobileExperience ? <MobileToday manager={mobileManager}/> : current === "Painel inicial" ? <DashboardWorkspace onNavigate={setCurrent} serviceOrders={serviceOrders} modules={moduleRecords} role={authenticatedUser.role}/> : current === "Central de pendências" ? <OperationsActionCenter serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} modules={moduleRecords as unknown as Record<string,Record<string,unknown>[]>} onNavigate={setCurrent}/> : current === "Clientes" ? <Customers onOpen={name => { setModal(""); window.setTimeout(() => setModal(name), 0); }} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={saveCustomerStructure} onDeleteStructure={deleteCustomerStructure} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Agenda" ? <Agenda serviceOrders={serviceOrders} onOpen={setModal} onSelect={setSelectedOrder}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} company={activeCompany} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <LicitacoesWorkspace company={activeCompany} modules={moduleRecords} customers={customerRecords} orders={serviceOrders} onSaveRecord={(moduleName,record)=>saveConfirmedModuleRecord(moduleName,record)} onDeleteRecord={deleteModuleRecord} onReadyToInvoice={record=>saveConfirmedModuleRecord("Empenhos",{...record,status:"Pronto para faturar"},[{moduleName:"Financeiro",record:{id:`FAT-${record.id}`,name:`Faturamento • ${record.name}`,client:record.client,description:`Aguardando emissão de Nota Fiscal • ${record.empenhoProcess || "processo não informado"}`,createdAt:new Date().toLocaleString("pt-BR"),status:"Pronto para faturar",date:new Date().toISOString().slice(0,10),value:record.value??0,category:"Faturamento público",transactionType:"Receber",empenhoId:record.id}}])} onOpenTender={item=>setModal(`Análise de edital • ${item.numeroControlePNCP || item.objetoCompra || "Licitação"}`)}/> : current === "Orçamentos" ? <BudgetPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={record => updateModuleRecord("Orçamentos",record)} onConvert={convertBudget} onDelete={record => deleteModuleRecord("Orçamentos",record)} onCreateCustomer={createQuickCustomer} onCreateStructure={createQuickStructure}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} sales={moduleRecords.Vendas ?? []} onSave={record => updateModuleRecord("Vendas",record)} onDelete={record=>deleteModuleRecord("Vendas",record)}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders} company={activeCompany}/> : current === "Diagnósticos" ? <DiagnosticManagementDashboard serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} equipment={(moduleRecords["Equipamentos"] ?? []) as unknown as Record<string,unknown>[]}/> : current === "Fiscal" ? <FiscalWorkspace modules={moduleRecords} serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} company={activeCompany} onNavigate={setCurrent}/> : current === "Base Técnica" ? <TechnicalBasePanel/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany} isAdministrator={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*"))}/> : current === "Aprovações" ? <ApprovalCenter records={moduleRecords["Aprovações"] ?? []} canApprove={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*") || authenticatedUser.permissions?.includes("aprovacoes.aprovar") || authenticatedUser.permissions?.includes("Aprovações"))} onOperation={runOperationalCommand}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} modules={moduleRecords} onOperation={runOperationalCommand} onOpen={setModal} onIssueInvoice={(record,invoiceNumber)=>{const commitment=(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId);const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Faturado"}}]:[];return saveConfirmedModuleRecord("Financeiro",{...record,status:"Em aberto",transactionType:"Receber",invoiceNumber,invoiceIssuedAt:new Date().toISOString()},related)}}/> : current === "Funcionários" ? <EmployeesWorkspace records={moduleRecords["Funcionários"] ?? []} serviceOrders={serviceOrders} onOpen={setModal} onUpdate={(moduleName,record)=>saveConfirmedModuleRecord(moduleName,record)} onDelete={deleteModuleRecord} canEdit={hasAction("Funcionários","Editar")} canManageLogin={Boolean(authenticatedUser.role==="Administrador"||authenticatedUser.permissions?.includes("*"))}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} onUpdate={updateServiceOrder} serviceOrders={serviceOrders} customers={customerRecords} company={activeCompany} role={authenticatedUser.role}/> : <>{(current === "Compras" || current === "Estoque") && <InventoryOperations mode={current} modules={moduleRecords} onOperation={runOperationalCommand}/>}<GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []} allModules={moduleRecords} serviceOrders={serviceOrders}/></>}</div>
       <footer><span>© {new Date().getFullYear()} ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
-    {modal && <div data-testid={modal === "Novo cliente" ? "customer-new-dialog" : undefined}><Modal title={modal} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalogRecords={[...(moduleRecords["Serviços"] ?? []).map(item=>({...item,kind:"Serviço" as const})), ...(moduleRecords["Produtos"] ?? []).map(item=>({...item,kind:"Produto" as const}))]} supplierRecords={moduleRecords["Fornecedores"] ?? []} employeeRecords={moduleRecords["Funcionários"] ?? [tiagoEmployee]} equipmentRecords={moduleRecords["Equipamentos"] ?? []} close={() => setModal("")} onSave={saveRecord} onCreateStructure={createOrderStructure}/></div>}
+    {modal && <div data-testid={modal === "Novo cliente" ? "customer-new-dialog" : undefined}><Modal title={modal} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalogRecords={[...(moduleRecords["Serviços"] ?? []).map(item=>({...item,kind:"Serviço" as const})), ...(moduleRecords["Produtos"] ?? []).map(item=>({...item,kind:"Produto" as const}))]} supplierRecords={moduleRecords["Fornecedores"] ?? []} employeeRecords={moduleRecords["Funcionários"] ?? []} equipmentRecords={moduleRecords["Equipamentos"] ?? []} close={() => setModal("")} onSave={saveRecord} onCreateStructure={createOrderStructure}/></div>}
     {selectedOrder && <OrderDetail order={selectedOrder} customerPhone={customerRecords.find(customer => customer.name === selectedOrder.client)?.phone} company={activeCompany} catalog={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} contracts={(moduleRecords.Certames ?? []) as PublicContractRecord[]} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} equipment={moduleRecords["Equipamentos"] ?? []} errorCodes={[...(moduleRecords["Códigos HVAC"] ?? []), ...(moduleRecords["Códigos de erro"] ?? []), ...(moduleRecords["ErrorCode"] ?? [])]} manuals={[...(moduleRecords["Base Técnica"] ?? []), ...(moduleRecords["Manuais Técnicos"] ?? []), ...(moduleRecords["Manuais HVAC"] ?? []), ...(moduleRecords["DiagnosticManual"] ?? [])]} close={() => setSelectedOrder(null)} onUpdate={updateServiceOrder} onDelete={deleteOrder} onSyncEquipmentDiagnostic={async (equipmentId, entry) => {
     const currentEquipment=(moduleRecords["Equipamentos"] ?? []).find(item=>item.id===equipmentId);
     if(!currentEquipment)return false;

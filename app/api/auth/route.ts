@@ -1,7 +1,9 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
+import { resolveTenantDb, tenantHeaders } from "../../../lib/tenant-rest";
+import { employeeStateKeys, tenantEmployeeCandidate } from "../../../lib/tenant-employee-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { authenticate, createSessionForUser, readSession } from "../../../lib/proar-auth";
-import { supabaseConfigured, supabaseRest } from "../../../lib/supabase-rest";
+import { databaseFetch, supabaseConfigured, supabaseRest } from "../../../lib/supabase-rest";
 import { hashPassword, verifyPassword } from "../../../lib/password";
 import { tenantSlugFromHost } from "../../../lib/tenant-host";
 import { validateCompanyAccess, validateCompanyAccessBySlug } from "../../../lib/company-access";
@@ -17,23 +19,29 @@ const primaryTenantModules = () => [...ALL_MANAGER_MODULES];
 const contractedModules = (companyId?: string, companySlug?: string, planCode?: unknown) => isPrimaryTenant(companyId,companySlug) ? primaryTenantModules() : [...managerPlan(planCode || "basico").modules];
 const safeEqual = (left: string, right: string) => { const a=Buffer.from(left); const b=Buffer.from(right); return a.length===b.length && timingSafeEqual(a,b); };
 
-async function authenticateLegacyEmployee(username: string, password: string) {
+async function authenticateLegacyEmployee(username: string, password: string, requestedTenant:string) {
   if (!supabaseConfigured()) return null;
   const normalized = username.trim().toLocaleLowerCase("pt-BR");
-  const response = await supabaseRest("proar_state?select=id,payload");
-  if (!response.ok) return null;
-  const rows = await response.json() as { id: string; payload?: { moduleRecords?: Record<string, Array<Record<string, unknown>>> } }[];
-  const primaryCompanyId = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
-  for (const row of rows) {
-    const employees = row.payload?.moduleRecords?.["Funcionários"] ?? [];
-    const employee = employees.find(item => item.status !== "Inativo" && String(item.employeeUsername ?? "").trim().toLocaleLowerCase("pt-BR") === normalized);
-    if (!employee) continue;
-    const storedHash = String(employee.employeePasswordHash ?? "");
-    const suppliedHash = createHash("sha256").update(password).digest("hex");
-    const passwordMatches = storedHash.startsWith("scrypt$")
-      ? verifyPassword(password, storedHash)
-      : safeEqual(suppliedHash, storedHash);
-    if (!storedHash || !passwordMatches) continue;
+  const companySlug=requestedTenant.trim().toLowerCase()||PRIMARY_COMPANY_SLUG;
+  let companyId=PRIMARY_COMPANY_ID;
+  if(companySlug!==PRIMARY_COMPANY_SLUG){
+    const response=await supabaseRest(`proar_companies?select=id,slug,status&slug=eq.${encodeURIComponent(companySlug)}&limit=1`);
+    const companies=response.ok?await response.json():[];
+    if(!companies[0]||companies[0].status!=="active")return null;
+    companyId=String(companies[0].id);
+  }
+  const db=await resolveTenantDb(companyId);
+  if(!db.url||!db.key)return null;
+  for(const key of employeeStateKeys(companyId,db.dedicated,PRIMARY_COMPANY_ID)){
+    const response=await databaseFetch(`${db.url}/rest/v1/proar_state?id=eq.${encodeURIComponent(key)}&select=payload&limit=1`,{headers:tenantHeaders(db.key),cache:"no-store"});
+    if(!response.ok)return null;
+    const rows=await response.json();
+    const employee=tenantEmployeeCandidate(rows[0]?.payload,companyId,normalized);
+    if(!employee)continue;
+    // A matching current employee must never fall through to an older password.
+    if(String(employee.status||"").trim().toLowerCase()==="inativo")return {denied:true as const,reason:"Utilizador ou senha inválidos.",status:401};
+    const storedHash=String(employee.employeePasswordHash||"");
+    if(!storedHash||!verifyPassword(password,storedHash))return {denied:true as const,reason:"Utilizador ou senha inválidos.",status:401};
     if (employee.restrictLoginToWorkHours === true) {
       const start = /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(employee.workdayStart || "")) ? String(employee.workdayStart) : "07:00";
       const end = /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(employee.workdayEnd || "")) ? String(employee.workdayEnd) : "18:00";
@@ -43,7 +51,7 @@ async function authenticateLegacyEmployee(username: string, password: string) {
     }
     const permissionsMap = (employee.employeePermissions ?? {}) as Record<string, string[]>;
     const permissions = String(employee.employeeRole || "") === "Administrador" ? ["*"] : Object.entries(permissionsMap).flatMap(([module, actions]) => actions.includes("Visualizar") ? [module, ...actions.map(action => `${module}:${action}`)] : []);
-    return { username: String(employee.employeeUsername || normalized), displayName: String(employee.name || normalized), role: String(employee.employeeRole || "Utilizador"), permissions, companyId: primaryCompanyId, legacy: true };
+    return { username: String(employee.employeeUsername || normalized), displayName: String(employee.name || normalized), role: String(employee.employeeRole || "Utilizador"), permissions, companyId, companySlug, legacy: true };
   }
   return null;
 }
@@ -118,7 +126,7 @@ async function handlePostAuth(request: NextRequest) {
     }
   }
   const isConfiguredTiago = String(username).trim().toLocaleLowerCase("pt-BR") === "tiago.viana" && Boolean(process.env.PROAR_POLARTECH_TIAGO_PASSWORD) && safeEqual(String(password), String(process.env.PROAR_POLARTECH_TIAGO_PASSWORD));
-  if (validateManagerCredentials(String(username), String(password)) || isConfiguredTiago) {
+  if ((!resolvedTenant || resolvedTenant===PRIMARY_COMPANY_SLUG) && (validateManagerCredentials(String(username), String(password)) || isConfiguredTiago)) {
     let companyId = PRIMARY_COMPANY_ID;
     let companySlug = resolvedTenant || PRIMARY_COMPANY_SLUG;
     let entitledModules: string[] | undefined = isPrimaryTenant(companyId, companySlug) ? primaryTenantModules() : undefined;
@@ -138,7 +146,7 @@ async function handlePostAuth(request: NextRequest) {
   }
   // Usuários administrativos/legados continuam válidos também no domínio oficial.
   // O tenant só é usado como fallback quando não houver usuário existente.
-  const staticUser = authenticate(String(username), String(password));
+  const staticUser = resolvedTenant && resolvedTenant!==PRIMARY_COMPANY_SLUG ? null : authenticate(String(username), String(password));
   if (staticUser) {
     const primaryTenant = resolvedTenant === PRIMARY_COMPANY_SLUG;
     const claims = {
@@ -157,9 +165,9 @@ async function handlePostAuth(request: NextRequest) {
     return response;
   }
 
-  const legacyEmployee = await authenticateLegacyEmployee(String(username), String(password));
+  const legacyEmployee = await authenticateLegacyEmployee(String(username), String(password),resolvedTenant);
   if (legacyEmployee) {
-    if ("denied" in legacyEmployee) return NextResponse.json({ error: legacyEmployee.reason }, { status: 403 });
+    if ("denied" in legacyEmployee) return NextResponse.json({ error: legacyEmployee.reason }, { status: "status" in legacyEmployee ? legacyEmployee.status : 403 });
     const response = NextResponse.json({ authenticated: true, ...legacyEmployee }); response.cookies.set(COOKIE_NAME, createSessionForUser(legacyEmployee), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 }); return response;
   }
 
