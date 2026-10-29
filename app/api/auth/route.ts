@@ -126,7 +126,7 @@ async function handlePostAuth(request: NextRequest) {
     }
   }
   const isConfiguredTiago = String(username).trim().toLocaleLowerCase("pt-BR") === "tiago.viana" && Boolean(process.env.PROAR_POLARTECH_TIAGO_PASSWORD) && safeEqual(String(password), String(process.env.PROAR_POLARTECH_TIAGO_PASSWORD));
-  if (validateManagerCredentials(String(username), String(password)) || isConfiguredTiago) {
+  if ((!resolvedTenant || resolvedTenant===PRIMARY_COMPANY_SLUG) && (validateManagerCredentials(String(username), String(password)) || isConfiguredTiago)) {
     let companyId = PRIMARY_COMPANY_ID;
     let companySlug = resolvedTenant || PRIMARY_COMPANY_SLUG;
     let entitledModules: string[] | undefined = isPrimaryTenant(companyId, companySlug) ? primaryTenantModules() : undefined;
@@ -146,7 +146,7 @@ async function handlePostAuth(request: NextRequest) {
   }
   // Usuários administrativos/legados continuam válidos também no domínio oficial.
   // O tenant só é usado como fallback quando não houver usuário existente.
-  const staticUser = authenticate(String(username), String(password));
+  const staticUser = resolvedTenant && resolvedTenant!==PRIMARY_COMPANY_SLUG ? null : authenticate(String(username), String(password));
   if (staticUser) {
     const primaryTenant = resolvedTenant === PRIMARY_COMPANY_SLUG;
     const claims = {
