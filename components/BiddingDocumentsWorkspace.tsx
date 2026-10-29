@@ -59,17 +59,17 @@ export function BiddingDocumentsWorkspace({companyName}:{companyName:string}){
  return <section className="panel bidding-private-documents" aria-label="Arquivos reais de habilitação" style={{padding:18,marginBottom:18}}>
   <h3>Arquivos e conferência de habilitação</h3><p><strong>Empresa: {companyName}</strong>. Arquivos privados por empresa. Anexar não significa aprovar; cada documento exige revisão humana.</p>
   {!configured&&<p role="status">Armazenamento privado não confirmado nesta instalação. O envio ficará bloqueado até a configuração estar disponível.</p>}
-  <fieldset disabled={busy||!canEdit} style={{border:0,padding:0,margin:0}}>
+  <fieldset disabled={busy} style={{border:0,padding:0,margin:0}}>
    <div className="form-grid" style={{padding:0}}>
-    <label>Categoria<select value={category} onChange={event=>setCategory(event.target.value as DocumentCategory)}>{DOCUMENT_CATEGORIES.map(value=><option key={value}>{value}</option>)}</select></label>
+    <label>Categoria<select disabled={!canEdit} value={category} onChange={event=>setCategory(event.target.value as DocumentCategory)}>{DOCUMENT_CATEGORIES.map(value=><option key={value}>{value}</option>)}</select></label>
     <label>Vínculo ao edital<select value={tenderId} onChange={event=>setTenderId(event.target.value)}><option value="">Cofre da empresa • sem edital específico</option>{tenders.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select><small>Salve o edital no acompanhamento para vinculá-lo aqui.</small></label>
-    <label className="wide">Arquivos reais • PDF, JPG ou PNG • até 10 MB cada<input type="file" multiple accept=".pdf,.jpg,.jpeg,.png" disabled={!configured} onChange={event=>{
+    <label className="wide">Arquivos reais • PDF, JPG ou PNG • até 10 MB cada<input type="file" multiple accept=".pdf,.jpg,.jpeg,.png" disabled={!configured||!canEdit} onChange={event=>{
      const batch=Array.from(event.target.files||[]);event.target.value="";
      const valid=batch.filter(file=>file.size>0&&file.size<=DOCUMENT_LIMIT&&["application/pdf","image/png","image/jpeg"].includes(file.type));
      setFiles(valid.slice(0,10));setNotice(valid.length!==batch.length||batch.length>10?"Selecione até 10 arquivos PDF/JPG/PNG, com até 10 MB por arquivo. Os demais não foram selecionados.":"Arquivos selecionados apenas neste aparelho; use Enviar para salvar no servidor.");
     }}/></label>
    </div><ul>{files.map((file,index)=><li key={file.name+index}>{file.name} • {(file.size/1024/1024).toFixed(2)} MB</li>)}</ul>
-   <button type="button" className="primary-btn" disabled={!configured||!files.length||busy} onClick={()=>void send()}>{busy?"Processando…":"Enviar arquivos privados"}</button>
+   <button type="button" className="primary-btn" disabled={!canEdit||!configured||!files.length||busy} onClick={()=>void send()}>{busy?"Processando…":"Enviar arquivos privados"}</button>
   </fieldset>
   <p role="status" aria-live="polite">{notice}</p>
   <p style={{fontSize:12}}>Recebido confirma o arquivo no servidor. Aprovado exige conferência registrada. Validade é verificada diariamente pela data informada. A verificação de formato não é antivírus nem validação automática do conteúdo legal.</p>
@@ -82,10 +82,10 @@ export function BiddingDocumentsWorkspace({companyName}:{companyName:string}){
    <h4>Conferir: {selected.name}</h4><p>A decisão será registrada para esta versão do arquivo e este vínculo.</p><fieldset disabled={busy} style={{border:0,padding:0}}><div className="form-grid" style={{padding:0}}>
     <label>Decisão<select value={review} onChange={event=>setReview(event.target.value)}><option value="received">Recebido • aguardar revisão</option><option value="approved">Aprovar manualmente</option><option value="rejected">Rejeitar</option></select></label>
     <label>Validade informada no documento<input type="date" value={validUntil} onChange={event=>{setValidUntil(event.target.value);setNoExpiry(false);}}/></label>
-    <label className="wide"><span><input type="checkbox" checked={noExpiry} onChange={event=>{setNoExpiry(event.target.checked);if(event.target.checked)setValidUntil("");}}/> Conferi que este documento não possui vencimento</span></label>
-    <label className="wide"><span><input type="checkbox" checked={identityChecked} onChange={event=>setIdentityChecked(event.target.checked)}/> Conferi a identificação da empresa no arquivo</span></label>
-    <label className="wide"><span><input type="checkbox" checked={contentChecked} onChange={event=>setContentChecked(event.target.checked)}/> Li o conteúdo e conferi autenticidade e condições na origem</span></label>
-    {selected.tenderId&&<label className="wide"><span><input type="checkbox" checked={tenderChecked} onChange={event=>setTenderChecked(event.target.checked)}/> Conferi adequação às exigências deste edital</span></label>}
+    <label className="wide"><span><input type="checkbox" style={{width:18,height:18,minHeight:0,display:"inline-block",margin:"0 8px 0 0",verticalAlign:"middle"}} checked={noExpiry} onChange={event=>{setNoExpiry(event.target.checked);if(event.target.checked)setValidUntil("");}}/> Conferi que este documento não possui vencimento</span></label>
+    <label className="wide"><span><input type="checkbox" style={{width:18,height:18,minHeight:0,display:"inline-block",margin:"0 8px 0 0",verticalAlign:"middle"}} checked={identityChecked} onChange={event=>setIdentityChecked(event.target.checked)}/> Conferi a identificação da empresa no arquivo</span></label>
+    <label className="wide"><span><input type="checkbox" style={{width:18,height:18,minHeight:0,display:"inline-block",margin:"0 8px 0 0",verticalAlign:"middle"}} checked={contentChecked} onChange={event=>setContentChecked(event.target.checked)}/> Li o conteúdo e conferi autenticidade e condições na origem</span></label>
+    {selected.tenderId&&<label className="wide"><span><input type="checkbox" style={{width:18,height:18,minHeight:0,display:"inline-block",margin:"0 8px 0 0",verticalAlign:"middle"}} checked={tenderChecked} onChange={event=>setTenderChecked(event.target.checked)}/> Conferi adequação às exigências deste edital</span></label>}
     <label className="wide">Justificativa / observações • obrigatório<textarea value={note} onChange={event=>setNote(event.target.value)} maxLength={2000}/></label>
    </div><button type="button" className="outline-btn" onClick={()=>setSelected(null)}>Cancelar conferência</button> <button type="button" className="primary-btn" onClick={()=>void saveReview()}>Salvar conferência</button></fieldset>
   </section>}
