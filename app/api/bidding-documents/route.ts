@@ -27,7 +27,7 @@ export async function GET(request:NextRequest){
   const result=await routeRest(c.db,"proar_state?id=like."+encodeURIComponent(biddingDocumentPrefix(c.company)+"*")+"&select=payload&order=updated_at.desc&limit=50&offset="+offset);
   if(!result.ok)throw new Error("Consulta indisponível");
   const rows=await result.json() as {payload:BiddingDocument}[];
-  return json({companyId:c.company,canEdit:hasPermission(access.session,"licitacoes.editar"),storageConfigured:Boolean(process.env.BLOB_READ_WRITE_TOKEN||process.env.BLOB_STORE_ID),documents:rows.filter(row=>row.payload.companyId===c.company).map(({payload:doc})=>{const {pathname,...safe}=doc;return {...safe,status:documentStatus(doc)};}),hasMore:rows.length===50,tenders:biddingTenderOptions(c.state)});
+  return json({companyId:c.company,canEdit:hasPermission(access.session,"licitacoes.editar"),storageConfigured:Boolean(process.env.BLOB_READ_WRITE_TOKEN||process.env.BLOB_STORE_ID),documents:rows.filter(row=>row.payload.companyId===c.company).map(({payload:doc})=>{const {pathname,...safe}=doc;return {...safe,audit:doc.audit.slice(-5),status:documentStatus(doc)};}),hasMore:rows.length===50,tenders:biddingTenderOptions(c.state)});
  }catch{return json({error:"Não foi possível consultar os documentos privados. Nenhum registro foi alterado."},503);}
 }
 export async function POST(request:NextRequest){
