@@ -1,5 +1,7 @@
 "use client";
 
+import { createPortal } from "react-dom";
+
 import { EMPLOYEE_ACCESS_MODULES, EMPLOYEE_ACCESS_PROFILES, employeeAccessPreset, employeeAccessRole } from "@/lib/employee-access-presets";
 import { employeePasswordIssue } from "@/lib/employee-password-validation";
 import { orderCreationIssue } from "@/lib/order-create-validation";
@@ -3448,7 +3450,7 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
     if (!isNewOrder && selectedClient && !availableUnits.some(item => item.name === unit)) setUnit(availableUnits[0]?.name ?? "");
   }, [selectedClient, availableUnits, unit]);
   useEffect(() => { if (sector && !availableSectors.some(item => item.name === sector)) setSector(""); }, [unit, selectedClient, structures]);
-  if (isNewOrder) return <>
+  if (isNewOrder) return typeof document === "undefined" ? null : createPortal(<>
     <div className="modal-layer os-create-layer" role="dialog" aria-modal="true" aria-label="Cadastrar nova ordem de serviço">
       <button className="modal-backdrop" onClick={close} aria-label="Fechar janela"/>
       <section className="modal os-create-modal">
@@ -3457,7 +3459,7 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
           <div className="os-create-head-actions"><button type="button" onClick={() => setDescription(improveTechnicalText(description))}><Sparkles size={14}/> Sugerir com IA</button><button type="button" className="icon-only" onClick={close} aria-label="Fechar"><X size={17}/></button></div>
         </header>
 
-        <section className="os-create-card os-create-schedule" aria-label="Data e horário do atendimento" style={{margin:"0 20px 12px",flexShrink:0}}>
+        <section className="os-create-card os-create-schedule" aria-label="Data e horário do atendimento" >
           <div className="os-create-card-head"><span><CalendarDays size={15}/> Data e horário do atendimento</span></div>
           <div className="os-create-location-grid">
             <label>Data do atendimento • para agendar<input id="os-create-date" type="date" value={date} disabled={orderSaveBusy} onInput={event=>{setDate(event.currentTarget.value);setOrderSaveError("");}} onChange={event=>{setDate(event.target.value);setOrderSaveError("");}}/></label>
@@ -3579,7 +3581,7 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
       </section>
     </div>
     {servicePickerOpen && <div className="service-picker-layer" role="dialog" aria-modal="true" aria-label="Selecionar serviços"><button type="button" className="service-picker-backdrop" aria-label="Fechar seleção de serviços" onClick={() => setServicePickerOpen(false)}/><section className="service-picker"><header><div><span>CATÁLOGO DE SERVIÇOS</span><h3>Selecionar vários serviços</h3><p>Pesquise e marque todos os itens necessários para esta ordem.</p></div><button type="button" aria-label="Fechar" onClick={() => setServicePickerOpen(false)}><X size={17}/></button></header><label className="service-picker-search"><Search size={17}/><input autoFocus value={serviceSearch} onChange={event => setServiceSearch(event.target.value)} placeholder="Pesquisar por nome ou categoria..."/><small>{visibleServiceOptions.length} resultado(s)</small></label><div className="service-picker-grid">{visibleServiceOptions.map(item => <label key={item.id} className={servicePickerIds.includes(item.id) ? "selected" : ""}><input type="checkbox" checked={servicePickerIds.includes(item.id)} onChange={() => setServicePickerIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])}/><span><Wrench size={17}/></span><div><b>{item.name}</b><small>{item.category || item.description || "Serviço cadastrado"}</small></div><CheckCircle2 size={16}/></label>)}</div>{!visibleServiceOptions.length && <div className="catalog-empty"><Search size={18}/><span>Nenhum serviço encontrado para esta pesquisa.</span></div>}<footer><span><b>{servicePickerIds.length}</b> serviço(s) marcado(s)</span><div><button type="button" className="outline-btn" onClick={() => setServicePickerOpen(false)}>Cancelar</button><button type="button" className="primary-btn" onClick={() => { setSelectedCatalogIds(current => [...current.filter(id => !serviceRecords.some(item => item.id === id)), ...servicePickerIds]); setServicePickerIds([]); setServicePickerOpen(false); }}><CheckCircle2 size={15}/> Aplicar seleção</button></div></footer></section></div>}
-  </>;
+  </>, document.body);
 
   return <div className="modal-layer" role="dialog" aria-modal="true" aria-label={title}><button className="modal-backdrop" onClick={close} aria-label="Fechar janela"/><div className={`modal ${isNewCustomer ? "customer-create-modal" : ""}`}><div className="modal-head"><div><span>{isLinkedStructure ? "ESTRUTURA DO CLIENTE • LIMITE DE 20" : "CADASTRO PROAR"}</span><h2>{isLinkedStructure ? "Nova unidade, filial ou setor" : title}</h2>{isLinkedStructure && <p>Este registro será vinculado a <strong>{parentCustomer}</strong>.</p>}</div><button onClick={close} aria-label="Fechar"><X size={18}/></button></div><div className="form-grid">
     {isLinkedStructure ? <>
