@@ -38,10 +38,10 @@ const validatePublicHierarchy = (
 ) => {
   if (!isPublicCustomer(customer)) return;
   const level=canonicalPublicLevel(draft);
-  if (!level) throw new Error("Para Prefeitura, use Matriz → Filial/Unidade → Setor → Ambiente.");
+  if (!level) throw new Error("Para Prefeitura, use Cliente principal → Setor → Unidade → Ambiente.");
   if (level === "Secretaria" && parent) throw new Error("Secretaria deve ficar vinculada diretamente à Prefeitura.");
-  if (level === "Unidade" && parent && canonicalPublicLevel(parent) !== "Secretaria") throw new Error("Unidade deve ficar na Matriz ou na Secretaria legada.");
-  if (level === "Setor" && canonicalPublicLevel(parent) !== "Unidade") throw new Error("Setor deve ser vinculado a uma Unidade.");
+  if (level === "Unidade" && parent && !["Secretaria","Setor"].includes(canonicalPublicLevel(parent))) throw new Error("Unidade deve ficar no cliente principal ou em um Setor/Secretaria.");
+  if (level === "Setor" && parent && canonicalPublicLevel(parent) !== "Unidade") throw new Error("Setor deve ficar no cliente principal ou em uma Unidade legada.");
   if (level === "Sala" && !["Unidade","Setor"].includes(canonicalPublicLevel(parent))) throw new Error("Sala/Ambiente deve ser vinculada a uma Unidade ou Setor.");
 };
 
