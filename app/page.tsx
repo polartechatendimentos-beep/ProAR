@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { EMPLOYEE_ACCESS_MODULES, EMPLOYEE_ACCESS_PROFILES, employeeAccessPreset, employeeAccessRole } from "@/lib/employee-access-presets";
 import { employeePasswordIssue } from "@/lib/employee-password-validation";
 import { orderCreationIssue } from "@/lib/order-create-validation";
-import { orderLocationOptions } from "@/lib/order-location-options";
+import { orderSectorLocationOptions, orderSectorUnitSelection } from "@/lib/order-location-options";
 import { stateSaveOutcome } from "@/lib/state-save-confirmation";
 import type { CostLine } from "@/lib/catalog-cost-engine";
 import { CatalogBidSimulator } from "@/components/CatalogBidSimulator";
@@ -3187,6 +3187,7 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
   const [priorityAttendance, setPriorityAttendance] = useState(false);
   const [quickSectorOpen, setQuickSectorOpen] = useState(false);
   const [quickSectorName, setQuickSectorName] = useState("");
+  const [quickStructureKind,setQuickStructureKind]=useState<"Setor"|"Unidade">("Setor");
   const [quickSectorFeedback, setQuickSectorFeedback] = useState("");
   const [orderTab, setOrderTab] = useState<"Geral" | "Equipamentos" | "Valores" | "Anexos">("Geral");
   const [orderPriority, setOrderPriority] = useState<ServiceOrder["priority"]>("Normal");
@@ -3358,7 +3359,7 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
   const parentStructures = isLinkedStructure ? customerStructures(parentCustomer, customers, structures) : [];
   const parentCandidates = parentStructures.filter(item => item.id !== parentStructureId);
   const selectedClientData = customers.find(customer => customer.name === selectedClient);
-  const orderLocations=selectedClientData?orderLocationOptions(selectedClientData,structures,customers,hierarchyLocation?.unitId||"",hierarchyLocation?.sectorId||""):null;
+  const orderLocations=selectedClientData?orderSectorLocationOptions(selectedClientData,structures,customers,hierarchyLocation?.sectorId||"",hierarchyLocation?.unitId||""):null;
   const availableRooms = isNewOrder?(orderLocations?.rooms.map(node=>node.record as ModuleRecord)||[]):selectedClient ? customerStructures(selectedClient, customers, structures).filter(item => /sala|ambiente|consult|labor|farm|uti|recep|almox|audit|cozinha|cpd|quarto/i.test(`${item.name} ${item.category ?? ""} ${item.environmentType ?? ""}`)) : [];
   const serviceRecords = catalogRecords.filter(item => (item.kind || "Serviço") === "Serviço");
   const productRecords = catalogRecords.filter(item => item.kind === "Produto");
@@ -3421,35 +3422,32 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
     finally{orderSaveLock.current=false;setOrderSaveBusy(false);}
   };
   const [quickSectorBusy,setQuickSectorBusy]=useState(false);
+  const quickStructureLock=useRef(false);
   const createSectorFromOrder = async () => {
-    if(quickSectorBusy)return;
-    const name = quickSectorName.trim();
-    if (!selectedClient) { setQuickSectorFeedback("Selecione o cliente antes de cadastrar o setor."); return; }
-    if (!name) { setQuickSectorFeedback("Informe o nome do setor ou local de atendimento."); return; }
-    const duplicate = availableSectors.find(item=>normalizeRelation(item.name)===normalizeRelation(name));
-    if (duplicate) {
-      if(selectedClientData&&orderLocations)chooseModalLocation(hierarchySelection(selectedClientData,orderLocations.nodes,duplicate.id));else setSector(duplicate.name);
-      setQuickSectorFeedback("Este setor já estava cadastrado e foi selecionado.");
-      setQuickSectorName("");
-      setQuickSectorOpen(false);
-      return;
+    if(quickStructureLock.current||orderSaveLock.current)return;
+    const name=quickSectorName.trim(),kind=isNewOrder?quickStructureKind:"Setor";
+    if(!selectedClient){setQuickSectorFeedback("Selecione o cliente principal.");return;}
+    if(kind==="Unidade"&&!hierarchyLocation?.sectorId){setQuickSectorFeedback("Selecione o setor antes de cadastrar a unidade.");return;}
+    if(!name){setQuickSectorFeedback(`Informe o nome ${kind==="Unidade"?"da unidade":"do setor"}.`);return;}
+    const options=kind==="Unidade"?availableUnits:availableSectors;
+    const duplicate=options.find(item=>normalizeRelation(item.name)===normalizeRelation(name));
+    if(duplicate&&selectedClientData&&orderLocations){
+      chooseModalLocation(kind==="Unidade"?orderSectorUnitSelection(selectedClientData,orderLocations.nodes,hierarchyLocation?.sectorId||"",duplicate.id):hierarchySelection(selectedClientData,orderLocations.nodes,duplicate.id));
+      setQuickSectorFeedback("Registro já cadastrado e selecionado.");setQuickSectorName("");setQuickSectorOpen(false);return;
     }
-    const parent = availableUnits.find(item => item.name === unit);
-    setQuickSectorBusy(true);setQuickSectorFeedback("Salvando setor no cadastro do cliente…");
-    let created:ModuleRecord|null=null;
-    try{created=await onCreateStructure({kind:"Setor",name,parentId:hierarchyLocation?.unitId||parent?.id||"",environmentType:"",roomNumber:"",description:"Cadastrado diretamente pela Ordem de Serviço",client:selectedClient});}
-    catch(error){setQuickSectorFeedback(error instanceof Error?error.message:"Falha ao cadastrar setor.");}
-    finally{setQuickSectorBusy(false);}
-    if (!created) { setQuickSectorFeedback("Não foi possível cadastrar o setor."); return; }
-    if(selectedClientData){const nodes=customerHierarchy(selectedClientData,[created,...structures],customers);chooseModalLocation(hierarchySelection(selectedClientData,nodes,created.id));}else setSector(created.name);
-    setQuickSectorName("");
-    setQuickSectorFeedback(`Setor ${created.name} cadastrado e selecionado.`);
-    setQuickSectorOpen(false);
+    quickStructureLock.current=true;setQuickSectorBusy(true);setQuickSectorFeedback("Salvando no cadastro do cliente…");
+    try{
+      const created=await onCreateStructure({kind,name,parentId:kind==="Unidade"?hierarchyLocation?.sectorId||"":isNewOrder?"":hierarchyLocation?.unitId||"",environmentType:"",roomNumber:"",description:"Cadastrado diretamente pela Ordem de Serviço",client:selectedClient});
+      if(!created)throw new Error("O servidor não confirmou o cadastro. Tente novamente.");
+      if(selectedClientData){const nodes=customerHierarchy(selectedClientData,[created,...structures],customers);chooseModalLocation(hierarchySelection(selectedClientData,nodes,created.id));}
+      setQuickSectorName("");setQuickSectorFeedback(`${kind} cadastrada(o) e selecionada(o).`);setQuickSectorOpen(false);
+    }catch(error){setQuickSectorFeedback(error instanceof Error?error.message:"Falha ao cadastrar. Os campos foram mantidos.");}
+    finally{quickStructureLock.current=false;setQuickSectorBusy(false);}
   };
   useEffect(() => {
     if (!isNewOrder && selectedClient && !availableUnits.some(item => item.name === unit)) setUnit(availableUnits[0]?.name ?? "");
   }, [selectedClient, availableUnits, unit]);
-  useEffect(() => { if (sector && !availableSectors.some(item => item.name === sector)) setSector(""); }, [unit, selectedClient, structures]);
+  useEffect(() => { if (!isNewOrder && sector && !availableSectors.some(item => item.name === sector)) setSector(""); }, [unit, selectedClient, structures]);
   if (isNewOrder) return typeof document === "undefined" ? null : createPortal(<>
     <div className="modal-layer os-create-layer" role="dialog" aria-modal="true" aria-label="Cadastrar nova ordem de serviço">
       <button className="modal-backdrop" onClick={close} aria-label="Fechar janela"/>
@@ -3478,15 +3476,15 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
             <div className="os-create-left">
               <article className="os-create-card">
                 <div className="os-create-card-head"><span><UserRound size={15}/> Cliente & Local do Serviço</span><em>* Obrigatório</em></div>
-                <label>Pesquisar cliente<CustomerSearchSelect showHierarchy={false} disabled={orderSaveBusy||quickSectorBusy} customers={customers} value={selectedClient} locationId={hierarchyLocation?.structureId} onLocationChange={chooseModalLocation} onChange={(value,selected) => { setSelectedClient(value); setHierarchyLocation(selected?hierarchySelection(customers.find(item=>item.id===selected.id)!,[]):null); setUnit(""); setSector(""); setRoom(""); setSelectedEquipmentIds([]); setQuickSectorOpen(false); setQuickSectorFeedback(""); }} /></label>
+                <label>Cliente principal<CustomerSearchSelect showHierarchy={false} disabled={orderSaveBusy||quickSectorBusy} customers={customers} value={selectedClient} locationId={hierarchyLocation?.structureId} onLocationChange={chooseModalLocation} onChange={(value,selected) => { setSelectedClient(value); setHierarchyLocation(selected?hierarchySelection(customers.find(item=>item.id===selected.id)!,[]):null); setUnit(""); setSector(""); setRoom(""); setSelectedEquipmentIds([]); setQuickSectorOpen(false); setQuickSectorFeedback(""); }} /></label>
                 {selectedClientData && <div className="os-client-confirm"><div><span>{selectedClientData.doc || "Documento não informado"}</span><strong className={selectedClientData.financialStatus === "Bloqueado" ? "blocked" : ""}>{selectedClientData.financialStatus || "Liberado"}</strong></div><b>{orderAddress || "Endereço principal não informado"}</b><small>{selectedClientData.contact || "Responsável não informado"} • {selectedClientData.phone || "Telefone não informado"}</small></div>}
                 <div className="os-create-location-grid">
-                  <label >Unidade / Filial<select value={hierarchyLocation?.unitId||""} onChange={event=>{if(selectedClientData&&orderLocations)chooseModalLocation(hierarchySelection(selectedClientData,orderLocations.nodes,event.target.value));}} disabled={!selectedClient||quickSectorBusy}><option value="">{selectedClient ? "Cliente principal / Endereço principal" : "Selecione primeiro o cliente"}</option>{availableUnits.map(item => <option key={item.id} value={item.id}>{item.name} • {item.type}</option>)}</select></label>
-                  <label >Setor / Local<select value={hierarchyLocation?.sectorId||""} onChange={event=>{if(selectedClientData&&orderLocations)chooseModalLocation(hierarchySelection(selectedClientData,orderLocations.nodes,event.target.value||hierarchyLocation?.unitId||""));}} disabled={!selectedClient||quickSectorBusy||!availableSectors.length}><option value="">{selectedClient ? availableSectors.length ? "Selecione o setor" : "Nenhum setor cadastrado" : "Selecione o cliente"}</option>{availableSectors.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{selectedClient && <button type="button" className="inline-create-link" disabled={quickSectorBusy} onClick={() => { setQuickSectorOpen(value => !value); setQuickSectorFeedback(""); }}><Plus size={12}/> Cadastrar setor</button>}</label>
-                  <label >Sala / Ambiente<select value={hierarchyLocation?.roomId||""} onChange={event=>{if(selectedClientData&&orderLocations)chooseModalLocation(hierarchySelection(selectedClientData,orderLocations.nodes,event.target.value||hierarchyLocation?.sectorId||hierarchyLocation?.unitId||""));}} disabled={!selectedClient||quickSectorBusy}><option value="">{selectedClient ? availableRooms.length ? "Selecione a sala (opcional)" : "Nenhuma sala cadastrada" : "Selecione o cliente"}</option>{availableRooms.map(item => <option key={item.id} value={item.id}>{item.name} • {item.category || item.environmentType || "Ambiente"}</option>)}</select></label>
+                  <label>Setor<select value={hierarchyLocation?.sectorId||""} onChange={event=>{if(selectedClientData&&orderLocations){chooseModalLocation(hierarchySelection(selectedClientData,orderLocations.nodes,event.target.value));setQuickSectorOpen(false);setQuickSectorName("");setQuickSectorFeedback("");}}} disabled={!selectedClient||orderSaveBusy||quickSectorBusy}><option value="">{selectedClient?"Selecione o setor":"Selecione primeiro o cliente"}</option>{availableSectors.map(item=><option key={item.id} value={item.id}>{item.name}{orderLocations?.nodes.find(node=>node.id===item.id)?.depth? ` • ${orderLocations.nodes.find(node=>node.id===item.id)?.path.slice(0,-1).map(id=>orderLocations.nodes.find(node=>node.id===id)?.name).join(" / ")}`:""}</option>)}</select>{selectedClient&&<button type="button" className="inline-create-link" disabled={orderSaveBusy||quickSectorBusy} onClick={()=>{setQuickStructureKind("Setor");setQuickSectorName("");setQuickSectorFeedback("");setQuickSectorOpen(true);}}><Plus size={12}/> Cadastrar setor</button>}</label>
+                  <label>Unidade<select value={hierarchyLocation?.unitId||""} onChange={event=>{if(selectedClientData&&orderLocations)chooseModalLocation(orderSectorUnitSelection(selectedClientData,orderLocations.nodes,hierarchyLocation?.sectorId||"",event.target.value));}} disabled={!hierarchyLocation?.sectorId||orderSaveBusy||quickSectorBusy}><option value="">{hierarchyLocation?.sectorId?"Selecione a unidade (opcional)":"Selecione primeiro o setor"}</option>{availableUnits.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>{selectedClient&&<button type="button" className="inline-create-link" disabled={!hierarchyLocation?.sectorId||orderSaveBusy||quickSectorBusy} onClick={()=>{setQuickStructureKind("Unidade");setQuickSectorName("");setQuickSectorFeedback("");setQuickSectorOpen(true);}}><Plus size={12}/> Cadastrar unidade</button>}</label>
+                  <label >Sala / Ambiente<select value={hierarchyLocation?.roomId||""} onChange={event=>{if(selectedClientData&&orderLocations)chooseModalLocation(event.target.value?hierarchySelection(selectedClientData,orderLocations.nodes,event.target.value):orderSectorUnitSelection(selectedClientData,orderLocations.nodes,hierarchyLocation?.sectorId||"",hierarchyLocation?.unitId||""));}} disabled={!selectedClient||quickSectorBusy}><option value="">{selectedClient ? availableRooms.length ? "Selecione a sala (opcional)" : "Nenhuma sala cadastrada" : "Selecione o cliente"}</option>{availableRooms.map(item => <option key={item.id} value={item.id}>{item.name} • {item.category || item.environmentType || "Ambiente"}</option>)}</select></label>
                   <label>Endereço do atendimento<input value={orderAddress} readOnly placeholder="Carregado pelo cadastro"/></label>
                 </div>
-                {quickSectorOpen && <div className="order-sector-quick-create os-inline-sector"><div><span>CADASTRO RÁPIDO</span><b>Novo setor / local</b><small>{unit ? `Vinculado à unidade ${unit}.` : "Vinculado ao cliente principal."}</small></div><label>Nome<input autoFocus value={quickSectorName} onChange={event => setQuickSectorName(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); createSectorFromOrder(); } }} placeholder="Ex.: Secretaria de Saúde"/></label><div className="order-sector-quick-actions"><button type="button" className="outline-btn" onClick={() => setQuickSectorOpen(false)}>Cancelar</button><button type="button" className="primary-btn" disabled={quickSectorBusy} onClick={()=>void createSectorFromOrder()}><Plus size={13}/> Cadastrar</button></div></div>}
+                {quickSectorOpen&&<div className="order-sector-quick-create os-inline-sector"><div><span>CADASTRO DIRETO</span><b>{quickStructureKind==="Unidade"?"Nova unidade":"Novo setor"}</b><small>{quickStructureKind==="Unidade"?`Cliente: ${selectedClient} • Setor: ${sector}`:`Vinculado ao cliente principal: ${selectedClient}`}</small></div><label>Nome {quickStructureKind==="Unidade"?"da unidade":"do setor"}<input autoFocus disabled={quickSectorBusy} value={quickSectorName} onChange={event=>setQuickSectorName(event.target.value)} onKeyDown={event=>{if(event.key==="Enter"){event.preventDefault();void createSectorFromOrder();}}} placeholder={quickStructureKind==="Unidade"?"Ex.: UBS Central":"Ex.: Saúde"}/></label><div className="order-sector-quick-actions"><button type="button" className="outline-btn" disabled={quickSectorBusy} onClick={()=>setQuickSectorOpen(false)}>Cancelar</button><button type="button" className="primary-btn" disabled={quickSectorBusy} onClick={()=>void createSectorFromOrder()}>{quickSectorBusy?"Salvando…":"Cadastrar e selecionar"}</button></div></div>}
                 {quickSectorFeedback && <div className="field-hint order-sector-feedback"><CheckCircle2 size={13}/>{quickSectorFeedback}</div>}
                 {selectedClientData && <div className={`os-credit-strip ${selectedClientData.financialStatus === "Bloqueado" ? "blocked" : ""}`}><CircleDollarSign size={16}/><span><b>Crédito</b><small>Limite R$ {(selectedClientData.creditLimit ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})} • Lançado R$ {(selectedClientData.balancePosted ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</small></span><strong>{selectedClientData.financialStatus ?? "Liberado"}</strong></div>}
               </article>

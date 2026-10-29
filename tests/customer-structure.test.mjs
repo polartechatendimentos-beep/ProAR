@@ -108,5 +108,16 @@ test("editing a legacy root sector confirms unique owner and preserves metadata"
  assert.equal(saved.record.extra,"keep");
  assert.equal(saved.record.createdAt,"original");
  assert.throws(()=>prepareCustomerStructureSave(c,{...r,name:"New"},[r],[c,{...c,id:"other"}]),/confirmado/);
- assert.throws(()=>prepareCustomerStructureSave(c,{...r,id:"new"},[r],[c]),/Unidade/);
+ assert.equal(prepareCustomerStructureSave(c,{...r,id:"new"},[r],[c]).record.parentId,undefined);
+});
+
+test("new municipality structure supports principal client then sector then unit",()=>{
+ const c={id:"C",name:"Prefeitura",organizationType:"Prefeitura"};
+ const sector=prepareCustomerStructureSave(c,{id:"S",name:"Saúde",category:"Setor"},[]);
+ const unit=prepareCustomerStructureSave(c,{id:"U",name:"UBS",category:"Unidade",parentId:"S"},sector.nextStructures);
+ assert.equal(sector.record.parentId,undefined);assert.equal(unit.record.parentId,"S");assert.equal(unit.record.customerId,"C");
+ assert.equal(unit.record.parentUnit,"Saúde");
+ const room=prepareCustomerStructureSave(c,{id:"R",name:"Sala",category:"Sala",parentId:"U"},unit.nextStructures);
+ assert.equal(room.record.parentId,"U");
+ assert.throws(()=>prepareCustomerStructureSave(c,{id:"U2",name:"Outra",category:"Unidade",parentId:"R"},room.nextStructures),/Setor/);
 });
