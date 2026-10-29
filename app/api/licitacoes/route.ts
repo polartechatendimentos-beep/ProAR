@@ -1,5 +1,5 @@
 import {fetchOlimpiaTenders} from "@/lib/procurement/olimpia-connector";
-import {tenderSearchMatches,pncpProposalQuery,withinTenderWindow} from "@/lib/procurement/search-relevance";
+import {tenderSearchMatches,pncpProposalQuery,withinTenderWindow,procurementDateIso} from "@/lib/procurement/search-relevance";
 import {procurementAccess} from "@/lib/procurement/access";
 import {procurementFilters,filterProcurementResults} from "@/lib/procurement/search-contract";
 import {canonicalProcurementKey,identifyProcurementSource,mergeProcurementEvidence,type ProcurementTender,type SourceDiagnostic as ProcurementSourceDiagnostic} from "@/lib/procurement/domain";
@@ -66,6 +66,8 @@ function canonicalTenderKey(item: PncpTender) {
 }
 
 function validateTender(item: PncpTender, now = Date.now()) {
+  item.dataEncerramentoProposta=procurementDateIso(item.dataEncerramentoProposta);
+  item.dataPublicacaoPncp=procurementDateIso(item.dataPublicacaoPncp);
   const closing=item.dataEncerramentoProposta ? new Date(item.dataEncerramentoProposta).getTime() : 0;
   const text=normalize(`${item.situacaoCompraNome??""}`);
   item.canonicalKey=canonicalTenderKey(item);
@@ -386,7 +388,8 @@ export async function GET(request: NextRequest) {
       try {
         const response = await fetch(`${PNCP_CONSULTA_BASE}/orgaos/${cnpj}/compras/${ano}/${sequencial}`, { headers: { Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
         if (!response.ok) return privateJson({ data: null, linkSistemaOrigem, warning: `O PNCP não retornou os detalhes desta contratação (${response.status}). O edital oficial continua disponível.` });
-        return privateJson({ data: await response.json(), source: "PNCP consulta detalhada" });
+        const detail=await response.json();
+        return privateJson({ data:{...detail,dataEncerramentoProposta:procurementDateIso(detail.dataEncerramentoProposta),dataPublicacaoPncp:procurementDateIso(detail.dataPublicacaoPncp)}, source: "PNCP consulta detalhada" });
       } catch (error) {
         console.error("PNCP detail failed", error);
         return privateJson({ data: null, linkSistemaOrigem, warning: "O PNCP demorou para responder aos detalhes desta contratação. O edital oficial continua disponível." });
