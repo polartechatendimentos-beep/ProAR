@@ -1,3 +1,4 @@
+import { projectOperationalState, mergeOperationalView } from "../../../lib/state-access";
 import { NextRequest, NextResponse } from "next/server";
 import { readSession } from "../../../lib/proar-auth";
 import { resolveTenantDb } from "../../../lib/tenant-rest";
@@ -156,11 +157,11 @@ export async function GET(request: NextRequest) {
         const state = await readState(db, candidate);
         if (state) states.push(state);
       }
-      return NextResponse.json({ state: mergeStates(states), dedicatedDatabase: false, canonicalCompanyId: company, recoveredLegacyStates: states.length });
+      return NextResponse.json({ state: projectOperationalState(mergeStates(states),session,p=>hasPermission(session,p as Permission)), dedicatedDatabase: false, canonicalCompanyId: company, recoveredLegacyStates: states.length });
     }
     if (session.companyId || db.dedicated) {
       const state = await readState(db, id);
-      return NextResponse.json({ state, dedicatedDatabase: db.dedicated, canonicalCompanyId: company });
+      return NextResponse.json({ state:projectOperationalState(state,session,p=>hasPermission(session,p as Permission)), dedicatedDatabase: db.dedicated, canonicalCompanyId: company });
     }
 
     // Recuperação compatível de instalações legadas: alguns aparelhos gravavam em IDs diferentes.
@@ -176,9 +177,9 @@ export async function GET(request: NextRequest) {
       const revision = Math.max(...states.map(state => Number(state._revision || 0)), 0) + 1;
       const consolidated = { ...merged, _revision: revision, _updatedAt: new Date().toISOString(), _companyId: company, _legacyMerged: true };
       await writeState(db, id, consolidated);
-      return NextResponse.json({ state: consolidated, dedicatedDatabase: false, canonicalCompanyId: company, recoveredLegacyStates: states.length });
+      return NextResponse.json({ state: projectOperationalState(consolidated,session,p=>hasPermission(session,p as Permission)), dedicatedDatabase: false, canonicalCompanyId: company, recoveredLegacyStates: states.length });
     }
-    return NextResponse.json({ state: merged, dedicatedDatabase: false, canonicalCompanyId: company });
+    return NextResponse.json({ state: projectOperationalState(merged,session,p=>hasPermission(session,p as Permission)), dedicatedDatabase: false, canonicalCompanyId: company });
   } catch (error) {
     const descriptor=classifyProarError(error);
     const company=companyKey(request,session);
@@ -195,10 +196,11 @@ export async function PUT(request: NextRequest) {
     const currentResponse = await stateRest(db, `proar_state?id=eq.${encodeURIComponent(id)}&select=payload`);
     if (!currentResponse.ok) throw new Error("Falha ao ler a versão vigente");
     const currentRows = currentResponse.ok ? await currentResponse.json() as { payload?: StatePayload }[] : []; const current = currentRows[0]?.payload; const currentRevision = Number(current?._revision || 0); const baseRevision = Number(body._baseRevision || 0);
-    if (current && baseRevision !== currentRevision) return NextResponse.json({ error: "A base online possui uma versão mais recente.", conflict: true, state: current }, { status: 409 });
+    if (current && baseRevision !== currentRevision) return NextResponse.json({ error: "A base online possui uma versão mais recente.", conflict: true, state: projectOperationalState(current,session,p=>hasPermission(session,p as Permission)) }, { status: 409 });
     const { _baseRevision: _ignoredBase, _force: _ignoredForce, companyId: _ignoredCompany, ...cleanBody } = body;
-    if (Array.isArray(cleanBody.serviceOrders)) await guardTechnicianOsChanges(session,current?.serviceOrders||[],cleanBody.serviceOrders);
-    const validated = prepareOperationalState(current || null, cleanBody, { username: session.username, displayName: session.displayName, can: permission => hasPermission(session, permission as Permission) });
+    const mergedBody=mergeOperationalView(current,cleanBody,session,p=>hasPermission(session,p as Permission));
+    if (Array.isArray(mergedBody.serviceOrders)) await guardTechnicianOsChanges(session,current?.serviceOrders||[],mergedBody.serviceOrders);
+    const validated = prepareOperationalState(current || null, mergedBody, { username: session.username, displayName: session.displayName, can: permission => hasPermission(session, permission as Permission) });
     const userLimit=await companyUserLimit(company);
     if(userLimit!==null){
       const masterUsers=await masterActiveUsernames(company);
@@ -220,8 +222,8 @@ export async function PUT(request: NextRequest) {
     let response: Response;
     if (db.url === PRIMARY_DATABASE_URL) {
       const confirmed = await commitNeonOperationalState(id, current ? currentRevision : null, payload, independentOperationalRows(company, payload, current));
-      if (!confirmed) return NextResponse.json({ error: "A base online foi alterada durante esta gravação.", conflict: true, state: await readState(db, id) }, { status: 409 });
-      return NextResponse.json({ saved: true, state: confirmed, dedicatedDatabase: db.dedicated, canonicalCompanyId: company, transactionalRecords: true });
+      if (!confirmed) return NextResponse.json({ error: "A base online foi alterada durante esta gravação.", conflict: true, state: projectOperationalState(await readState(db,id),session,p=>hasPermission(session,p as Permission)) }, { status: 409 });
+      return NextResponse.json({ saved: true, state: projectOperationalState(confirmed,session,p=>hasPermission(session,p as Permission)), dedicatedDatabase: db.dedicated, canonicalCompanyId: company, transactionalRecords: true });
     }
     if (current) {
       const revisionFilter = current._revision === undefined ? "payload->>_revision=is.null" : `payload->>_revision=eq.${currentRevision}`;
@@ -242,9 +244,9 @@ export async function PUT(request: NextRequest) {
     const confirmed = confirmedRows[0]?.payload;
     if (!confirmed || Number(confirmed._revision || 0) !== currentRevision + 1) {
       const latest = await readState(db, id);
-      return NextResponse.json({ error: "A base online foi alterada durante esta gravação.", conflict: true, state: latest }, { status: 409 });
+      return NextResponse.json({ error: "A base online foi alterada durante esta gravação.", conflict: true, state: projectOperationalState(latest,session,p=>hasPermission(session,p as Permission)) }, { status: 409 });
     }
-    return NextResponse.json({ saved: true, state: confirmed, dedicatedDatabase: db.dedicated, canonicalCompanyId: company });
+    return NextResponse.json({ saved: true, state: projectOperationalState(confirmed,session,p=>hasPermission(session,p as Permission)), dedicatedDatabase: db.dedicated, canonicalCompanyId: company });
   } catch (error) {
     if (error instanceof OperationError || error instanceof FieldSupportError) return NextResponse.json({ error: error.message }, { status: error.status });
     const company=companyKey(request,session);
