@@ -1,4 +1,5 @@
 import {createHash,createCipheriv,createDecipheriv,randomBytes} from "node:crypto";
+export function cloudDraftOwner(employeeId:unknown,username:string){return employeeId?"employee:"+String(employeeId):"login:"+username.trim().toLowerCase();}
 export const CLOUD_DRAFT_TTL=30*86400000;
 export function cloudDraftPrefix(company:string,username:string){return "cloud-draft-v1:"+createHash("sha256").update(company).digest("hex")+":"+createHash("sha256").update(username.trim().toLowerCase()).digest("hex")+":";}
 export function cloudDraftKey(company:string,username:string,orderId:string){return cloudDraftPrefix(company,username)+createHash("sha256").update(orderId).digest("hex");}
