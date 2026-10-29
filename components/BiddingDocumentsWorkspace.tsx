@@ -71,7 +71,7 @@ export function BiddingDocumentsWorkspace({companyName}:{companyName:string}){
    const response=await fetch(endpoint+"?id="+doc.id+"&download=1",{cache:"no-store"});if(!response.ok)throw new Error("Não foi possível carregar o arquivo privado.");
    const file=new File([await response.blob()],doc.filename,{type:doc.mime});
    await auditFile(doc.id,file,reader,message=>setNotice(doc.name+": "+message));await load();setNotice("Auditoria individual salva. A conferência humana continua pendente.");
-  }catch(error){setNotice(error instanceof Error?error.message:"Falha ao auditar arquivo.");}finally{await reader.dispose();lock.current=false;setBusy(false);}
+  }catch(error){setNotice(error instanceof Error?error.message:"Falha ao auditar arquivo.");}finally{try{await reader?.dispose();}catch{}lock.current=false;setBusy(false);}
  };
  const openReview=(doc:DocumentView)=>{setSelected(doc);setReview(doc.review);setReviewCategory(doc.category);setNote("");setValidUntil(doc.validUntil);setNoExpiry(doc.noExpiry);setIdentityChecked(false);setContentChecked(false);setTenderChecked(false);};
  const saveReview=async()=>{
