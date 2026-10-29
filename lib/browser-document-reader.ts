@@ -24,7 +24,7 @@ export function createDocumentReader(){
    onProgress("Abrindo PDF…");
    const pdfjs=await import(/* webpackIgnore: true */base+"/pdf.min.mjs") as typeof import("pdfjs-dist");
    pdfjs.GlobalWorkerOptions.workerSrc=base+"/pdf.worker.min.mjs";
-   const task=pdfjs.getDocument({data:bytes,isEvalSupported:false,enableXfa:false,cMapUrl:base+"/cmaps/",cMapPacked:true,standardFontDataUrl:base+"/standard_fonts/"});
+   const task=pdfjs.getDocument({data:bytes,enableXfa:false,cMapUrl:base+"/cmaps/",cMapPacked:true,standardFontDataUrl:base+"/standard_fonts/"});
    let pdf:Awaited<typeof task.promise>|null=null;
    try{
     pdf=await task.promise;const limit=Math.min(pdf.numPages,40);let text="",read=0,ocrPages=0,textPages=0;const warnings:string[]=[],confidence:number[]=[];
@@ -45,7 +45,7 @@ export function createDocumentReader(){
      if(text.length>250000){warnings.push("Limite de texto atingido; leitura parcial.");text=text.slice(0,250000);break;}
     }
     return {text,sha256,extraction:{source:ocrPages?textPages?"mixed":"ocr":textPages?"pdf_text":"unreadable",pagesRead:read,totalPages:pdf.numPages,partial:read<pdf.numPages||warnings.length>0,confidence:confidence.length?confidence.reduce((sum,value)=>sum+value,0)/confidence.length:undefined,warnings}};
-   }finally{if(pdf)await pdf.destroy();else await task.destroy();}
+   }finally{await task.destroy();}
   },
   async dispose(){if(worker){await worker.terminate();worker=null;}}
  };
