@@ -280,24 +280,26 @@ function filterStoredItems(items: PncpTender[], term: string, radius: number) {
   });
 }
 
-async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radius?: number; all?: boolean; term?: string }) {
+async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radius?: number; all?: boolean; term?: string; city?:string }) {
   const today = options?.start ?? new Date();
   const end = options?.end ?? new Date(today.getTime() + 366 * 86400000);
   const dataFinal = end.toISOString().slice(0, 10).replaceAll("-", "");
   const publicationStart = new Date(today.getTime() - 60 * 86400000).toISOString().slice(0, 10);
   const publicationEnd = today.toISOString().slice(0, 10);
   const normalizedTerm = normalize(options?.term ?? "");
-  const municipality = Object.entries(CITY_CODES).find(([name]) => normalizedTerm.includes(name))?.[1];
+  const cityQuery=normalize(options?.city||normalizedTerm);
+  const municipality = Object.entries(CITY_CODES).find(([name]) => cityQuery.includes(name))?.[1];
 
   // Cada UF/modalidade é independente: limitar concorrência evita sobrecarga
   // do PNCP e retryar somente falhas transitórias mantém resultados parciais.
   const startedAt = new Map<string, number>();
   const scanDeadline=Date.now()+70000;
-  const pncpTasks=(municipality?["SP"]:Array.from(UFS)).flatMap(uf=>MODALITIES.map(modality=>({uf,modality})));
+  const regionalCities=municipality?[municipality]:[CITY_CODES["sao jose do rio preto"],CITY_CODES.olimpia,CITY_CODES.mirassol];
+  const pncpTasks=[...regionalCities.flatMap(city=>[6,8,12].map(modality=>({uf:"SP",modality,ibge:city.ibge}))),...(municipality?[]:Array.from(UFS).flatMap(uf=>MODALITIES.map(modality=>({uf,modality,ibge:undefined as string|undefined}))))];
   const [pncpSettled, comprasSettled, municipalSettled,bllResult,fiorilliResult,olimpiaResult] = await Promise.all([
     runLimited(pncpTasks,PNCP_CONCURRENCY,async task=>{
-      const {uf,modality}=task,key=`PNCP-${uf}-modalidade-${modality}`;startedAt.set(key,Date.now());
-      const value=await fetchPages(dataFinal,uf,modality,municipality?15:uf==="SP"?TARGETED_PNCP_PAGES:3,municipality?.ibge,scanDeadline);
+      const {uf,modality}=task,key=`PNCP-${uf}-${task.ibge||"estadual"}-modalidade-${modality}`;startedAt.set(key,Date.now());
+      const value=await fetchPages(dataFinal,uf,modality,task.ibge?5:uf==="SP"?TARGETED_PNCP_PAGES:3,task.ibge,scanDeadline);
       return {value,diagnostic:{source:key,status:value.error?"error" as const:"ok" as const,attempts:value.attempts,durationMs:Date.now()-(startedAt.get(key)??Date.now()),count:value.items.length,pagesRead:value.pagesRead,truncated:value.truncated,error:value.error}};
     }),
     runLimited(MODALITIES, COMPRAS_CONCURRENCY, async code => {
@@ -413,7 +415,7 @@ export async function GET(request: NextRequest) {
     const term = (request.nextUrl.searchParams.get("termo") ?? request.nextUrl.searchParams.get("q") ?? "").trim();
     const requestedPortals = (request.nextUrl.searchParams.get("portais") ?? "").split(",").map(value => value.trim()).filter(Boolean);
     const orderBy = request.nextUrl.searchParams.get("ordenar_por") === "valor" ? "valor" : "distancia";
-    const result = await searchAutomaticTenders({ start, end, radius, all: !term, term });
+    const result = await searchAutomaticTenders({ start, end, radius, all: !term, term,city:filters.city });
     const portalAliases: Record<string, string> = {
       pncp: "PNCP", "compras.gov.br": "Compras.gov.br", comprasgov: "Compras.gov.br", bec: "BEC-SP", "bec-sp": "BEC-SP",
       compraspublicas: "Portal de Compras Públicas", "portal de compras públicas": "Portal de Compras Públicas",
