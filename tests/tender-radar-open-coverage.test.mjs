@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {tenderSearchMatches,pncpProposalQuery,withinTenderWindow} from "../lib/procurement/search-relevance.ts";
+import {tenderSearchMatches,pncpProposalQuery,withinTenderWindow,procurementDateIso} from "../lib/procurement/search-relevance.ts";
 import {parseOlimpiaDetail,olimpiaDetailLinks,fetchOlimpiaTenders} from "../lib/procurement/olimpia-connector.ts";
 import {municipalTenderDate} from "../lib/tender-date.ts";
 test("HVAC search includes mixed refrigeration lots and climatizadores without literal phrase match",()=>{
@@ -38,4 +38,11 @@ test("municipal deadline prioritizes explicit closing and validates calendar",()
 test("connector never invents records when official pages fail",async()=>{
  const result=await fetchOlimpiaTenders(async()=>{throw new Error("offline");});
  assert.deepEqual(result.items,[]);assert.equal(result.diagnostic.status,"error");
+});
+
+test("PNCP timezone-free civil deadline remains 08h30 in Brasilia, including explicit offsets",()=>{
+ assert.equal(procurementDateIso("2026-11-03T08:30:00"),"2026-11-03T11:30:00.000Z");
+ assert.equal(procurementDateIso("2026-11-03T08:30:00-03:00"),"2026-11-03T11:30:00.000Z");
+ assert.equal(procurementDateIso("2026-11-03T11:30:00Z"),"2026-11-03T11:30:00.000Z");
+ assert.equal(procurementDateIso("invalid"),undefined);
 });
