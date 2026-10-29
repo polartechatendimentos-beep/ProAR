@@ -25,8 +25,11 @@ function moduleVisible(module:string,actor:StateActor,can:Can){
  if(technician(actor)&&["Financeiro","Contas financeiras","Razão financeiro","Conciliações","Funcionários","Auditoria","Auditoria operacional"].includes(module))return false;
  return allowed;
 }
-const secret=(key:string)=>/password|senha|secret|api.?key|private.?key|service.?role|access.?token|refresh.?token/i.test(key);
-const financial=(key:string)=>["total","value","cost","unitValue","servicesTotal","productsTotal","discount","nfseValue","costLines","costMarginPercent","costTaxPercent"].includes(key);
+const secret=(key:string)=>{
+ const name=key.replace(/[_-]/g,"").toLowerCase();
+ return /password|senha/.test(name)||["secret","encryptedsecret","clientsecret","apikey","servicekey","servicerolekey"].includes(name)||/privatekey$|accesstoken$|refreshtoken$/.test(name);
+};
+const financial=(key:string)=>["total","cost","unitValue","servicesTotal","productsTotal","discount","nfseValue","costLines","costMarginPercent","costTaxPercent"].includes(key);
 function protectedField(key:string,actor:StateActor,write=false){
  return (secret(key)&&(!write||!admin(actor)))||(technician(actor)&&financial(key));
 }
