@@ -1,3 +1,5 @@
+import {fetchOlimpiaTenders} from "@/lib/procurement/olimpia-connector";
+import {tenderSearchMatches,pncpProposalQuery,withinTenderWindow,procurementDateIso} from "@/lib/procurement/search-relevance";
 import {procurementAccess} from "@/lib/procurement/access";
 import {procurementFilters,filterProcurementResults} from "@/lib/procurement/search-contract";
 import {canonicalProcurementKey,identifyProcurementSource,mergeProcurementEvidence,type ProcurementTender,type SourceDiagnostic as ProcurementSourceDiagnostic} from "@/lib/procurement/domain";
@@ -13,23 +15,27 @@ const privateJson=(body:unknown,init?:ResponseInit)=>{const headers=new Headers(
 
 const PNCP_URL = "https://pncp.gov.br/api/consulta/v1/contratacoes/proposta";
 const PNCP_CONSULTA_BASE = "https://pncp.gov.br/api/consulta/v1";
+const PNCP_FILES_BASE = "https://pncp.gov.br/api/pncp/v1";
 const COMPRAS_URL = "https://dadosabertos.compras.gov.br/modulo-contratacoes/1_consultarContratacoes_PNCP_14133";
 const MUNICIPAL_SOURCES = [
   { city:"Mirassol", uf:"SP", distance:0, url:"https://www.mirassol.sp.gov.br/portal/editais/1" },
   { city:"Catanduva", uf:"SP", distance:58, url:"https://www.catanduva.sp.gov.br/portal/editais/1" },
 ] as const;
 const UFS = ["SP", "MG", "MS", "PR", "GO"] as const;
-const MODALITIES = [4, 5, 6, 7, 8, 9, 12] as const;
-const TARGETED_PNCP_PAGES = 60;
+const MODALITIES = [6, 8, 12, 4, 5, 7, 9] as const;
+const TARGETED_PNCP_PAGES = 10;
 const PNCP_PAGE_SIZE = 50;
 export const maxDuration = 120;
 const REQUEST_TIMEOUT_MS = 9000;
 const COMPRAS_TIMEOUT_MS = 7000;
 const MAX_RETRIES = 1;
-const PNCP_CONCURRENCY = 5;
+const PNCP_CONCURRENCY = 8;
 const COMPRAS_CONCURRENCY = 2;
 const CITY_CODES: Record<string, { ibge: string; distance: number }> = {
   "jose bonifacio": { ibge: "3525706", distance: 62 },
+  "sao jose do rio preto": {ibge:"3549805",distance:15},
+  "olimpia": {ibge:"3533908",distance:62},
+  "mirassol": {ibge:"3530300",distance:0},
 };
 const climateTerms = /ar\s*-?\s*condicionado|condicionador(?:es)? de ar|climatiza|refrigera|pmoc|hvac|split|multi\s*split|cassete|piso\s*teto|evaporador|condensador|chiller|vrf|fluido refrigerante|g[aá]s refrigerante|compressor frigor[ií]fico|manuten[cç][aã]o.*(?:climatiza|refrigera|condicion)|instala[cç][aã]o.*(?:ar|split|climatiza)|exaust[aã]o|ventila[cç][aã]o mec[aâ]nica/i;
 const excludedTerms = /purificador(?:es)? de [aá]gua|equipamento fotodocumentador|mobili[aá]rio|geladeira dom[eé]stica|bebedouro(?!.*refrigera)/i;
@@ -60,6 +66,8 @@ function canonicalTenderKey(item: PncpTender) {
 }
 
 function validateTender(item: PncpTender, now = Date.now()) {
+  item.dataEncerramentoProposta=procurementDateIso(item.dataEncerramentoProposta);
+  item.dataPublicacaoPncp=procurementDateIso(item.dataPublicacaoPncp);
   const closing=item.dataEncerramentoProposta ? new Date(item.dataEncerramentoProposta).getTime() : 0;
   const text=normalize(`${item.situacaoCompraNome??""}`);
   item.canonicalKey=canonicalTenderKey(item);
@@ -119,8 +127,8 @@ function identifySource(item: PncpTender): NonNullable<PncpTender["sourcePortal"
   return identifyProcurementSource(item);
 }
 
-async function fetchPage(dataInicial: string, dataFinal: string, uf: string, page = 1) {
-  const query = new URLSearchParams({ dataInicial, dataFinal, pagina: String(page), tamanhoPagina: String(PNCP_PAGE_SIZE), uf });
+async function fetchPage(dataFinal: string, uf: string, modality:number, page = 1, municipalityCode?:string) {
+  const query = pncpProposalQuery(dataFinal,uf,modality,page,municipalityCode);
   const result = await withRetry(`PNCP-${uf}-página-${page}`, async () => {
     const response = await fetch(`${PNCP_URL}?${query}`, {
       headers: {
@@ -140,7 +148,7 @@ async function fetchPage(dataInicial: string, dataFinal: string, uf: string, pag
   return { ...result.value, attempts: result.attempts };
 }
 
-async function fetchPages(dataInicial: string, dataFinal: string, uf: string, maxPages = TARGETED_PNCP_PAGES) {
+async function fetchPages(dataFinal: string, uf: string, modality:number, maxPages = TARGETED_PNCP_PAGES, municipalityCode?:string, deadline=Date.now()+70000) {
   const items: PncpTender[] = [];
   let attempts = 0;
   let pagesRead = 0;
@@ -148,7 +156,8 @@ async function fetchPages(dataInicial: string, dataFinal: string, uf: string, ma
   let error: string | undefined;
   for (let page = 1; page <= maxPages; page += 1) {
     try {
-      const current = await fetchPage(dataInicial, dataFinal, uf, page);
+      if(Date.now()>deadline-20000){truncated=true;error="Limite de tempo da varredura atingido; resultados parciais preservados.";break;}
+      const current = await fetchPage(dataFinal, uf, modality, page,municipalityCode);
       attempts += current.attempts;
       pagesRead += 1;
       items.push(...current.items);
@@ -269,31 +278,31 @@ function filterStoredItems(items: PncpTender[], term: string, radius: number) {
   const normalizedTerm = normalize(term);
   return items.filter(item => {
     const searchable = normalize(`${item.objetoCompra ?? ""} ${item.orgaoEntidade?.razaoSocial ?? ""} ${item.unidadeOrgao?.municipioNome ?? ""} ${item.unidadeOrgao?.nomeUnidade ?? ""}`);
-    return (!normalizedTerm || searchable.includes(normalizedTerm)) && item.distanciaMirassol !== undefined && item.distanciaMirassol <= radius;
+    return tenderSearchMatches(item.objetoCompra??"",searchable,normalizedTerm) && item.distanciaMirassol !== undefined && item.distanciaMirassol <= radius;
   });
 }
 
-async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radius?: number; all?: boolean; term?: string }) {
+async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radius?: number; all?: boolean; term?: string; city?:string }) {
   const today = options?.start ?? new Date();
-  const end = options?.end ?? new Date(today.getTime() + 60 * 86400000);
-  const dataInicial = today.toISOString().slice(0, 10).replaceAll("-", "");
+  const end = options?.end ?? new Date(today.getTime() + 366 * 86400000);
   const dataFinal = end.toISOString().slice(0, 10).replaceAll("-", "");
   const publicationStart = new Date(today.getTime() - 60 * 86400000).toISOString().slice(0, 10);
   const publicationEnd = today.toISOString().slice(0, 10);
   const normalizedTerm = normalize(options?.term ?? "");
-  const municipality = Object.entries(CITY_CODES).find(([name]) => normalizedTerm.includes(name))?.[1];
+  const cityQuery=normalize(options?.city||normalizedTerm);
+  const municipality = Object.entries(CITY_CODES).find(([name]) => cityQuery.includes(name))?.[1];
 
   // Cada UF/modalidade é independente: limitar concorrência evita sobrecarga
   // do PNCP e retryar somente falhas transitórias mantém resultados parciais.
   const startedAt = new Map<string, number>();
-  const [pncpSettled, comprasSettled, municipalSettled,bllResult,fiorilliResult] = await Promise.all([
-    runLimited(municipality ? (["SP"] as const) : UFS, PNCP_CONCURRENCY, async uf => {
-      const key = `PNCP-${uf}`; startedAt.set(key, Date.now());
-      // Pesquisa por município também consulta diretamente o PNCP. Antes, quando
-      // o termo era uma cidade conhecida (ex.: José Bonifácio), o PNCP era
-      // completamente ignorado e o resultado dependia somente do Compras.gov.br.
-      const value = await fetchPages(dataInicial, dataFinal, uf, TARGETED_PNCP_PAGES);
-      return { value, diagnostic: { source: key, status: value.error ? "error" as const : "ok" as const, attempts: value.attempts, durationMs: Date.now() - (startedAt.get(key) ?? Date.now()), count: value.items.length, pagesRead: value.pagesRead, truncated: value.truncated, error: value.error } };
+  const scanDeadline=Date.now()+70000;
+  const regionalCities=municipality?[municipality]:[CITY_CODES["sao jose do rio preto"],CITY_CODES.olimpia,CITY_CODES.mirassol];
+  const pncpTasks=[...regionalCities.flatMap(city=>[6,8,12].map(modality=>({uf:"SP",modality,ibge:city.ibge}))),...(municipality?[]:Array.from(UFS).flatMap(uf=>MODALITIES.map(modality=>({uf,modality,ibge:undefined as string|undefined}))))];
+  const [pncpSettled, comprasSettled, municipalSettled,bllResult,fiorilliResult,olimpiaResult] = await Promise.all([
+    runLimited(pncpTasks,PNCP_CONCURRENCY,async task=>{
+      const {uf,modality}=task,key=`PNCP-${uf}-${task.ibge||"estadual"}-modalidade-${modality}`;startedAt.set(key,Date.now());
+      const value=await fetchPages(dataFinal,uf,modality,task.ibge?5:uf==="SP"?TARGETED_PNCP_PAGES:3,task.ibge,scanDeadline);
+      return {value,diagnostic:{source:key,status:value.error?"error" as const:"ok" as const,attempts:value.attempts,durationMs:Date.now()-(startedAt.get(key)??Date.now()),count:value.items.length,pagesRead:value.pagesRead,truncated:value.truncated,error:value.error}};
     }),
     runLimited(MODALITIES, COMPRAS_CONCURRENCY, async code => {
       const key = `Compras.gov.br-${code}`; startedAt.set(key, Date.now());
@@ -303,6 +312,7 @@ async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radi
     Promise.all(MUNICIPAL_SOURCES.filter(source=>source.distance <= (options?.radius??300)).map(fetchMunicipalSource)),
     fetchBllTenders(),
     fetchFiorilliTenders({year:today.getFullYear(),radius:options?.radius??300}),
+    (options?.radius??300)>=62?fetchOlimpiaTenders():Promise.resolve(null),
   ]);
   const raw = [
     ...pncpSettled.flatMap(result => result.status === "fulfilled" ? result.value.value.items.map(item=>({...item,sourcePortal:item.sourcePortal??identifySource(item),publicationSystem:publicationSystem(item.usuarioNome),disputePlatform:disputePlatformFromUrl(item.linkSistemaOrigem),sourceOrigins:[...new Set(["PNCP",item.sourcePortal??identifySource(item),...(publicationSystem(item.usuarioNome)?[publicationSystem(item.usuarioNome)!]:[])])],ingestedFrom:["PNCP"]})) : []),
@@ -310,12 +320,14 @@ async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radi
     ...municipalSettled.flatMap(result=>result.items),
     ...bllResult.items,
     ...fiorilliResult.items,
+    ...(olimpiaResult?.items??[]),
   ];
   const diagnostics: SourceDiagnostic[] = [
-    ...pncpSettled.map((result, index) => result.status === "fulfilled" ? result.value.diagnostic : { source: `PNCP-${UFS[index]}`, status: "error" as const, attempts: MAX_RETRIES + 1, durationMs: Date.now() - (startedAt.get(`PNCP-${UFS[index]}`) ?? Date.now()), count: 0, error: result.reason instanceof Error ? result.reason.message : String(result.reason) }),
+    ...pncpSettled.map((result, index) => result.status === "fulfilled" ? result.value.diagnostic : { source: `PNCP-${pncpTasks[index].uf}-modalidade-${pncpTasks[index].modality}`, status: "error" as const, attempts: MAX_RETRIES + 1, durationMs: Date.now() - (startedAt.get(`PNCP-${pncpTasks[index].uf}-modalidade-${pncpTasks[index].modality}`) ?? Date.now()), count: 0, error: result.reason instanceof Error ? result.reason.message : String(result.reason) }),
     ...comprasSettled.map((result, index) => result.status === "fulfilled" ? result.value.diagnostic : { source: `Compras.gov.br-${MODALITIES[index]}`, status: "error" as const, attempts: MAX_RETRIES + 1, durationMs: Date.now() - (startedAt.get(`Compras.gov.br-${MODALITIES[index]}`) ?? Date.now()), count: 0, error: result.reason instanceof Error ? result.reason.message : String(result.reason) }),
     ...municipalSettled.map(result=>result.diagnostic),
     ...fiorilliResult.diagnostics,
+    ...(olimpiaResult?[olimpiaResult.diagnostic]:[]),
     ...["Licitações-e","BEC-SP"].map(name=>({source:`${name} · via PNCP`,status:pncpSettled.length>0&&pncpSettled.every(r=>r.status==="fulfilled"&&!r.value.value.error)?"ok" as const:"error" as const,attempts:0,durationMs:0,count:pncpSettled.flatMap(r=>r.status==="fulfilled"?r.value.value.items:[]).filter(item=>disputePlatformFromUrl(item.linkSistemaOrigem)===name).length,mode:"pncp_bridge" as const,detail:"Plataforma identificada no link oficial retornado pelo PNCP; não houve consulta direta à sala de disputa."})),
     ...["Fiorilli","Betha","IPM / Atende.net","Equiplano","Aspec","SMARAPD"].map(name=>({source:`${name} · via PNCP`,status:pncpSettled.length>0&&pncpSettled.every(r=>r.status==="fulfilled"&&!r.value.value.error)?"ok" as const:"error" as const,attempts:0,durationMs:0,count:pncpSettled.flatMap(r=>r.status==="fulfilled"?r.value.value.items:[]).filter(item=>publicationSystem(item.usuarioNome)===name).length,mode:"pncp_bridge" as const,detail:"Classificação pelo publicador informado no PNCP. Não comprova consulta direta nem cobertura integral do fornecedor."})),
     ...(bllResult.diagnostic?[bllResult.diagnostic]:[]),
@@ -331,12 +343,8 @@ async function searchAutomaticTenders(options?: { start?: Date; end?: Date; radi
   const filtered = raw.filter(item => {
     const object = item.objetoCompra ?? "";
     const searchable = normalize(`${object} ${item.orgaoEntidade?.razaoSocial ?? ""} ${item.unidadeOrgao?.municipioNome ?? ""} ${item.unidadeOrgao?.nomeUnidade ?? ""}`);
-    if (!options?.all && (term ? !searchable.includes(term) : (!climateTerms.test(object) || excludedTerms.test(object)))) return false;
-    const closing = item.dataEncerramentoProposta ? new Date(item.dataEncerramentoProposta).getTime() : 0;
-    const published = item.dataPublicacaoPncp ? new Date(item.dataPublicacaoPncp).getTime() : 0;
-    // O conjunto do Compras.gov.br nem sempre informa o encerramento. Nesses casos,
-    // mantém publicações recentes; registros com encerramento conhecido e vencido saem.
-    if (closing ? (closing < startTime || closing > endTime) : (item.sourcePortal!=="Portal Municipal" && (!published || published < today.getTime() - 60 * 86400000))) return false;
+    if (!tenderSearchMatches(object,`${searchable} ${item.numeroCompra??""} ${item.numeroControlePNCP??""}`,term)) return false;
+    if(!withinTenderWindow(item.dataEncerramentoProposta,item.dataPublicacaoPncp,startTime,endTime,item.sourcePortal==="Portal Municipal"))return false;
     const municipalityName = normalize(item.unidadeOrgao?.municipioNome ?? "");
     const municipalityKey = `${municipalityName}|${String(item.unidadeOrgao?.ufSigla ?? "").toUpperCase()}`;
     const distance = municipalityDistances[String(item.unidadeOrgao?.codigoIbge ?? "")] ?? municipalityNameDistances[municipalityKey] ?? (item.unidadeOrgao?.ufSigla === "SP" ? CITY_CODES[municipalityName]?.distance ?? cityDistances[municipalityName] : undefined);
@@ -380,7 +388,8 @@ export async function GET(request: NextRequest) {
       try {
         const response = await fetch(`${PNCP_CONSULTA_BASE}/orgaos/${cnpj}/compras/${ano}/${sequencial}`, { headers: { Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
         if (!response.ok) return privateJson({ data: null, linkSistemaOrigem, warning: `O PNCP não retornou os detalhes desta contratação (${response.status}). O edital oficial continua disponível.` });
-        return privateJson({ data: await response.json(), source: "PNCP consulta detalhada" });
+        const detail=await response.json();
+        return privateJson({ data:{...detail,dataEncerramentoProposta:procurementDateIso(detail.dataEncerramentoProposta),dataPublicacaoPncp:procurementDateIso(detail.dataPublicacaoPncp)}, source: "PNCP consulta detalhada" });
       } catch (error) {
         console.error("PNCP detail failed", error);
         return privateJson({ data: null, linkSistemaOrigem, warning: "O PNCP demorou para responder aos detalhes desta contratação. O edital oficial continua disponível." });
@@ -391,7 +400,7 @@ export async function GET(request: NextRequest) {
       const ano = Number(request.nextUrl.searchParams.get("ano") ?? 0);
       const sequencial = Number(request.nextUrl.searchParams.get("sequencial") ?? 0);
       if (cnpj.length !== 14 || !ano || !sequencial) return privateJson({ data: [], error: "Identificadores da contratação incompletos." }, { status: 400 });
-      const response = await fetch(`${PNCP_CONSULTA_BASE}/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos`, { headers: { Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(6500) });
+      const response = await fetch(`${PNCP_FILES_BASE}/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos`, { headers: { Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(6500) });
       if (!response.ok) return privateJson({ data: [], warning: `O PNCP não retornou os documentos desta contratação (${response.status}).` });
       const payload = await response.json();
       const docs = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : [];
@@ -399,17 +408,17 @@ export async function GET(request: NextRequest) {
     }
     if (request.nextUrl.searchParams.get("monitor") === "1") {
       const store = await readMonitorStore();
-      return privateJson({ data: applyFilters(store.items ?? []), lastScan: store.lastScan, warning: store.lastError ?? "", source: "Monitor oficial PNCP" });
+      return privateJson({ data: applyFilters((store.items ?? []).map((item:PncpTender)=>validateTender(item))), lastScan: store.lastScan, warning: store.lastError ?? "", source: "Monitor oficial PNCP" });
     }
     const startParam = request.nextUrl.searchParams.get("dataInicial");
     const endParam = request.nextUrl.searchParams.get("dataFinal");
     const start = startParam ? new Date(`${startParam}T12:00:00-03:00`) : new Date();
-    const end = endParam ? new Date(`${endParam}T23:59:59-03:00`) : new Date(Date.now() + 60 * 86400000);
+    const end = endParam ? new Date(`${endParam}T23:59:59-03:00`) : new Date(Date.now() + 366 * 86400000);
     const radius = Math.min(1000, Math.max(1, Number(request.nextUrl.searchParams.get("raio_km") ?? request.nextUrl.searchParams.get("raio") ?? (filters.strictRadius||400))));
     const term = (request.nextUrl.searchParams.get("termo") ?? request.nextUrl.searchParams.get("q") ?? "").trim();
     const requestedPortals = (request.nextUrl.searchParams.get("portais") ?? "").split(",").map(value => value.trim()).filter(Boolean);
     const orderBy = request.nextUrl.searchParams.get("ordenar_por") === "valor" ? "valor" : "distancia";
-    const result = await searchAutomaticTenders({ start, end, radius, all: !term, term });
+    const result = await searchAutomaticTenders({ start, end, radius, all: !term, term,city:filters.city });
     const portalAliases: Record<string, string> = {
       pncp: "PNCP", "compras.gov.br": "Compras.gov.br", comprasgov: "Compras.gov.br", bec: "BEC-SP", "bec-sp": "BEC-SP",
       compraspublicas: "Portal de Compras Públicas", "portal de compras públicas": "Portal de Compras Públicas",
@@ -418,7 +427,7 @@ export async function GET(request: NextRequest) {
     result.data=applyFilters(result.data);
     const normalizedPortals = requestedPortals.map(value => portalAliases[normalize(value)] ?? value);
     // Portais de origem em registros PNCP não comprovam um conector direto validado.
-    const connectedPortals = new Set(["PNCP", "Compras.gov.br",...(result.diagnostics.some(d=>d.mode==="direct"&&d.status==="ok")?["BLL Compras"]:[])]);
+    const connectedPortals = new Set(["PNCP", "Compras.gov.br",...(result.diagnostics.some(d=>d.mode==="direct"&&d.status==="ok"&&/^BLL/.test(d.source))?["BLL Compras"]:[]),...(result.diagnostics.some(d=>d.status==="ok"&&/Portal Municipal|Fiorilli direto/.test(d.source))?["Portal Municipal"]:[])]);
     const unavailablePortals = normalizedPortals.filter(portal => !connectedPortals.has(portal));
     if (normalizedPortals.length) result.data = result.data.filter(item => normalizedPortals.includes(item.sourcePortal ?? "PNCP"));
     result.data.sort((a, b) => orderBy === "valor"
