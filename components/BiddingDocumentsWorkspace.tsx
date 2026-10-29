@@ -52,7 +52,7 @@ export function BiddingDocumentsWorkspace({companyName}:{companyName:string}){
   catch(error){setNotice(error instanceof Error?error.message:"Falha ao confirmar.");}finally{lock.current=false;setBusy(false);}
  };
  const scoped=documents.filter(doc=>tenderId?doc.tenderId===tenderId:!doc.tenderId);
- const checklist=documentChecklist(documents as BiddingDocument[],tenderId);
+ const checklist=documentChecklist(documents,tenderId);
  return <section className="panel bidding-private-documents" aria-label="Arquivos reais de habilitação" style={{padding:18,marginBottom:18}}>
   <h3>Arquivos e conferência de habilitação</h3><p><strong>Empresa: {companyName}</strong>. Arquivos privados por empresa. Anexar não significa aprovar; cada documento exige revisão humana.</p>
   {!configured&&<p role="status">Armazenamento privado não confirmado nesta instalação. O envio ficará bloqueado até a configuração estar disponível.</p>}
