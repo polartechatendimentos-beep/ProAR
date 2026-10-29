@@ -56,3 +56,11 @@ test("tenant employee lookup accepts only expected state ownership and explicit 
  assert.deepEqual(employeeStateKeys("C2",true,"C1"),["main"]);
  assert.deepEqual(employeeStateKeys("C1",false,"C1"),["C1","main","polartech"]);
 });
+
+test("credential redaction preserves secretariat labels and technical measurement values",()=>{
+ const before={...state,customers:[{id:"C",name:"Cliente",secretaria:"Saúde"}],moduleRecords:{...state.moduleRecords,Equipamentos:[{id:"EQ",measurements:[{id:"M",value:22}],privateKey:"hidden"}]}};
+ const view=projectOperationalState(before,tech,can);
+ assert.equal(view.customers[0].secretaria,"Saúde");
+ assert.equal(view.moduleRecords.Equipamentos[0].measurements[0].value,22);
+ assert.equal(view.moduleRecords.Equipamentos[0].privateKey,undefined);
+});
