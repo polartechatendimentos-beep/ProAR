@@ -115,12 +115,14 @@ function mergeStates(states: StatePayload[]) {
   return { ...base, customers, serviceOrders, moduleRecords, _legacyMerged: states.length > 1 };
 }
 
-async function readState(db: { url: string; key: string }, id: string) {
+async function readState(db: { url: string; key: string }, id: string, expectedCompany?:string) {
   if (!id) return null;
   const response = await stateRest(db, `proar_state?id=eq.${encodeURIComponent(id)}&select=payload`);
   if (!response.ok) return null;
   const rows = await response.json() as { payload?: StatePayload }[];
-  return rows[0]?.payload ?? null;
+  const payload=rows[0]?.payload;
+  if(payload?._companyId&&expectedCompany&&String(payload._companyId)!==expectedCompany)return null;
+  return payload ?? null;
 }
 
 async function readOperationalStates(db: { url: string; key: string }) {
@@ -154,22 +156,22 @@ export async function GET(request: NextRequest) {
       const candidates = Array.from(new Set([company, "main", "polartech"].filter(Boolean)));
       const states: StatePayload[] = [];
       for (const candidate of candidates) {
-        const state = await readState(db, candidate);
+        const state = await readState(db, candidate,company);
         if (state) states.push(state);
       }
       return NextResponse.json({ state: projectOperationalState(mergeStates(states),session,p=>hasPermission(session,p as Permission)), dedicatedDatabase: false, canonicalCompanyId: company, recoveredLegacyStates: states.length });
     }
     if (session.companyId || db.dedicated) {
-      const state = await readState(db, id);
+      const state = await readState(db, id,company);
       return NextResponse.json({ state:projectOperationalState(state,session,p=>hasPermission(session,p as Permission)), dedicatedDatabase: db.dedicated, canonicalCompanyId: company });
     }
 
     // Recuperação compatível de instalações legadas: alguns aparelhos gravavam em IDs diferentes.
     // A leitura une os dados sem excluir nada e consolida no identificador canônico.
-    const candidates = Array.from(new Set([id, requestedCompany(request), "main", "polartech-principal"].filter(Boolean)));
+    const candidates = Array.from(new Set([id, "main", PRIMARY_COMPANY_ID].filter(Boolean)));
     const states: StatePayload[] = [];
     for (const candidate of candidates) {
-      const state = await readState(db, candidate);
+      const state = await readState(db, candidate,company);
       if (state) states.push(state);
     }
     const merged = mergeStates(states);
@@ -196,6 +198,7 @@ export async function PUT(request: NextRequest) {
     const currentResponse = await stateRest(db, `proar_state?id=eq.${encodeURIComponent(id)}&select=payload`);
     if (!currentResponse.ok) throw new Error("Falha ao ler a versão vigente");
     const currentRows = currentResponse.ok ? await currentResponse.json() as { payload?: StatePayload }[] : []; const current = currentRows[0]?.payload; const currentRevision = Number(current?._revision || 0); const baseRevision = Number(body._baseRevision || 0);
+    if(current?._companyId&&String(current._companyId)!==company)return NextResponse.json({error:"Base operacional de outra empresa."},{status:403});
     if (current && baseRevision !== currentRevision) return NextResponse.json({ error: "A base online possui uma versão mais recente.", conflict: true, state: projectOperationalState(current,session,p=>hasPermission(session,p as Permission)) }, { status: 409 });
     const { _baseRevision: _ignoredBase, _force: _ignoredForce, companyId: _ignoredCompany, ...cleanBody } = body;
     const mergedBody=mergeOperationalView(current,cleanBody,session,p=>hasPermission(session,p as Permission));
@@ -222,7 +225,7 @@ export async function PUT(request: NextRequest) {
     let response: Response;
     if (db.url === PRIMARY_DATABASE_URL) {
       const confirmed = await commitNeonOperationalState(id, current ? currentRevision : null, payload, independentOperationalRows(company, payload, current));
-      if (!confirmed) return NextResponse.json({ error: "A base online foi alterada durante esta gravação.", conflict: true, state: projectOperationalState(await readState(db,id),session,p=>hasPermission(session,p as Permission)) }, { status: 409 });
+      if (!confirmed) return NextResponse.json({ error: "A base online foi alterada durante esta gravação.", conflict: true, state: projectOperationalState(await readState(db,id,company),session,p=>hasPermission(session,p as Permission)) }, { status: 409 });
       return NextResponse.json({ saved: true, state: projectOperationalState(confirmed,session,p=>hasPermission(session,p as Permission)), dedicatedDatabase: db.dedicated, canonicalCompanyId: company, transactionalRecords: true });
     }
     if (current) {
@@ -243,7 +246,7 @@ export async function PUT(request: NextRequest) {
     const confirmedRows = await response.json() as { payload?: StatePayload }[];
     const confirmed = confirmedRows[0]?.payload;
     if (!confirmed || Number(confirmed._revision || 0) !== currentRevision + 1) {
-      const latest = await readState(db, id);
+      const latest = await readState(db, id,company);
       return NextResponse.json({ error: "A base online foi alterada durante esta gravação.", conflict: true, state: projectOperationalState(latest,session,p=>hasPermission(session,p as Permission)) }, { status: 409 });
     }
     return NextResponse.json({ saved: true, state: projectOperationalState(confirmed,session,p=>hasPermission(session,p as Permission)), dedicatedDatabase: db.dedicated, canonicalCompanyId: company });
