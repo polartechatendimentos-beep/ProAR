@@ -69,6 +69,13 @@ jobs:
         continue-on-error: true
         timeout-minutes: 2
         run: node --experimental-strip-types scripts/probe-procurement-public.mjs
+      - name: Production document access probe
+        continue-on-error: true
+        run: |
+          STATUS=$(curl -sS --max-time 15 -o /tmp/proar-document-access.json -w "%{http_code}" "https://polartech.proar.online/api/bidding-documents")
+          echo "DOCUMENT_ACCESS_HTTP=$STATUS"
+          test "$STATUS" = "401"
+          node -e 'const fs=require("node:fs");const body=JSON.parse(fs.readFileSync("/tmp/proar-document-access.json","utf8"));if(typeof body.error!=="string"||body.documents||body.pathname)process.exit(1);console.log("DOCUMENT_ACCESS_PROBE=anonymous_denied_json")'
       - name: Production database probe
         if: always()
         continue-on-error: true
