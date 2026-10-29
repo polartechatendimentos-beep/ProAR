@@ -40,7 +40,7 @@ export function reviewDocument(doc:BiddingDocument,input:{review:unknown;note:un
  if(validUntil&&noExpiry)throw new Error("Informe validade ou ausência de vencimento, sem marcar ambos.");
  const today=now.toLocaleDateString("en-CA",{timeZone:"America/Sao_Paulo"});
  if(review==="approved"){
-  if(!input.identityChecked||!input.contentChecked||(doc.tenderId&&!input.tenderChecked))throw new Error("Confirme leitura, identidade da empresa e adequação ao edital antes de aprovar.");
+  if(input.identityChecked!==true||input.contentChecked!==true||(doc.tenderId&&input.tenderChecked!==true))throw new Error("Confirme leitura, identidade da empresa e adequação ao edital antes de aprovar.");
   if(!validUntil&&!noExpiry)throw new Error("Informe a validade ou confirme que este documento não possui vencimento.");
   if(validUntil&&validUntil<today)throw new Error("Documento vencido não pode ser aprovado.");
  }
