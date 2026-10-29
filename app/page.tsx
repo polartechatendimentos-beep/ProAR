@@ -4,6 +4,7 @@ import { EMPLOYEE_ACCESS_MODULES, EMPLOYEE_ACCESS_PROFILES, employeeAccessPreset
 import { employeePasswordIssue } from "@/lib/employee-password-validation";
 import { orderCreationIssue } from "@/lib/order-create-validation";
 import { orderLocationOptions } from "@/lib/order-location-options";
+import { stateSaveOutcome } from "@/lib/state-save-confirmation";
 import type { CostLine } from "@/lib/catalog-cost-engine";
 import { CatalogBidSimulator } from "@/components/CatalogBidSimulator";
 import { CatalogAdvancedSimulators } from "@/components/CatalogAdvancedSimulators";
@@ -4032,31 +4033,31 @@ export default function Home() {
     notifyFeedback({ message:savedMessage, tone });
     setSavedMessage("");
   }, [savedMessage]);
-  const persistSharedState = (nextCustomers: Customer[], nextOrders: ServiceOrder[], nextModules: Record<string, ModuleRecord[]>) => {
-    if (databaseMode === "degraded") {
-      setSavedMessage("Modo contingência: alterações estão temporariamente bloqueadas até o banco voltar a responder.");
-      return;
+  const persistSharedState = async (nextCustomers:Customer[],nextOrders:ServiceOrder[],nextModules:Record<string,ModuleRecord[]>):Promise<boolean>=>{
+    if(databaseMode==="degraded"){setSavedMessage("Não foi salvo: banco em contingência. O formulário permanece aberto.");return false;}
+    const payload={companyId:activeCompany.id,customers:nextCustomers,serviceOrders:nextOrders,moduleRecords:nextModules,_baseRevision:stateRevision};
+    if(!navigator.onLine){
+      try{
+        const queue=JSON.parse(localStorage.getItem("proar-offline-queue")||"[]");
+        localStorage.setItem("proar-offline-queue",JSON.stringify([...queue.filter((item:{companyId:string})=>item.companyId!==activeCompany.id),{companyId:activeCompany.id,payload,createdAt:new Date().toISOString()}]));
+      }catch{setSavedMessage("Não foi salvo: sem conexão e não foi possível guardar a tentativa neste aparelho.");return false;}
+      setSavedMessage("Rascunho local: aguardando conexão. A gravação no banco ainda não foi confirmada.");return false;
     }
-    localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(nextCustomers));
-    localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(nextOrders));
-    localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(nextModules));
-    const payload = { companyId: activeCompany.id, customers: nextCustomers, serviceOrders: nextOrders, moduleRecords: nextModules, _baseRevision: stateRevision };
-    if (!navigator.onLine) {
-      const queue = JSON.parse(localStorage.getItem("proar-offline-queue") || "[]");
-      localStorage.setItem("proar-offline-queue", JSON.stringify([...queue.filter((item: { companyId: string }) => item.companyId !== activeCompany.id), { companyId: activeCompany.id, payload, createdAt: new Date().toISOString() }]));
-      setSavedMessage("Sem internet: alteração guardada somente neste aparelho."); return;
-    }
-    fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }).then(async response => {
-      const result=await response.json();
-      if (response.status===409 && result.state) { const serverCustomers=result.state.customers??[]; const serverOrders=result.state.serviceOrders??[]; const serverModules=mergeImportedServices(result.state.moduleRecords??{}); setCustomerRecords(serverCustomers);setServiceOrders(serverOrders);setModuleRecords(serverModules);setStateRevision(Number(result.state._revision||0));localStorage.setItem(companyStorageKey(activeCompany.id,"customers"),JSON.stringify(serverCustomers));localStorage.setItem(companyStorageKey(activeCompany.id,"service-orders"),JSON.stringify(serverOrders));localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(serverModules));setSavedMessage("Conflito detectado: a versão mais recente do banco online foi preservada. Refaça apenas a alteração pendente.");return; }
-      if (!response.ok) throw new Error(result.error || "Falha ao confirmar a gravação"); const confirmedModules = mergeImportedServices(result.state?.moduleRecords ?? nextModules); setModuleRecords(confirmedModules); localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(confirmedModules)); setStateRevision(Number(result.state?._revision||stateRevision+1));
-    }).catch((error) => {
-      setSavedMessage(friendlyErrorMessage(error, { fallback:"Não foi possível sincronizar com o banco online. Seus dados locais foram preservados." }));
-    });
+    const applyConfirmed=(state:{customers?:unknown;serviceOrders?:unknown;moduleRecords?:unknown;_revision?:unknown})=>{
+      const confirmedCustomers=state.customers as Customer[],confirmedOrders=state.serviceOrders as ServiceOrder[],confirmedModules=mergeImportedServices(state.moduleRecords as Record<string,ModuleRecord[]>);
+      setCustomerRecords(confirmedCustomers);setServiceOrders(confirmedOrders);setModuleRecords(confirmedModules);setStateRevision(Number(state._revision||0));
+      try{localStorage.setItem(companyStorageKey(activeCompany.id,"customers"),JSON.stringify(confirmedCustomers));localStorage.setItem(companyStorageKey(activeCompany.id,"service-orders"),JSON.stringify(confirmedOrders));localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(confirmedModules));}catch{/* Server confirmation remains valid if the local cache is full. */}
+    };
+    setSyncPhase("syncing");setSavedMessage("Enviando alterações para confirmação no banco…");
+    try{
+      const response=await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+      const body=await response.json().catch(()=>null),outcome=stateSaveOutcome(response.status,body,stateRevision);
+      if(!outcome.confirmed){
+        if(outcome.conflict&&Array.isArray(body?.state?.customers)&&Array.isArray(body?.state?.serviceOrders)&&body?.state?.moduleRecords)applyConfirmed(body.state);
+        setSavedMessage("Não foi salvo: "+outcome.error);setSyncPhase("idle");return false;
+      }
+      applyConfirmed(outcome.state);setSyncPhase("complete");window.setTimeout(()=>setSyncPhase("idle"),1000);return true;
+    }catch(error){setSavedMessage(friendlyErrorMessage(error,{fallback:"Não foi salvo: falha de conexão. Os campos permanecem em edição."}));setSyncPhase("idle");return false;}
   };
   const pullFromDatabase = async () => {
     if (!online) { setSavedMessage("Sem internet. Não foi possível atualizar do banco."); return; }
@@ -4276,7 +4277,11 @@ export default function Home() {
     }
     setSavedMessage(`Orçamento convertido em ${target}.`); window.setTimeout(() => setSavedMessage(""),2500);
   };
+  const recordSaveLock=useRef(false);
   const saveRecord = async (data: ModalSave) => {
+    if(recordSaveLock.current)return;
+    recordSaveLock.current=true;
+    try{
     if (data.title.startsWith("Nova unidade, filial ou setor") || data.title.startsWith("Novo setor") || data.title.startsWith("Nova sala") || data.title.startsWith("Nova sala ou ambiente")) {
       const parentCustomer = data.title.split("•")[1]?.trim() || data.client;
       const structure: ModuleRecord = { id:`SET-${Date.now().toString().slice(-6)}`, name:data.name, client:parentCustomer, description:data.description || data.doc, doc:data.doc, contact:data.contact, phone:data.phone, address:data.address, category:data.category || "Setor", parentId:data.parentId || undefined, parentUnit:data.parentUnit || undefined, hierarchyLevel:data.hierarchyLevel || undefined, environmentType:data.environmentType, roomNumber:data.roomNumber, floor:data.floor, block:data.block, localResponsible:data.localResponsible, extension:data.extension, criticality:data.criticality, priorityAttendance:data.priorityAttendance, status:"Ativo", createdAt:new Date().toLocaleString("pt-BR"), legalName:data.legalName, tradeName:data.tradeName, email:data.email, zipCode:data.zipCode, street:data.street, addressNumber:data.addressNumber, complement:data.complement, neighborhood:data.neighborhood, city:data.city, state:data.state, stateRegistration:data.stateRegistration, municipalRegistration:data.municipalRegistration, cnaeMain:data.cnaeMain, taxStatus:data.taxStatus };
@@ -4287,14 +4292,10 @@ export default function Home() {
       const updatedModules = { ...moduleRecords, "Unidades e setores":[structure,...(moduleRecords["Unidades e setores"] ?? [])] };
       const updatedCustomers = customerRecords.map(customer => customer.name === parentCustomer ? {...customer,units:(Number(customer.units) || 0)+1} : customer);
       try {
-        setModuleRecords(updatedModules);
-        setCustomerRecords(updatedCustomers);
-        persistSharedState(updatedCustomers,serviceOrders,updatedModules);
+        if(!await persistSharedState(updatedCustomers,serviceOrders,updatedModules))return;
         setSavedMessage(`${data.category || "Setor"} vinculado a ${parentCustomer} com sucesso.`);
         window.setTimeout(() => setSavedMessage(""), 3000);
       } catch (error) {
-        setModuleRecords(moduleRecords);
-        setCustomerRecords(customerRecords);
         setSavedMessage(error instanceof Error ? `Falha ao salvar setor: ${error.message}` : "Falha ao salvar setor. Os dados anteriores foram preservados.");
         return;
       }
@@ -4330,10 +4331,7 @@ export default function Home() {
       };
       const updatedCustomers = [newCustomer, ...customerRecords];
       const updatedModules=appendAudit(moduleRecords,"Cliente criado",`Clientes • ${newCustomer.name}`,"Novo cadastro de cliente.",{moduleName:"Clientes",recordId:newCustomer.id,after:newCustomer as unknown as Record<string,unknown>});
-      setCustomerRecords(updatedCustomers);
-      setModuleRecords(updatedModules);
-      localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(updatedCustomers));
-      persistSharedState(updatedCustomers, serviceOrders, updatedModules);
+      if(!await persistSharedState(updatedCustomers, serviceOrders, updatedModules))return;
       setCurrent("Clientes");
       setSavedMessage(`Cliente ${newCustomer.name} cadastrado com sucesso.`);
     } else if (data.title === "Nova ordem de serviço") {
@@ -4384,10 +4382,7 @@ export default function Home() {
       };
       const updatedOrders = [newOrder, ...serviceOrders];
       const updatedModules=appendAudit(moduleRecords,"OS criada",`Ordens de serviço • ${newOrder.id}`,"Nova ordem de serviço cadastrada.",{moduleName:"Ordens de serviço",recordId:newOrder.id,after:newOrder as unknown as Record<string,unknown>});
-      setServiceOrders(updatedOrders);
-      setModuleRecords(updatedModules);
-      localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(updatedOrders));
-      persistSharedState(customerRecords, updatedOrders, updatedModules);
+      if(!await persistSharedState(customerRecords, updatedOrders, updatedModules))return;
       setCurrent("Ordens de serviço");
       setSavedMessage(`Ordem ${newOrder.id} gravada com sucesso.`);
     } else {
@@ -4518,14 +4513,13 @@ export default function Home() {
         });
         updatedRecords = { ...updatedRecords, Financeiro: [...payables, ...(moduleRecords.Financeiro ?? [])] };
       }
-      setModuleRecords(updatedRecords);
-      localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(updatedRecords));
-      persistSharedState(customerRecords, serviceOrders, updatedRecords);
+      if(!await persistSharedState(customerRecords, serviceOrders, updatedRecords))return;
       setCurrent(moduleName);
       setSavedMessage(moduleName === "Compras" && data.paymentType === "A prazo" ? `Compra gravada e ${Math.max(1, data.paymentInstallments.length || data.installments)} parcela(s) lançada(s) em Contas a Pagar.` : "Registro gravado com sucesso.");
     }
     setModal("");
     window.setTimeout(() => setSavedMessage(""), 3500);
+    }finally{recordSaveLock.current=false;}
   };
   useEffect(() => {
     const handleProfileCustomerUpdate = (event: Event) => {
