@@ -2,6 +2,7 @@
 import {useCallback,useEffect,useRef,useState} from "react";
 import {upload} from "@vercel/blob/client";
 import {DOCUMENT_CATEGORIES,DOCUMENT_LIMIT,documentChecklist,type BiddingDocument,type DocumentCategory} from "@/lib/bidding-documents";
+type DocumentReader=ReturnType<typeof import("@/lib/browser-document-reader")["createDocumentReader"]>;
 type BatchItem={key:string;file:File;serverId?:string;pathname?:string;uploadDone?:boolean;received?:boolean;audited?:boolean;stage:string;error?:string};
 type DocumentView=Omit<BiddingDocument,"pathname">&{status:string};
 const endpoint="/api/bidding-documents";
@@ -23,17 +24,18 @@ export function BiddingDocumentsWorkspace({companyName}:{companyName:string}){
   if(!response.ok)throw new Error(result.error||"Operação não confirmada.");return result;
  };
  const updateItem=(key:string,patch:Partial<BatchItem>)=>setFiles(current=>current.map(item=>item.key===key?{...item,...patch}:item));
- const auditFile=async(docId:string,file:File,reader:ReturnType<typeof import("@/lib/browser-document-reader")["createDocumentReader"]>,progress:(message:string)=>void)=>{
+ const auditFile=async(docId:string,file:File,reader:DocumentReader,progress:(message:string)=>void)=>{
   const extracted=await reader.read(file,progress);
   const result=await post({action:"audit",id:docId,...extracted});if(result.audited!==true)throw new Error("Auditoria ainda não confirmada no servidor.");return result;
  };
  const send=async()=>{
   if(lock.current||!files.some(item=>!item.audited))return;
   lock.current=true;pauseRequested.current=false;setBusy(true);setNotice("");
-  const {createDocumentReader}=await import("@/lib/browser-document-reader"),reader=createDocumentReader();
-  let received=0,audited=0,failed=0;
+  let reader:DocumentReader|null=null,received=0,audited=0,failed=0;
   try{
-   for(const item of files){
+   const {createDocumentReader}=await import("@/lib/browser-document-reader");reader=createDocumentReader();
+   for(const original of files){
+    const item={...original};
     if(item.audited)continue;if(pauseRequested.current)break;
     try{
      if(!item.serverId){
@@ -59,12 +61,13 @@ export function BiddingDocumentsWorkspace({companyName}:{companyName:string}){
    }
    await load();setNotice(audited+" auditoria(s) salva(s), "+received+" novo(s) arquivo(s) recebido(s), "+failed+" falha(s). "+(pauseRequested.current?"Lote pausado; continue para processar os restantes.":"Confira os relatórios individuais abaixo."));
   }catch(error){setNotice(error instanceof Error?error.message:"Falha ao atualizar a lista. Os arquivos confirmados continuam no servidor.");}
-  finally{await reader.dispose();lock.current=false;setBusy(false);}
+  finally{try{await reader?.dispose();}catch{}lock.current=false;setBusy(false);}
  };
  const auditReceived=async(doc:DocumentView)=>{
   if(lock.current)return;lock.current=true;setBusy(true);setNotice("");
-  const {createDocumentReader}=await import("@/lib/browser-document-reader"),reader=createDocumentReader();
+  let reader:DocumentReader|null=null;
   try{
+   const {createDocumentReader}=await import("@/lib/browser-document-reader");reader=createDocumentReader();
    const response=await fetch(endpoint+"?id="+doc.id+"&download=1",{cache:"no-store"});if(!response.ok)throw new Error("Não foi possível carregar o arquivo privado.");
    const file=new File([await response.blob()],doc.filename,{type:doc.mime});
    await auditFile(doc.id,file,reader,message=>setNotice(doc.name+": "+message));await load();setNotice("Auditoria individual salva. A conferência humana continua pendente.");
@@ -101,8 +104,7 @@ export function BiddingDocumentsWorkspace({companyName}:{companyName:string}){
      const valid=batch.filter(file=>file.size>0&&file.size<=DOCUMENT_LIMIT&&["application/pdf","image/png","image/jpeg"].includes(file.type));
      const batchId=crypto.randomUUID();
      setFiles(current=>{
-      const known=new Set(current.map(item=>[item.file.name,item.file.size,item.file.lastModified].join(":")));
-      const added=valid.filter(file=>!known.has([file.name,file.size,file.lastModified].join(":"))).map((file,index)=>({key:batchId+":"+index,file,stage:"Aguardando envio"}));
+      const added=valid.map((file,index)=>({key:batchId+":"+index,file,stage:"Aguardando envio"}));
       return [...current,...added].slice(0,200);
      });
      setNotice(valid.length!==batch.length?"Alguns arquivos foram recusados por formato ou tamanho. Cada arquivo deve ter até 10 MB.":"Lote selecionado. Use Enviar e auditar para processar cada arquivo. Limite de 200 arquivos por lote.");
