@@ -1,3 +1,4 @@
+import {paginationOffset} from "./rest-pagination";
 import { neon } from "@neondatabase/serverless";
 import { isReadOnlyRequest, resilientDatabaseFetch, retryDatabaseOperation } from "./database-resilience";
 
@@ -147,7 +148,7 @@ function addParam(params: unknown[], value: unknown) {
 function buildWhere(paramsUrl: URLSearchParams, values: unknown[]) {
   const clauses: string[] = [];
   for (const [key, raw] of paramsUrl.entries()) {
-    if (["select", "limit", "order", "on_conflict"].includes(key)) continue;
+    if (["select", "limit", "offset", "order", "on_conflict"].includes(key)) continue;
     if (key === "or") {
       const inner = raw.replace(/^\(|\)$/g, "").split(",");
       const orClauses = inner.map((part) => {
@@ -210,6 +211,8 @@ async function neonRest(path: string, init: RequestInit) {
     }
     const limit = urlParams.get("limit");
     if (limit && /^\d+$/.test(limit)) query += ` LIMIT ${Number(limit)}`;
+    const offset=paginationOffset(urlParams.get("offset"));
+    if(offset!==null)query+=` OFFSET ${offset}`;
   } else if (method === "POST") {
     const records = Array.isArray(body) ? body : [body];
     if (!records.length || !records[0] || typeof records[0] !== "object") throw new Error("Payload de inserção inválido");
