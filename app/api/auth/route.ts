@@ -39,9 +39,9 @@ async function authenticateLegacyEmployee(username: string, password: string, re
     const employee=tenantEmployeeCandidate(rows[0]?.payload,companyId,normalized);
     if(!employee)continue;
     // A matching current employee must never fall through to an older password.
-    if(String(employee.status||"").trim().toLowerCase()==="inativo")return null;
+    if(String(employee.status||"").trim().toLowerCase()==="inativo")return {denied:true as const,reason:"Utilizador ou senha inválidos.",status:401};
     const storedHash=String(employee.employeePasswordHash||"");
-    if(!storedHash||!verifyPassword(password,storedHash))return null;
+    if(!storedHash||!verifyPassword(password,storedHash))return {denied:true as const,reason:"Utilizador ou senha inválidos.",status:401};
     if (employee.restrictLoginToWorkHours === true) {
       const start = /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(employee.workdayStart || "")) ? String(employee.workdayStart) : "07:00";
       const end = /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(employee.workdayEnd || "")) ? String(employee.workdayEnd) : "18:00";
@@ -167,7 +167,7 @@ async function handlePostAuth(request: NextRequest) {
 
   const legacyEmployee = await authenticateLegacyEmployee(String(username), String(password),resolvedTenant);
   if (legacyEmployee) {
-    if ("denied" in legacyEmployee) return NextResponse.json({ error: legacyEmployee.reason }, { status: 403 });
+    if ("denied" in legacyEmployee) return NextResponse.json({ error: legacyEmployee.reason }, { status: "status" in legacyEmployee ? legacyEmployee.status : 403 });
     const response = NextResponse.json({ authenticated: true, ...legacyEmployee }); response.cookies.set(COOKIE_NAME, createSessionForUser(legacyEmployee), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 }); return response;
   }
 
