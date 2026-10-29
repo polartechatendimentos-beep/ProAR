@@ -424,7 +424,7 @@ export async function GET(request: NextRequest) {
     result.data=applyFilters(result.data);
     const normalizedPortals = requestedPortals.map(value => portalAliases[normalize(value)] ?? value);
     // Portais de origem em registros PNCP não comprovam um conector direto validado.
-    const connectedPortals = new Set(["PNCP", "Compras.gov.br",...(result.diagnostics.some(d=>d.mode==="direct"&&d.status==="ok")?["BLL Compras"]:[])]);
+    const connectedPortals = new Set(["PNCP", "Compras.gov.br",...(result.diagnostics.some(d=>d.mode==="direct"&&d.status==="ok"&&/^BLL/.test(d.source))?["BLL Compras"]:[]),...(result.diagnostics.some(d=>d.status==="ok"&&/Portal Municipal|Fiorilli direto/.test(d.source))?["Portal Municipal"]:[])]);
     const unavailablePortals = normalizedPortals.filter(portal => !connectedPortals.has(portal));
     if (normalizedPortals.length) result.data = result.data.filter(item => normalizedPortals.includes(item.sourcePortal ?? "PNCP"));
     result.data.sort((a, b) => orderBy === "valor"
