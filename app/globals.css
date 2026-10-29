@@ -362,3 +362,11 @@ label.status-filter select option,.status-filter select option{background:#08101
  .os-create-layer .os-create-schedule{margin:4px 12px;padding:6px 10px}
  .os-create-layer .os-create-footer{padding:6px 12px}
 }
+
+.os-inline-customer{padding:14px;border:1px solid #3285ce;border-radius:10px;background:#0a1b2e;display:grid;gap:12px}
+.os-inline-customer b{color:#eaf4ff;font-size:13px}
+.os-inline-customer p{margin:4px 0 0;color:#b7cce0;font-size:12px}
+.os-inline-customer fieldset{margin:0;padding:0;border:0;min-width:0}
+.os-inline-customer-actions{display:flex;flex-wrap:wrap;gap:8px}
+.os-inline-customer-actions button{flex:1;min-height:40px;white-space:normal}
+.os-inline-customer p.os-inline-customer-error{color:#fecaca;background:#451a26;padding:10px;border-radius:8px}
