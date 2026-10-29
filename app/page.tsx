@@ -1459,7 +1459,7 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
 }
 
 type TenderDocument = { sequencialDocumento?: number; tipoDocumentoNome?: string; titulo?: string; dataPublicacaoPncp?: string; url?: string; uri?: string };
-type Tender = { numeroCompra?:string; sourceExternalId?:string; validationStatus?:string; validationReason?:string; situacaoCompraNome?:string; numeroControlePNCP?: string; objetoCompra?: string; modalidadeNome?: string; dataEncerramentoProposta?: string; dataPublicacaoPncp?: string; valorTotalEstimado?: number; linkSistemaOrigem?: string; sourcePortal?: string; distanciaMirassol?: number; anoCompra?: number; sequencialCompra?: number; orgaoEntidade?: { razaoSocial?: string; cnpj?: string }; unidadeOrgao?: { municipioNome?: string; ufSigla?: string; nomeUnidade?: string } };
+type Tender = { numeroCompra?:string; sourceExternalId?:string; validationStatus?:"active_confirmed"|"history"|"incomplete"; validationReason?:string; situacaoCompraNome?:string; numeroControlePNCP?: string; objetoCompra?: string; modalidadeNome?: string; dataEncerramentoProposta?: string; dataPublicacaoPncp?: string; valorTotalEstimado?: number; linkSistemaOrigem?: string; sourcePortal?: string; distanciaMirassol?: number; anoCompra?: number; sequencialCompra?: number; orgaoEntidade?: { razaoSocial?: string; cnpj?: string }; unidadeOrgao?: { municipioNome?: string; ufSigla?: string; nomeUnidade?: string } };
 type LicitacoesTab = "Habilitação e BDI" | "Radar" | "Empenhos / Saldo Contratual" | "Documentos" | "Auditoria" | "Dados Reais";
 
 function LicitacoesWorkspace({
