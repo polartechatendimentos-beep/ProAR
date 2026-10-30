@@ -65,6 +65,19 @@ jobs:
           echo "$POST_STATUS" | grep -Eq "^(401|403|500|503)$"
           grep -qi "^content-type: application/json" /tmp/auth-post.headers
           node -e 'const body=JSON.parse(require("fs").readFileSync("/tmp/auth-post.json","utf8")); if(!body || typeof body!=="object") process.exit(1); if(typeof body.error!=="string") process.exit(1)'
+      - name: Document PDF and OCR browser fixtures
+        timeout-minutes: 5
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund @playwright/test@1.63.0
+          npx playwright install --with-deps chromium
+          npm start > /tmp/proar-document-browser.log 2>&1 &
+          DOCUMENT_APP_PID=$!
+          trap 'kill $DOCUMENT_APP_PID || true' EXIT
+          for i in {1..45}; do
+            if curl -fsS http://127.0.0.1:3000/api/health > /dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/test-document-reader-browser.mjs
       - name: Public procurement source probe
         continue-on-error: true
         timeout-minutes: 2

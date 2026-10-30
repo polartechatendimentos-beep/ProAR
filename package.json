@@ -6,8 +6,8 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "next dev",
-    "build": "NODE_ENV=production next build",
+    "dev": "node scripts/prepare-document-assets.mjs && next dev",
+    "build": "node scripts/prepare-document-assets.mjs && NODE_ENV=production next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "validate:fast": "npm run typecheck && npm run lint && npm test",
@@ -26,8 +26,10 @@
     "lucide-react": "^0.468.0",
     "next": "16.2.6",
     "node-forge": "^1.3.1",
+    "pdfjs-dist": "6.4.299",
     "react": "19.2.6",
-    "react-dom": "19.2.6"
+    "react-dom": "19.2.6",
+    "tesseract.js": "7.0.0"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.37.1",

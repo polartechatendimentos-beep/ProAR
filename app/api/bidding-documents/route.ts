@@ -1,3 +1,5 @@
+import {buildDocumentAudit,validateExtraction} from "@/lib/bidding-document-audit";
+import {supabaseRest} from "@/lib/supabase-rest";
 import {NextRequest,NextResponse} from "next/server";
 import {get} from "@vercel/blob";
 import {createHash,randomUUID} from "node:crypto";
@@ -35,7 +37,7 @@ export async function POST(request:NextRequest){
  if(!hasPermission(access.session,"licitacoes.editar"))return json({error:"Sem permissão para anexar ou conferir documentos."},403);
  if(request.headers.get("origin")!==request.nextUrl.origin)return json({error:"Origem não autorizada."},403);
  try{
-  const raw=await request.text();if(raw.length>16000)return json({error:"Solicitação muito grande."},413);
+  const raw=await request.text();if(raw.length>400000)return json({error:"Solicitação muito grande."},413);
   const body=JSON.parse(raw),c=await routeContext(access.session),actor=access.session.username,now=new Date();
   if(body.action==="prepare"){
    if(!process.env.BLOB_READ_WRITE_TOKEN&&!process.env.BLOB_STORE_ID)return json({error:"Armazenamento privado não configurado. O arquivo não foi enviado nem salvo."},503);
@@ -43,7 +45,7 @@ export async function POST(request:NextRequest){
    if(!DOCUMENT_CATEGORIES.includes(body.category))return json({error:"Categoria inválida."},422);
    const tenderId=String(body.tenderId||"");if(tenderId&&!biddingTenderOptions(c.state).some(t=>t.id===tenderId))return json({error:"Edital não vinculado a esta empresa. Salve-o no acompanhamento primeiro."},422);
    const id=randomUUID(),name=String(body.name||file.filename).trim();if(!name||name.length>200)return json({error:"Nome do documento inválido."},422);
-   const doc:BiddingDocument={id,companyId:c.company,_revision:1,name,filename:file.filename,mime:file.mime,size:file.size,category:body.category,tenderId,pathname:biddingDocumentPath(c.company,id,file.extension),uploaded:false,validUntil:"",noExpiry:false,review:"received",reviewNote:"",createdAt:now.toISOString(),createdBy:actor,audit:[{at:now.toISOString(),actor,action:"prepare",note:"Aguardando arquivo real no armazenamento privado."}]};
+   const doc:BiddingDocument={id,companyId:c.company,_revision:1,name,filename:file.filename,mime:file.mime,size:file.size,category:body.category,tenderId,pathname:biddingDocumentPath(c.company,id,file.extension),...(typeof body.batchId==="string"&&/^[0-9a-f-]{36}$/.test(body.batchId)?{batchId:body.batchId}:{}),uploaded:false,validUntil:"",noExpiry:false,review:"received",reviewNote:"",createdAt:now.toISOString(),createdBy:actor,audit:[{at:now.toISOString(),actor,action:"prepare",note:"Aguardando arquivo real no armazenamento privado."}]};
    if(!await saveBiddingDocument(c.db,doc,null))return json({error:"Cadastro do envio não confirmado."},409);
    return json({prepared:true,id,pathname:doc.pathname});
   }
@@ -58,9 +60,23 @@ export async function POST(request:NextRequest){
    const next:BiddingDocument={...previous,_revision:previous._revision+1,uploaded:true,sha256:createHash("sha256").update(bytes).digest("hex"),audit:[...previous.audit,{at:now.toISOString(),actor,action:"received",note:"Arquivo privado recebido; formato e tamanho conferidos. Conteúdo e validade ainda não aprovados."}]};
    return await saveBiddingDocument(c.db,next,previous)?json({saved:true,document:{id:next.id,status:documentStatus(next)}}):json({error:"Documento alterado durante o envio. Atualize a lista."},409);
   }
+  if(body.action==="audit"){
+   if(!previous.uploaded||!previous.sha256)return json({error:"Confirme o arquivo real antes de auditar."},409);
+   if(body.sha256!==previous.sha256)return json({error:"O texto não corresponde à versão do arquivo anexado. Releia o arquivo original."},422);
+   if(typeof body.text!=="string"||body.text.length>250000)return json({error:"Texto de auditoria inválido ou muito grande."},422);
+   const extraction=validateExtraction(body.extraction),textHash=createHash("sha256").update(body.text).digest("hex");
+   if(previous.automaticAudit?.textHash===textHash&&previous.automaticAudit.sha256===previous.sha256)return json({audited:true,report:previous.automaticAudit});
+   if(previous.audit.length>=200)return json({error:"Limite de revisões atingido para este documento."},422);
+   let expectedCnpj="";
+   try{const companyResponse=await supabaseRest("proar_companies?id=eq."+encodeURIComponent(c.company)+"&select=cnpj&limit=1");if(companyResponse.ok)expectedCnpj=String((await companyResponse.json())[0]?.cnpj||"");}catch{}
+   const report=buildDocumentAudit({text:body.text,expectedCnpj,sha256:previous.sha256,textHash,extraction,now});
+   const next:BiddingDocument={...previous,_revision:previous._revision+1,automaticAudit:report,audit:[...previous.audit,{at:now.toISOString(),actor,action:"automatic_audit",note:"Triagem por extração local: "+report.suggestedCategory+". "+report.checks.filter(check=>check.status!=="identified").length+" ponto(s) para revisão humana. Nenhuma aprovação automática."}]};
+   return await saveBiddingDocument(c.db,next,previous)?json({audited:true,report}):json({error:"O documento mudou durante a auditoria. Atualize e tente novamente."},409);
+  }
   if(body.action==="review"){
    if(body.expectedRevision!==previous._revision)return json({error:"Outra conferência foi salva. Atualize antes de continuar."},409);
-   const next=reviewDocument(previous,body,actor,now);
+   const category=body.category??previous.category;if(!DOCUMENT_CATEGORIES.includes(category))return json({error:"Categoria inválida."},422);
+   const next=reviewDocument({...previous,category},body,actor,now);
    return await saveBiddingDocument(c.db,next,previous)?json({saved:true,document:{id:next.id,status:documentStatus(next)}}):json({error:"A conferência mudou. Atualize a lista."},409);
   }
   return json({error:"Ação inválida."},422);

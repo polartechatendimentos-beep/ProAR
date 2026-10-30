@@ -1,10 +1,11 @@
+import type {DocumentAuditReport} from "./bidding-document-audit";
 export const DOCUMENT_LIMIT=10*1024*1024;
 export const DOCUMENT_TYPES={"application/pdf":"pdf","image/png":"png","image/jpeg":"jpg"} as const;
 export const DOCUMENT_CATEGORIES=["CND Federal","CND Estadual","CND Municipal","FGTS","Trabalhista","CREA / CFT","ART","Atestado técnico","Outros"] as const;
 export type DocumentCategory=typeof DOCUMENT_CATEGORIES[number];
 export type ReviewState="received"|"approved"|"rejected";
 export type DocumentAudit={at:string;actor:string;action:string;note:string};
-export type BiddingDocument={id:string;companyId:string;_revision:number;name:string;filename:string;mime:string;size:number;category:DocumentCategory;tenderId:string;pathname:string;uploaded:boolean;sha256?:string;validUntil:string;noExpiry:boolean;review:ReviewState;reviewNote:string;createdAt:string;createdBy:string;reviewedAt?:string;reviewedBy?:string;audit:DocumentAudit[]};
+export type BiddingDocument={id:string;companyId:string;_revision:number;name:string;filename:string;mime:string;size:number;category:DocumentCategory;tenderId:string;pathname:string;uploaded:boolean;sha256?:string;validUntil:string;noExpiry:boolean;review:ReviewState;reviewNote:string;createdAt:string;createdBy:string;reviewedAt?:string;reviewedBy?:string;audit:DocumentAudit[];automaticAudit?:DocumentAuditReport;batchId?:string};
 export function documentFileInput(value:{filename:unknown;mime:unknown;size:unknown}){
  const filename=String(value.filename??"").trim(),mime=String(value.mime??"");
  if(!filename||filename.length>180||/[\/\\\r\n\0]/.test(filename))throw new Error("Nome de arquivo inválido.");
