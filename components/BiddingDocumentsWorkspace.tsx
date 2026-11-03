@@ -2,6 +2,7 @@
 import {useCallback,useEffect,useRef,useState} from "react";
 import {upload} from "@vercel/blob/client";
 import {DOCUMENT_CATEGORIES,DOCUMENT_LIMIT,documentChecklist,type BiddingDocument,type DocumentCategory} from "@/lib/bidding-documents";
+import {qualificationRisks,qualificationDossier} from "@/lib/bidding-qualification-risk";
 type DocumentView=Omit<BiddingDocument,"pathname">&{status:string};
 const endpoint="/api/bidding-documents";
 export function BiddingDocumentsWorkspace({companyName}:{companyName:string}){
@@ -56,6 +57,7 @@ export function BiddingDocumentsWorkspace({companyName}:{companyName:string}){
  };
  const scoped=documents.filter(doc=>tenderId?doc.tenderId===tenderId:!doc.tenderId);
  const checklist=documentChecklist(documents,tenderId);
+ const risks=qualificationRisks(documents as BiddingDocument[],tenderId);
  const today=new Date().toLocaleDateString("en-CA",{timeZone:"America/Sao_Paulo"});
  const expiring=scoped.filter(doc=>doc.uploaded&&doc.validUntil&&doc.validUntil>=today&&Math.ceil((Date.parse(doc.validUntil+"T12:00:00Z")-Date.parse(today+"T12:00:00Z"))/86400000)<=30);
  const expired=scoped.filter(doc=>doc.uploaded&&doc.validUntil&&doc.validUntil<today);
@@ -77,7 +79,7 @@ export function BiddingDocumentsWorkspace({companyName}:{companyName:string}){
    </div><ul>{files.map((file,index)=><li key={file.name+index}>{file.name} • {(file.size/1024/1024).toFixed(2)} MB</li>)}</ul>
    <button type="button" className="primary-btn" disabled={!canEdit||!configured||!files.length||busy} onClick={()=>void send()}>{busy?"Processando…":"Enviar arquivos privados"}</button>
   </fieldset>
-  <p role="status" aria-live="polite">{notice}</p><div role="status" style={{padding:12,border:"1px solid #527493",borderRadius:8,marginTop:12}}><strong>Alertas documentais:</strong> {expired.length} vencido(s) • {expiring.length} com vencimento em até 30 dias. {expired.length>0&&<p>Vencidos: {expired.map(doc=>doc.name).join(" · ")}</p>}{expiring.length>0&&<p>Próximos do vencimento: {expiring.map(doc=>doc.name+" ("+doc.validUntil+")").join(" · ")}</p>}<button type="button" className="outline-btn" disabled={!scoped.length||hasMore} onClick={report}>Exportar relatório preliminar</button>{hasMore&&<small> Carregue todos os registros antes de exportar.</small>}</div>
+  <p role="status" aria-live="polite">{notice}</p><section aria-label="Painel de riscos de habilitação" style={{padding:14,border:"1px solid #54799b",borderRadius:12,marginTop:14}}><h4>Painel de riscos e dossiê preliminar</h4><p>Riscos críticos: {risks.filter(r=>r.level==="critical").length} • Atenção: {risks.filter(r=>r.level==="warning").length}. A conferência das exigências específicas do edital continua obrigatória.</p><ul>{risks.slice(0,15).map((risk,index)=><li key={index}><strong>{risk.level==="critical"?"Crítico":"Atenção"} — {risk.title}:</strong> {risk.detail}</li>)}</ul>{risks.length>15&&<p>Exibindo 15 de {risks.length} alertas.</p>}<button type="button" className="outline-btn" disabled={hasMore||!documents.length} onClick={()=>{const data=qualificationDossier(documents as BiddingDocument[],tenderId,companyName,tenders.find(t=>t.id===tenderId)?.name||"Cofre da empresa");const blob=new Blob([data],{type:"text/plain;charset=utf-8"}),url=URL.createObjectURL(blob),link=document.createElement("a");link.href=url;link.download="proar-dossie-preliminar.txt";link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}}>Gerar dossiê preliminar</button><p style={{fontSize:12}}>Aprovação final exige conferência humana, validação da autenticidade e revisão do edital. Não há decisão automática por IA nesta etapa.</p></section><div role="status" style={{padding:12,border:"1px solid #527493",borderRadius:8,marginTop:12}}><strong>Alertas documentais:</strong> {expired.length} vencido(s) • {expiring.length} com vencimento em até 30 dias. {expired.length>0&&<p>Vencidos: {expired.map(doc=>doc.name).join(" · ")}</p>}{expiring.length>0&&<p>Próximos do vencimento: {expiring.map(doc=>doc.name+" ("+doc.validUntil+")").join(" · ")}</p>}<button type="button" className="outline-btn" disabled={!scoped.length||hasMore} onClick={report}>Exportar relatório preliminar</button>{hasMore&&<small> Carregue todos os registros antes de exportar.</small>}</div>
   <p style={{fontSize:12}}>Recebido confirma o arquivo no servidor. Aprovado exige conferência registrada. Validade é verificada diariamente pela data informada. A verificação de formato não é antivírus nem validação automática do conteúdo legal.</p>
   <button type="button" className="outline-btn" disabled={busy} onClick={()=>void load().catch(error=>setNotice(error.message))}>Atualizar documentos</button>
   <div style={{overflowX:"auto",marginTop:14}}><table style={{width:"100%",minWidth:720}}><thead><tr><th>Documento</th><th>Edital</th><th>Situação</th><th>Validade</th><th>Arquivo / Conferência</th></tr></thead><tbody>{scoped.map(doc=><tr key={doc.id}>
