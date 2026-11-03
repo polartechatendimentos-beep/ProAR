@@ -52,6 +52,7 @@ export default function ManagerPage(){
   const[companies,setCompanies]=useState<Company[]>([]);
   const[instances,setInstances]=useState<Instance[]>([]);
   const[receivables,setReceivables]=useState<Receivable[]>([]);
+  const[billingFilter,setBillingFilter]=useState("all");
   const[error,setError]=useState("");
   const[notice,setNotice]=useState("");
   const[loading,setLoading]=useState(false);
@@ -262,6 +263,13 @@ export default function ManagerPage(){
 
   if(!authenticated)return <main className="manager-root"><section className="manager-login-card"><div className="manager-mark"><ShieldCheck size={32}/></div><span className="manager-kicker">BY TAV&apos;s</span><h1>ProAR Manager</h1><p>Gerenciador exclusivo de empresas, licenças, cobrança, bancos e ambientes ProAR.</p><form onSubmit={login}><label>Usuário<input autoFocus autoComplete="username" value={username} onChange={e=>setUsername(e.target.value)}/></label><label>Senha<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)}/></label>{loginError&&<div className="manager-error">{loginError}</div>}<button type="submit"><LogIn size={17}/> Entrar no Manager</button></form><small>Ambiente administrativo separado do ProAR operacional.</small></section></main>;
 
+  const today=new Intl.DateTimeFormat("sv-SE",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+  const isOverdue=(row:Receivable)=>row.status==="pending"&&row.due_date<today;
+  const visibleReceivables=receivables.filter(row=>billingFilter==="all"||(billingFilter==="overdue"?isOverdue(row):row.status===billingFilter));
+  const pendingCompanies=companies.filter(company=>company.status!=="active"||(
+    company.plan_code==="trial"&&company.trial_expires_at&&Date.parse(company.trial_expires_at)<=Date.now()+7*86_400_000
+  ));
+
   return <main className="manager-dashboard">
     <header className="manager-header">
       <div className="manager-title"><div className="manager-mark small"><Building2 size={22}/></div><div><span>BY TAV&apos;s</span><h1>ProAR Manager</h1><p>Empresas, licenças, cobrança recorrente, trials e bancos isolados</p></div></div>
@@ -388,13 +396,30 @@ export default function ManagerPage(){
         </div>}
       </section>
 
+      <section className="manager-panel">
+        <div className="panel-head"><div><h2>Central de pendências</h2><p>Acessos bloqueados e períodos de teste encerrados ou próximos do fim.</p></div></div>
+        {pendingCompanies.map(company=><div className="manager-inline-actions" key={company.id}>
+          <button onClick={()=>{setSelectedCompanyId(company.id);setDetailTab("Visão Geral")}}>{company.trade_name||company.legal_name}</button>
+          <span>{statusLabel(company)==="ATIVA"?"Teste próximo do fim":statusLabel(company)}{company.plan_code==="trial"&&company.trial_expires_at?" · "+date(company.trial_expires_at):""}</span>
+        </div>)}
+        {!pendingCompanies.length&&<p>Nenhuma pendência de acesso ou teste nas empresas carregadas.</p>}
+      </section>
+
       <section className="manager-panel manager-receivables-panel">
-        <div className="panel-head"><div><h2>Contas a receber</h2><p>Últimas mensalidades geradas pelo Manager.</p></div></div>
-        <div className="manager-table-wrap"><table className="manager-table"><thead><tr><th>Empresa</th><th>Referência</th><th>Vencimento</th><th>Valor</th><th>Forma</th><th>Status</th><th>Ações</th></tr></thead><tbody>
-          {receivables.slice(0,80).map(row=>{const overdue=row.status==="pending"&&row.due_date<new Date().toISOString().slice(0,10);return <tr key={row.id}>
+        <div className="panel-head"><div><h2>Contas a receber</h2><p>Mensalidades carregadas pelo Manager.</p></div></div>
+        <label>Situação da cobrança <select value={billingFilter} onChange={event=>setBillingFilter(event.target.value)}>
+          <option value="all">Todas</option><option value="pending">Em aberto</option><option value="overdue">Vencidas</option><option value="paid">Pagas</option>
+        </select></label>
+        <div className="manager-table-wrap"><table className="manager-table"><thead><tr><th>Empresa</th><th>Referência</th><th>Vencimento</th><th>Valor</th><th>Forma</th><th>Status</th><th>Dias em atraso</th><th>Baixa</th><th>Ações</th></tr></thead><tbody>
+          {visibleReceivables.map(row=>{
+            const overdue=isOverdue(row);
+            const overdueDays=overdue?(Date.parse(today)-Date.parse(row.due_date))/86_400_000:0;
+            return <tr key={row.id}>
             <td><button className="manager-link-button" onClick={()=>{setSelectedCompanyId(row.company_id);setDetailTab("Cobrança")}}>{companyMap[row.company_id]?.trade_name||companyMap[row.company_id]?.legal_name||row.company_id}</button></td>
             <td>{date(row.reference_month)}</td><td>{date(row.due_date)}</td><td>{money(row.amount_cents)}</td><td>{row.payment_method==="boleto"?"Boleto":row.payment_method==="pix"?"Pix":row.payment_method==="card"?"Cartão":"Manual"}</td>
             <td><span className={`manager-payment-status ${overdue?"overdue":row.status}`}>{overdue?"VENCIDA":row.status==="paid"?"PAGA":row.status==="pending"?"EM ABERTO":row.status.toUpperCase()}</span></td>
+            <td>{overdue ? overdueDays : "—"}</td>
+            <td>{row.status==="paid"&&row.paid_at ? date(row.paid_at) : "—"}</td>
             <td><div className="manager-row-actions">
               {row.payment_url&&<a href={row.payment_url} target="_blank" rel="noreferrer"><ExternalLink size={14}/> Abrir</a>}
               {row.pix_qr_code&&<button onClick={()=>void copy(row.pix_qr_code)}><Copy size={14}/> Copiar Pix</button>}
@@ -404,7 +429,7 @@ export default function ManagerPage(){
               {row.status==="pending"&&<button className="danger" onClick={()=>void billingAction({action:"cancel",receivableId:row.id})}>Cancelar</button>}
             </div></td>
           </tr>})}
-          {!receivables.length&&<tr><td colSpan={7}><div className="manager-empty">Nenhuma mensalidade gerada ainda.</div></td></tr>}
+          {!visibleReceivables.length&&<tr><td colSpan={9}><div className="manager-empty">Nenhuma mensalidade encontrada para este filtro.</div></td></tr>}
         </tbody></table></div>
       </section>
 
