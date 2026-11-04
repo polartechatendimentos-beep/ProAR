@@ -998,7 +998,13 @@
       "detail": "No card lateral de Resumo Financeiro, detalhar quantos títulos vencem exatamente na data atual.",
       "files": "components/DashboardWorkspace.tsx, lib/action-center.ts",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "implementado",
+      "evidence": {
+        "files": [
+          "components/DashboardWorkspace.tsx"
+        ],
+        "scope": "Resumo financeiro mostra contagens separadas de títulos em aberto vencidos e com vencimento hoje. As contagens usam títulos existentes do módulo Financeiro, valor em aberto e data de vencimento ISO ou dd/mm/aaaa; títulos liquidados/cancelados são excluídos."
+      }
     },
     {
       "id": "MEL-070",
