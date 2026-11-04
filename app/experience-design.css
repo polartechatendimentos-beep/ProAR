@@ -28,3 +28,62 @@ html[data-proar-system-theme="light"] .proar-full-system .main{background:var(--
 @media(min-width:1025px){html[data-proar-sidebar-compact="true"] .proar-full-system .sidebar .brand{padding:0 12px}html[data-proar-sidebar-compact="true"] .proar-full-system .sidebar :is(.help-card,.secure>span,.nav-group>p){display:none!important}html[data-proar-sidebar-compact="true"] .proar-full-system .sidebar nav button{justify-content:center;padding:12px 8px!important;position:relative}html[data-proar-sidebar-compact="true"] .proar-full-system .sidebar nav button>span:not(.nav-icon){position:absolute;width:1px;height:1px;clip-path:inset(50%);overflow:hidden;white-space:nowrap}html[data-proar-sidebar-compact="true"] .proar-full-system .sidebar nav button>em{display:none}html[data-proar-sidebar-compact="true"] .proar-full-system .sidebar .nav-icon{display:grid!important;place-items:center;min-width:24px}}
 html[data-proar-system-theme="light"] .proar-side-drawer :is(input,select,textarea){background:#fff!important;color:#0f172a!important;border-color:#94a3b8!important;color-scheme:light}
 .proar-side-drawer :is(input,select,textarea,button){font-size:14px!important}.proar-side-drawer :is(button,input,select){min-height:40px}
+
+
+/* Appearance controls stay out of the work area until explicitly opened. */
+.proar-appearance-toolbar[data-open="false"]{
+  width:max-content;
+  min-height:0;
+  padding:0;
+  border:0;
+  background:transparent;
+  box-shadow:none;
+}
+.proar-appearance-toolbar .appearance-toolbar-trigger{
+  display:inline-flex!important;
+  align-items:center;
+  justify-content:center;
+  min-height:34px;
+  padding:0 12px;
+  border:1px solid var(--ux-border);
+  border-radius:999px;
+  background:var(--ux-card)!important;
+  color:var(--ux-text)!important;
+  font-size:11px;
+  font-weight:700;
+  box-shadow:0 4px 16px #0003;
+}
+.proar-appearance-toolbar[data-open="true"]{
+  align-items:flex-end;
+  flex-direction:column;
+  gap:8px;
+  max-width:min(560px,calc(100vw - 24px));
+}
+.appearance-toolbar-controls{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  flex-wrap:wrap;
+  gap:8px;
+  padding:10px;
+  border:1px solid var(--ux-border);
+  border-radius:14px;
+  background:var(--ux-card);
+  color:var(--ux-text);
+  box-shadow:0 10px 32px #0004;
+}
+.appearance-toolbar-controls>label{
+  display:flex;
+  align-items:center;
+  gap:7px;
+}
+.proar-appearance-toolbar[data-open="true"] .appearance-toolbar-trigger{
+  align-self:flex-end;
+  min-height:28px;
+  box-shadow:none;
+}
+@media(max-width:700px){
+  .proar-appearance-toolbar{bottom:8px;right:8px;left:auto}
+  .proar-appearance-toolbar .appearance-toolbar-trigger{display:inline-flex!important}
+  .appearance-toolbar-controls{max-width:calc(100vw - 16px);align-items:stretch;flex-direction:column}
+}
