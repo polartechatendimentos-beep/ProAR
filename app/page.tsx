@@ -106,31 +106,29 @@ type GlobalSearchItem = { id: string; title: string; detail: string; module: str
 type PendingItem = { id: string; title: string; detail: string; module: string; tone: "blue" | "amber" | "red" };
 
 const navGroups: { label: string; items: NavItem[] }[] = [
-  { label: "VISÃO GERAL", items: [
+  { label: "OPERAÇÃO DO DIA A DIA", items: [
     { icon: LayoutDashboard, name: "Painel inicial" },
     { icon: Activity, name: "Atividades" },
     { icon: Bell, name: "Central de pendências" },
     { icon: CalendarDays, name: "Agenda" },
-  ]},
-  { label: "COMERCIAL", items: [
+    { icon: ClipboardList, name: "Ordens de serviço" },
     { icon: UsersRound, name: "Clientes" },
     { icon: Boxes, name: "Equipamentos" },
+    { icon: ShieldCheck, name: "PMOC e conformidade" },
+    { icon: Building2, name: "Obras" },
+    { icon: Warehouse, name: "Estoque" },
+    { icon: FileText, name: "Base Técnica" },
+  ]},
+  { label: "COMERCIAL & CONTRATOS", items: [
     { icon: FileText, name: "Orçamentos" },
     { icon: ShoppingBag, name: "Vendas" },
     { icon: Landmark, name: "Licitações" },
-  ]},
-  { label: "OPERAÇÃO", items: [
-    { icon: ClipboardList, name: "Ordens de serviço" },
-    { icon: ShieldCheck, name: "PMOC e conformidade" },
-    { icon: Building2, name: "Obras" },
     { icon: Wrench, name: "Serviços" },
     { icon: Package, name: "Produtos" },
-    { icon: Warehouse, name: "Estoque" },
     { icon: ShoppingCart, name: "Compras" },
     { icon: Store, name: "Fornecedores" },
-    { icon: FileText, name: "Base Técnica" },
   ]},
-  { label: "GESTÃO", items: [
+  { label: "FINANCEIRO & RESULTADOS", items: [
     { icon: WalletCards, name: "Financeiro" },
     { icon: ReceiptText, name: "Fiscal" },
     { icon: ShieldCheck, name: "Aprovações" },
@@ -900,8 +898,34 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: so
   },[sourceServiceOrders,onSelect]);
   const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
   const todayIso = new Date().toISOString().slice(0,10);
-  const isClosed = (status:string) => /conclu[ií]d|cancelad/i.test(status);
-  const visibleOrders = sourceServiceOrders.filter(order => { const customer = customers.find(item => item.name === order.client); const matchesSearch=!query.trim() || normalizeSearch([order.id, order.client, order.unit, order.address, order.tech, customer?.legalName, customer?.tradeName, customer?.doc, customer?.phone].filter(Boolean).join(" ")).includes(normalizeSearch(query)); const matchesFilter=visibility === "Todas" || visibility === "Concluídas" ? /conclu[ií]d/i.test(order.status) : visibility === "Canceladas" ? /cancelad/i.test(order.status) : visibility === "Hoje" ? order.date === todayIso : !isClosed(order.status); return matchesSearch && matchesFilter; });
+  const isClosed = (status:string) => /conclu[ií]d|finalizad|cancelad/i.test(status);
+  const orderStage = (order: ServiceOrder) => {
+    const status = normalizeSearch(order.status);
+    if (/cancelad/.test(status)) return "Canceladas";
+    if (/conclu[ií]d|finalizad/.test(status)) return "Concluídas";
+    if (/andamento|em rota|a caminho|check.?in|atendimento|execu[cç][aã]o|aguardando material|aguardando pe[cç]a/.test(status) || Boolean(order.checkInAt && !order.checkOutAt)) return "Em andamento";
+    return "Programadas";
+  };
+  const stageOrders = {
+    scheduled: sourceServiceOrders.filter(order => orderStage(order) === "Programadas"),
+    active: sourceServiceOrders.filter(order => orderStage(order) === "Em andamento"),
+    completed: sourceServiceOrders.filter(order => orderStage(order) === "Concluídas"),
+  };
+  const billedCount = stageOrders.completed.filter(order => order.nfseStatus === "Autorizada" || order.nfseStatus === "Emitida" || /faturad/i.test(order.status)).length;
+  const activeCheckins = stageOrders.active.filter(order => Boolean(order.checkInAt && !order.checkOutAt)).length;
+  const visibleOrders = sourceServiceOrders.filter(order => {
+    const customer = customers.find(item => item.name === order.client);
+    const matchesSearch = !query.trim() || normalizeSearch([order.id, order.client, order.unit, order.address, order.tech, customer?.legalName, customer?.tradeName, customer?.doc, customer?.phone].filter(Boolean).join(" ")).includes(normalizeSearch(query));
+    const stage = orderStage(order);
+    const matchesFilter = visibility === "Todas" ? true
+      : visibility === "Programadas" ? stage === "Programadas"
+      : visibility === "Em andamento" ? stage === "Em andamento"
+      : visibility === "Concluídas" || visibility === "Concluídas & faturadas" ? stage === "Concluídas"
+      : visibility === "Canceladas" ? stage === "Canceladas"
+      : visibility === "Hoje" ? order.date === todayIso && !isClosed(order.status)
+      : !isClosed(order.status);
+    return matchesSearch && matchesFilter;
+  });
   const serviceOrders = visibleOrders;
   const today = new Date().toISOString().slice(0, 10);
   const reviewAlerts = serviceOrders.filter(order => {
@@ -946,7 +970,12 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: so
       <div><span className="section-kicker"><Wrench size={12}/> MODO TÉCNICO</span><h2>Atendimentos do dia</h2><p>Abra a OS, execute o checklist, registre materiais/fotos e finalize com assinatura.</p></div>
       <div className="technician-command-grid">{myTodayOrders.map(order=><button key={order.id} onClick={()=>onSelect(order)}><span><b>{order.time || "A definir"}</b><small>{order.id}</small></span><div><strong>{order.client}</strong><small>{order.unit} • {order.service}</small></div><em>{order.status}</em><ChevronRight size={16}/></button>)}{!myTodayOrders.length&&<div className="linked-empty"><CheckCircle2 size={22}/><h4>Nenhum atendimento hoje</h4><p>Use a Agenda para consultar os próximos serviços.</p></div>}</div>
     </section>}
-    <div className="module-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Pesquisar por cliente, OS, CPF/CNPJ, telefone ou unidade..."/></label><label className="status-filter"><Filter size={14}/><select aria-label="Exibir ordens" value={visibility} onChange={event=>setVisibility(event.target.value)}><option>Em aberto</option><option>Todas</option><option>Concluídas</option><option>Canceladas</option><option>Hoje</option></select></label><ContextReports title="Ordens de Serviço" rows={serviceOrders.map(order=>[order.id,order.client,order.status])} options={["Imprimir Ordem de Serviço","Relatório técnico","Certificado de higienização","Relatório fotográfico","Relatório da assistência técnica","Comprovante de entrega","Histórico completo da OS"]}/><button className="primary-btn" onClick={() => onOpen("Nova ordem de serviço")}><Plus size={16}/> Nova ordem de serviço</button></div>
+    <div className="module-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Pesquisar por cliente, OS, CPF/CNPJ, telefone ou unidade..."/></label><label className="status-filter"><Filter size={14}/><select aria-label="Exibir ordens" value={visibility} onChange={event=>setVisibility(event.target.value)}><option>Em aberto</option><option>Programadas</option><option>Em andamento</option><option>Todas</option><option>Concluídas</option><option>Canceladas</option><option>Hoje</option></select></label><ContextReports title="Ordens de Serviço" rows={serviceOrders.map(order=>[order.id,order.client,order.status])} options={["Imprimir Ordem de Serviço","Relatório técnico","Certificado de higienização","Relatório fotográfico","Relatório da assistência técnica","Comprovante de entrega","Histórico completo da OS"]}/><button className="primary-btn" onClick={() => onOpen("Nova ordem de serviço")}><Plus size={16}/> Nova ordem de serviço</button></div>
+    <div className="service-order-flow" role="group" aria-label="Fluxo das ordens de serviço">
+      <button type="button" aria-pressed={visibility === "Programadas"} onClick={() => setVisibility("Programadas")}><span>1</span><div><strong>Programadas</strong><small>Fila e agenda futura</small></div><b>{stageOrders.scheduled.length}</b></button>
+      <button type="button" aria-pressed={visibility === "Em andamento"} onClick={() => setVisibility("Em andamento")}><span>2</span><div><strong>Em andamento</strong><small>{activeCheckins} com check-in registrado</small></div><b>{stageOrders.active.length}</b></button>
+      <button type="button" aria-pressed={visibility === "Concluídas"} onClick={() => setVisibility("Concluídas")}><span>3</span><div><strong>Concluídas & faturamento</strong><small>{billedCount} faturadas • {Math.max(0,stageOrders.completed.length-billedCount)} aguardam faturamento</small></div><b>{stageOrders.completed.length}</b></button>
+    </div>
     <div className="module-summary">
       <article><span><ClipboardList size={19}/></span><div><small>ORDENS ABERTAS</small><strong>{serviceOrders.filter(item => item.status !== "Concluída").length}</strong><em>{serviceOrders.filter(item => item.date === today).length} para hoje</em></div></article>
       <article><span><UserCheck size={19}/></span><div><small>TÉCNICOS EMPENHADOS</small><strong>{new Set(serviceOrders.map(item => item.tech).filter(Boolean)).size}</strong><em>Cadastros reais</em></div></article>
