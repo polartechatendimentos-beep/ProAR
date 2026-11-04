@@ -3439,9 +3439,10 @@
         "files": [
           "components/TechnicalBasePanel.tsx",
           "components/MobileTechnicalLibrary.tsx",
+          "components/FieldOrderEditor.tsx",
           "lib/mobile-technical-library.ts"
         ],
-        "scope": "Cálculos disponíveis na Base Técnica e na Biblioteca Técnica Mobile, com opção automática pela tabela P–T validada e entrada manual preservada. O cálculo automático separa pressão de sucção (superaquecimento) e pressão da linha líquida (sub-resfriamento), converte bar(g) para psig e não extrapola fora da tabela. A integração ao checklist da OS ainda não foi feita."
+        "scope": "Cálculos disponíveis na Base Técnica, Biblioteca Técnica Mobile e execução da OS de campo. Usa tabela P–T validada ou saturação manual; separa pressão de sucção para superaquecimento e pressão da linha líquida para sub-resfriamento; converte bar(g) para psig; não extrapola fora da tabela. O resultado com fluido, pressão, temperatura de linha e saturação pode ser anexado ao diagnóstico da OS e segue pelo autosave/registro já existente."
       }
     },
     {
