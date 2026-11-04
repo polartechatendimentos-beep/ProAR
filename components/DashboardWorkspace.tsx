@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Activity, AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, Boxes, CalendarDays, ChartNoAxesCombined, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock3, FileChartColumn, FileText, Filter, MoreHorizontal, ShieldCheck, ShoppingBag, ShoppingCart, TrendingUp, UsersRound, WalletCards, Zap } from "lucide-react";
 import { deriveOperationalActions } from "@/lib/action-center";
 
@@ -8,6 +8,19 @@ type DashboardRecord = { id:string; name:string; category?:string; transactionTy
 
 export function DashboardWorkspace({ onNavigate, serviceOrders, modules, role }: { onNavigate: (s: string) => void; serviceOrders: DashboardOrder[]; modules: Record<string, DashboardRecord[]>; role?: string }) {
   const [period, setPeriod] = useState("Este mês");
+  const [periodRestored, setPeriodRestored] = useState(false);
+  useEffect(() => {
+    try {
+      const savedPeriod = window.localStorage.getItem("proar.dashboard.period");
+      if (savedPeriod && ["Hoje", "Semana", "Este mês", "Ano"].includes(savedPeriod)) setPeriod(savedPeriod);
+    } catch { /* Preferência indisponível: mantém o padrão da tela. */ }
+    setPeriodRestored(true);
+  }, []);
+  useEffect(() => {
+    if (!periodRestored) return;
+    try { window.localStorage.setItem("proar.dashboard.period", period); }
+    catch { /* O painel segue funcional mesmo sem armazenamento local. */ }
+  }, [period, periodRestored]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [technician, setTechnician] = useState("Todos");
   const [status, setStatus] = useState("Todos");
