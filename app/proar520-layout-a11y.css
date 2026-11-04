@@ -295,3 +295,59 @@ html[data-proar-system-theme] main h3 {
   font-size: clamp(1.05rem, .96rem + .4vw, 1.3rem);
   line-height: 1.28;
 }
+
+.proar-search-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0;
+}
+.proar-search-filters button,
+.proar-search-history button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  border: 1px solid var(--ux-border, #29405c);
+  border-radius: 8px;
+  padding: 5px 9px;
+  background: var(--ux-surface, #081120);
+  color: var(--ux-text, #e5edf7);
+  cursor: pointer;
+  font-size: 12px;
+}
+.proar-search-filters button[aria-pressed="true"],
+.proar-search-filters button:hover,
+.proar-search-history button:hover {
+  border-color: var(--ux-accent, #3b82f6);
+  background: color-mix(in srgb, var(--ux-accent, #3b82f6) 18%, var(--ux-surface, #081120));
+}
+.proar-search-history {
+  display: grid;
+  gap: 6px;
+  padding: 5px 0;
+}
+.proar-search-history small {
+  color: var(--ux-muted, #a8b7ca);
+  font-size: 12px;
+}
+.proar-search-history button {
+  justify-content: flex-start;
+  text-align: left;
+}
+.proar-search-history button span {
+  color: var(--ux-accent, #3b82f6);
+  font-size: 16px;
+}
+.proar-search-highlight {
+  border-radius: 3px;
+  padding: 0 1px;
+  background: #facc15;
+  color: #111827;
+  font-weight: 800;
+}
+.header-result-list [role="option"][aria-selected="true"] {
+  outline: 2px solid var(--ux-focus, #38bdf8);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--ux-accent, #3b82f6) 18%, var(--ux-surface, #081120));
+}
