@@ -54,9 +54,9 @@ export function DashboardWorkspace({ onNavigate, serviceOrders, modules, role }:
   const moneyDashboard = (value:number) => value.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
   const dashboardDateOnly = (value: unknown) => {
     const raw = String(value || "").trim();
-    const iso = /^(\\d{4}-\\d{2}-\\d{2})/.exec(raw)?.[1];
+    const iso = /^([0-9]{4}-[0-9]{2}-[0-9]{2})/.exec(raw)?.[1];
     if (iso) return iso;
-    const br = /^(\\d{2})\\/(\\d{2})\\/(\\d{4})/.exec(raw);
+    const br = /^([0-9]{2})[/]([0-9]{2})[/]([0-9]{4})/.exec(raw);
     return br ? `${br[3]}-${br[2]}-${br[1]}` : "";
   };
   const openFinancialRecords = (modules.Financeiro ?? []).filter(record =>
