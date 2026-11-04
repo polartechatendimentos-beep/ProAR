@@ -43,7 +43,7 @@ import "./resilience-status.css";
 import { ConnectivityBanner } from "@/components/ResponsivePrimitives";
 import { MobileToday } from "@/components/MobileToday";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   Activity, AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight,
   Bell, Boxes, BriefcaseBusiness, Building2, CalendarDays, ChartNoAxesCombined,
@@ -680,12 +680,72 @@ const tiagoEmployee: ModuleRecord = { id: "FUN-000001", name: "Tiago Viana", cli
 const linkedUnits: Record<string, { icon: IconType; name: string; type: string; doc: string; responsible: string; phone: string; address: string; orders: number }[]> = {};
 const linkedSectors: Record<string, { icon: IconType; name: string; type: string; doc: string; responsible: string; phone: string; address: string; orders: number }[]> = {};
 
+function normalizeGlobalSearch(value: string) {
+  return value.toLocaleLowerCase("pt-BR");
+}
+
+function highlightGlobalSearch(value: string, query: string) {
+  const term = query.trim();
+  if (!term) return value;
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return value.split(new RegExp(`(${escaped})`, "ig")).map((part, index) =>
+    part.toLocaleLowerCase("pt-BR") === term.toLocaleLowerCase("pt-BR")
+      ? <mark className="proar-search-highlight" key={index}>{part}</mark>
+      : part
+  );
+}
+
 function Header({ title, subtitle, onMenu, searchItems, pendingItems, onSearchSelect, onPendingSelect, userName, userRole, onSwitchUser, online, syncing, onPull }: { title: string; subtitle: string; onMenu: () => void; onNew: (option: string) => void; searchItems: GlobalSearchItem[]; pendingItems: PendingItem[]; onSearchSelect: (item: GlobalSearchItem) => void; onPendingSelect: (item: PendingItem) => void; userName: string; userRole: string; onSwitchUser: () => void; online: boolean; syncing: boolean; onPull: () => void; onPush: () => void }) {
   const [searchOpen,setSearchOpen]=useState(false);
   const [pendingOpen,setPendingOpen]=useState(false);
   const [query,setQuery]=useState("");
-  useEffect(()=>{ const handler=(event:KeyboardEvent)=>{ if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==="k"){ event.preventDefault(); setSearchOpen(true); setPendingOpen(false); } }; window.addEventListener("keydown",handler); return()=>window.removeEventListener("keydown",handler); },[]);
-  const matches=query.trim().length<2?[]:searchItems.filter(item=>`${item.title} ${item.detail} ${item.module}`.toLowerCase().includes(query.trim().toLowerCase())).slice(0,10);
+  const [searchCategory,setSearchCategory]=useState<"Todos"|"Cliente"|"OS"|"Cadastro">("Todos");
+  const [searchHistory,setSearchHistory]=useState<string[]>([]);
+  const [activeSearchIndex,setActiveSearchIndex]=useState(-1);
+  useEffect(()=>{
+    try{
+      const saved=JSON.parse(localStorage.getItem("proar-global-search-history")||"[]");
+      if(Array.isArray(saved))setSearchHistory(saved.filter((item):item is string=>typeof item==="string").slice(0,5));
+    }catch{}
+  },[]);
+  useEffect(()=>{setActiveSearchIndex(-1);},[query,searchCategory]);
+  useEffect(()=>{
+    const handler=(event:KeyboardEvent)=>{
+      if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==="k"){
+        event.preventDefault();setSearchOpen(true);setPendingOpen(false);
+      }
+      if(event.key==="Escape"){setSearchOpen(false);setPendingOpen(false);}
+    };
+    const outside=(event:PointerEvent)=>{
+      const target=event.target;
+      if(!(target instanceof Element))return;
+      if(!target.closest(".header-global-search"))setSearchOpen(false);
+      if(!target.closest(".header-pending"))setPendingOpen(false);
+    };
+    window.addEventListener("keydown",handler);
+    document.addEventListener("pointerdown",outside);
+    return()=>{window.removeEventListener("keydown",handler);document.removeEventListener("pointerdown",outside);};
+  },[]);
+  const normalizedQuery=normalizeGlobalSearch(query.trim());
+  const matches=normalizedQuery.length<2?[]:searchItems
+    .filter(item=>searchCategory==="Todos"||item.kind===searchCategory)
+    .filter(item=>normalizeGlobalSearch(`${item.title} ${item.detail} ${item.module}`).includes(normalizedQuery))
+    .slice(0,10);
+  const selectSearchItem=(item:GlobalSearchItem)=>{
+    const term=query.trim();
+    if(term.length>=2){
+      const next=[term,...searchHistory.filter(entry=>entry.toLocaleLowerCase("pt-BR")!==term.toLocaleLowerCase("pt-BR"))].slice(0,5);
+      setSearchHistory(next);
+      try{localStorage.setItem("proar-global-search-history",JSON.stringify(next));}catch{}
+    }
+    onSearchSelect(item);setSearchOpen(false);setQuery("");setActiveSearchIndex(-1);
+  };
+  const onSearchKeyDown=(event:ReactKeyboardEvent<HTMLInputElement>)=>{
+    if(event.key==="ArrowDown"&&matches.length){event.preventDefault();setActiveSearchIndex(index=>index<0?0:(index+1)%matches.length);}
+    else if(event.key==="ArrowUp"&&matches.length){event.preventDefault();setActiveSearchIndex(index=>index<=0?matches.length-1:index-1);}
+    else if(event.key==="Enter"&&activeSearchIndex>=0&&matches[activeSearchIndex]){event.preventDefault();selectSearchItem(matches[activeSearchIndex]);}
+    else if(event.key==="Escape"){event.preventDefault();setSearchOpen(false);}
+  };
   return <header className="topbar topbar-user-only">
     <div className="headline">
       <button className="menu-toggle" aria-label="Abrir menu" onClick={onMenu}><Menu size={20}/></button>
@@ -695,11 +755,23 @@ function Header({ title, subtitle, onMenu, searchItems, pendingItems, onSearchSe
     <div className="top-actions top-actions-user-only">
       <a href="/mobile" className="header-tool-button" aria-label="Abrir ProAR Mobile no celular" title="ProAR Mobile — versão mobile"><Smartphone size={16}/></a>
       <div className="header-global-search">
-        <button className="header-tool-button" aria-label="Busca global" title="Busca global" onClick={()=>{setSearchOpen(value=>!value);setPendingOpen(false)}}><Search size={16}/></button>
-        {searchOpen&&<div className="header-popover search-popover"><label><Search size={14}/><input autoFocus value={query} onChange={event=>setQuery(event.target.value)} placeholder="Cliente, CNPJ, OS, série, NF..."/></label>{query.trim().length<2?<small>Digite pelo menos 2 caracteres.</small>:matches.length?<div className="header-result-list">{matches.map(item=><button key={`${item.module}-${item.id}`} onClick={()=>{onSearchSelect(item);setSearchOpen(false);setQuery("")}}><b>{item.title}</b><span>{item.detail||item.module}</span><em>{item.module}</em></button>)}</div>:<small>Nenhum registro encontrado nos dados carregados.</small>}</div>}
+        <button className="header-tool-button" aria-label="Busca global" title="Busca global (Ctrl+K)" aria-expanded={searchOpen} aria-controls="proar-global-search-popover" onClick={()=>{setSearchOpen(value=>!value);setPendingOpen(false)}}><Search size={16}/></button>
+        {searchOpen&&<div id="proar-global-search-popover" className="header-popover search-popover" role="dialog" aria-label="Busca global do ProAR">
+          <label className="proar-search-input"><Search size={14}/><input autoFocus role="combobox" aria-label="Pesquisar em clientes, ordens e cadastros" aria-autocomplete="list" aria-expanded={matches.length>0} aria-controls="proar-global-search-results" aria-activedescendant={activeSearchIndex>=0?`proar-search-result-${activeSearchIndex}`:undefined} value={query} onChange={event=>setQuery(event.target.value)} onKeyDown={onSearchKeyDown} placeholder="Cliente, CNPJ, OS, série, NF..." /></label>
+          <div className="proar-search-filters" aria-label="Filtrar resultados por tipo">
+            {(["Todos","Cliente","OS","Cadastro"] as const).map(category=><button type="button" key={category} aria-pressed={searchCategory===category} onClick={()=>setSearchCategory(category)}>{category}</button>)}
+          </div>
+          {query.trim().length<2?
+            <div className="proar-search-history"><small>{searchHistory.length?"Buscas recentes":"Digite pelo menos 2 caracteres para pesquisar."}</small>{searchHistory.map(term=><button type="button" key={term} onClick={()=>setQuery(term)}><span aria-hidden="true">↺</span>{term}</button>)}</div>:
+            matches.length?
+              <div id="proar-global-search-results" className="header-result-list" role="listbox" aria-label="Resultados da busca">
+                {matches.map((item,index)=><button id={`proar-search-result-${index}`} role="option" aria-selected={activeSearchIndex===index} key={`${item.module}-${item.id}`} onMouseEnter={()=>setActiveSearchIndex(index)} onClick={()=>selectSearchItem(item)}><b>{highlightGlobalSearch(item.title,query)}</b><span>{highlightGlobalSearch(item.detail||item.module,query)}</span><em>{item.module}</em></button>)}
+              </div>:
+              <small>Nenhum registro encontrado nos dados carregados.</small>}
+        </div>}
       </div>
       <div className="header-pending">
-        <button className="header-tool-button" aria-label="Próximas ações" title="Próximas ações" onClick={()=>{setPendingOpen(value=>!value);setSearchOpen(false)}}><Bell size={16}/>{pendingItems.length>0&&<i>{Math.min(pendingItems.length,99)}</i>}</button>
+        <button className="header-tool-button" aria-label="Próximas ações" title="Próximas ações" aria-expanded={pendingOpen} onClick={()=>{setPendingOpen(value=>!value);setSearchOpen(false)}}><Bell size={16}/>{pendingItems.length>0&&<i>{Math.min(pendingItems.length,99)}</i>}</button>
         {pendingOpen&&<div className="header-popover pending-popover"><div className="header-popover-title"><b>Próximas ações</b><span>{pendingItems.length}</span></div>{pendingItems.length?<div className="header-result-list">{pendingItems.slice(0,10).map(item=><button key={item.id} className={item.tone} onClick={()=>{onPendingSelect(item);setPendingOpen(false)}}><b>{item.title}</b><span>{item.detail}</span><em>{item.module}</em></button>)}</div>:<small>Nenhuma pendência identificada.</small>}</div>}
       </div>
       <button className={`header-tool-button sync-state ${online?"online":"offline"}`} aria-label={online?"Atualizar dados":"Sem conexão"} title={online?"Atualizar dados do banco":"Sem conexão"} disabled={!online||syncing} onClick={onPull}><RefreshCw size={16} className={syncing?"spin":""}/></button>
