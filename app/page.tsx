@@ -288,7 +288,7 @@ type PmocExecution = {
 
 type Customer = {
   changeReason?: string;
-  id: string; name: string; doc: string; contact: string; phone: string;
+  id: string; name: string; doc: string; contact: string; phone: string; whatsapp?: string;
   address: string; units: number; status: string;
   personType?: "PF" | "PJ";
   organizationType?: "Empresa" | "Pessoa Física" | "Prefeitura" | "Órgão Público" | "Autarquia" | "Fundação" | "Entidade Pública" | "Outro";
