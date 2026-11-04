@@ -21,6 +21,7 @@ export function OperationsActionCenter({ serviceOrders, modules, onNavigate }: P
   const [category,setCategory]=useState<(typeof categories)[number]>("Todas");
   const [priority,setPriority]=useState("Todas");
   const [query,setQuery]=useState("");
+  const [groupByModule,setGroupByModule]=useState(false);
   const actions=useMemo(()=>deriveOperationalActions(serviceOrders,modules),[serviceOrders,modules]);
   const summary=useMemo(()=>summarizeOperationalActions(actions),[actions]);
   const command=useMemo(()=>buildCommandCenter(serviceOrders,modules),[serviceOrders,modules]);
@@ -30,12 +31,21 @@ export function OperationsActionCenter({ serviceOrders, modules, onNavigate }: P
     (priority==="Todas" || String(item.priority)===priority) &&
     `${item.title} ${item.detail} ${item.module} ${item.category}`.toLowerCase().includes(query.trim().toLowerCase())
   );
+  const groupedModules = [...new Set(visible.map(item => item.module))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
 
   const resolve = (item: OperationalAction) => {
     const plan=resolutionPlan(item);
     onNavigate(plan.module);
     window.dispatchEvent(new CustomEvent("proar:focus-record",{detail:{module:plan.module,recordId:plan.recordId,actionId:plan.actionId,resolutionMode:plan.mode,resolutionMessage:plan.message}}));
   };
+
+  const renderAction = (item: OperationalAction) => (
+    <article key={item.id} className={`operation-action priority-${item.priority}`}>
+      <span className="operation-marker"/>
+      <div className="operation-main"><div className="operation-meta"><b>{item.category}</b><span>{priorityLabel[item.priority]}</span>{item.dueDate&&<time>{item.dueDate}</time>}</div><h3>{item.title}</h3><p>{item.detail}</p><small>{item.module}</small></div>
+      <button className="primary-btn" onClick={()=>resolve(item)}>Resolver agora <ChevronRight size={14}/></button>
+    </article>
+  );
 
   return <section className="operations-center module-page">
     <div className="management-hero">
@@ -53,14 +63,14 @@ export function OperationsActionCenter({ serviceOrders, modules, onNavigate }: P
       <label className="list-search"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar cliente, OS, título, produto..." /></label>
       <label className="status-filter"><Filter size={14}/><select value={category} onChange={e=>setCategory(e.target.value as (typeof categories)[number])}>{categories.map(item=><option key={item}>{item}</option>)}</select></label>
       <label className="status-filter"><select value={priority} onChange={e=>setPriority(e.target.value)}><option>Todas</option><option value="1">Crítica</option><option value="2">Atenção</option><option value="3">Follow-up</option></select></label>
+      <button type="button" className={`outline-btn compact ${groupByModule?"active":""}`} aria-pressed={groupByModule} onClick={()=>setGroupByModule(value=>!value)}>Agrupar por módulo</button>
     </div>
     <div className="panel" style={{marginBottom:16}}><div className="panel-head"><div><span className="section-kicker">FECHAMENTO E INTEGRIDADE</span><h2>{command.preClose.canClose?"Dia pronto para fechamento":"Fechamento com pendências"}</h2><p>{command.dayClose.canClose?"Todas as verificações automáticas estão consistentes.":`${command.preClose.blockers.length} verificação(ões) precisam de atenção antes do fechamento.`}</p></div><button className="outline-btn compact" onClick={()=>onNavigate("Financeiro")}>{command.dayClose.canClose?"Revisar fechamento":"Resolver pendências"}</button></div>{!command.dayClose.canClose&&<div className="workday-list">{command.dayClose.checks.filter(x=>!x.ok).map(x=><button key={x.key} onClick={()=>onNavigate(x.module)}><i/><span><b>{x.label}</b><small>{x.count} ocorrência(s){x.amount?` • R$ ${Math.abs(x.amount).toLocaleString("pt-BR",{minimumFractionDigits:2})}`:""}</small></span><ChevronRight size={15}/></button>)}</div>}</div>
     <div className="panel" style={{marginBottom:16}}><div className="panel-head"><div><span className="section-kicker">CENTRO DE EXCEÇÕES</span><h2>{exceptions.length?`${exceptions.length} exceção(ões) operacional(is)`:"Operação sem exceções críticas"}</h2><p>Fiscal, financeiro, estoque, comercial e vínculos que precisam de intervenção.</p></div></div>{exceptions.length>0&&<div className="workday-list">{exceptions.slice(0,8).map(item=><button key={item.id} onClick={()=>onNavigate(item.area)}><i/><span><b>{item.title}</b><small>{item.detail} • {item.recommendedAction}</small></span><ChevronRight size={15}/></button>)}</div>}</div><div className="operations-list">
-      {visible.map(item=><article key={item.id} className={`operation-action priority-${item.priority}`}>
-        <span className="operation-marker"/>
-        <div className="operation-main"><div className="operation-meta"><b>{item.category}</b><span>{priorityLabel[item.priority]}</span>{item.dueDate&&<time>{item.dueDate}</time>}</div><h3>{item.title}</h3><p>{item.detail}</p><small>{item.module}</small></div>
-        <button className="primary-btn" onClick={()=>resolve(item)}>Resolver agora <ChevronRight size={14}/></button>
-      </article>)}
+      {groupByModule ? groupedModules.map(module => <section className="operations-module-group" key={module} aria-label={`Ações de ${module}`}>
+        <header><h3>{module}</h3><span>{visible.filter(item=>item.module===module).length} ação(ões)</span></header>
+        <div className="operations-list">{visible.filter(item=>item.module===module).map(renderAction)}</div>
+      </section>) : visible.map(renderAction)}
       {!visible.length&&<div className="linked-empty"><CheckCircle2 size={25}/><h4>Nenhuma ação neste filtro</h4><p>As novas pendências aparecerão automaticamente conforme os dados operacionais.</p></div>}
     </div>
   </section>;
