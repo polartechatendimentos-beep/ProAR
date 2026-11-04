@@ -16,6 +16,7 @@ export type WhatsAppConfig = {
   tenderTo: string;
   tenderTemplate: string;
   reminderTemplate: string;
+  appointmentTemplate: string;
   updatedAt?: string;
   updatedBy?: string;
 };
@@ -30,6 +31,7 @@ const defaults: WhatsAppConfig = {
   tenderTo: "5517991567798",
   tenderTemplate: "nova_licitacao_proar",
   reminderTemplate: "lembrete_higienizacao",
+  appointmentTemplate: "os_agendamento_proar",
 };
 
 function key() {
