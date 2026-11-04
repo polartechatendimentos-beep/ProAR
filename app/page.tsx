@@ -966,7 +966,7 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: so
     .sort((a, b) => a.daysLeft - b.daysLeft || a.date.localeCompare(b.date));
   const sendOfficialWhatsApp = async (order: ServiceOrder, kind: "appointment" | "pmoc", parameters: string[], eventKey: string, manualMessage: string) => {
     const customer = customers.find(item => item.name === order.client);
-    const phone = String(order.whatsappPhone || customer?.whatsapp || customer?.phone || "").replace(/\\D/g, "");
+    const phone = String(order.whatsappPhone || customer?.whatsapp || customer?.phone || "").replace(/\D/g, "");
     if (!phone) return window.alert("O cliente desta OS não possui WhatsApp cadastrado.");
     if (!window.confirm("Confirma que o cliente autorizou receber esta mensagem pelo WhatsApp?")) return;
     try {
@@ -978,7 +978,7 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: so
       window.alert(data.message || "Mensagem aceita pela Meta para envio. A entrega ainda depende da confirmação do WhatsApp.");
     } catch (error) {
       const reason = error instanceof Error ? error.message : "Falha no WhatsApp Business.";
-      if (window.confirm(reason + "\\n\\nDeseja abrir o WhatsApp com a mensagem pronta para envio manual?")) {
+      if (window.confirm(reason + "\n\nDeseja abrir o WhatsApp com a mensagem pronta para envio manual?")) {
         const internationalPhone = phone.startsWith("55") ? phone : "55" + phone;
         window.open("https://wa.me/" + internationalPhone + "?text=" + encodeURIComponent(manualMessage), "_blank", "noopener,noreferrer");
       }
