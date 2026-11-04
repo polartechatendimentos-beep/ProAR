@@ -61,6 +61,8 @@ import { BudgetQuickCreateDrawer, type CustomerDraft, type StructureDraft } from
 import { CustomerSearchSelect } from "@/components/CustomerSearchSelect";
 import { CurrencyInput } from "@/components/CurrencyInput";
 import { centsToMoney, moneyToCents } from "@/lib/money-input";
+import { validateCpf, validateCnpj } from "@/lib/customer-validation";
+import { formatBrazilDate } from "@/lib/date-format";
 import { CustomerHierarchyProvider } from "@/components/CustomerHierarchyContext";
 import { customerHierarchy, hierarchySelection, isMunicipalCustomer, matchesHierarchyLocation, type HierarchySelection } from "@/lib/customer-hierarchy";
 import { TechnicalBasePanel } from "@/components/TechnicalBasePanel";
@@ -394,15 +396,28 @@ const legacyStorageKeys: Record<string, string> = {
 };
 
 function readCompanyStorage(companyId: string, resource: string, fallback: unknown) {
-  const current = localStorage.getItem(companyStorageKey(companyId, resource));
-  // Dados legados globais só podem ser usados na empresa principal. Em tenants, nunca cruzar caches.
-  const allowLegacy = companyId === DEFAULT_COMPANY.id || companyId === "main";
-  const legacy = allowLegacy && legacyStorageKeys[resource] ? localStorage.getItem(legacyStorageKeys[resource]) : null;
-  try { return JSON.parse(current ?? legacy ?? JSON.stringify(fallback)); }
-  catch { return fallback; }
+  try {
+    const current = localStorage.getItem(companyStorageKey(companyId, resource));
+    // Dados legados globais só podem ser usados na empresa principal. Em tenants, nunca cruzar caches.
+    const allowLegacy = companyId === DEFAULT_COMPANY.id || companyId === "main";
+    const legacy = allowLegacy && legacyStorageKeys[resource] ? localStorage.getItem(legacyStorageKeys[resource]) : null;
+    const raw = current ?? legacy;
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch (error) {
+    console.warn(`[ProAR Cache] Não foi possível ler o cache de ${resource}; usando o padrão seguro.`, error);
+    return fallback;
+  }
 }
 const normalizeCnpj = (value: string) => value.replace(/\D/g, "").slice(0, 14);
-const formatCnpj = (value: string) => normalizeCnpj(value).replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2}).*/, "$1.$2.$3/$4-$5");
+const customerDocumentError = (value?: string) => {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length === 11) return validateCpf(digits) ? "" : "CPF inválido. Confira os dígitos verificadores.";
+  if (digits.length === 14) return validateCnpj(digits) ? "" : "CNPJ inválido. Confira os dígitos verificadores.";
+  return "CPF deve ter 11 dígitos ou CNPJ deve ter 14 dígitos.";
+};
+const formatCnpj = (value: string) => value.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2}).*/, "$1.$2.$3/$4-$5");
 async function prepareCatalogImage(file: File): Promise<{dataUrl:string;name:string}> {
   if (!file.type.startsWith("image/")) throw new Error("Selecione uma imagem válida.");
   if (file.size > 8 * 1024 * 1024) throw new Error("A imagem original deve ter no máximo 8 MB.");
@@ -3953,6 +3968,27 @@ export default function Home() {
       document.body.classList.remove("proar-mobile-route");
     }
   }, []);
+  useEffect(() => {
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const dialogs = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]'));
+      const topmost = dialogs.at(-1);
+      if (!topmost) return;
+      event.preventDefault();
+      const backdrop = topmost.querySelector<HTMLElement>(".modal-backdrop, .service-picker-backdrop, .version-modal-backdrop");
+      backdrop?.click();
+      requestAnimationFrame(() => {
+        if (!document.querySelector('[role="dialog"][aria-modal="true"]')) {
+          document.body.classList.remove("overflow-hidden");
+          document.documentElement.classList.remove("overflow-hidden");
+          document.body.style.removeProperty("overflow");
+          document.documentElement.style.removeProperty("overflow");
+        }
+      });
+    };
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, []);
 
   const [authenticatedUser, setAuthenticatedUser] = useState<AuthenticatedUser | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
@@ -4466,6 +4502,11 @@ export default function Home() {
         return;
       }
     } else if (data.title === "Novo cliente") {
+      const documentError = customerDocumentError(data.doc);
+      if (documentError) {
+        setSavedMessage(`Cliente não salvo • ${documentError}`);
+        return;
+      }
       const newCustomer: Customer = {
         id: `CLI-${Date.now().toString().slice(-6)}`,
         name: data.name,
@@ -4553,6 +4594,10 @@ export default function Home() {
       setSavedMessage(`Ordem ${newOrder.id} gravada com sucesso.`);
     } else {
       const requestedModule = data.title.includes("•") ? data.title.split("•").pop()!.trim() : data.title.replace(/^Novo(a)?\s+/i, "");
+      if (/empenhos/i.test(requestedModule)) {
+        const documentError = customerDocumentError(data.doc);
+        if (documentError) { setSavedMessage(`Empenho não salvo • ${documentError}`); return; }
+      }
       const moduleName = requestedModule === "Serviços" || requestedModule === "Produtos" ? `${data.kind}s` : requestedModule;
       const record: ModuleRecord = {
         id: `${moduleName.slice(0, 3).toUpperCase()}-${Date.now().toString().slice(-6)}`,
@@ -4768,6 +4813,8 @@ export default function Home() {
     showFeedback(moduleName === "Compras" && record.status === "Recebida" ? "Compra recebida com sucesso • estoque e conta a pagar atualizados." : exists ? "Alteração salva com sucesso." : "Cadastro salvo com sucesso.", "success");
   };
   const createQuickCustomer = (draft: CustomerDraft): Customer | null => {
+    const documentError = customerDocumentError(draft.doc);
+    if (documentError) { showFeedback(documentError, "error"); return null; }
     const existing = customerRecords.find(item => normalizeRelation(item.doc) === normalizeRelation(draft.doc) && draft.doc.replace(/\D/g, "").length >= 11);
     if (existing) return existing;
     const created: Customer = {
@@ -4904,7 +4951,8 @@ export default function Home() {
     if(!navigator.onLine)throw new Error("Sem conexão. Os campos foram mantidos; conecte-se para salvar o cliente.");
     const name=draft.name.trim(),digits=draft.doc.replace(/\D/g,"");
     if(!name)throw new Error("Informe o nome ou razão social do cliente.");
-    if(digits&&![11,14].includes(digits.length))throw new Error("Informe CPF com 11 dígitos ou CNPJ com 14 dígitos.");
+    const documentError=customerDocumentError(draft.doc);
+    if(documentError)throw new Error(documentError);
     if(draft.email.trim()&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim()))throw new Error("Confira o e-mail informado.");
     const byDocument=digits?customerRecords.filter(item=>item.doc.replace(/\D/g,"")===digits):[];
     if(byDocument.length>1)throw new Error("Há mais de um cliente com este documento. Regularize o cadastro antes de continuar.");
