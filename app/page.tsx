@@ -897,7 +897,7 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: so
     return()=>window.removeEventListener("proar:focus-record",handler);
   },[sourceServiceOrders,onSelect]);
   const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
-  const todayIso = new Date().toISOString().slice(0,10);
+  const todayIso = new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
   const isClosed = (status:string) => /conclu[ií]d|finalizad|cancelad/i.test(status);
   const orderStage = (order: ServiceOrder) => {
     const status = normalizeSearch(order.status);
