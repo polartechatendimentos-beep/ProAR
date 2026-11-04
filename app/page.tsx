@@ -62,7 +62,6 @@ import { CustomerSearchSelect } from "@/components/CustomerSearchSelect";
 import { CurrencyInput } from "@/components/CurrencyInput";
 import { centsToMoney, moneyToCents } from "@/lib/money-input";
 import { validateCpf, validateCnpj } from "@/lib/customer-validation";
-import { formatBrazilDate } from "@/lib/date-format";
 import { CustomerHierarchyProvider } from "@/components/CustomerHierarchyContext";
 import { customerHierarchy, hierarchySelection, isMunicipalCustomer, matchesHierarchyLocation, type HierarchySelection } from "@/lib/customer-hierarchy";
 import { TechnicalBasePanel } from "@/components/TechnicalBasePanel";
@@ -1641,7 +1640,7 @@ function LicitacoesWorkspace({
     {tab==="Radar" && <BiddingModule company={company} trackingRecords={modules["Acompanhamento de licitações"]??[]} onSaveTracking={record=>onSaveRecord("Acompanhamento de licitações",record as ModuleRecord)} qualificationDocuments={documents} onManageDocuments={()=>setTab("Habilitação e BDI")} imported={modules["Oportunidades importadas"]??[]} onImport={record=>onSaveRecord("Oportunidades importadas",record as ModuleRecord)} onOpen={onOpenTender}/>}
     {tab==="Empenhos / Saldo Contratual" && <div className="licitacoes-tab-stack">
       <PublicContractsPanel records={contracts} customers={customers} onSave={record=>onSaveRecord("Certames",record as ModuleRecord)} onDelete={record=>onDeleteRecord("Certames",record as ModuleRecord)}/>
-      <PublicCommitmentsPanel orders={orders} contracts={contracts} commitments={commitments} onSave={record=>onSaveRecord("Empenhos",record as ModuleRecord)} onReadyToInvoice={onReadyToInvoice} onCancel={record=>onSaveRecord("Empenhos",record as ModuleRecord)}/>
+      <PublicCommitmentsPanel orders={orders} contracts={contracts} customers={customers.map(customer=>({name:customer.name,doc:customer.doc}))} commitments={commitments} onSave={record=>onSaveRecord("Empenhos",record as ModuleRecord)} onReadyToInvoice={onReadyToInvoice} onCancel={record=>onSaveRecord("Empenhos",record as ModuleRecord)}/>
     </div>}
     {tab==="Habilitação e BDI" && <ProcurementReadinessPanel documents={documents} compositions={modules["Composições de licitação"]??[]} onSave={(module,record)=>onSaveRecord(module,record as ModuleRecord)}/>}
     {tab==="Documentos" && <section className="licitacoes-data-panel panel"><BiddingDocumentsWorkspace companyName={company.legalName}/><header><div><span className="section-kicker"><FileText size={13}/> HABILITAÇÃO</span><h3>Documentos</h3><p>Documentos reais já cadastrados em Documentação / Habilitação.</p></div><strong>{documents.length} registros</strong></header><div className="licitacoes-record-list">{documents.map(item=><article key={item.id}><div><b>{item.name}</b><small>{item.category || "Documento"} • {item.client || "PolarTech"}</small><p>{item.description || "Sem observação adicional."}</p></div><span>{item.status || "Cadastrado"}</span><div className="record-actions"><button title="Alterar documento" onClick={()=>setEditingDocument({...item})}><Edit3 size={14}/></button><button className="danger" title="Excluir / inativar documento" onClick={()=>onDeleteRecord("Documentação / Habilitação",item)}><Trash2 size={14}/></button></div></article>)}{!documents.length&&<div className="linked-empty"><FileText size={23}/><h4>Nenhum documento cadastrado</h4><p>Esta aba não cria dados fictícios. Cadastros reais aparecerão aqui após confirmação no banco.</p></div>}</div></section>}
@@ -4454,6 +4453,8 @@ export default function Home() {
   };
   const hasAction = (moduleName: string, action: "Visualizar" | "Criar" | "Editar" | "Excluir") => Boolean(authenticatedUser?.permissions?.includes("*") || authenticatedUser?.role === "Administrador" || authenticatedUser?.permissions?.includes(`${moduleName}:${action}`));
   const updateCustomer = (updatedCustomer: Customer) => {
+    const documentError=customerDocumentError(updatedCustomer.doc);
+    if(documentError){setSavedMessage(`Cliente não atualizado • ${documentError}`);return;}
     const previousCustomer=customerRecords.find(customer=>customer.id===updatedCustomer.id);
     const updatedCustomers = customerRecords.map(customer => customer.id === updatedCustomer.id ? updatedCustomer : customer);
     const updatedModules=appendAudit(moduleRecords,"Cliente atualizado",`Clientes • ${updatedCustomer.name}`,"Cadastro do cliente alterado.",{moduleName:"Clientes",recordId:updatedCustomer.id,before:previousCustomer as unknown as Record<string,unknown> | undefined,after:updatedCustomer as unknown as Record<string,unknown>});
@@ -4594,10 +4595,6 @@ export default function Home() {
       setSavedMessage(`Ordem ${newOrder.id} gravada com sucesso.`);
     } else {
       const requestedModule = data.title.includes("•") ? data.title.split("•").pop()!.trim() : data.title.replace(/^Novo(a)?\s+/i, "");
-      if (/empenhos/i.test(requestedModule)) {
-        const documentError = customerDocumentError(data.doc);
-        if (documentError) { setSavedMessage(`Empenho não salvo • ${documentError}`); return; }
-      }
       const moduleName = requestedModule === "Serviços" || requestedModule === "Produtos" ? `${data.kind}s` : requestedModule;
       const record: ModuleRecord = {
         id: `${moduleName.slice(0, 3).toUpperCase()}-${Date.now().toString().slice(-6)}`,
@@ -4736,6 +4733,8 @@ export default function Home() {
     const handleProfileCustomerUpdate = (event: Event) => {
       const detail = (event as CustomEvent<Customer>).detail;
       if (!detail?.id) return;
+      const documentError=customerDocumentError(detail.doc);
+      if(documentError){setSavedMessage(`Cliente não atualizado • ${documentError}`);return;}
       const updated = customerRecords.map(item => item.id === detail.id ? { ...item, ...detail } : item);
       setCustomerRecords(updated);
       localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(updated));

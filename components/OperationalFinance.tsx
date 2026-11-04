@@ -39,13 +39,13 @@ export function OperationalFinance({ records, modules, onOpen, onOperation, onIs
   const outstanding = (record: ErpRecord) => /cancelad/i.test(record.status || "") ? 0 : centsToMoney(Math.max(0, moneyToCents(record.value) - moneyToCents(record.settledValue)));
   const visible = useMemo(() => records.filter(record => (filter === "Todos" || (filter === "Pagamentos" ? payable(record) : !payable(record))) && `${record.name ?? ""} ${record.client ?? ""} ${record.invoiceNumber ?? ""} ${record.originKey ?? ""}`.toLowerCase().includes(query.toLowerCase().trim())), [records, filter, query]);
   const openTotal = (pay: boolean) => records.filter(record => payable(record) === pay).reduce((sum, record) => sum + outstanding(record), 0);
-  const incoming = ledger.filter(item => Number(item.signedValue) > 0).reduce((sum, item) => sum + Number(item.signedValue), 0);
-  const outgoing = ledger.filter(item => Number(item.signedValue) < 0).reduce((sum, item) => sum - Number(item.signedValue), 0);
+  const incoming = centsToMoney(ledger.filter(item => moneyToCents(item.signedValue) > 0).reduce((sum, item) => sum + moneyToCents(item.signedValue), 0));
+  const outgoing = centsToMoney(ledger.filter(item => moneyToCents(item.signedValue) < 0).reduce((sum, item) => sum - moneyToCents(item.signedValue), 0));
   const balance = accounts.reduce((sum, account) => sum + financialAccountBalance(account.id, ledger), 0);
   const today = new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
   const dueTodayTotal = records.filter(record => !/cancelad/i.test(record.status || "") && outstanding(record) > 0 && String(record.dueDate || record.date || "").slice(0,10) === today).reduce((sum,record) => sum + outstanding(record),0);
-  const expectedRevenue = records.filter(record=>!payable(record) && !/cancelad/i.test(record.status || "")).reduce((sum,record)=>sum+Number(record.value||0),0);
-  const expectedExpense = records.filter(record=>payable(record) && !/cancelad/i.test(record.status || "")).reduce((sum,record)=>sum+Number(record.value||0),0);
+  const expectedRevenue = centsToMoney(records.filter(record=>!payable(record) && !/cancelad/i.test(record.status || "")).reduce((sum,record)=>sum+moneyToCents(record.value),0));
+  const expectedExpense = centsToMoney(records.filter(record=>payable(record) && !/cancelad/i.test(record.status || "")).reduce((sum,record)=>sum+moneyToCents(record.value),0));
   const overdueReceivables = records.filter(record=>!payable(record) && outstanding(record)>0 && String(record.dueDate || record.date || "") < today).reduce((sum,record)=>sum+outstanding(record),0);
   const aging = [
     {label:"Vencido até 7 dias",min:0,max:7},
