@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
     (order.customerId && String(item.id || "") === String(order.customerId)) ||
     String(item.name || "").trim().toLocaleLowerCase("pt-BR") === String(order.client || "").trim().toLocaleLowerCase("pt-BR")
   );
-  const consentField = kind === "appointment" ? "whatsappAppointmentReminderEnabled" : "whatsappUpdatesEnabled";
+  const consentField = "whatsappAppointmentReminderEnabled";
   if (order[consentField] === false) return NextResponse.json({ error: "O envio está desativado para esta OS." }, { status: 403 });
   const to = readPhone(order, customer);
   if (to.length < 10 || to.length > 13) return NextResponse.json({ error: "Cadastre um telefone/WhatsApp válido no cliente ou na OS." }, { status: 422 });
