@@ -520,3 +520,60 @@ html[data-proar-system-theme] main :is(.modal,.modal-content,[role="dialog"]) :i
   .budget-saved > div > article { align-items: stretch; }
   .budget-saved > div > article > button { flex: 1 1 calc(50% - 8px); }
 }
+.proar-connectivity-banner[open] {
+  align-items: stretch;
+}
+.proar-connectivity-banner > summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  list-style: none;
+}
+.proar-connectivity-banner > summary::-webkit-details-marker { display: none; }
+.proar-connectivity-banner > summary > span:first-of-type { display: flex; min-width: 0; flex-direction: column; }
+.proar-connectivity-count {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--ux-accent);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+}
+.proar-connectivity-queue {
+  max-height: min(50vh, 360px);
+  overflow: auto;
+  padding-top: 10px;
+}
+.proar-connectivity-queue ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.proar-connectivity-queue li {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid var(--ux-border);
+  border-radius: 8px;
+  background: var(--ux-card);
+  color: var(--ux-text);
+}
+.proar-connectivity-queue li strong,
+.proar-connectivity-queue li small,
+.proar-connectivity-queue p {
+  overflow-wrap: anywhere;
+}
+.proar-connectivity-queue li small,
+.proar-connectivity-note {
+  color: var(--ux-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
