@@ -13,11 +13,9 @@
       "status": "parcial",
       "evidence": {
         "files": [
-          "app/proar520-layout-a11y.css",
-          "components/SystemAppearance.tsx",
-          "tests/proar520-a11y.test.mjs"
+          "app/proar520-layout-a11y.css"
         ],
-        "scope": "Adicionados tokens semânticos --ux-* no novo stylesheet global; valores hex legados continuam em múltiplos arquivos e ainda requerem migração."
+        "scope": "Tokens globais agora incluem compatibilidade de tema para classes Tailwind legadas em superfícies, campos, modais e painéis. Ainda há componentes específicos fora dessa camada que exigem auditoria individual."
       }
     },
     {
@@ -33,10 +31,9 @@
       "evidence": {
         "files": [
           "app/proar520-layout-a11y.css",
-          "components/SystemAppearance.tsx",
           "tests/proar520-a11y.test.mjs"
         ],
-        "scope": "Teste automatizado valida texto principal/secundário contra o fundo dos temas claro, escuro e alto contraste; não cobre todos os componentes e estados de toda a aplicação."
+        "scope": "Camada adicional corrige combinações comuns de texto branco em superfícies claras, texto escuro em superfícies navy, rótulos de campos e texto de tabelas nos temas claro/escuro. O teste WCAG valida os tokens principais; a aplicação completa ainda requer inspeção por módulo."
       }
     },
     {
@@ -3437,7 +3434,14 @@
       "detail": "Completar a ferramenta de campo em lib/refrigerant-tools.ts calculando automaticamente o superaquecimento a partir da pressão de sucção e temperatura do tubo.",
       "files": "components/TechnicalCompliancePanel.tsx, lib/refrigerant-tools.ts, lib/technical-compliance.ts",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "parcial",
+      "evidence": {
+        "files": [
+          "components/TechnicalBasePanel.tsx",
+          "lib/mobile-technical-library.ts"
+        ],
+        "scope": "Calculadora de superaquecimento e sub-resfriamento usa tabela P–T existente para R-22, R-32, R-134a, R-410A e R-407C, interpolação no trecho publicado e sem extrapolação. Superaquecimento requer pressão de sucção; sub-resfriamento, pressão de linha líquida. Ainda não foi incorporada ao checklist de execução da OS."
+      }
     },
     {
       "id": "MEL-290",
@@ -5417,7 +5421,15 @@
       "detail": "Mostrar ao técnico em campo quantas fotos, check-ins e assinaturas estão guardados no aparelho aguardando sinal.",
       "files": "components/ProARMobile.tsx, components/ProARFieldMobile.tsx, components/MobileToday.tsx, lib/field-offline-queue.ts, android-shell/",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "parcial",
+      "evidence": {
+        "files": [
+          "components/ResponsivePrimitives.tsx",
+          "app/proar520-layout-a11y.css",
+          "lib/mobile-operations.ts"
+        ],
+        "scope": "Indicador offline fica abaixo do cabeçalho e expõe rótulo, tipo e horário dos itens da fila local. Retentativa manual/progresso não foram habilitados porque não existe consumidor de replay idempotente para os payloads genéricos atuais."
+      }
     },
     {
       "id": "MEL-470",
