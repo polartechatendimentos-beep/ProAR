@@ -32,7 +32,7 @@ export function TechnicalBasePanel() {
     const line=Number(lineText.trim().replace(",","."));
     const options=refrigerantKeys[calcFluid]||[];
     const key=(calcFluid==="R-407C"?(kind==="superheat"?"r407cVapor":"r407cLiquid"):options[0]) as RefrigerantKey|undefined;
-    if(!key||!Number.isFinite(pressure)||!Number.isFinite(line)) return null;
+    if(!key||!pressureText.trim()||!lineText.trim()||!Number.isFinite(pressure)||!Number.isFinite(line)) return null;
     const saturation=referenceTemperature(pressure,key);
     if(saturation===null) return null;
     try { return technicalDifference(kind,line,saturation); } catch { return null; }
