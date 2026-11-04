@@ -589,3 +589,89 @@ html[data-proar-system-theme="light"] main :is(.panel,.erp-card,.management-hero
   display: block !important;
   color: var(--ux-text) !important;
 }
+
+
+/* Three routine groups keep every licensed module reachable in the existing sidebar. */
+.nav-group > p {
+  color: var(--ux-muted);
+  letter-spacing: .075em;
+}
+.service-order-flow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+  margin: 12px 0 16px;
+}
+.service-order-flow > button {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 76px;
+  padding: 12px 14px;
+  border: 1px solid var(--ux-border);
+  border-radius: 12px;
+  background: var(--ux-card);
+  color: var(--ux-text);
+  text-align: left;
+  box-shadow: var(--ux-shadow-1);
+}
+.service-order-flow > button:hover,
+.service-order-flow > button[aria-pressed="true"] {
+  border-color: var(--ux-accent);
+  background: color-mix(in srgb, var(--ux-accent) 9%, var(--ux-card));
+}
+.service-order-flow > button > span {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ux-accent) 17%, transparent);
+  color: var(--ux-accent);
+  font-weight: 800;
+}
+.service-order-flow > button > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.service-order-flow > button strong,
+.service-order-flow > button small {
+  overflow-wrap: anywhere;
+}
+.service-order-flow > button small {
+  color: var(--ux-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.service-order-flow > button > b {
+  font: 700 20px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+}
+.finance-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.finance-row-actions .settle-button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  white-space: nowrap;
+}
+.finance-settled-label {
+  color: var(--ux-muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+@media (max-width: 900px) {
+  .service-order-flow { grid-template-columns: 1fr; }
+  .service-order-flow > button { min-height: 64px; }
+  .finance-row-actions { justify-content: flex-start; }
+}
