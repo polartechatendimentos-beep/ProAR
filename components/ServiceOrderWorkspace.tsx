@@ -227,7 +227,8 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
   const save = async () => {
     if (!canEdit || saving) return;
     if (/conclu[ií]da/i.test(draft.status) && (!closeReady || !guidedProgress.ready)) {
-      setNotice("Fechamento bloqueado: complete os itens obrigatórios do checklist.");
+      const pending = [...closeChecks.filter(item => !item.ok).map(item => item.label), ...guidedChecklist.filter(item => item.required && !guidedDone[item.key]).map(item => item.label)];
+      setNotice("Fechamento bloqueado. Pendências: " + pending.join("; ") + ".");
       setActiveTab("Resumo");
       return;
     }
@@ -248,10 +249,17 @@ export function ServiceOrderWorkspace({ order, customers = [], structures = [], 
       const latestDiagnostic = diagnosticHistory[0];
       const targetEquipmentId = linkedEquipment[0]?.id;
       if (latestDiagnostic && typeof targetEquipmentId === "string" && onSyncEquipmentDiagnostic) {
-        await onSyncEquipmentDiagnostic(targetEquipmentId, latestDiagnostic);
+        try {
+          const synced = await onSyncEquipmentDiagnostic(targetEquipmentId, latestDiagnostic);
+          if (!synced) throw new Error("Sincronização não confirmada");
+        } catch {
+          try { localStorage.removeItem(autosaveKey); } catch {}
+          setNotice(`OS ${draft.id} salva no servidor. O histórico do equipamento não foi sincronizado; tente novamente para atualizar esse histórico.`);
+          return;
+        }
       }
       try { localStorage.removeItem(autosaveKey); } catch {}
-      setNotice("Alterações salvas com sucesso.");
+      setNotice(`OS ${draft.id}: alterações confirmadas no servidor.`);
     } catch (reason) {
       setNotice(reason instanceof Error ? reason.message : "Não foi possível salvar. Verifique a conexão e tente novamente.");
     } finally {
