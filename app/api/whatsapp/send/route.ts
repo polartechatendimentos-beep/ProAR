@@ -1,14 +1,14 @@
-import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "../../../../lib/permissions";
 import { loadWhatsAppConfig, normalizeWhatsAppNumber, sendWhatsAppTemplate } from "../../../../lib/proar-whatsapp";
 import { databaseFetch } from "../../../../lib/supabase-rest";
 import { resolveTenantDb, tenantHeaders } from "../../../../lib/tenant-rest";
+import { validateWhatsAppMessageInput, whatsappAttemptRecordId, type WhatsAppMessageKind } from "../../../../lib/whatsapp-message-policy";
 
 export const runtime = "nodejs";
 
 type StateRow = { payload?: { customers?: Record<string, unknown>[]; serviceOrders?: Record<string, unknown>[] } };
-type SendBody = { originId?: string; kind?: "appointment" | "pmoc"; parameters?: unknown; consentConfirmed?: boolean; eventKey?: string };
+type SendBody = { originId?: string; kind?: WhatsAppMessageKind; parameters?: unknown; consentConfirmed?: boolean; eventKey?: string };
 
 function cleanText(value: unknown, max = 500) {
   return String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, max);
@@ -50,18 +50,12 @@ export async function POST(request: NextRequest) {
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   const session = access.session;
   const body = await request.json().catch(() => null) as SendBody | null;
-  const originId = cleanText(body?.originId, 120);
-  const kind = body?.kind;
-  const eventKey = cleanText(body?.eventKey, 180);
-  if (!body || !originId || !eventKey || !["appointment", "pmoc"].includes(String(kind))) {
-    return NextResponse.json({ error: "Informe uma OS, o tipo de mensagem e o evento de origem." }, { status: 400 });
-  }
-  if (body.consentConfirmed !== true) {
-    return NextResponse.json({ error: "Confirme que o cliente autorizou receber mensagens pelo WhatsApp." }, { status: 422 });
-  }
-  if (!Array.isArray(body.parameters) || body.parameters.length > 10 || body.parameters.some(value => typeof value !== "string" || cleanText(value, 501).length > 500)) {
-    return NextResponse.json({ error: "Parâmetros do modelo inválidos." }, { status: 400 });
-  }
+  if (!body) return NextResponse.json({ error: "Payload inválido." }, { status: 400 });
+  const validationIssue = validateWhatsAppMessageInput(body);
+  if (validationIssue) return NextResponse.json({ error: validationIssue }, { status: body.consentConfirmed === true ? 400 : 422 });
+  const originId = cleanText(body.originId, 120);
+  const kind = body.kind as WhatsAppMessageKind;
+  const eventKey = cleanText(body.eventKey, 180);
 
   const primaryCompanyId = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
   const primaryCompanySlug = (process.env.PROAR_PRIMARY_COMPANY_SLUG || "polartech").toLowerCase();
@@ -93,8 +87,7 @@ export async function POST(request: NextRequest) {
   const template = cleanText(kind === "appointment" ? config.appointmentTemplate : config.reminderTemplate, 100);
   if (!/^[a-z0-9_]+$/.test(template)) return NextResponse.json({ error: "Configure um nome válido de modelo aprovado pela Meta." }, { status: 422 });
 
-  const eventHash = createHash("sha256").update(`${companyId}:${originId}:${kind}:${eventKey}`).digest("hex");
-  const attemptId = `whatsapp-send:${eventHash.slice(0, 48)}`;
+  const attemptId = whatsappAttemptRecordId(companyId, originId, kind, eventKey);
   const createdAt = new Date().toISOString();
   const attempt = {
     kind: "whatsapp-send-audit", status: "transmitting", originType: "os", originId, messageKind: kind,
