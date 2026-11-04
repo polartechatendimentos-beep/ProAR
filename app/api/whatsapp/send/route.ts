@@ -21,7 +21,6 @@ function readPhone(order: Record<string, unknown>, customer?: Record<string, unk
 
 async function readCompanyState(companyId: string, dedicated: boolean, db: { url: string; key: string }) {
   const primary = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
-  const primarySlug = (process.env.PROAR_PRIMARY_COMPANY_SLUG || "polartech").toLowerCase();
   const ids = dedicated ? ["main"] : companyId === primary ? [companyId, "main", "polartech"] : [companyId];
   const states: StateRow[] = [];
   for (const id of [...new Set(ids)]) {
@@ -32,15 +31,14 @@ async function readCompanyState(companyId: string, dedicated: boolean, db: { url
     const rows = await response.json() as StateRow[];
     if (rows[0]?.payload) states.push(rows[0]);
   }
-  void primarySlug;
   return states;
 }
 
 async function writeAttempt(db: { url: string; key: string }, id: string, payload: Record<string, unknown>, insert: boolean) {
-  const url = `${db.url}/rest/v1/proar_state${insert ? "" : `?id=eq.${encodeURIComponent(id)}`}`;
+  const url = `${db.url}/rest/v1/proar_state${insert ? "?on_conflict=id" : `?id=eq.${encodeURIComponent(id)}`}`;
   const response = await databaseFetch(url, {
     method: insert ? "POST" : "PATCH",
-    headers: { ...tenantHeaders(db.key), ...(insert ? { Prefer: "return=minimal" } : { Prefer: "return=minimal" }) },
+    headers: { ...tenantHeaders(db.key), ...(insert ? { Prefer: "resolution=ignore-duplicates,return=representation" } : { Prefer: "return=minimal" }) },
     body: JSON.stringify(insert ? { id, payload, updated_at: new Date().toISOString() } : { payload, updated_at: new Date().toISOString() }),
     cache: "no-store",
   });
@@ -92,7 +90,7 @@ export async function POST(request: NextRequest) {
   if (!config.active || !config.phoneNumberId || !config.accessToken) {
     return NextResponse.json({ error: "WhatsApp Business não está configurado/ativo. Configure a integração ou use o envio manual pelo WhatsApp." }, { status: 428 });
   }
-  const template = cleanText(config.reminderTemplate, 100);
+  const template = cleanText(kind === "appointment" ? config.appointmentTemplate : config.reminderTemplate, 100);
   if (!/^[a-z0-9_]+$/.test(template)) return NextResponse.json({ error: "Configure um nome válido de modelo aprovado pela Meta." }, { status: 422 });
 
   const eventHash = createHash("sha256").update(`${companyId}:${originId}:${kind}:${eventKey}`).digest("hex");
