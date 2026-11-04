@@ -46,6 +46,8 @@ export function SystemAppearance(){
       <summary>Acessibilidade e densidade</summary>
       <div className="proar-appearance-advanced__body">
         <label><input type="checkbox" checked={highContrast} onChange={e=>saveHighContrast(e.target.checked)}/> Alto contraste para campo</label>
-        <label>Densidade das tabelas<select aria-label="Densidade das tabelas" value={density} onChange={e=>saveDensity(e.target.value==="compact"?"compact":"comfortable")}><option value="comfortable">Confortável</option><option value="compact">...[truncated]    </details>
+        <label>Densidade das tabelas<select aria-label="Densidade das tabelas" value={density} onChange={e=>saveDensity(e.target.value==="compact"?"compact":"comfortable")}><option value="comfortable">Confortável</option><option value="compact">Compacta</option></select></label>
+      </div>
+    </details>
   </aside>;
 }
