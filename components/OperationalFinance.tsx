@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Plus, X, CheckCircle2, WalletCards, FileText, Search, ArrowDownLeft, ArrowUpRight, TrendingUp, Landmark, ReceiptText, LineChart, ShieldCheck, Clock3, type LucideIcon } from "lucide-react";
 import { defaultFinancialAccounts, financialAccountBalance, type ErpRecord, type OperationalCommand } from "@/lib/operational-ledger";
 import { cashFlowForecast } from "@/lib/cash-flow-forecast";
@@ -7,6 +7,7 @@ import { profitabilityPortfolio } from "@/lib/profitability-derivation";
 import { CurrencyInput } from "@/components/CurrencyInput";
 import { centsToMoney, moneyToCents } from "@/lib/money-input";
 import { formatBrazilDate } from "@/lib/date-format";
+import { notifyFeedback } from "@/lib/ui-feedback";
 
 type Props = { records: ErpRecord[]; modules: Record<string, ErpRecord[]>; onOpen: (title: string) => void; onOperation: (command: OperationalCommand) => Promise<void>; onIssueInvoice: (record: ErpRecord, number: string) => Promise<boolean> };
 const money = (value: number) => centsToMoney(moneyToCents(value)).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -33,6 +34,7 @@ export function OperationalFinance({ records, modules, onOpen, onOperation, onIs
   const [data, setData] = useState<ErpRecord>({});
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
+  const initialModalData=useRef("");
   const accounts = modules["Contas financeiras"]?.length ? modules["Contas financeiras"] : defaultFinancialAccounts();
   const ledger = modules["Razão financeiro"] || [];
   const reconciliations = modules["Conciliações"] || [];
@@ -74,7 +76,13 @@ export function OperationalFinance({ records, modules, onOpen, onOperation, onIs
   ];
   const open = (action: string, record?: ErpRecord) => {
     setNotice(""); setModal({ action, record });
-    setData({ principal: record ? outstanding(record) : 0, interest: 0, discount: 0, method: "Pix", accountId: accounts.find(item => item.status === "Ativo")?.id || "BANK", paymentDate: new Date().toISOString().slice(0, 10), competenceDate: record?.competenceDate || record?.date || new Date().toISOString().slice(0, 10), dueDate: record?.dueDate || record?.date || new Date().toISOString().slice(0, 10), reason: "", openingBalance: 0, type: "Banco" });
+    const initial = { principal: record ? outstanding(record) : 0, interest: 0, discount: 0, method: "Pix", accountId: accounts.find(item => item.status === "Ativo")?.id || "BANK", paymentDate: new Date().toISOString().slice(0, 10), competenceDate: record?.competenceDate || record?.date || new Date().toISOString().slice(0, 10), dueDate: record?.dueDate || record?.date || new Date().toISOString().slice(0, 10), reason: "", openingBalance: 0, type: "Banco" };
+    setData(initial); initialModalData.current=JSON.stringify(initial);
+  };
+  const closeModal = () => {
+    if(saving)return;
+    if(modal && JSON.stringify(data)!==initialModalData.current && !window.confirm("Você tem dados não salvos. Deseja realmente fechar sem salvar?"))return;
+    setModal(null);
   };
   const submit = async () => {
     if (!modal || saving) return;
@@ -86,8 +94,19 @@ export function OperationalFinance({ records, modules, onOpen, onOperation, onIs
       } else {
         await onOperation({ idempotencyKey: crypto.randomUUID(), action: modal.action, recordId: modal.record?.id, expectedRecord: modal.record, data });
       }
-      setModal(null); setNotice("Operação confirmada no banco e registrada no histórico.");
-    } catch (error) { setNotice(error instanceof Error ? error.message : "Operação não confirmada."); }
+      const amount=centsToMoney(moneyToCents(data.principal)+moneyToCents(data.interest)-moneyToCents(data.discount));
+      const feedback = modal.action==="settle"
+        ? {title:"Baixa confirmada",message:`Baixa de ${money(amount)} confirmada com sucesso.`,tone:"success" as const,actions:modal.record?[{label:"Ver histórico",onClick:()=>setModal({action:"history",record:modal.record})}]:undefined}
+        : modal.action==="reverse"
+          ? {title:"Estorno registrado",message:"Pagamento estornado com sucesso. Saldo recalculado.",tone:"success" as const}
+          : modal.action==="dates"
+            ? {title:"Vencimento atualizado",message:"Datas e competência foram atualizadas com sucesso.",tone:"change" as const}
+            : modal.action==="invoice"
+              ? {title:"Faturamento atualizado",message:"Documento fiscal associado ao título.",tone:"change" as const}
+              : {title:"Operação confirmada",message:"Alteração registrada com sucesso no banco e na auditoria.",tone:"success" as const};
+      notifyFeedback(feedback);
+      setModal(null); setNotice("");
+    } catch (error) { const message=error instanceof Error ? error.message : "Operação não confirmada."; setNotice(message); notifyFeedback({title:"Operação não confirmada",message,tone:"error"}); }
     finally { setSaving(false); }
   };
   const field = (key: string, value: string | number) => setData(current => ({ ...current, [key]: value }));
@@ -111,7 +130,7 @@ export function OperationalFinance({ records, modules, onOpen, onOperation, onIs
     </div>}
     {view === "Contas e razão" && <><div className="panel erp-card"><div className="panel-head"><h3>Contas financeiras</h3><button className="primary-btn" onClick={() => open("account")}>Nova conta</button></div>{accounts.map(account => <div className="erp-balance-row" key={account.id}><span>{account.name} • {account.type}</span><strong>{money(financialAccountBalance(account.id,ledger))}</strong></div>)}</div><div className="panel"><div className="w-full overflow-x-auto min-w-0 table-wrap"><table><thead><tr><th>DATA</th><th>CONTA</th><th>MOVIMENTO</th><th>ORIGEM</th><th>VALOR</th><th>USUÁRIO</th><th>CONCILIAÇÃO</th></tr></thead><tbody>{[...ledger].reverse().map(item => <tr key={item.id}><td>{item.paymentDate || item.createdAt?.slice(0,10)}</td><td>{accounts.find(account => account.id === item.accountId)?.name}</td><td>{item.name}<small className="table-description">{item.reason}</small></td><td>{item.titleId || "Abertura"}</td><td>{money(item.signedValue)}</td><td>{item.user}</td><td>{reconciliations.some(record => record.movementId === item.id) ? reconciliations.find(record => record.movementId === item.id)?.reference : <button className="outline-btn" onClick={() => { open("reconcile"); setData({ movementId:item.id, accountId:item.accountId, reference:"", date:new Date().toISOString().slice(0,10) }); }}>Conciliar</button>}</td></tr>)}</tbody></table></div></div></>}
     {view === "Auditoria" && <div className="panel"><div className="w-full overflow-x-auto min-w-0 table-wrap"><table><thead><tr><th>DATA</th><th>USUÁRIO</th><th>REGISTRO</th><th>MOTIVO</th><th>ALTERAÇÕES</th></tr></thead><tbody>{[...(modules["Auditoria operacional"] || [])].reverse().filter(item => ["Financeiro","Contas financeiras","Conciliações"].includes(item.module)).map(item => <tr key={item.id}><td>{new Date(item.createdAt).toLocaleString("pt-BR")}</td><td>{item.displayName || item.user}</td><td>{item.module} • {item.recordId}</td><td>{item.reason}</td><td><details><summary>Valores anteriores e novos</summary><pre className="erp-audit-data">{JSON.stringify(item.changes,null,2)}</pre></details></td></tr>)}</tbody></table></div></div>}
-    {modal && <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Operação financeira"><button className="modal-backdrop" disabled={saving} onClick={() => setModal(null)} aria-label="Fechar"/><div className="modal settlement-modal"><div className="modal-head"><div><span>FINANCEIRO • HISTÓRICO PRESERVADO</span><h2>{modal.record?.name || "Conta / conciliação"}</h2></div><button disabled={saving} onClick={() => setModal(null)} aria-label="Fechar"><X size={18}/></button></div><div className="settlement-form">
+    {modal && <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Operação financeira"><button className="modal-backdrop" disabled={saving} onClick={closeModal} aria-label="Fechar"/><div className="modal settlement-modal"><div className="modal-head"><div><span>FINANCEIRO • HISTÓRICO PRESERVADO</span><h2>{modal.record?.name || "Conta / conciliação"}</h2></div><button disabled={saving} onClick={closeModal} aria-label="Fechar"><X size={18}/></button></div><div className="settlement-form">
       {modal.action === "settle" && <>{[["principal","Principal liquidado"],["interest","Juros / multa"],["discount","Desconto"]].map(([key,label]) => <label key={key}>{label}<CurrencyInput aria-label={label} value={Number(data[key] || 0)} onValueChange={value => field(key,value)}/></label>)}<label>Data de pagamento<input type="date" value={data.paymentDate} onChange={event => field("paymentDate",event.target.value)}/></label><label>Forma<select value={data.method} onChange={event => field("method",event.target.value)}>{["Pix","Boleto","Cartão de crédito","Cartão de débito","Dinheiro","Transferência"].map(value => <option key={value}>{value}</option>)}</select></label><label>Conta<select value={data.accountId} onChange={event => field("accountId",event.target.value)}>{accounts.filter(item => item.status === "Ativo").map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><div className="settlement-total"><span>VALOR EFETIVO EM CAIXA</span><strong>{money(centsToMoney(moneyToCents(data.principal)+moneyToCents(data.interest)-moneyToCents(data.discount)))}</strong></div></>}
       {modal.action === "history" && <div className="erp-history">{(modal.record?.settlementHistory || []).map((entry: ErpRecord) => { const reversed = (modal.record?.reversalHistory || []).find((item: ErpRecord) => item.settlementId === entry.id); return <article key={entry.id}><b>{money(entry.value)} • {entry.method}</b><p>{entry.createdAt} • {entry.user || "Legado"}</p><p>Principal: {money(entry.principal ?? entry.value)} • Juros: {money(entry.interest)} • Desconto: {money(entry.discount)}</p>{reversed ? <small>Estornada: {reversed.reason} • {reversed.user}</small> : <button className="outline-btn" onClick={() => { setModal({action:"reverse",record:modal.record}); setData({settlementId:entry.id,reason:""}); }}>Estornar esta baixa</button>}</article>; })}{Number(modal.record?._settlementOpening || (!modal.record?.settlementHistory?.length ? modal.record?.settledValue : 0)) > 0 && !(modal.record?.reversalHistory || []).some((item:ErpRecord) => item.settlementId === `LEGACY-${modal.record?.id}`) && <article><b>Saldo legado: {money(modal.record?._settlementOpening ?? modal.record?.settledValue)}</b><p>Baixa anterior à implantação do razão.</p><button className="outline-btn" onClick={() => {setModal({action:"reverse",record:modal.record});setData({settlementId:`LEGACY-${modal.record?.id}`,reason:""});}}>Estornar saldo legado</button></article>}{!modal.record?.settlementHistory?.length && <p>Não há baixas detalhadas. Saldos legados ficam identificados no razão e não podem ser apagados por edição.</p>}</div>}
       {["reverse","cancel"].includes(modal.action) && <label>Motivo obrigatório<textarea required value={data.reason || ""} onChange={event => field("reason",event.target.value)}/></label>}
@@ -119,6 +138,6 @@ export function OperationalFinance({ records, modules, onOpen, onOperation, onIs
       {modal.action === "invoice" && <label>Número da Nota Fiscal<input value={data.invoiceNumber || ""} onChange={event => field("invoiceNumber",event.target.value)}/></label>}
       {modal.action === "account" && <><label>Nome<input value={data.name || ""} onChange={event => field("name",event.target.value)}/></label><label>Tipo<select value={data.type} onChange={event => field("type",event.target.value)}>{["Caixa","Banco","Pix","Cartão"].map(value => <option key={value}>{value}</option>)}</select></label><label>Saldo inicial<CurrencyInput aria-label="Saldo inicial" value={Number(data.openingBalance || 0)} onValueChange={value => field("openingBalance",value)}/></label></>}
       {modal.action === "reconcile" && <><label>Referência no extrato<input value={data.reference || ""} onChange={event => field("reference",event.target.value)}/></label><label>Data da conciliação<input type="date" value={data.date} onChange={event => field("date",event.target.value)}/></label></>}
-    </div>{notice && <p className="erp-card" role="alert">{notice}</p>}<div className="modal-actions"><button className="outline-btn" disabled={saving} onClick={() => setModal(null)}>Fechar</button>{modal.action !== "history" && <button className="primary-btn" disabled={saving} onClick={() => void submit()}><CheckCircle2 size={15}/>{saving ? "Confirmando..." : "Confirmar no banco"}</button>}</div></div></div>}
+    </div>{notice && <p className="erp-card" role="alert">{notice}</p>}<div className="modal-actions"><button className="outline-btn" disabled={saving} onClick={closeModal}>Fechar</button>{modal.action !== "history" && <button className="primary-btn" disabled={saving} onClick={() => void submit()}><CheckCircle2 size={15}/>{saving ? "Confirmando..." : "Confirmar no banco"}</button>}</div></div></div>"}</button>}</div></div></div>}
   </section>;
 }
