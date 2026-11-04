@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Plus, X, CheckCircle2, WalletCards, FileText, Search, ArrowDownLeft, ArrowUpRight, TrendingUp, Landmark, ReceiptText, LineChart, ShieldCheck, type LucideIcon } from "lucide-react";
+import { Plus, X, CheckCircle2, WalletCards, FileText, Search, ArrowDownLeft, ArrowUpRight, TrendingUp, Landmark, ReceiptText, LineChart, ShieldCheck, Clock3, type LucideIcon } from "lucide-react";
 import { defaultFinancialAccounts, financialAccountBalance, type ErpRecord, type OperationalCommand } from "@/lib/operational-ledger";
 import { cashFlowForecast } from "@/lib/cash-flow-forecast";
 import { profitabilityPortfolio } from "@/lib/profitability-derivation";
@@ -39,7 +39,8 @@ export function OperationalFinance({ records, modules, onOpen, onOperation, onIs
   const incoming = ledger.filter(item => Number(item.signedValue) > 0).reduce((sum, item) => sum + Number(item.signedValue), 0);
   const outgoing = ledger.filter(item => Number(item.signedValue) < 0).reduce((sum, item) => sum - Number(item.signedValue), 0);
   const balance = accounts.reduce((sum, account) => sum + financialAccountBalance(account.id, ledger), 0);
-  const today = new Date().toISOString().slice(0,10);
+  const today = new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+  const dueTodayTotal = records.filter(record => !/cancelad/i.test(record.status || "") && outstanding(record) > 0 && String(record.dueDate || record.date || "").slice(0,10) === today).reduce((sum,record) => sum + outstanding(record),0);
   const expectedRevenue = records.filter(record=>!payable(record) && !/cancelad/i.test(record.status || "")).reduce((sum,record)=>sum+Number(record.value||0),0);
   const expectedExpense = records.filter(record=>payable(record) && !/cancelad/i.test(record.status || "")).reduce((sum,record)=>sum+Number(record.value||0),0);
   const overdueReceivables = records.filter(record=>!payable(record) && outstanding(record)>0 && String(record.dueDate || record.date || "") < today).reduce((sum,record)=>sum+outstanding(record),0);
@@ -59,6 +60,7 @@ export function OperationalFinance({ records, modules, onOpen, onOperation, onIs
   const profitability=useMemo(()=>profitabilityPortfolio([...(modules["Ordens de serviço"]||[]),...(modules.Obras||[]),...(modules.Vendas||[])]),[modules]);
   const kpis: [string, number, LucideIcon, string][] = [
     ["A RECEBER", openTotal(false), ArrowDownLeft, "receivable"],
+    ["VENCE HOJE", dueTodayTotal, Clock3, "due-today"],
     ["A PAGAR", openTotal(true), ArrowUpRight, "payable"],
     ["ENTRADAS NO RAZÃO", incoming, TrendingUp, "income"],
     ["SALDO DAS CONTAS", balance, Landmark, "balance"],
