@@ -12,7 +12,8 @@ function safeFeedbackError(message:string, fallback="Não foi possível concluir
   return value.length>240?fallback:value.replace(/\s+/g," ").trim();
 }
 
-export type FeedbackTone = "success" | "error" | "warning" | "info";
+export type FeedbackTone = "success" | "change" | "error" | "warning" | "info";
+export type FeedbackAction = { label: string; onClick: () => void };
 
 export type FeedbackMessage = {
   id?: string;
@@ -21,6 +22,7 @@ export type FeedbackMessage = {
   tone?: FeedbackTone;
   duration?: number;
   detail?: string;
+  actions?: FeedbackAction[];
 };
 
 export const feedbackEventName = "proar:notify";
@@ -30,13 +32,15 @@ const defaultTitle: Record<FeedbackTone,string> = {
   error: "Não foi possível concluir",
   warning: "Atenção",
   info: "Informação",
+  change: "Alteração concluída",
 };
 
 export function inferFeedbackTone(message: string): FeedbackTone {
   const value=message.toLocaleLowerCase("pt-BR");
   if (/falha|erro|não foi possível|inval|bloquead|indisponível|não localizado/.test(value)) return "error";
   if (/atenção|conflito|sem internet|pendente|aguard|alerta/.test(value)) return "warning";
-  if (/sucesso|salv|grav|criad|cadastrad|atualizad|alterad|exclu|removid|confirmad|conclu|sincronizad|emitid|aprovad|recebid/.test(value)) return "success";
+  if (/atualizad|alterad|editad/.test(value)) return "change";
+  if (/sucesso|salv|grav|criad|cadastrad|exclu|removid|confirmad|conclu|sincronizad|emitid|aprovad|recebid/.test(value)) return "success";
   return "info";
 }
 
@@ -63,3 +67,4 @@ export const notifySuccess=(message:string,title="Operação concluída",duratio
 export const notifyError=(message:string,title="Não foi possível concluir",duration=6500)=>notifyFeedback({message,title,tone:"error",duration});
 export const notifyWarning=(message:string,title="Atenção",duration=5200)=>notifyFeedback({message,title,tone:"warning",duration});
 export const notifyInfo=(message:string,title="Informação",duration=3600)=>notifyFeedback({message,title,tone:"info",duration});
+export const notifyChange=(message:string,title="Dados atualizados",duration=3600)=>notifyFeedback({message,title,tone:"change",duration});

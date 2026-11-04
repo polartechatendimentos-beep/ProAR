@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, Info, X, XCircle } from "lucide-react";
-import { feedbackEventName, type FeedbackMessage, type FeedbackTone } from "@/lib/ui-feedback";
+import { AlertTriangle, CheckCircle2, Info, RefreshCw, X, XCircle } from "lucide-react";
+import { feedbackEventName, type FeedbackAction, type FeedbackMessage, type FeedbackTone } from "@/lib/ui-feedback";
 
-type Toast = Required<Pick<FeedbackMessage,"id"|"message"|"title"|"tone"|"duration">> & { detail?: string };
+type Toast = Required<Pick<FeedbackMessage,"id"|"message"|"title"|"tone"|"duration">> & { detail?: string; actions?: FeedbackAction[] };
 
-const iconFor = (tone: FeedbackTone) => tone === "success" ? CheckCircle2 : tone === "error" ? XCircle : tone === "warning" ? AlertTriangle : Info;
+const iconFor = (tone: FeedbackTone) => tone === "success" ? CheckCircle2 : tone === "change" ? RefreshCw : tone === "error" ? XCircle : tone === "warning" ? AlertTriangle : Info;
 
 export function GlobalFeedback() {
   const [items,setItems]=useState<Toast[]>([]);
@@ -38,6 +38,7 @@ export function GlobalFeedback() {
         tone:input.tone ?? "info",
         duration:input.duration ?? 3600,
         detail:input.detail,
+        actions:input.actions,
       };
       setItems(current=>[...current.filter(item=>item.id!==toast.id),toast].slice(-4));
       const existing=timers.current.get(toast.id);
@@ -62,6 +63,7 @@ export function GlobalFeedback() {
           <strong>{item.title}</strong>
           <p>{item.message}</p>
           {item.detail&&<small>{item.detail}</small>}
+          {item.actions?.length ? <div className="global-feedback-actions">{item.actions.map((action,index)=><button type="button" key={`${item.id}-action-${index}`} onClick={()=>{try{action.onClick();}finally{remove(item.id);}}}>{action.label}<span aria-hidden="true">→</span></button>)}</div> : null}
         </div>
         <button type="button" aria-label="Fechar notificação" onClick={()=>remove(item.id)}><X size={15}/></button>
         <i className="global-feedback-progress" style={{animationDuration:`${item.duration}ms`}}/>
