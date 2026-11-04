@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Activity, AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, Boxes, CalendarDays, ChartNoAxesCombined, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock3, FileChartColumn, FileText, Filter, MoreHorizontal, ShieldCheck, ShoppingBag, ShoppingCart, TrendingUp, UsersRound, WalletCards, Zap } from "lucide-react";
 import { deriveOperationalActions } from "@/lib/action-center";
 
@@ -8,6 +8,19 @@ type DashboardRecord = { id:string; name:string; category?:string; transactionTy
 
 export function DashboardWorkspace({ onNavigate, serviceOrders, modules, role }: { onNavigate: (s: string) => void; serviceOrders: DashboardOrder[]; modules: Record<string, DashboardRecord[]>; role?: string }) {
   const [period, setPeriod] = useState("Este mês");
+  const [periodRestored, setPeriodRestored] = useState(false);
+  useEffect(() => {
+    try {
+      const savedPeriod = window.localStorage.getItem("proar.dashboard.period");
+      if (savedPeriod && ["Hoje", "Semana", "Este mês", "Ano"].includes(savedPeriod)) setPeriod(savedPeriod);
+    } catch { /* Preferência indisponível: mantém o padrão da tela. */ }
+    setPeriodRestored(true);
+  }, []);
+  useEffect(() => {
+    if (!periodRestored) return;
+    try { window.localStorage.setItem("proar.dashboard.period", period); }
+    catch { /* O painel segue funcional mesmo sem armazenamento local. */ }
+  }, [period, periodRestored]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [technician, setTechnician] = useState("Todos");
   const [status, setStatus] = useState("Todos");
@@ -39,6 +52,23 @@ export function DashboardWorkspace({ onNavigate, serviceOrders, modules, role }:
   const payableOpen = financialRecords.filter(record => isPayable(record)).reduce((sum,record)=>sum+outstandingFinancial(record),0);
   const predictedResult = receivableOpen - payableOpen;
   const moneyDashboard = (value:number) => value.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+  const dashboardDateOnly = (value: unknown) => {
+    const raw = String(value || "").trim();
+    const iso = /^([0-9]{4}-[0-9]{2}-[0-9]{2})/.exec(raw)?.[1];
+    if (iso) return iso;
+    const br = /^([0-9]{2})[/]([0-9]{2})[/]([0-9]{4})/.exec(raw);
+    return br ? `${br[3]}-${br[2]}-${br[1]}` : "";
+  };
+  const openFinancialRecords = (modules.Financeiro ?? []).filter(record =>
+    outstandingFinancial(record) > 0 && !/paga|recebida|cancelad/i.test(record.status || "")
+  );
+  const overdueFinancialCount = openFinancialRecords.filter(record =>
+    dashboardDateOnly(record.dueDate || record.date || record.firstDueDate) < todayIso
+      && Boolean(dashboardDateOnly(record.dueDate || record.date || record.firstDueDate))
+  ).length;
+  const dueTodayFinancialCount = openFinancialRecords.filter(record =>
+    dashboardDateOnly(record.dueDate || record.date || record.firstDueDate) === todayIso
+  ).length;
   const technicians = ["Todos", ...Array.from(new Set(serviceOrders.map(order=>order.tech).filter(Boolean)))];
   const statuses = ["Todos", ...Array.from(new Set(serviceOrders.map(order=>order.status).filter(Boolean)))];
   const roleShortcuts = /t[eé]cnico/i.test(role || "") ? [
@@ -100,6 +130,10 @@ export function DashboardWorkspace({ onNavigate, serviceOrders, modules, role }:
           <div className="panel-head"><div><span className="section-kicker"><ChartNoAxesCombined size={12}/> PERFORMANCE</span><h2>Resumo financeiro</h2><p>{financialRecords.length ? `${financialRecords.length} título(s) no período` : "Sem lançamentos no período"}</p></div><button aria-label="Abrir financeiro" onClick={()=>onNavigate("Financeiro")}><MoreHorizontal size={17}/></button></div>
           <div className="finance-total"><small>RESULTADO PREVISTO</small><strong>{moneyDashboard(predictedResult)}</strong><span><TrendingUp size={12}/> {period}</span></div>
           <div className="finance-split"><div><span className="money-icon green"><ArrowUpRight size={17}/></span><small>A receber</small><strong>{moneyDashboard(receivableOpen)}</strong></div><div><span className="money-icon red"><ArrowDownRight size={17}/></span><small>A pagar</small><strong>{moneyDashboard(payableOpen)}</strong></div></div>
+          <div className="finance-split" aria-label="Situação dos vencimentos">
+            <div><span className="money-icon red"><Clock3 size={16}/></span><small>Vencidos</small><strong>{overdueFinancialCount}</strong></div>
+            <div><span className="money-icon green"><CalendarDays size={16}/></span><small>Vencem hoje</small><strong>{dueTodayFinancialCount}</strong></div>
+          </div>
         </div>
         <div className="panel alerts">
           <div className="panel-head"><div><span className="section-kicker"><AlertTriangle size={12}/> CENTRAL DE TRABALHO DO DIA</span><h2>Próximas ações</h2><p>Somente o que precisa de atenção agora.</p></div><button className="outline-btn compact" onClick={()=>onNavigate("Central de pendências")}>{workItems.length} ação(ões)</button></div>

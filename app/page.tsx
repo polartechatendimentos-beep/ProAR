@@ -43,7 +43,7 @@ import "./resilience-status.css";
 import { ConnectivityBanner } from "@/components/ResponsivePrimitives";
 import { MobileToday } from "@/components/MobileToday";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   Activity, AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight,
   Bell, Boxes, BriefcaseBusiness, Building2, CalendarDays, ChartNoAxesCombined,
@@ -106,31 +106,29 @@ type GlobalSearchItem = { id: string; title: string; detail: string; module: str
 type PendingItem = { id: string; title: string; detail: string; module: string; tone: "blue" | "amber" | "red" };
 
 const navGroups: { label: string; items: NavItem[] }[] = [
-  { label: "VISÃO GERAL", items: [
+  { label: "OPERAÇÃO DO DIA A DIA", items: [
     { icon: LayoutDashboard, name: "Painel inicial" },
     { icon: Activity, name: "Atividades" },
     { icon: Bell, name: "Central de pendências" },
     { icon: CalendarDays, name: "Agenda" },
-  ]},
-  { label: "COMERCIAL", items: [
+    { icon: ClipboardList, name: "Ordens de serviço" },
     { icon: UsersRound, name: "Clientes" },
     { icon: Boxes, name: "Equipamentos" },
+    { icon: ShieldCheck, name: "PMOC e conformidade" },
+    { icon: Building2, name: "Obras" },
+    { icon: Warehouse, name: "Estoque" },
+    { icon: FileText, name: "Base Técnica" },
+  ]},
+  { label: "COMERCIAL & CONTRATOS", items: [
     { icon: FileText, name: "Orçamentos" },
     { icon: ShoppingBag, name: "Vendas" },
     { icon: Landmark, name: "Licitações" },
-  ]},
-  { label: "OPERAÇÃO", items: [
-    { icon: ClipboardList, name: "Ordens de serviço" },
-    { icon: ShieldCheck, name: "PMOC e conformidade" },
-    { icon: Building2, name: "Obras" },
     { icon: Wrench, name: "Serviços" },
     { icon: Package, name: "Produtos" },
-    { icon: Warehouse, name: "Estoque" },
     { icon: ShoppingCart, name: "Compras" },
     { icon: Store, name: "Fornecedores" },
-    { icon: FileText, name: "Base Técnica" },
   ]},
-  { label: "GESTÃO", items: [
+  { label: "FINANCEIRO & RESULTADOS", items: [
     { icon: WalletCards, name: "Financeiro" },
     { icon: ReceiptText, name: "Fiscal" },
     { icon: ShieldCheck, name: "Aprovações" },
@@ -680,12 +678,72 @@ const tiagoEmployee: ModuleRecord = { id: "FUN-000001", name: "Tiago Viana", cli
 const linkedUnits: Record<string, { icon: IconType; name: string; type: string; doc: string; responsible: string; phone: string; address: string; orders: number }[]> = {};
 const linkedSectors: Record<string, { icon: IconType; name: string; type: string; doc: string; responsible: string; phone: string; address: string; orders: number }[]> = {};
 
+function normalizeGlobalSearch(value: string) {
+  return value.toLocaleLowerCase("pt-BR");
+}
+
+function highlightGlobalSearch(value: string, query: string) {
+  const term = query.trim();
+  if (!term) return value;
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return value.split(new RegExp(`(${escaped})`, "ig")).map((part, index) =>
+    part.toLocaleLowerCase("pt-BR") === term.toLocaleLowerCase("pt-BR")
+      ? <mark className="proar-search-highlight" key={index}>{part}</mark>
+      : part
+  );
+}
+
 function Header({ title, subtitle, onMenu, searchItems, pendingItems, onSearchSelect, onPendingSelect, userName, userRole, onSwitchUser, online, syncing, onPull }: { title: string; subtitle: string; onMenu: () => void; onNew: (option: string) => void; searchItems: GlobalSearchItem[]; pendingItems: PendingItem[]; onSearchSelect: (item: GlobalSearchItem) => void; onPendingSelect: (item: PendingItem) => void; userName: string; userRole: string; onSwitchUser: () => void; online: boolean; syncing: boolean; onPull: () => void; onPush: () => void }) {
   const [searchOpen,setSearchOpen]=useState(false);
   const [pendingOpen,setPendingOpen]=useState(false);
   const [query,setQuery]=useState("");
-  useEffect(()=>{ const handler=(event:KeyboardEvent)=>{ if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==="k"){ event.preventDefault(); setSearchOpen(true); setPendingOpen(false); } }; window.addEventListener("keydown",handler); return()=>window.removeEventListener("keydown",handler); },[]);
-  const matches=query.trim().length<2?[]:searchItems.filter(item=>`${item.title} ${item.detail} ${item.module}`.toLowerCase().includes(query.trim().toLowerCase())).slice(0,10);
+  const [searchCategory,setSearchCategory]=useState<"Todos"|"Cliente"|"OS"|"Cadastro">("Todos");
+  const [searchHistory,setSearchHistory]=useState<string[]>([]);
+  const [activeSearchIndex,setActiveSearchIndex]=useState(-1);
+  useEffect(()=>{
+    try{
+      const saved=JSON.parse(localStorage.getItem("proar-global-search-history")||"[]");
+      if(Array.isArray(saved))setSearchHistory(saved.filter((item):item is string=>typeof item==="string").slice(0,5));
+    }catch{}
+  },[]);
+  useEffect(()=>{setActiveSearchIndex(-1);},[query,searchCategory]);
+  useEffect(()=>{
+    const handler=(event:KeyboardEvent)=>{
+      if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==="k"){
+        event.preventDefault();setSearchOpen(true);setPendingOpen(false);
+      }
+      if(event.key==="Escape"){setSearchOpen(false);setPendingOpen(false);}
+    };
+    const outside=(event:PointerEvent)=>{
+      const target=event.target;
+      if(!(target instanceof Element))return;
+      if(!target.closest(".header-global-search"))setSearchOpen(false);
+      if(!target.closest(".header-pending"))setPendingOpen(false);
+    };
+    window.addEventListener("keydown",handler);
+    document.addEventListener("pointerdown",outside);
+    return()=>{window.removeEventListener("keydown",handler);document.removeEventListener("pointerdown",outside);};
+  },[]);
+  const normalizedQuery=normalizeGlobalSearch(query.trim());
+  const matches=normalizedQuery.length<2?[]:searchItems
+    .filter(item=>searchCategory==="Todos"||item.kind===searchCategory)
+    .filter(item=>normalizeGlobalSearch(`${item.title} ${item.detail} ${item.module}`).includes(normalizedQuery))
+    .slice(0,10);
+  const selectSearchItem=(item:GlobalSearchItem)=>{
+    const term=query.trim();
+    if(term.length>=2){
+      const next=[term,...searchHistory.filter(entry=>entry.toLocaleLowerCase("pt-BR")!==term.toLocaleLowerCase("pt-BR"))].slice(0,5);
+      setSearchHistory(next);
+      try{localStorage.setItem("proar-global-search-history",JSON.stringify(next));}catch{}
+    }
+    onSearchSelect(item);setSearchOpen(false);setQuery("");setActiveSearchIndex(-1);
+  };
+  const onSearchKeyDown=(event:ReactKeyboardEvent<HTMLInputElement>)=>{
+    if(event.key==="ArrowDown"&&matches.length){event.preventDefault();setActiveSearchIndex(index=>index<0?0:(index+1)%matches.length);}
+    else if(event.key==="ArrowUp"&&matches.length){event.preventDefault();setActiveSearchIndex(index=>index<=0?matches.length-1:index-1);}
+    else if(event.key==="Enter"&&activeSearchIndex>=0&&matches[activeSearchIndex]){event.preventDefault();selectSearchItem(matches[activeSearchIndex]);}
+    else if(event.key==="Escape"){event.preventDefault();setSearchOpen(false);}
+  };
   return <header className="topbar topbar-user-only">
     <div className="headline">
       <button className="menu-toggle" aria-label="Abrir menu" onClick={onMenu}><Menu size={20}/></button>
@@ -695,11 +753,23 @@ function Header({ title, subtitle, onMenu, searchItems, pendingItems, onSearchSe
     <div className="top-actions top-actions-user-only">
       <a href="/mobile" className="header-tool-button" aria-label="Abrir ProAR Mobile no celular" title="ProAR Mobile — versão mobile"><Smartphone size={16}/></a>
       <div className="header-global-search">
-        <button className="header-tool-button" aria-label="Busca global" title="Busca global" onClick={()=>{setSearchOpen(value=>!value);setPendingOpen(false)}}><Search size={16}/></button>
-        {searchOpen&&<div className="header-popover search-popover"><label><Search size={14}/><input autoFocus value={query} onChange={event=>setQuery(event.target.value)} placeholder="Cliente, CNPJ, OS, série, NF..."/></label>{query.trim().length<2?<small>Digite pelo menos 2 caracteres.</small>:matches.length?<div className="header-result-list">{matches.map(item=><button key={`${item.module}-${item.id}`} onClick={()=>{onSearchSelect(item);setSearchOpen(false);setQuery("")}}><b>{item.title}</b><span>{item.detail||item.module}</span><em>{item.module}</em></button>)}</div>:<small>Nenhum registro encontrado nos dados carregados.</small>}</div>}
+        <button className="header-tool-button" aria-label="Busca global" title="Busca global (Ctrl+K)" aria-expanded={searchOpen} aria-controls="proar-global-search-popover" onClick={()=>{setSearchOpen(value=>!value);setPendingOpen(false)}}><Search size={16}/></button>
+        {searchOpen&&<div id="proar-global-search-popover" className="header-popover search-popover" role="dialog" aria-label="Busca global do ProAR">
+          <label className="proar-search-input"><Search size={14}/><input autoFocus role="combobox" aria-label="Pesquisar em clientes, ordens e cadastros" aria-autocomplete="list" aria-expanded={matches.length>0} aria-controls="proar-global-search-results" aria-activedescendant={activeSearchIndex>=0?`proar-search-result-${activeSearchIndex}`:undefined} value={query} onChange={event=>setQuery(event.target.value)} onKeyDown={onSearchKeyDown} placeholder="Cliente, CNPJ, OS, série, NF..." /></label>
+          <div className="proar-search-filters" aria-label="Filtrar resultados por tipo">
+            {(["Todos","Cliente","OS","Cadastro"] as const).map(category=><button type="button" key={category} aria-pressed={searchCategory===category} onClick={()=>setSearchCategory(category)}>{category}</button>)}
+          </div>
+          {query.trim().length<2?
+            <div className="proar-search-history"><small>{searchHistory.length?"Buscas recentes":"Digite pelo menos 2 caracteres para pesquisar."}</small>{searchHistory.map(term=><button type="button" key={term} onClick={()=>setQuery(term)}><span aria-hidden="true">↺</span>{term}</button>)}</div>:
+            matches.length?
+              <div id="proar-global-search-results" className="header-result-list" role="listbox" aria-label="Resultados da busca">
+                {matches.map((item,index)=><button id={`proar-search-result-${index}`} role="option" aria-selected={activeSearchIndex===index} key={`${item.module}-${item.id}`} onMouseEnter={()=>setActiveSearchIndex(index)} onClick={()=>selectSearchItem(item)}><b>{highlightGlobalSearch(item.title,query)}</b><span>{highlightGlobalSearch(item.detail||item.module,query)}</span><em>{item.module}</em></button>)}
+              </div>:
+              <small>Nenhum registro encontrado nos dados carregados.</small>}
+        </div>}
       </div>
       <div className="header-pending">
-        <button className="header-tool-button" aria-label="Próximas ações" title="Próximas ações" onClick={()=>{setPendingOpen(value=>!value);setSearchOpen(false)}}><Bell size={16}/>{pendingItems.length>0&&<i>{Math.min(pendingItems.length,99)}</i>}</button>
+        <button className="header-tool-button" aria-label="Próximas ações" title="Próximas ações" aria-expanded={pendingOpen} onClick={()=>{setPendingOpen(value=>!value);setSearchOpen(false)}}><Bell size={16}/>{pendingItems.length>0&&<i>{Math.min(pendingItems.length,99)}</i>}</button>
         {pendingOpen&&<div className="header-popover pending-popover"><div className="header-popover-title"><b>Próximas ações</b><span>{pendingItems.length}</span></div>{pendingItems.length?<div className="header-result-list">{pendingItems.slice(0,10).map(item=><button key={item.id} className={item.tone} onClick={()=>{onPendingSelect(item);setPendingOpen(false)}}><b>{item.title}</b><span>{item.detail}</span><em>{item.module}</em></button>)}</div>:<small>Nenhuma pendência identificada.</small>}</div>}
       </div>
       <button className={`header-tool-button sync-state ${online?"online":"offline"}`} aria-label={online?"Atualizar dados":"Sem conexão"} title={online?"Atualizar dados do banco":"Sem conexão"} disabled={!online||syncing} onClick={onPull}><RefreshCw size={16} className={syncing?"spin":""}/></button>
@@ -827,9 +897,35 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: so
     return()=>window.removeEventListener("proar:focus-record",handler);
   },[sourceServiceOrders,onSelect]);
   const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
-  const todayIso = new Date().toISOString().slice(0,10);
-  const isClosed = (status:string) => /conclu[ií]d|cancelad/i.test(status);
-  const visibleOrders = sourceServiceOrders.filter(order => { const customer = customers.find(item => item.name === order.client); const matchesSearch=!query.trim() || normalizeSearch([order.id, order.client, order.unit, order.address, order.tech, customer?.legalName, customer?.tradeName, customer?.doc, customer?.phone].filter(Boolean).join(" ")).includes(normalizeSearch(query)); const matchesFilter=visibility === "Todas" || visibility === "Concluídas" ? /conclu[ií]d/i.test(order.status) : visibility === "Canceladas" ? /cancelad/i.test(order.status) : visibility === "Hoje" ? order.date === todayIso : !isClosed(order.status); return matchesSearch && matchesFilter; });
+  const todayIso = new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+  const isClosed = (status:string) => /conclu[ií]d|finalizad|cancelad/i.test(status);
+  const orderStage = (order: ServiceOrder) => {
+    const status = normalizeSearch(order.status);
+    if (/cancelad/.test(status)) return "Canceladas";
+    if (/conclu[ií]d|finalizad/.test(status)) return "Concluídas";
+    if (/andamento|em rota|a caminho|check.?in|atendimento|execu[cç][aã]o|aguardando material|aguardando pe[cç]a/.test(status) || Boolean(order.checkInAt && !order.checkOutAt)) return "Em andamento";
+    return "Programadas";
+  };
+  const stageOrders = {
+    scheduled: sourceServiceOrders.filter(order => orderStage(order) === "Programadas"),
+    active: sourceServiceOrders.filter(order => orderStage(order) === "Em andamento"),
+    completed: sourceServiceOrders.filter(order => orderStage(order) === "Concluídas"),
+  };
+  const billedCount = stageOrders.completed.filter(order => order.nfseStatus === "Autorizada" || order.nfseStatus === "Emitida" || /faturad/i.test(order.status)).length;
+  const activeCheckins = stageOrders.active.filter(order => Boolean(order.checkInAt && !order.checkOutAt)).length;
+  const visibleOrders = sourceServiceOrders.filter(order => {
+    const customer = customers.find(item => item.name === order.client);
+    const matchesSearch = !query.trim() || normalizeSearch([order.id, order.client, order.unit, order.address, order.tech, customer?.legalName, customer?.tradeName, customer?.doc, customer?.phone].filter(Boolean).join(" ")).includes(normalizeSearch(query));
+    const stage = orderStage(order);
+    const matchesFilter = visibility === "Todas" ? true
+      : visibility === "Programadas" ? stage === "Programadas"
+      : visibility === "Em andamento" ? stage === "Em andamento"
+      : visibility === "Concluídas" || visibility === "Concluídas & faturadas" ? stage === "Concluídas"
+      : visibility === "Canceladas" ? stage === "Canceladas"
+      : visibility === "Hoje" ? order.date === todayIso && !isClosed(order.status)
+      : !isClosed(order.status);
+    return matchesSearch && matchesFilter;
+  });
   const serviceOrders = visibleOrders;
   const today = new Date().toISOString().slice(0, 10);
   const reviewAlerts = serviceOrders.filter(order => {
@@ -874,7 +970,12 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: so
       <div><span className="section-kicker"><Wrench size={12}/> MODO TÉCNICO</span><h2>Atendimentos do dia</h2><p>Abra a OS, execute o checklist, registre materiais/fotos e finalize com assinatura.</p></div>
       <div className="technician-command-grid">{myTodayOrders.map(order=><button key={order.id} onClick={()=>onSelect(order)}><span><b>{order.time || "A definir"}</b><small>{order.id}</small></span><div><strong>{order.client}</strong><small>{order.unit} • {order.service}</small></div><em>{order.status}</em><ChevronRight size={16}/></button>)}{!myTodayOrders.length&&<div className="linked-empty"><CheckCircle2 size={22}/><h4>Nenhum atendimento hoje</h4><p>Use a Agenda para consultar os próximos serviços.</p></div>}</div>
     </section>}
-    <div className="module-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Pesquisar por cliente, OS, CPF/CNPJ, telefone ou unidade..."/></label><label className="status-filter"><Filter size={14}/><select aria-label="Exibir ordens" value={visibility} onChange={event=>setVisibility(event.target.value)}><option>Em aberto</option><option>Todas</option><option>Concluídas</option><option>Canceladas</option><option>Hoje</option></select></label><ContextReports title="Ordens de Serviço" rows={serviceOrders.map(order=>[order.id,order.client,order.status])} options={["Imprimir Ordem de Serviço","Relatório técnico","Certificado de higienização","Relatório fotográfico","Relatório da assistência técnica","Comprovante de entrega","Histórico completo da OS"]}/><button className="primary-btn" onClick={() => onOpen("Nova ordem de serviço")}><Plus size={16}/> Nova ordem de serviço</button></div>
+    <div className="module-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Pesquisar por cliente, OS, CPF/CNPJ, telefone ou unidade..."/></label><label className="status-filter"><Filter size={14}/><select aria-label="Exibir ordens" value={visibility} onChange={event=>setVisibility(event.target.value)}><option>Em aberto</option><option>Programadas</option><option>Em andamento</option><option>Todas</option><option>Concluídas</option><option>Canceladas</option><option>Hoje</option></select></label><ContextReports title="Ordens de Serviço" rows={serviceOrders.map(order=>[order.id,order.client,order.status])} options={["Imprimir Ordem de Serviço","Relatório técnico","Certificado de higienização","Relatório fotográfico","Relatório da assistência técnica","Comprovante de entrega","Histórico completo da OS"]}/><button className="primary-btn" onClick={() => onOpen("Nova ordem de serviço")}><Plus size={16}/> Nova ordem de serviço</button></div>
+    <div className="service-order-flow" role="group" aria-label="Fluxo das ordens de serviço">
+      <button type="button" aria-pressed={visibility === "Programadas"} onClick={() => setVisibility("Programadas")}><span>1</span><div><strong>Programadas</strong><small>Fila e agenda futura</small></div><b>{stageOrders.scheduled.length}</b></button>
+      <button type="button" aria-pressed={visibility === "Em andamento"} onClick={() => setVisibility("Em andamento")}><span>2</span><div><strong>Em andamento</strong><small>{activeCheckins} com check-in registrado</small></div><b>{stageOrders.active.length}</b></button>
+      <button type="button" aria-pressed={visibility === "Concluídas"} onClick={() => setVisibility("Concluídas")}><span>3</span><div><strong>Concluídas & faturamento</strong><small>{billedCount} faturadas • {Math.max(0,stageOrders.completed.length-billedCount)} aguardam faturamento</small></div><b>{stageOrders.completed.length}</b></button>
+    </div>
     <div className="module-summary">
       <article><span><ClipboardList size={19}/></span><div><small>ORDENS ABERTAS</small><strong>{serviceOrders.filter(item => item.status !== "Concluída").length}</strong><em>{serviceOrders.filter(item => item.date === today).length} para hoje</em></div></article>
       <article><span><UserCheck size={19}/></span><div><small>TÉCNICOS EMPENHADOS</small><strong>{new Set(serviceOrders.map(item => item.tech).filter(Boolean)).size}</strong><em>Cadastros reais</em></div></article>
@@ -1452,7 +1553,7 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
         </div>
       </section>
     </> : <>
-      <div className="budget-saved panel"><header><div><span className="section-kicker"><History size={12}/> ACOMPANHAMENTO COMERCIAL</span><h3>Orçamentos salvos</h3></div><small>{budgets.length} orçamento(s)</small></header>{budgets.length ? <div>{budgets.map(record => <article key={record.id} onDoubleClick={()=>editBudget(record)} title="Dê dois cliques para alterar este orçamento"><span><b>{record.id}</b><strong>{record.client}</strong><small>{record.purchaseItems?.length ?? 0} item(ns) • {record.reference ? `Ref. ${record.reference} • ` : ""}{record.endDate ? `Válido até ${new Date(`${record.endDate}T12:00:00`).toLocaleDateString("pt-BR")}` : record.createdAt}</small></span><em>{record.status}</em><b>R$ {(record.value ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</b><select aria-label={`Status do orçamento ${record.id}`} value={record.status || "Em elaboração"} onChange={event=>onSave({...record,status:event.target.value,changeReason:`Status comercial atualizado para ${event.target.value}`})}>{["Em elaboração","Enviado","Aguardando retorno","Em negociação","Aprovado","Perdido","Cancelado"].map(status=><option key={status}>{status}</option>)}</select><button type="button" onClick={() => editBudget(record)}><Edit3 size={14}/> Alterar</button><button onClick={() => onConvert(record,"Pedido")} disabled={!/Aprovado|Em negociação|Enviado|Aguardando retorno/i.test(record.status||"")}><ShoppingBag size={14}/> Converter em venda</button><button onClick={() => onConvert(record,"Ordem de serviço")} disabled={!/Aprovado|Em negociação|Enviado|Aguardando retorno/i.test(record.status||"")}><ClipboardList size={14}/> Converter em OS</button><button className="danger" onClick={() => onDelete(record)}><Trash2 size={14}/></button></article>)}</div> : <div className="linked-empty"><FileText size={22}/><h4>Nenhum orçamento salvo</h4></div>}</div>
+      <div className="budget-saved panel"><header><div><span className="section-kicker"><History size={12}/> ACOMPANHAMENTO COMERCIAL</span><h3>Orçamentos salvos</h3></div><small>{budgets.length} orçamento(s)</small></header>{budgets.length ? <div>{budgets.map(record => <article key={record.id} onDoubleClick={()=>editBudget(record)} title="Dê dois cliques para alterar este orçamento"><span><b>{record.id}</b><strong>{record.client}</strong><small>{record.purchaseItems?.length ?? 0} item(ns) • {record.reference ? `Ref. ${record.reference} • ` : ""}{record.endDate ? `Válido até ${new Date(`${record.endDate}T12:00:00`).toLocaleDateString("pt-BR")}` : record.createdAt}</small></span><em>{record.status}</em><b>R$ {(record.value ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</b><select aria-label={`Status do orçamento ${record.id}`} value={record.status || "Em elaboração"} onChange={event=>onSave({...record,status:event.target.value,changeReason:`Status comercial atualizado para ${event.target.value}`})}>{["Em elaboração","Enviado","Aguardando retorno","Em negociação","Aprovado","Perdido","Cancelado"].map(status=><option key={status}>{status}</option>)}</select><button type="button" onClick={() => editBudget(record)}><Edit3 size={14}/> Alterar</button><button onClick={() => onConvert(record,"Pedido")} disabled={!/Aprovado|Em negociação|Enviado|Aguardando retorno/i.test(record.status||"")}><ShoppingBag size={14}/> Converter em venda</button><button onClick={() => onConvert(record,"Ordem de serviço")} disabled={!/Aprovado|Em negociação|Enviado|Aguardando retorno/i.test(record.status||"")}><ClipboardList size={14}/> Converter em OS</button><button type="button" className="danger" aria-label={`Excluir orçamento ${record.id}`} title="Excluir orçamento" onClick={() => onDelete(record)}><Trash2 size={14}/> Excluir</button></article>)}</div> : <div className="linked-empty"><FileText size={22}/><h4>Nenhum orçamento salvo</h4></div>}</div>
     </>}
 
     <BudgetQuickCreateDrawer open={Boolean(quickCreate)} mode={quickCreate ?? "customer"} customerName={customer} customers={customers} structures={structures} onClose={() => setQuickCreate(null)} onCreateCustomer={created => { const result = onCreateCustomer(created); if (result) { setCustomer(result.name); setUnit(""); setNotice("Cliente criado e selecionado no orçamento."); } return result; }} onCreateStructure={created => { const result = onCreateStructure(created); if (result) { setUnit(result.id); setNotice("Estrutura criada e selecionada no orçamento."); } return result; }} />
