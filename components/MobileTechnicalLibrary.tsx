@@ -5,7 +5,8 @@ import {convertTechnicalUnit,technicalDifference,technicalSources,technicalCodes
 import styles from './ProARFieldMobile.module.css';
 export function MobileTechnicalLibrary({scope}:{scope:string}){
  const [tab,setTab]=useState('fluids'),[fluid,setFluid]=useState('R-410A'),[brand,setBrand]=useState('Daikin'),[family,setFamily]=useState(''),[code,setCode]=useState(''),[pressure,setPressure]=useState(''),[unit,setUnit]=useState<'psi'|'bar'>('psi');
- const [conversion,setConversion]=useState<'psi-bar'|'bar-psi'|'f-c'|'c-f'|'btu-kw'|'kw-btu'>('psi-bar'),[value,setValue]=useState(''),[mode,setMode]=useState<'superheat'|'subcool'>('superheat'),[line,setLine]=useState(''),[saturation,setSaturation]=useState(''),[result,setResult]=useState('');\n const [calcMethod,setCalcMethod]=useState<"pt"|"manual">("pt"),[calcFluid,setCalcFluid]=useState("R-410A"),[calcPressure,setCalcPressure]=useState(""),[calcUnit,setCalcUnit]=useState<"psi"|"bar">("psi");
+ const [conversion,setConversion]=useState<'psi-bar'|'bar-psi'|'f-c'|'c-f'|'btu-kw'|'kw-btu'>('psi-bar'),[value,setValue]=useState(''),[mode,setMode]=useState<'superheat'|'subcool'>('superheat'),[line,setLine]=useState(''),[saturation,setSaturation]=useState(''),[result,setResult]=useState('');
+ const [calcMethod,setCalcMethod]=useState<"pt"|"manual">("pt"),[calcFluid,setCalcFluid]=useState("R-410A"),[calcPressure,setCalcPressure]=useState(""),[calcUnit,setCalcUnit]=useState<"psi"|"bar">("psi");
  const [favorites,setFavorites]=useState<{scope:string;ids:string[]}>({scope:'',ids:[]}),[notice,setNotice]=useState('');
  const key=`proar-technical-favorites-v1:${encodeURIComponent(scope)}`;
  useEffect(()=>{try{const ids=JSON.parse(localStorage.getItem(key)||'[]');setFavorites({scope,ids:Array.isArray(ids)?ids.filter((id:unknown)=>typeof id==='string'&&(Object.hasOwn(technicalSources,id)||technicalCodes.some(c=>c.id===id))).slice(0,50):[]});}catch{setNotice('Favoritos disponíveis apenas nesta sessão.')}},[key,scope]);
@@ -13,7 +14,11 @@ export function MobileTechnicalLibrary({scope}:{scope:string}){
  function favorite(id:string){const next=ids.includes(id)?ids.filter(x=>x!==id):[...ids,id].slice(-50);setFavorites({scope,ids:next});try{localStorage.setItem(key,JSON.stringify(next));}catch{setNotice('Não foi possível salvar favoritos neste navegador.')}}
  const keys=refrigerantKeys[fluid]||[],matches=searchTechnicalCodes(brand,family,code);
  const number=(s:string)=>s.trim()?Number(s.replace(',','.')):NaN;
- const pressurePsi=unit==='bar'?number(pressure)/0.0689475729:number(pressure);\n const calcPressurePsi=calcUnit==="bar"?number(calcPressure)/0.0689475729:number(calcPressure);\n const calcKey=(calcFluid==="R-407C"?(mode==="superheat"?"r407cVapor":"r407cLiquid"):(refrigerantKeys[calcFluid]||[])[0]) as RefrigerantKey|undefined;\n const ptSaturation=calcKey&&Number.isFinite(calcPressurePsi)?referenceTemperature(calcPressurePsi,calcKey):null;\n const effectiveSaturation=calcMethod==="pt"?ptSaturation:number(saturation);
+ const pressurePsi=unit==='bar'?number(pressure)/0.0689475729:number(pressure);
+ const calcPressurePsi=calcUnit==="bar"?number(calcPressure)/0.0689475729:number(calcPressure);
+ const calcKey=(calcFluid==="R-407C"?(mode==="superheat"?"r407cVapor":"r407cLiquid"):(refrigerantKeys[calcFluid]||[])[0]) as RefrigerantKey|undefined;
+ const ptSaturation=calcKey&&Number.isFinite(calcPressurePsi)?referenceTemperature(calcPressurePsi,calcKey):null;
+ const effectiveSaturation=calcMethod==="pt"?ptSaturation:number(saturation);
  function source(id:keyof typeof technicalSources){const s=technicalSources[id];return <div className={styles.librarySource}><a href={s.url} target="_blank" rel="noopener noreferrer">Abrir fonte: {s.title} ↗</a><button type="button" aria-pressed={ids.includes(id)} onClick={()=>favorite(id)}>{ids.includes(id)?'★ Favorito':'☆ Favoritar'}</button><small>Conferido em {s.checkedAt}. Documento externo exige conexão.</small></div>}
  return <section className={styles.screen}><p className={styles.eyebrow}>CONHECIMENTO EM CAMPO</p><h1 className={styles.title}>Acervo técnico</h1><p className={styles.subtitle}>Fontes identificadas, consulta por linha de equipamento e cálculos com unidades explícitas.</p>
  <div className={styles.filterChips} role="group" aria-label="Seções do acervo">{[['fluids','Fluidos / tabela P–T'],['codes','Códigos de falha'],['manuals','Manuais e favoritos'],['tools','Calculadoras']].map(([id,label])=><button key={id} type="button" aria-pressed={tab===id} onClick={()=>{setTab(id);setResult('')}}>{label}</button>)}</div>
