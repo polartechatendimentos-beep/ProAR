@@ -6,6 +6,7 @@ import "./global-feedback.css";
 import "./experience-design.css";
 import "./tender-radar-design.css";
 import "./catalog-pricing.css";
+import "./proar520-layout-a11y.css";
 import {SystemAppearance} from "@/components/SystemAppearance";
 import { GlobalFeedback } from "@/components/GlobalFeedback";
 
