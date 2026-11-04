@@ -351,3 +351,172 @@ html[data-proar-system-theme] main h3 {
   outline-offset: -2px;
   background: color-mix(in srgb, var(--ux-accent, #3b82f6) 18%, var(--ux-surface, #081120));
 }
+
+/* Compatibility layer: components still using Tailwind palette classes follow the active theme. */
+html[data-proar-system-theme="dark"] .app-shell,
+html[data-proar-system-theme="dark"] .main {
+  background: var(--ux-bg) !important;
+  color: var(--ux-text) !important;
+}
+html[data-proar-system-theme="light"] .app-shell,
+html[data-proar-system-theme="light"] .main {
+  background: var(--ux-bg) !important;
+  color: var(--ux-text) !important;
+}
+html[data-proar-system-theme="dark"] main :is([class~="bg-white"],[class~="bg-slate-50"],[class~="bg-slate-100"],[class~="bg-gray-50"]) {
+  background-color: var(--ux-card) !important;
+  border-color: var(--ux-border) !important;
+}
+html[data-proar-system-theme="dark"] main :is([class~="text-slate-900"],[class~="text-gray-900"],[class~="text-black"],[class~="text-blue-950"],[class~="text-blue-900"]) {
+  color: var(--ux-text) !important;
+}
+html[data-proar-system-theme="dark"] main :is([class~="text-slate-500"],[class~="text-slate-600"],[class~="text-gray-500"],[class~="text-gray-600"],[class~="text-blue-800"]) {
+  color: var(--ux-muted) !important;
+}
+html[data-proar-system-theme="light"] main :is([class~="bg-slate-900"],[class~="bg-slate-950"],[class~="bg-gray-900"],[class~="bg-gray-950"],[class~="bg-[#050a14]"],[class~="bg-[#081120]"],[class~="bg-[#0b1628]"]) {
+  background-color: var(--ux-surface) !important;
+  border-color: var(--ux-border) !important;
+  color: var(--ux-text) !important;
+}
+html[data-proar-system-theme="light"] main :is([class~="bg-white"],[class~="bg-slate-50"],[class~="bg-slate-100"],[class~="bg-gray-50"]) :is([class~="text-white"],[class~="text-slate-100"],[class~="text-slate-200"],[class~="text-blue-100"],[class~="text-blue-200"]),
+html[data-proar-system-theme="light"] main :is([class~="bg-white"][class~="text-white"],[class~="bg-slate-50"][class~="text-white"],[class~="bg-slate-100"][class~="text-white"]) {
+  color: var(--ux-text) !important;
+}
+html[data-proar-system-theme="light"] main table :is(td,th) :is([class~="text-white"],[class~="text-slate-100"],[class~="text-slate-200"],[class~="text-blue-100"],[class~="text-blue-200"]) {
+  color: var(--ux-text) !important;
+}
+html[data-proar-system-theme] main :is(label,legend) {
+  color: var(--ux-text) !important;
+}
+html[data-proar-system-theme] main :is(.modal,.modal-content,[role="dialog"]) {
+  background-color: var(--ux-card) !important;
+  border-color: var(--ux-border) !important;
+  color: var(--ux-text) !important;
+}
+html[data-proar-system-theme] main :is(.modal,.modal-content,[role="dialog"]) :is(label,legend,h1,h2,h3,h4,p,small) {
+  color: var(--ux-text) !important;
+}
+
+/* Financial rows keep actions in a compact popover and totals within the scroll region. */
+.finance-titles-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  overscroll-behavior-inline: contain;
+}
+.finance-titles-table {
+  width: max-content;
+  min-width: 100%;
+  table-layout: auto;
+}
+.finance-titles-table th:last-child,
+.finance-titles-table td:last-child {
+  min-width: 62px;
+  width: 62px;
+}
+.finance-settlement-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(82px, 1fr));
+  gap: 6px;
+  min-width: 176px;
+}
+.finance-row-menu {
+  position: relative;
+  display: inline-block;
+}
+.finance-row-menu > summary {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--ux-border);
+  border-radius: 9px;
+  background: var(--ux-surface);
+  color: var(--ux-text);
+  cursor: pointer;
+  list-style: none;
+  font-size: 22px;
+  line-height: 1;
+}
+.finance-row-menu > summary::-webkit-details-marker { display: none; }
+.finance-row-menu__items {
+  position: absolute;
+  z-index: var(--ux-z-dropdown);
+  top: calc(100% + 5px);
+  right: 0;
+  display: grid;
+  gap: 4px;
+  width: max-content;
+  min-width: 190px;
+  max-width: min(250px, 78vw);
+  padding: 6px;
+  border: 1px solid var(--ux-border);
+  border-radius: 10px;
+  background: var(--ux-card);
+  color: var(--ux-text);
+  box-shadow: var(--ux-shadow-2);
+}
+.finance-row-menu__items button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ux-text);
+  text-align: left;
+  white-space: normal;
+}
+.finance-row-menu__items button:hover { background: color-mix(in srgb, var(--ux-accent) 12%, transparent); }
+
+/* Long quote cards wrap their controls instead of cutting off the conversion actions. */
+.budget-saved > div > article {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+}
+.budget-saved > div > article > span {
+  flex: 1 1 260px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.budget-saved > div > article > select {
+  flex: 0 1 170px;
+  min-width: 0;
+  max-width: 100%;
+}
+.budget-saved > div > article > button {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Keep offline status below the fixed header, with room for its expandable queue. */
+.proar-connectivity-banner {
+  top: 72px !important;
+  left: auto !important;
+  right: 16px !important;
+  transform: none !important;
+  z-index: var(--ux-z-sticky) !important;
+  max-width: min(420px, calc(100vw - 24px)) !important;
+}
+@media (max-width: 767px) {
+  .proar-connectivity-banner {
+    top: auto !important;
+    bottom: calc(var(--proar-mobile-nav-space) + 8px) !important;
+    right: 10px !important;
+    max-width: min(420px, calc(100vw - 20px)) !important;
+  }
+  .finance-settlement-values { grid-template-columns: 1fr; min-width: 116px; }
+  .budget-saved > div > article { align-items: stretch; }
+  .budget-saved > div > article > button { flex: 1 1 calc(50% - 8px); }
+}
