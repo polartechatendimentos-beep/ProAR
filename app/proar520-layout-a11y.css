@@ -675,3 +675,15 @@ html[data-proar-system-theme="light"] main :is(.panel,.erp-card,.management-hero
   .service-order-flow > button { min-height: 64px; }
   .finance-row-actions { justify-content: flex-start; }
 }
+
+
+/* Finance summary supports the due-today card without squeezing the values. */
+.financial-module > .finance-kpis-remodeled {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+@media (max-width: 1200px) {
+  .financial-module > .finance-kpis-remodeled { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .financial-module > .finance-kpis-remodeled { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
