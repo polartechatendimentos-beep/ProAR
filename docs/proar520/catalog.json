@@ -1053,7 +1053,13 @@
       "detail": "Manter o filtro de período escolhido pelo usuário ao navegar para outro módulo e retornar ao Painel Inicial.",
       "files": "components/DashboardWorkspace.tsx, lib/action-center.ts",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "implementado",
+      "evidence": {
+        "files": [
+          "components/DashboardWorkspace.tsx"
+        ],
+        "scope": "Período do Dashboard salvo no localStorage do navegador, restaurado ao reabrir o painel e validado contra os períodos disponíveis; fallback para Este mês quando não há preferência ou o armazenamento falha."
+      }
     },
     {
       "id": "MEL-075",
