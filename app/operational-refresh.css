@@ -95,9 +95,9 @@
 .customer-create-section{overflow:hidden;border:1px solid #142d49;border-radius:12px;background:#081522}
 .customer-create-section>header{display:flex;align-items:center;gap:9px;padding:9px 11px;border-bottom:1px solid #142d49;background:#091a2c}
 .customer-create-section>header>span{display:grid;width:24px;height:24px;place-items:center;border:1px solid #245887;border-radius:7px;background:#0d2d4e;color:#6fc8ff;font-size:9px;font-weight:900}
-.customer-create-section>header div{display:flex;align-items:baseline;gap:8px}.customer-create-section>header b{color:#eef7ff;font-size:11px}.customer-create-section>header small{color:#68839d;font-size:9px}
+.customer-create-section>header div{display:flex;align-items:baseline;gap:8px}.customer-create-section>header b{color:#eef7ff;font-size:11px}.customer-create-section>header small{color:#b6c7d8;font-size:9px}
 .customer-create-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:9px;padding:11px}
-.customer-create-grid label,.customer-create-notes>label{display:flex;min-width:0;flex-direction:column;gap:5px;color:#8ea9c2;font-size:9px;font-weight:700}
+.customer-create-grid label,.customer-create-notes>label{display:flex;min-width:0;flex-direction:column;gap:5px;color:#dbe7f3;font-size:9px;font-weight:700}
 .customer-create-grid input,.customer-create-grid select{width:100%;height:40px;min-width:0;box-sizing:border-box;padding:0 10px;border:1px solid #2a4664;border-radius:8px;background:#071523;color:#eaf3fc;font-size:11px}
 .customer-create-grid input:focus,.customer-create-grid select:focus,.customer-create-notes textarea:focus{outline:none;border-color:#38bdf8;box-shadow:0 0 0 3px rgba(56,189,248,.1)}
 .customer-create-grid.identity .doc-field{grid-column:span 3}.customer-create-grid.identity>label:nth-of-type(2){grid-column:span 2}.customer-create-grid.identity>label:nth-of-type(3){grid-column:span 3}.customer-create-grid.identity .legal-name{grid-column:span 6}.customer-create-grid.identity .trade-name{grid-column:span 6}.customer-create-grid.identity>label:nth-last-of-type(3){grid-column:span 4}.customer-create-grid.identity>label:nth-last-of-type(2){grid-column:span 3}.customer-create-grid.identity .email-field{grid-column:span 5}
@@ -432,3 +432,133 @@
  .external-access-modal .work-register-body{padding:10px!important}
  .external-access-modal .modal-head{padding:12px!important}
 }
+
+
+/* Activity history: compact scan-first timeline with optional full change details. */
+.activity-center{gap:10px;min-width:0}
+.activity-hero{padding:14px 18px;min-height:74px}
+.activity-hero h2{font-size:20px}
+.activity-hero p{font-size:12px;color:#a9bbcd}
+.activity-today{padding:8px 11px}
+.activity-toolbar{display:grid;grid-template-columns:minmax(220px,1.6fr) minmax(130px,.8fr) minmax(130px,.8fr) minmax(170px,.8fr) minmax(170px,.8fr);gap:8px;padding:9px}
+.activity-toolbar .list-search{min-width:0}
+.activity-toolbar>label:not(.list-search){min-width:0;height:38px}
+.activity-toolbar select,.activity-toolbar input{min-width:0;color:#dbe7f5!important;font-size:12px!important}
+.activity-toolbar input[type="date"]{width:100%;border:0;outline:0;background:transparent;color:#dbe7f5}
+.activity-toolbar input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(.8)}
+.activity-date-filter span{color:#91a6bb;font-size:11px;white-space:nowrap}
+.activity-stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.activity-stats article{padding:9px 12px}
+.activity-stats small{font-size:9px;color:#91a6bb}
+.activity-stats strong{font-size:16px}
+.activity-list{gap:6px}
+.activity-entry{grid-template-columns:30px minmax(0,1fr)!important;gap:9px!important;padding:10px 12px!important;border-color:#203754!important;background:#091625!important}
+.activity-entry .activity-dot{width:28px;height:28px;border-radius:8px}
+.activity-main{min-width:0}
+.activity-main>header{align-items:flex-start;min-width:0}
+.activity-title{min-width:0}
+.activity-main header b{font-size:12px}
+.activity-main header small{font-size:11px;color:#9bb2c8}
+.activity-main time{flex-shrink:0;color:#9aafc3;font-size:10px;white-space:nowrap}
+.activity-summary{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0}
+.activity-main p{margin:5px 0;color:#c0cede;font-size:12px;line-height:1.4}
+.activity-state{flex:0 0 auto;padding:4px 8px;border:1px solid #68511f;border-radius:999px;background:#2a210f;color:#ffdb83;font-size:10px;font-weight:750}
+.activity-main footer{margin-top:5px;color:#9aafc3;font-size:10px}
+.activity-details{margin-top:3px}
+.activity-details summary{width:max-content;max-width:100%;padding:5px 0;color:#70c8ff;font-size:11px;font-weight:700;cursor:pointer}
+.activity-changes{display:grid;gap:5px;margin-top:7px}
+.activity-change{display:grid;grid-template-columns:minmax(130px,.75fr) minmax(0,1.25fr) 16px minmax(0,1.25fr);align-items:center;gap:8px;padding:7px 9px;border:1px solid #1b3b59;border-radius:8px;background:#0b1e31;color:#c3d3e2;font-size:11px}
+.activity-change>*{min-width:0;overflow-wrap:anywhere}
+.activity-change b{color:#dce9f6}
+.activity-change span{color:#e8b67d}
+.activity-change i{color:#8da5ba;font-style:normal;text-align:center}
+.activity-change strong{color:#76e1b5}
+.activity-truncated{display:block;margin-top:5px;color:#9aafc3;font-size:10px}
+.activity-empty{padding:28px}
+.activity-empty b{font-size:13px}
+.activity-empty span{font-size:11px}
+@media(max-width:1100px){.activity-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}.activity-toolbar .list-search{grid-column:1/-1}}
+@media(max-width:650px){.activity-stats{grid-template-columns:1fr}.activity-toolbar{grid-template-columns:1fr}.activity-toolbar .list-search{grid-column:auto}.activity-summary{align-items:flex-start;flex-direction:column}.activity-main>header{flex-direction:column}.activity-main time{white-space:normal}.activity-change{grid-template-columns:minmax(0,1fr) 14px minmax(0,1fr)}.activity-change b{grid-column:1/-1}.activity-hero{align-items:flex-start;flex-direction:row}.activity-today{flex:0 0 auto}}
+@media(prefers-reduced-motion:reduce){.pmoc-due-item.urgent::before{animation:none!important}}
+
+/* PMOC prevention alerts: dates are derived only from saved plan and execution records. */
+.pmoc-due-soon-panel{display:grid;gap:10px;padding:14px;border:1px solid #5c4720;border-radius:14px;background:linear-gradient(135deg,#17170f,#0b1420);color:#e8eef5}
+.pmoc-due-soon-panel>header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.pmoc-due-soon-panel>header h3{margin:4px 0;color:#fff;font-size:15px}
+.pmoc-due-soon-panel>header p{margin:0;color:#a9b5c3;font-size:11px}
+.pmoc-due-soon-panel>header>strong{flex:0 0 auto;color:#ffda7b;font:700 13px/1.2 var(--font-geist-mono),monospace}
+.pmoc-due-soon-list{display:grid;gap:7px}
+.pmoc-due-item{position:relative;display:grid;grid-template-columns:8px minmax(0,1fr) auto;align-items:center;gap:10px;padding:10px 12px;border:1px solid #4d3e20;border-radius:11px;background:#111b29}
+.pmoc-due-item.urgent{border-color:#a87922;box-shadow:0 0 0 1px rgba(245,158,11,.12)}
+.pmoc-due-item.urgent::before{content:"";position:absolute;inset:-2px;border:1px solid rgba(245,158,11,.6);border-radius:12px;pointer-events:none;animation:pmoc-due-pulse 2s ease-in-out infinite}
+.pmoc-due-indicator{width:8px;height:8px;border-radius:50%;background:#fbbf24;box-shadow:0 0 10px #f59e0b}
+.pmoc-due-copy{display:grid;gap:3px;min-width:0}
+.pmoc-due-copy small{overflow:hidden;color:#a9bbcd;font-size:10px;text-overflow:ellipsis;white-space:nowrap}
+.pmoc-due-copy b{color:#f6f8fa;font-size:13px}
+.pmoc-due-copy>span{color:#ffd479;font-size:11px;font-weight:700}
+.pmoc-due-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
+.pmoc-due-actions button{min-height:32px;padding:0 10px;border:1px solid #30445b;border-radius:8px;background:#14263a;color:#e4edf6;font-size:11px;font-weight:700;white-space:nowrap}
+.pmoc-due-actions .pmoc-whatsapp-action{border-color:#287650;background:#0e3a2b;color:#9af0bf}
+@keyframes pmoc-due-pulse{0%,100%{opacity:.3;transform:scale(1)}50%{opacity:.85;transform:scale(1.003)}}
+@media(max-width:700px){.pmoc-due-item{grid-template-columns:8px minmax(0,1fr)}.pmoc-due-actions{grid-column:2;justify-content:flex-start}.pmoc-due-soon-panel>header{align-items:flex-start}.pmoc-due-copy small{white-space:normal}}
+
+
+/* Contrast fixes confirmed in the interactive production-like test. */
+html[data-proar-system-theme="dark"] .technician-command-grid>button :is(strong,b){
+  color:#f8fafc!important;
+}
+html[data-proar-system-theme="dark"] .technician-command-grid>button :is(small,span,em){
+  color:#cbd8e6!important;
+}
+html[data-proar-system-theme="dark"] .service-order-flow>button :is(strong,b){
+  color:#f8fafc!important;
+}
+html[data-proar-system-theme="dark"] .service-order-flow>button small{
+  color:#cbd8e6!important;
+}
+
+/* Customer form sections intentionally use a dark surface in both themes. */
+.customer-create-section :is(header b,header small,label){
+  color:#e5edf7!important;
+}
+.customer-create-section>header small,
+.customer-create-section label small{
+  color:#b9c9da!important;
+}
+.customer-create-modal .modal-head :is(h2,p,span){
+  color:#f8fafc!important;
+}
+
+/* Saved quotes keep the same readable header treatment as their dark surface. */
+html[data-proar-system-theme="dark"] .app-shell .budget-saved>header{
+  background:#0b1628!important;
+  border-color:#29405c!important;
+  color:#f8fafc!important;
+}
+html[data-proar-system-theme="dark"] .app-shell .budget-saved>header :is(h3,b,strong,small){
+  color:#f8fafc!important;
+}
+
+.customer-document-error{
+  margin:0 18px 10px;
+  padding:10px 12px;
+  border:1px solid #a83c4a;
+  border-radius:8px;
+  background:#35151c;
+  color:#ffd6db;
+  font-size:13px;
+  font-weight:650;
+}
+
+
+/* Contraste reforçado nos formulários escuros de Cliente e OS. */
+html[data-proar-system-theme="dark"] .app-shell .customer-create-modal .modal-head h2,
+html[data-proar-system-theme="dark"] .app-shell .customer-create-modal .customer-create-section>header b,
+html[data-proar-system-theme="dark"] .app-shell .customer-create-modal .customer-create-grid label,
+html[data-proar-system-theme="dark"] .app-shell .customer-create-modal .customer-create-notes>label,
+html[data-proar-system-theme="dark"] .app-shell .os-create-modal .os-create-body label,
+html[data-proar-system-theme="dark"] .app-shell .os-create-modal .os-create-location-grid label,
+html[data-proar-system-theme="dark"] .app-shell .os-create-modal .os-classification-grid label{color:#e2e8f0!important}
+html[data-proar-system-theme="dark"] .app-shell .customer-create-modal .modal-head p,
+html[data-proar-system-theme="dark"] .app-shell .customer-create-modal .customer-create-section>header small,
+html[data-proar-system-theme="dark"] .app-shell .os-create-modal .os-create-header p{color:#b6c7d8!important}

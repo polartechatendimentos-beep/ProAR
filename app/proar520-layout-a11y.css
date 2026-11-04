@@ -687,3 +687,26 @@ html[data-proar-system-theme="light"] main :is(.panel,.erp-card,.management-hero
 @media (max-width: 700px) {
   .financial-module > .finance-kpis-remodeled { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+
+/* Predictable form-label contrast across dark and light module cards. */
+html[data-proar-system-theme="dark"] .app-shell main :is(label,legend){
+  color:#e2e8f0!important;
+}
+html[data-proar-system-theme="dark"] .app-shell main label>small,
+html[data-proar-system-theme="dark"] .app-shell main label>span+small{
+  color:#a9bbcd!important;
+}
+html[data-proar-system-theme="dark"] .app-shell main :is(input,select,textarea){
+  color:#e5edf7;
+}
+html[data-proar-system-theme="light"] .app-shell main :is(label,legend){
+  color:#334155!important;
+}
+html[data-proar-system-theme="light"] .app-shell main label>small,
+html[data-proar-system-theme="light"] .app-shell main label>span+small{
+  color:#64748b!important;
+}
+html[data-proar-system-theme="light"] .app-shell main :is(input,select,textarea){
+  color:#0f172a;
+}

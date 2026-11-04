@@ -17,3 +17,8 @@ test("feedback classifica falhas e conflitos",()=>{
 test("feedback usa informação quando não há estado operacional evidente",()=>{
   assert.equal(inferFeedbackTone("Consulta finalizada."),"info");
 });
+
+test("classifica alterações como ciano e confirmações como verde",()=>{
+  assert.equal(inferFeedbackTone("Dados cadastrais atualizados com sucesso."),"change");
+  assert.equal(inferFeedbackTone("Cliente cadastrado com sucesso!"),"success");
+});

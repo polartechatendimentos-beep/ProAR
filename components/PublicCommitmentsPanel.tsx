@@ -3,6 +3,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { CheckCircle2, Download, Edit3, FileText, HandCoins, Plus, XCircle } from "lucide-react";
 import { validateEmpenhoAllocations, type EmpenhoAllocation } from "@/lib/public-contracts";
+import { validateCnpj, validateCpf } from "@/lib/customer-validation";
 import type { PublicContractRecord } from "@/components/PublicContractsPanel";
 
 type ContractItem = {
@@ -55,9 +56,10 @@ function downloadCsv(name: string, rows: unknown[][]) {
   URL.revokeObjectURL(url);
 }
 
-export function PublicCommitmentsPanel({ orders, contracts, commitments, onSave, onReadyToInvoice, onCancel }: {
+export function PublicCommitmentsPanel({ orders, contracts, customers = [], commitments, onSave, onReadyToInvoice, onCancel }: {
   orders: ContractOrder[];
   contracts: PublicContractRecord[];
+  customers?: { name: string; doc?: string }[];
   commitments: PublicCommitmentRecord[];
   onSave: (record: PublicCommitmentRecord) => Promise<boolean>;
   onReadyToInvoice: (record: PublicCommitmentRecord) => Promise<boolean>;
@@ -146,6 +148,15 @@ export function PublicCommitmentsPanel({ orders, contracts, commitments, onSave,
     try { validateEmpenhoAllocations(empenhoValue, allocations); }
     catch (error) { setMessage(error instanceof Error ? error.message : "Confira os valores vinculados.");return; }
     const contract = contracts.find(item => item.id === certameIds[0]);
+    const customerDocument = customers.find(item => item.name === contract?.client)?.doc?.replace(/\D/g, "") ?? "";
+    if (customerDocument && (
+      (customerDocument.length === 11 && !validateCpf(customerDocument)) ||
+      (customerDocument.length === 14 && !validateCnpj(customerDocument)) ||
+      ![11, 14].includes(customerDocument.length)
+    )) {
+      setMessage("CPF/CNPJ inválido no cadastro do cliente do Certame. Corrija o cadastro antes de registrar o Empenho.");
+      return;
+    }
     setSaving(true);setMessage("Salvando...");
     let saved = false;
     try {
