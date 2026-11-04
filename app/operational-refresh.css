@@ -95,9 +95,9 @@
 .customer-create-section{overflow:hidden;border:1px solid #142d49;border-radius:12px;background:#081522}
 .customer-create-section>header{display:flex;align-items:center;gap:9px;padding:9px 11px;border-bottom:1px solid #142d49;background:#091a2c}
 .customer-create-section>header>span{display:grid;width:24px;height:24px;place-items:center;border:1px solid #245887;border-radius:7px;background:#0d2d4e;color:#6fc8ff;font-size:9px;font-weight:900}
-.customer-create-section>header div{display:flex;align-items:baseline;gap:8px}.customer-create-section>header b{color:#eef7ff;font-size:11px}.customer-create-section>header small{color:#68839d;font-size:9px}
+.customer-create-section>header div{display:flex;align-items:baseline;gap:8px}.customer-create-section>header b{color:#eef7ff;font-size:11px}.customer-create-section>header small{color:#b6c7d8;font-size:9px}
 .customer-create-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:9px;padding:11px}
-.customer-create-grid label,.customer-create-notes>label{display:flex;min-width:0;flex-direction:column;gap:5px;color:#8ea9c2;font-size:9px;font-weight:700}
+.customer-create-grid label,.customer-create-notes>label{display:flex;min-width:0;flex-direction:column;gap:5px;color:#dbe7f3;font-size:9px;font-weight:700}
 .customer-create-grid input,.customer-create-grid select{width:100%;height:40px;min-width:0;box-sizing:border-box;padding:0 10px;border:1px solid #2a4664;border-radius:8px;background:#071523;color:#eaf3fc;font-size:11px}
 .customer-create-grid input:focus,.customer-create-grid select:focus,.customer-create-notes textarea:focus{outline:none;border-color:#38bdf8;box-shadow:0 0 0 3px rgba(56,189,248,.1)}
 .customer-create-grid.identity .doc-field{grid-column:span 3}.customer-create-grid.identity>label:nth-of-type(2){grid-column:span 2}.customer-create-grid.identity>label:nth-of-type(3){grid-column:span 3}.customer-create-grid.identity .legal-name{grid-column:span 6}.customer-create-grid.identity .trade-name{grid-column:span 6}.customer-create-grid.identity>label:nth-last-of-type(3){grid-column:span 4}.customer-create-grid.identity>label:nth-last-of-type(2){grid-column:span 3}.customer-create-grid.identity .email-field{grid-column:span 5}
@@ -549,3 +549,16 @@ html[data-proar-system-theme="dark"] .app-shell .budget-saved>header :is(h3,b,st
   font-size:13px;
   font-weight:650;
 }
+
+
+/* Contraste reforçado nos formulários escuros de Cliente e OS. */
+html[data-proar-system-theme="dark"] .app-shell .customer-create-modal .modal-head h2,
+html[data-proar-system-theme="dark"] .app-shell .customer-create-modal .customer-create-section>header b,
+html[data-proar-system-theme="dark"] .app-shell .customer-create-modal .customer-create-grid label,
+html[data-proar-system-theme="dark"] .app-shell .customer-create-modal .customer-create-notes>label,
+html[data-proar-system-theme="dark"] .app-shell .os-create-modal .os-create-body label,
+html[data-proar-system-theme="dark"] .app-shell .os-create-modal .os-create-location-grid label,
+html[data-proar-system-theme="dark"] .app-shell .os-create-modal .os-classification-grid label{color:#e2e8f0!important}
+html[data-proar-system-theme="dark"] .app-shell .customer-create-modal .modal-head p,
+html[data-proar-system-theme="dark"] .app-shell .customer-create-modal .customer-create-section>header small,
+html[data-proar-system-theme="dark"] .app-shell .os-create-modal .os-create-header p{color:#b6c7d8!important}
