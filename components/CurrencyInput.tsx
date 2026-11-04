@@ -24,6 +24,7 @@ export function CurrencyInput({ value, onValueChange, ...props }: Props) {
       inputMode="numeric"
       autoComplete="off"
       value={display}
+      onFocus={(event) => event.currentTarget.select()}
       onChange={(event) => {
         const nextValue = parseMoneyInput(event.currentTarget.value);
         setDisplay(formatMoneyInput(nextValue));
