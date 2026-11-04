@@ -10,7 +10,15 @@
       "detail": "Unificar variáveis CSS (--ux-bg, --ux-card, --ux-text, --ux-muted) eliminando valores hexadecimais avulsos nos 23 arquivos CSS.",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "parcial",
+      "evidence": {
+        "files": [
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
+        ],
+        "scope": "Adicionados tokens semânticos --ux-* no novo stylesheet global; valores hex legados continuam em múltiplos arquivos e ainda requerem migração."
+      }
     },
     {
       "id": "MEL-002",
@@ -21,7 +29,15 @@
       "detail": "Ajustar tons de cinza-azulado (#71859c e #60758d) para #94a3b8 sobre fundos #0b1628 em todos os subtítulos e descrições.",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Implementado v2.2.0",
-      "status": "nao_auditado"
+      "status": "parcial",
+      "evidence": {
+        "files": [
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
+        ],
+        "scope": "Teste automatizado valida texto principal/secundário contra o fundo dos temas claro, escuro e alto contraste; não cobre todos os componentes e estados de toda a aplicação."
+      }
     },
     {
       "id": "MEL-003",
@@ -32,7 +48,15 @@
       "detail": "Substituir fontes fixas de 6px a 9px herdadas em seletores antigos por escala responsiva mínima de 12px (0.75rem) no desktop e 14px no mobile.",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "implementado",
+      "evidence": {
+        "files": [
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
+        ],
+        "scope": "Escala clamp para H1, H2 e H3 no conteúdo administrativo; teste automatizado verifica as regras responsivas."
+      }
     },
     {
       "id": "MEL-004",
@@ -43,7 +67,15 @@
       "detail": "Definir 3 níveis estritos de arredondamento: --radius-sm (8px para inputs/botões), --radius-md (12px para cards) e --radius-lg (16px para modais/painéis).",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "parcial",
+      "evidence": {
+        "files": [
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
+        ],
+        "scope": "Tokens de raio aplicados a painéis, cards, controles e modais comuns; os componentes específicos ainda precisam de auditoria."
+      }
     },
     {
       "id": "MEL-005",
@@ -57,9 +89,11 @@
       "status": "implementado",
       "evidence": {
         "files": [
-          "app/globals.css"
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
         ],
-        "scope": "Anel de foco 2px #38bdf8 e offset 2px em elementos interativos :focus-visible no layout compartilhado. Publicação depende de CI e deploy do lote."
+        "scope": "Focus ring de 2px e offset 2px já existia em app/globals.css e foi mantido no conjunto global."
       }
     },
     {
@@ -71,7 +105,15 @@
       "detail": "Sincronizar o seletor de tema com prefers-color-scheme do sistema operacional quando o usuário escolher o modo Automático.",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "implementado",
+      "evidence": {
+        "files": [
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
+        ],
+        "scope": "Tema escuro/claro/automático persiste em localStorage e o modo automático acompanha prefers-color-scheme em components/SystemAppearance.tsx."
+      }
     },
     {
       "id": "MEL-007",
@@ -82,7 +124,15 @@
       "detail": "Criar variante de tema 'Campo / Sol Forte' com fundo claro puro, bordas pretas de 1.5px e tipografia em peso 700 para leitura sob luz solar.",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "implementado",
+      "evidence": {
+        "files": [
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
+        ],
+        "scope": "Alternância persistente de alto contraste e tokens de alto contraste integrados ao shell administrativo."
+      }
     },
     {
       "id": "MEL-008",
@@ -104,7 +154,15 @@
       "detail": "Fixar padding de 18px 20px nos contêineres .panel e .erp-card no desktop e 12px 14px em telas menores que 768px.",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "parcial",
+      "evidence": {
+        "files": [
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
+        ],
+        "scope": "Densidade configurável ajusta espaçamento de tabelas e painéis mais comuns; os 20 módulos ainda exigem auditoria visual."
+      }
     },
     {
       "id": "MEL-010",
@@ -115,7 +173,15 @@
       "detail": "Aplicar 3 níveis de box-shadow distintos para cards base, barras flutuantes sticky e janelas modais sobrepostas.",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "parcial",
+      "evidence": {
+        "files": [
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
+        ],
+        "scope": "Escala de sombras aplicada a cartões e modais comuns; hierarquia dos módulos ainda não está integralmente harmonizada."
+      }
     },
     {
       "id": "MEL-011",
@@ -126,7 +192,15 @@
       "detail": "Padronizar scrollbar-width: thin e scrollbar-color: #25476b #071220 em tabelas horizontais, listas de catálogo e modais.",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "implementado",
+      "evidence": {
+        "files": [
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
+        ],
+        "scope": "Rolagem fina e temática com fallback para navegadores WebKit e padrão scrollbar-color."
+      }
     },
     {
       "id": "MEL-012",
@@ -137,7 +211,15 @@
       "detail": "Definir font-display: swap e métricas de fallback para Geist Sans e Geist Mono em app/layout.tsx.",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "parcial",
+      "evidence": {
+        "files": [
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
+        ],
+        "scope": "Fontes Inter/Geist são carregadas com next/font no layout; CLS precisa de medição visual nas rotas e não foi declarado como eliminado."
+      }
     },
     {
       "id": "MEL-013",
@@ -148,7 +230,15 @@
       "detail": "Substituir textos estáticos de 'Carregando...' por blocos animados em gradiente escuro nas tabelas e cards de KPI.",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "parcial",
+      "evidence": {
+        "files": [
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
+        ],
+        "scope": "Classe utilitária de skeleton disponível; os estados de carregamento por módulo ainda não foram todos migrados."
+      }
     },
     {
       "id": "MEL-014",
@@ -159,7 +249,15 @@
       "detail": "Adotar fundo translúcido rgba(244,63,94,0.12) com borda #f43f5e e texto #fb7185, mudando para vermelho sólido apenas no hover/confirmação.",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "parcial",
+      "evidence": {
+        "files": [
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
+        ],
+        "scope": "Estilos para ações de perigo adicionados aos padrões conhecidos; cobertura de todos os botões de exclusão/cancelamento ainda requer auditoria."
+      }
     },
     {
       "id": "MEL-015",
@@ -170,7 +268,15 @@
       "detail": "Garantir gap fixo de 7px, flex-shrink: 0 nos SVGs e alinhamento vertical centralizado em .primary-btn e .outline-btn.",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "parcial",
+      "evidence": {
+        "files": [
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
+        ],
+        "scope": "Alinhamento e shrink de SVG em controles comuns; componentes específicos seguem em auditoria."
+      }
     },
     {
       "id": "MEL-016",
@@ -181,7 +287,15 @@
       "detail": "Aplicar opacity: 0.48, cursor: not-allowed e filtro grayscale(35%) em botões desabilitados por falta de permissão ou validação.",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "implementado",
+      "evidence": {
+        "files": [
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
+        ],
+        "scope": "Estados disabled e aria-disabled recebem cursor e diferenciação visual no stylesheet global."
+      }
     },
     {
       "id": "MEL-017",
@@ -192,7 +306,15 @@
       "detail": "Limitar animações de abertura de gavetas (drawers) e modais a 160ms ease-out e desativá-las quando o sistema exigir redução de movimento.",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "implementado",
+      "evidence": {
+        "files": [
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
+        ],
+        "scope": "prefers-reduced-motion reduz animações/transições e foi incluído no teste de acessibilidade."
+      }
     },
     {
       "id": "MEL-018",
@@ -203,7 +325,15 @@
       "detail": "Unificar .status, .os-status, .pmoc-pill e .workflow-status em um único componente CSS com ponto indicador (dot) e 5 cores semânticas.",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "parcial",
+      "evidence": {
+        "files": [
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
+        ],
+        "scope": "Estilo base para badges/pílulas de status; cores e semântica ainda variam por módulo."
+      }
     },
     {
       "id": "MEL-019",
@@ -214,7 +344,15 @@
       "detail": "Adicionar overflow-wrap: anywhere e text-overflow: ellipsis controlado em cabeçalhos de cards de clientes e órgãos públicos.",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "implementado",
+      "evidence": {
+        "files": [
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
+        ],
+        "scope": "Títulos globais usam min-width:0 e overflow-wrap:anywhere para evitar estouro horizontal."
+      }
     },
     {
       "id": "MEL-020",
@@ -225,7 +363,15 @@
       "detail": "Ocultar automaticamente sidebar, topbar, botões de ação e barras flutuantes ao acionar Ctrl+P em qualquer módulo do sistema.",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "implementado",
+      "evidence": {
+        "files": [
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
+        ],
+        "scope": "Folha global de impressão remove controles e reduz fundos/sombras decorativas."
+      }
     },
     {
       "id": "MEL-021",
@@ -236,7 +382,15 @@
       "detail": "Permitir alternar entre visualização 'Compacta' (36px por linha) e 'Confortável' (52px por linha) nas listagens do ERP.",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "implementado",
+      "evidence": {
+        "files": [
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
+        ],
+        "scope": "Preferência persistente Confortável/Compacta controla a densidade de tabelas."
+      }
     },
     {
       "id": "MEL-022",
@@ -258,7 +412,15 @@
       "detail": "Substituir o atributo title nativo por tooltips rápidos em CSS/JS nos botões de ação rápida das tabelas.",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "parcial",
+      "evidence": {
+        "files": [
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
+        ],
+        "scope": "Tooltip visual disponível para elementos com data-tooltip; a aplicação universal nos controles somente-ícone ainda requer revisão."
+      }
     },
     {
       "id": "MEL-024",
@@ -269,7 +431,15 @@
       "detail": "Adicionar transform: scale(0.98) no clique ativo de botões do PDV e do modo técnico mobile.",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "implementado",
+      "evidence": {
+        "files": [
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
+        ],
+        "scope": "Feedback de estado :active adicionado aos controles interativos."
+      }
     },
     {
       "id": "MEL-025",
@@ -280,7 +450,15 @@
       "detail": "Incluir ícone ilustrativo, título claro, explicação do motivo e botão de ação primária direta em todas as listas vazias.",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "parcial",
+      "evidence": {
+        "files": [
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
+        ],
+        "scope": "Estilo comum para estados vazios adicionado, mas a adoção por todos os módulos ainda não foi concluída."
+      }
     },
     {
       "id": "MEL-026",
@@ -291,7 +469,15 @@
       "detail": "Definir variáveis --z-sticky (20), --z-header (500), --z-popover (1200), --z-batch (8800), --z-modal (9500) e --z-toast (12000).",
       "files": "app/proar-unified-layout.css, app/proar-3-theme.css, app/globals.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "parcial",
+      "evidence": {
+        "files": [
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx",
+          "tests/proar520-a11y.test.mjs"
+        ],
+        "scope": "Tokens de z-index e camadas aplicados a overlays/modais comuns; conflitos de camada em módulos especiais ainda precisam ser auditados."
+      }
     },
     {
       "id": "MEL-027",
