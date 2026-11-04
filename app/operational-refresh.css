@@ -501,3 +501,40 @@
 .pmoc-due-actions .pmoc-whatsapp-action{border-color:#287650;background:#0e3a2b;color:#9af0bf}
 @keyframes pmoc-due-pulse{0%,100%{opacity:.3;transform:scale(1)}50%{opacity:.85;transform:scale(1.003)}}
 @media(max-width:700px){.pmoc-due-item{grid-template-columns:8px minmax(0,1fr)}.pmoc-due-actions{grid-column:2;justify-content:flex-start}.pmoc-due-soon-panel>header{align-items:flex-start}.pmoc-due-copy small{white-space:normal}}
+
+
+/* Contrast fixes confirmed in the interactive production-like test. */
+html[data-proar-system-theme="dark"] .technician-command-grid>button :is(strong,b){
+  color:#f8fafc!important;
+}
+html[data-proar-system-theme="dark"] .technician-command-grid>button :is(small,span,em){
+  color:#cbd8e6!important;
+}
+html[data-proar-system-theme="dark"] .service-order-flow>button :is(strong,b){
+  color:#f8fafc!important;
+}
+html[data-proar-system-theme="dark"] .service-order-flow>button small{
+  color:#cbd8e6!important;
+}
+
+/* Customer form sections intentionally use a dark surface in both themes. */
+.customer-create-section :is(header b,header small,label){
+  color:#e5edf7!important;
+}
+.customer-create-section>header small,
+.customer-create-section label small{
+  color:#b9c9da!important;
+}
+.customer-create-modal .modal-head :is(h2,p,span){
+  color:#f8fafc!important;
+}
+
+/* Saved quotes keep the same readable header treatment as their dark surface. */
+html[data-proar-system-theme="dark"] .app-shell .budget-saved>header{
+  background:#0b1628!important;
+  border-color:#29405c!important;
+  color:#f8fafc!important;
+}
+html[data-proar-system-theme="dark"] .app-shell .budget-saved>header :is(h3,b,strong,small){
+  color:#f8fafc!important;
+}
