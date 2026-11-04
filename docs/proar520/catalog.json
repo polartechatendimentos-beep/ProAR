@@ -1026,7 +1026,14 @@
       "detail": "Permitir filtrar a lista .workday-list entre Operacional (OS/Obras), Financeiro e Comercial.",
       "files": "components/DashboardWorkspace.tsx, lib/action-center.ts",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "implementado",
+      "evidence": {
+        "files": [
+          "components/OperationsActionCenter.tsx",
+          "components/operations-action-center.css"
+        ],
+        "scope": "Central de Pendências ganhou alternância acessível para agrupar ações pelo módulo de destino; filtros de categoria, prioridade e busca continuam aplicados dentro de cada grupo. Modo lista original permanece como padrão."
+      }
     },
     {
       "id": "MEL-072",
