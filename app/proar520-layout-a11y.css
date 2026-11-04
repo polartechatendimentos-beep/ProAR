@@ -577,3 +577,15 @@ html[data-proar-system-theme] main :is(.modal,.modal-content,[role="dialog"]) :i
   font-size: 11px;
   line-height: 1.4;
 }
+html[data-proar-system-theme="light"] main :is(.panel,.erp-card,.management-hero,.management-stats article,.technical-base-panel,.budget-saved) {
+  background-color: var(--ux-card) !important;
+  border-color: var(--ux-border) !important;
+  color: var(--ux-text) !important;
+}
+html[data-proar-system-theme="light"] main :is(.panel,.erp-card,.management-hero,.management-stats article,.technical-base-panel,.budget-saved) :is([class~="text-white"],[class~="text-slate-100"],[class~="text-slate-200"],[class~="text-slate-300"],[class~="text-blue-100"],[class~="text-blue-200"]):not(button):not([role="button"]) {
+  color: var(--ux-text) !important;
+}
+.proar-connectivity-banner {
+  display: block !important;
+  color: var(--ux-text) !important;
+}
