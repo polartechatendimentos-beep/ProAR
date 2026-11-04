@@ -3438,9 +3438,10 @@
       "evidence": {
         "files": [
           "components/TechnicalBasePanel.tsx",
+          "components/MobileTechnicalLibrary.tsx",
           "lib/mobile-technical-library.ts"
         ],
-        "scope": "Calculadora de superaquecimento e sub-resfriamento usa tabela P–T existente para R-22, R-32, R-134a, R-410A e R-407C, interpolação no trecho publicado e sem extrapolação. Superaquecimento requer pressão de sucção; sub-resfriamento, pressão de linha líquida. Ainda não foi incorporada ao checklist de execução da OS."
+        "scope": "Cálculos disponíveis na Base Técnica e na Biblioteca Técnica Mobile, com opção automática pela tabela P–T validada e entrada manual preservada. O cálculo automático separa pressão de sucção (superaquecimento) e pressão da linha líquida (sub-resfriamento), converte bar(g) para psig e não extrapola fora da tabela. A integração ao checklist da OS ainda não foi feita."
       }
     },
     {
