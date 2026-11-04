@@ -488,7 +488,15 @@
       "detail": "Adicionar botão para recolher o menu lateral de 224px para 64px (modo apenas ícones), ampliando a área útil para tabelas largas.",
       "files": "app/page.tsx (Header, Sidebar), app/header-visibility.css, app/lote-1-operacao.css",
       "sourceStatus": "Implementado v2.2.0",
-      "status": "nao_auditado"
+      "status": "implementado",
+      "evidence": {
+        "files": [
+          "app/page.tsx",
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx"
+        ],
+        "scope": "Botão persistente de recolher/expandir o menu desktop usa data-proar-sidebar-compact e o stylesheet do shell ajusta a navegação lateral."
+      }
     },
     {
       "id": "MEL-028",
@@ -499,7 +507,15 @@
       "detail": "Permitir navegar pelos resultados do popover de busca com ArrowDown/ArrowUp e abrir o item selecionado com Enter.",
       "files": "app/page.tsx (Header, Sidebar), app/header-visibility.css, app/lote-1-operacao.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "implementado",
+      "evidence": {
+        "files": [
+          "app/page.tsx",
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx"
+        ],
+        "scope": "Busca Global permite navegar resultados com setas ↑/↓, selecionar com Enter, abrir com Ctrl+K e fechar com Escape."
+      }
     },
     {
       "id": "MEL-029",
@@ -510,7 +526,15 @@
       "detail": "Adicionar pílulas rápidas (Todos, Clientes, OS, Orçamentos, Equipamentos, NF) no topo dos resultados de Ctrl+K.",
       "files": "app/page.tsx (Header, Sidebar), app/header-visibility.css, app/lote-1-operacao.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "implementado",
+      "evidence": {
+        "files": [
+          "app/page.tsx",
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx"
+        ],
+        "scope": "Filtros por Todos, Cliente, OS e Cadastro filtram os resultados no popover da busca."
+      }
     },
     {
       "id": "MEL-030",
@@ -521,7 +545,15 @@
       "detail": "Exibir os últimos registros acessados pelo usuário ao abrir a busca global antes de digitar.",
       "files": "app/page.tsx (Header, Sidebar), app/header-visibility.css, app/lote-1-operacao.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "implementado",
+      "evidence": {
+        "files": [
+          "app/page.tsx",
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx"
+        ],
+        "scope": "Últimas cinco consultas selecionadas são persistidas localmente e reapresentadas no popover."
+      }
     },
     {
       "id": "MEL-031",
@@ -532,7 +564,15 @@
       "detail": "Sublinhar em azul claro o trecho exato do nome, CNPJ ou número de OS que correspondeu à pesquisa global.",
       "files": "app/page.tsx (Header, Sidebar), app/header-visibility.css, app/lote-1-operacao.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "implementado",
+      "evidence": {
+        "files": [
+          "app/page.tsx",
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx"
+        ],
+        "scope": "O termo de busca é destacado com <mark> nos títulos e detalhes dos resultados."
+      }
     },
     {
       "id": "MEL-032",
@@ -675,7 +715,15 @@
       "detail": "Garantir que os popovers de Busca Global e Próximas Ações fechem imediatamente ao clicar em qualquer área da página ou pressionar ESC.",
       "files": "app/page.tsx (Header, Sidebar), app/header-visibility.css, app/lote-1-operacao.css",
       "sourceStatus": "Planejado",
-      "status": "nao_auditado"
+      "status": "implementado",
+      "evidence": {
+        "files": [
+          "app/page.tsx",
+          "app/proar520-layout-a11y.css",
+          "components/SystemAppearance.tsx"
+        ],
+        "scope": "Busca e próximas ações fecham ao clicar fora; Escape fecha ambos os popovers."
+      }
     },
     {
       "id": "MEL-045",
