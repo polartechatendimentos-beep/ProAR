@@ -964,23 +964,40 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: so
     return candidates;
   }).filter((item, index, all) => all.findIndex(candidate => candidate.order.id === item.order.id && candidate.equipment === item.equipment && candidate.date === item.date) === index)
     .sort((a, b) => a.daysLeft - b.daysLeft || a.date.localeCompare(b.date));
+  const sendOfficialWhatsApp = async (order: ServiceOrder, kind: "appointment" | "pmoc", parameters: string[], eventKey: string, manualMessage: string) => {
+    const customer = customers.find(item => item.name === order.client);
+    const phone = String(order.whatsappPhone || customer?.whatsapp || customer?.phone || "").replace(/\D/g, "");
+    if (!phone) return window.alert("O cliente desta OS não possui WhatsApp cadastrado.");
+    if (!window.confirm("Confirma que o cliente autorizou receber esta mensagem pelo WhatsApp?")) return;
+    try {
+      const response = await fetch("/api/whatsapp/send", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({
+        originId:order.id, kind, parameters, eventKey, consentConfirmed:true
+      }) });
+      const data = await response.json().catch(() => ({}));
+      if ((response.status === 409 && data.duplicate === true) || data.status === "unknown") {
+        window.alert(data.error || "Este aviso já foi enviado ou está em processamento.");
+        return;
+      }
+      if (!response.ok) throw new Error(data.error || "Não foi possível enviar pelo WhatsApp Business.");
+      window.alert(data.message || "Mensagem aceita pela Meta para envio. A entrega ainda depende da confirmação do WhatsApp.");
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Falha no WhatsApp Business.";
+      if (window.confirm(reason + "\n\nDeseja abrir o WhatsApp com a mensagem pronta para envio manual?")) {
+        const internationalPhone = phone.startsWith("55") ? phone : "55" + phone;
+        window.open("https://wa.me/" + internationalPhone + "?text=" + encodeURIComponent(manualMessage), "_blank", "noopener,noreferrer");
+      }
+    }
+  };
   const sendWhatsApp = (order: ServiceOrder) => {
     const customer = customers.find(item => item.name === order.client);
-    const phone = String(customer?.whatsapp || customer?.phone || "").replace(/\D/g, "");
-    if (!phone) return window.alert("O cliente desta OS não possui WhatsApp cadastrado.");
-    const internationalPhone = phone.startsWith("55") ? phone : "55" + phone;
-    const scheduled = order.date ? " prevista para " + new Date(order.date + "T12:00:00").toLocaleDateString("pt-BR") + (order.time ? " às " + order.time : "") : "";
-    const message = "Olá " + order.client + ", aqui é da PolarTech. Estou entrando em contato sobre a OS " + order.id + ", do serviço " + order.service + ", na unidade " + (order.unit || "informada") + scheduled + ". Como podemos ajudar?";
-    window.open("https://wa.me/" + internationalPhone + "?text=" + encodeURIComponent(message), "_blank", "noopener,noreferrer");
+    const scheduled = order.date ? new Date(order.date + "T12:00:00").toLocaleDateString("pt-BR") + (order.time ? " às " + order.time : "") : "a combinar";
+    const message = "Olá " + order.client + ", aqui é da PolarTech. Estou entrando em contato sobre a OS " + order.id + ", do serviço " + order.service + ", na unidade " + (order.unit || "informada") + ", prevista para " + scheduled + ". Como podemos ajudar?";
+    void sendOfficialWhatsApp(order, "appointment", [order.client, order.id, order.service || "atendimento técnico", order.unit || "unidade informada", scheduled], "appointment:" + (order.date || "") + ":" + (order.time || ""), message);
   };
   const sendPmocWhatsApp = (order: ServiceOrder, equipment: string, date: string) => {
-    const customer = customers.find(item => item.name === order.client);
-    const phone = String(customer?.whatsapp || customer?.phone || "").replace(/\D/g, "");
-    if (!phone) return window.alert("O cliente desta OS não possui WhatsApp cadastrado.");
-    const internationalPhone = phone.startsWith("55") ? phone : "55" + phone;
     const due = new Date(date + "T12:00:00").toLocaleDateString("pt-BR");
     const message = "Olá " + order.client + ", aqui é da PolarTech. A manutenção preventiva do equipamento " + equipment + ", na unidade " + (order.unit || "informada") + ", está prevista para " + due + ". Podemos combinar o agendamento?";
-    window.open("https://wa.me/" + internationalPhone + "?text=" + encodeURIComponent(message), "_blank", "noopener,noreferrer");
+    void sendOfficialWhatsApp(order, "pmoc", [order.client, equipment, order.unit || "unidade informada", due], "pmoc:" + equipment + ":" + date, message);
   };
   const emitNfse = async (order: ServiceOrder) => {
     const customer = customers.find(item => item.name === order.client);
@@ -1995,6 +2012,8 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
   const [wabaId, setWabaId] = useState("449236708270435");
   const [businessPhone, setBusinessPhone] = useState("+55 17 2122-2806");
   const [token, setToken] = useState("");
+  const [whatsAppAppointmentTemplate, setWhatsAppAppointmentTemplate] = useState("os_agendamento_proar");
+  const [whatsAppPmocTemplate, setWhatsAppPmocTemplate] = useState("lembrete_higienizacao");
   const [whatsAppBusy,setWhatsAppBusy]=useState(false);
   const [whatsAppStatus,setWhatsAppStatus]=useState<{configured:boolean;connected:boolean;tokenPreview?:string;verifiedName?:string;displayPhone?:string}>({configured:false,connected:false});
   const [saved, setSaved] = useState("");
@@ -2064,6 +2083,8 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
       const data=await response.json(); if(!response.ok)throw new Error(data.error||"Não foi possível carregar a configuração do WhatsApp.");
       setPhoneNumberId(String(data.phoneNumberId||""));
       setWabaId(String(data.wabaId||""));
+      setWhatsAppAppointmentTemplate(String(data.appointmentTemplate||"os_agendamento_proar"));
+      setWhatsAppPmocTemplate(String(data.reminderTemplate||"lembrete_higienizacao"));
       setWhatsAppStatus({configured:Boolean(data.tokenConfigured),connected:false,tokenPreview:data.tokenPreview||""});
       setToken("");
     }).catch(error=>setSaved(error instanceof Error?error.message:"Não foi possível carregar a configuração do WhatsApp.")).finally(()=>setWhatsAppBusy(false));
@@ -2073,7 +2094,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
     setSaved("Salvando configuração do WhatsApp...");
     try{
       const response=await fetch("/api/whatsapp",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({
-        active:true,phoneNumberId:phoneNumberId.trim(),wabaId:wabaId.trim(),...(token.trim()?{accessToken:token.trim()}:{})
+        active:true,phoneNumberId:phoneNumberId.trim(),wabaId:wabaId.trim(),appointmentTemplate:whatsAppAppointmentTemplate.trim(),reminderTemplate:whatsAppPmocTemplate.trim(),...(token.trim()?{accessToken:token.trim()}:{})
       })});
       const data=await response.json(); if(!response.ok)throw new Error(data.error||"Não foi possível salvar a configuração do WhatsApp.");
       setWhatsAppStatus({configured:Boolean(data.tokenConfigured),connected:false,tokenPreview:data.tokenPreview||""});
@@ -2203,7 +2224,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
     <div className="settings-layout"><nav className="settings-nav">{[{name:"Empresa",icon:Building2,text:"Dados e logomarca"},{name:"WhatsApp",icon:MessageCircle,text:"API oficial da Meta"},{name:"Google Agenda",icon:CalendarDays,text:"Sincronização de OS e agenda"},{name:"Fiscal",icon:FileText,text:"NF-e, NFC-e e NFS-e"},...(isAdministrator?[{name:"Inteligência Artificial",icon:Sparkles,text:"Credencial OpenAI protegida"}]:[]),{name:"Segurança",icon:ShieldCheck,text:"Acessos e proteção"}].map(item => <button key={item.name} className={tab === item.name ? "active" : ""} onClick={() => setTab(item.name as typeof tab)}><item.icon size={17}/><span><b>{item.name}</b><small>{item.text}</small></span></button>)}</nav>
       <div className="settings-card"><header><div><small>CONFIGURAÇÃO • {tab.toUpperCase()}</small><h3>{tab === "WhatsApp" ? "WhatsApp Business Platform" : tab === "Google Agenda" ? "Integração com Google Agenda" : tab === "Empresa" ? "Cadastro da empresa" : tab === "Fiscal" ? "Configuração fiscal" : tab === "Inteligência Artificial" ? "Credencial segura da OpenAI" : "Segurança do sistema"}</h3></div><span className="settings-status"><i/> {tab === "Google Agenda" ? googleCalendarStatus.connected ? `Conectado${googleCalendarStatus.email ? ` • ${googleCalendarStatus.email}` : ""}` : "Não conectado" : tab === "Inteligência Artificial" ? aiStatus.configured ? `Configurada • final ${aiStatus.last4}` : aiStatus.source === "environment" ? "Fallback do servidor" : "Não configurada" : "Configuração disponível"}</span></header>
         {tab === "Empresa" && <div className="settings-form company-settings-form"><label>Razão social / Nome empresarial<input value={companyName} onChange={event => setCompanyName(event.target.value)}/></label><label>Nome fantasia<input value={tradeName} onChange={event => setTradeName(event.target.value)}/></label><label>CNPJ<input value={companyDoc} onChange={event => setCompanyDoc(formatCnpj(event.target.value))} placeholder="00.000.000/0000-00"/></label><label>Telefone<input value={businessPhone} onChange={event => setBusinessPhone(event.target.value)}/></label><label>E-mail<input type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="contato@empresa.com.br"/></label><label>Cidade<input list="proar-cities" value={city} onChange={event => setCity(event.target.value)} placeholder="Selecione ou digite a cidade"/><datalist id="proar-cities">{cities.map(item => <option key={item}>{item}</option>)}</datalist></label><label>Estado<select value={state} onChange={event => setState(event.target.value)}>{["SP","MG","PR","RJ","MS","GO","SC","RS"].map(item => <option key={item}>{item}</option>)}</select></label><label className="wide">Endereço completo<input value={address} onChange={event => setAddress(event.target.value)} placeholder="Rua, número e bairro"/></label><div className="wide company-logo-field"><div className="company-logo-preview">{logo ? <img src={logo} alt="Logomarca da empresa"/> : <Building2 size={30}/>}</div><div><b>Logomarca dos relatórios</b><p>Será utilizada nos cabeçalhos de PDF, impressão, orçamentos e ordens de serviço.</p><label className="logo-upload"><ImagePlus size={15}/> Selecionar logomarca<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={event => readLogo(event.target.files?.[0])}/></label>{logo && <button className="logo-remove" type="button" onClick={() => setLogo("")}><Trash2 size={13}/> Remover</button>}</div></div></div>}
-        {tab === "WhatsApp" && <div className="settings-form whatsapp-settings-form"><div className="wide whatsapp-account-status"><MessageCircle size={20}/><div><small>WHATSAPP BUSINESS PLATFORM</small><b>{whatsAppStatus.connected?(whatsAppStatus.verifiedName||"Conta conectada"):whatsAppStatus.configured?"Credencial salva • conexão ainda não testada":"Integração não configurada"}</b><span>{whatsAppStatus.connected?(whatsAppStatus.displayPhone||businessPhone):whatsAppStatus.tokenPreview?`Token ${whatsAppStatus.tokenPreview}`:"Configure os IDs e o token permanente."}</span></div>{whatsAppStatus.connected?<CheckCircle2 size={19}/>:<AlertTriangle size={19}/>}</div><label>Phone Number ID<input value={phoneNumberId} onChange={event => setPhoneNumberId(event.target.value)} inputMode="numeric"/><small>ID do número, diferente do telefone.</small></label><label>WABA ID<input value={wabaId} onChange={event => setWabaId(event.target.value)} inputMode="numeric"/><small>ID da conta WhatsApp Business.</small></label><label className="wide">Token permanente<input type="password" value={token} onChange={event => setToken(event.target.value)} autoComplete="new-password" placeholder="Cole o token gerado pelo Utilizador do Sistema"/><small>Por segurança, o token nunca será mostrado depois de salvo.</small></label><div className="wide settings-security-note"><ShieldCheck size={17}/><span><b>Permissões necessárias</b><small>whatsapp_business_management e whatsapp_business_messaging</small></span></div><div className="wide settings-footer-actions"><button className="primary-btn" disabled={whatsAppBusy||!phoneNumberId.trim()||!wabaId.trim()||(!token.trim()&&!whatsAppStatus.configured)} onClick={()=>void saveWhatsAppConfiguration()}><Save size={14}/>{whatsAppBusy?"Salvando...":"Salvar API WhatsApp"}</button><button className="outline-btn" disabled={whatsAppBusy||!whatsAppStatus.configured} onClick={()=>void testWhatsAppConfiguration()}><Zap size={14}/> Testar conexão</button></div></div>}
+        {tab === "WhatsApp" && <div className="settings-form whatsapp-settings-form"><div className="wide whatsapp-account-status"><MessageCircle size={20}/><div><small>WHATSAPP BUSINESS PLATFORM</small><b>{whatsAppStatus.connected?(whatsAppStatus.verifiedName||"Conta conectada"):whatsAppStatus.configured?"Credencial salva • conexão ainda não testada":"Integração não configurada"}</b><span>{whatsAppStatus.connected?(whatsAppStatus.displayPhone||businessPhone):whatsAppStatus.tokenPreview?`Token ${whatsAppStatus.tokenPreview}`:"Configure os IDs e o token permanente."}</span></div>{whatsAppStatus.connected?<CheckCircle2 size={19}/>:<AlertTriangle size={19}/>}</div><label>Phone Number ID<input value={phoneNumberId} onChange={event => setPhoneNumberId(event.target.value)} inputMode="numeric"/><small>ID do número, diferente do telefone.</small></label><label>WABA ID<input value={wabaId} onChange={event => setWabaId(event.target.value)} inputMode="numeric"/><small>ID da conta WhatsApp Business.</small></label><label>Modelo aprovado para agendamento<input value={whatsAppAppointmentTemplate} onChange={event => setWhatsAppAppointmentTemplate(event.target.value)} placeholder="os_agendamento_proar"/><small>Nome exato do template aprovado na Meta.</small></label><label>Modelo aprovado para PMOC<input value={whatsAppPmocTemplate} onChange={event => setWhatsAppPmocTemplate(event.target.value)} placeholder="lembrete_higienizacao"/><small>Nome exato do template aprovado na Meta.</small></label><label className="wide">Token permanente<input type="password" value={token} onChange={event => setToken(event.target.value)} autoComplete="new-password" placeholder="Cole o token gerado pelo Utilizador do Sistema"/><small>Por segurança, o token nunca será mostrado depois de salvo.</small></label><div className="wide settings-security-note"><ShieldCheck size={17}/><span><b>Permissões necessárias</b><small>whatsapp_business_management e whatsapp_business_messaging</small></span></div><div className="wide settings-footer-actions"><button className="primary-btn" disabled={whatsAppBusy||!phoneNumberId.trim()||!wabaId.trim()||(!token.trim()&&!whatsAppStatus.configured)} onClick={()=>void saveWhatsAppConfiguration()}><Save size={14}/>{whatsAppBusy?"Salvando...":"Salvar API WhatsApp"}</button><button className="outline-btn" disabled={whatsAppBusy||!whatsAppStatus.configured} onClick={()=>void testWhatsAppConfiguration()}><Zap size={14}/> Testar conexão</button></div></div>}
         {tab === "Google Agenda" && <div className="settings-form google-calendar-settings">
           <div className="wide google-calendar-connection-card"><CalendarDays size={24}/><div><small>GOOGLE CALENDAR</small><b>{googleCalendarStatus.connected ? "Agenda conectada" : "Agenda ainda não conectada"}</b><span>{googleCalendarStatus.connected ? (googleCalendarStatus.email || "Conta Google autorizada") : "Conecte sua conta Google para sincronizar os agendamentos das Ordens de Serviço."}</span></div><span className={`integration-state ${googleCalendarStatus.connected?"connected":"disconnected"}`}>{googleCalendarStatus.connected?"Conectado":"Desconectado"}</span></div>
           <div className="wide settings-security-note"><ShieldCheck size={17}/><span><b>Conexão por usuário e empresa</b><small>Os tokens OAuth ficam criptografados no servidor. O ProAR solicita acesso ao Google Calendar e nunca armazena sua senha do Google.</small></span></div>
