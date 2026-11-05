@@ -562,3 +562,41 @@ html[data-proar-system-theme="dark"] .app-shell .os-create-modal .os-classificat
 html[data-proar-system-theme="dark"] .app-shell .customer-create-modal .modal-head p,
 html[data-proar-system-theme="dark"] .app-shell .customer-create-modal .customer-create-section>header small,
 html[data-proar-system-theme="dark"] .app-shell .os-create-modal .os-create-header p{color:#b6c7d8!important}
+
+/* Fixed dark surfaces use explicit foreground colors in both themes. */
+html .app-shell .customer-create-modal .customer-create-section label {
+  color: #e2e8f0 !important;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+html .app-shell .pmoc-workspace :is(.pmoc-hero h2, .pmoc-kpis strong, .pmoc-table-head h3) {
+  color: #fff !important;
+}
+html .app-shell .pmoc-workspace :is(.section-kicker, .pmoc-kpis small) {
+  color: #22d3ee !important;
+  font-family: ui-monospace, monospace;
+  font-size: 10px !important;
+}
+html .app-shell .pmoc-workspace :is(.pmoc-hero p, .pmoc-kpis p, .pmoc-table-head p) {
+  color: #cbd5e1 !important;
+}
+
+.finance-titles-table .finance-settlement-values {
+  grid-template-columns: minmax(0, 1fr);
+}
+.finance-titles-table .finance-settlement-values strong {
+  overflow-wrap: anywhere;
+}
+.finance-title-status {
+  display: inline-block;
+  white-space: nowrap;
+}
+@media (min-width: 761px) {
+  .finance-titles-table :is(th, td):nth-child(6) { min-width: 140px; }
+  .finance-titles-table :is(th, td):nth-child(7) { min-width: 142px; }
+  .finance-titles-table tbody td {
+    padding-block: 14px;
+    border-bottom: 1px solid var(--ux-border, #1e293b);
+  }
+}
