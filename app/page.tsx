@@ -974,6 +974,10 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: so
         originId:order.id, kind, parameters, eventKey, consentConfirmed:true
       }) });
       const data = await response.json().catch(() => ({}));
+      if (response.status === 409 && data.duplicate === true) {
+        window.alert(data.error || "Este aviso já foi enviado ou está em processamento.");
+        return;
+      }
       if (!response.ok) throw new Error(data.error || "Não foi possível enviar pelo WhatsApp Business.");
       window.alert(data.message || "Mensagem aceita pela Meta para envio. A entrega ainda depende da confirmação do WhatsApp.");
     } catch (error) {
