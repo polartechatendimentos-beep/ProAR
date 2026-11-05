@@ -3,7 +3,27 @@
 import { useMemo, useState } from "react";
 import { Activity, CalendarDays, Clock3, Filter, Search, UserRound } from "lucide-react";
 
-type AuditRecord = Record<string, any>;
+type AuditRecord = {
+  id?: string;
+  module?: string;
+  recordId?: string;
+  action?: string;
+  user?: string;
+  displayName?: string;
+  createdAt?: string;
+  reason?: string;
+  changes?: Record<string, { before: unknown; after: unknown }>;
+};
+
+const auditZone = "America/Sao_Paulo";
+const auditDay = new Intl.DateTimeFormat("en-CA", { timeZone: auditZone, year: "numeric", month: "2-digit", day: "2-digit" });
+const auditTime = new Intl.DateTimeFormat("pt-BR", { timeZone: auditZone, dateStyle: "short", timeStyle: "medium" });
+
+function actorLabel(item: AuditRecord) {
+  return item.displayName && item.displayName !== item.user
+    ? `${item.displayName} (${item.user})`
+    : item.user || "Usuário não identificado";
+}
 
 const auditFieldLabels: Record<string, string> = {
   catalogItems: "Itens do catálogo",
@@ -27,14 +47,8 @@ const auditFieldLabels: Record<string, string> = {
 };
 
 function auditDateKey(value: unknown) {
-  const raw = String(value ?? "").trim();
-  if (!raw) return "";
-  const iso = raw.match(/^(\d{4}-\d{2}-\d{2})/);
-  if (iso) return iso[1];
-  const parsed = new Date(raw);
-  return Number.isNaN(parsed.getTime())
-    ? ""
-    : new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(parsed);
+  const date = new Date(String(value ?? ""));
+  return Number.isNaN(date.getTime()) ? "" : auditDay.format(date);
 }
 
 function auditValue(value: unknown, field: string) {
@@ -60,21 +74,21 @@ export function ActivityCenter({ records }: { records: AuditRecord[] }) {
   const [userFilter, setUserFilter] = useState("Todos");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
-  const modules = useMemo(() => Array.from(new Set(records.map(item => String(item.auditModule || item.category || "Sistema")).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt-BR")), [records]);
-  const users = useMemo(() => Array.from(new Set(records.map(item => String(item.auditUser || item.client || "Sistema")).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt-BR")), [records]);
+  const modules = useMemo(() => Array.from(new Set(records.map(item => String(item.module || "Sistema")).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt-BR")), [records]);
+  const users = useMemo(() => Array.from(new Set(records.map(item => actorLabel(item)).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt-BR")), [records]);
   const filtered = useMemo(() => records.filter(item => {
-    const moduleName = String(item.auditModule || item.category || "Sistema");
-    const user = String(item.auditUser || item.client || "Sistema");
-    const text = `${item.name || ""} ${item.description || ""} ${item.auditDetail || ""} ${item.recordId || ""} ${moduleName} ${user}`.toLocaleLowerCase("pt-BR");
-    const dateKey = auditDateKey(item.createdAt || item.date);
+    const moduleName = String(item.module || "Sistema");
+    const user = actorLabel(item);
+    const text = `${item.action || ""} ${item.reason || ""} ${item.recordId || ""} ${moduleName} ${user}`.toLocaleLowerCase("pt-BR");
+    const dateKey = auditDateKey(item.createdAt);
     return (!query || text.includes(query.toLocaleLowerCase("pt-BR").trim()))
       && (moduleFilter === "Todos" || moduleName === moduleFilter)
       && (userFilter === "Todos" || user === userFilter)
       && (!fromDate || (dateKey && dateKey >= fromDate))
       && (!toDate || (dateKey && dateKey <= toDate));
-  }).sort((a, b) => new Date(b.createdAt || b.date || 0).getTime() - new Date(a.createdAt || a.date || 0).getTime()), [records, query, moduleFilter, userFilter, fromDate, toDate]);
-  const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-  const todayCount = records.filter(item => auditDateKey(item.createdAt || item.date) === todayKey).length;
+  }).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()), [records, query, moduleFilter, userFilter, fromDate, toDate]);
+  const todayKey = auditDay.format(new Date());
+  const todayCount = records.filter(item => auditDateKey(item.createdAt) === todayKey).length;
 
   return <section className="activity-center">
     <div className="activity-hero">
@@ -82,7 +96,7 @@ export function ActivityCenter({ records }: { records: AuditRecord[] }) {
       <div className="activity-today"><Clock3 size={18}/><span><small>HOJE</small><strong>{todayCount}</strong></span></div>
     </div>
     <div className="activity-toolbar">
-      <label className="list-search"><Search size={15}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar ação, cliente, OS, usuário ou módulo..."/></label>
+      <label className="list-search"><Search size={15}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar ação, registro, usuário ou módulo..."/></label>
       <label><Filter size={14}/><select aria-label="Filtrar por módulo" value={moduleFilter} onChange={event => setModuleFilter(event.target.value)}><option>Todos</option>{modules.map(item => <option key={item}>{item}</option>)}</select></label>
       <label><UserRound size={14}/><select aria-label="Filtrar por usuário" value={userFilter} onChange={event => setUserFilter(event.target.value)}><option>Todos</option>{users.map(item => <option key={item}>{item}</option>)}</select></label>
       <label className="activity-date-filter"><CalendarDays size={14}/><span>De</span><input aria-label="Data inicial" type="date" value={fromDate} max={toDate || undefined} onChange={event => setFromDate(event.target.value)}/></label>
@@ -95,26 +109,24 @@ export function ActivityCenter({ records }: { records: AuditRecord[] }) {
     </div>
     <div className="activity-list" aria-label="Histórico de atividades">
       {filtered.length ? filtered.map((item, index) => {
-        const changes = Array.isArray(item.auditChanges) ? item.auditChanges : [];
-        const title = item.name || item.auditAction || "Atividade registrada";
-        const moduleName = item.auditModule || item.category || "Sistema";
-        const user = item.auditUser || item.client || "Sistema";
-        const waitingForBank = /aguardou|aguardando|confirmação do banco/i.test(String(item.auditDetail || item.description || ""));
-        const timestamp = item.createdAt || item.date || "Data não informada";
+        const changes = Object.entries(item.changes ?? {});
+        const title = item.action || "Atividade registrada";
+        const moduleName = item.module || "Sistema";
+        const user = actorLabel(item);
+        const date = new Date(item.createdAt || "");
+        const timestamp = Number.isNaN(date.getTime()) ? "Data não informada" : auditTime.format(date);
         return <article className="activity-entry" key={item.id || `${moduleName}-${index}`}>
           <span className="activity-dot"><Activity size={14}/></span>
           <div className="activity-main">
-            <header><div className="activity-title"><b>{title}</b><small>{moduleName}{item.recordId ? ` • ${item.recordId}` : ""}</small></div><time dateTime={typeof timestamp === "string" ? timestamp : undefined}>{timestamp}</time></header>
+            <header><div className="activity-title"><b>{title}</b><small>{moduleName}{item.recordId ? ` • ${item.recordId}` : ""}</small></div><time dateTime={item.createdAt}>{timestamp}</time></header>
             <div className="activity-summary">
-              <p>{item.auditDetail || item.description || "Operação registrada."}</p>
-              {waitingForBank && <span className="activity-state pending">Aguardando confirmação</span>}
+              <p>{item.reason || "Operação registrada."}</p>
             </div>
             {changes.length > 0 && <details className="activity-details">
               <summary>{changes.length} alteração(ões) • Ver detalhes</summary>
-              <div className="activity-changes">{changes.slice(0, 20).map((change: any, changeIndex: number) => <div className="activity-change" key={changeIndex}>
-                <b>{auditFieldLabel(change.field)}</b><span>{auditValue(change.before, String(change.field || ""))}</span><i>→</i><strong>{auditValue(change.after, String(change.field || ""))}</strong>
+              <div className="activity-changes">{changes.map(([field, change]) => <div className="activity-change" key={field}>
+                <b>{auditFieldLabel(field)}</b><span>{auditValue(change.before, String(field || ""))}</span><i>→</i><strong>{auditValue(change.after, String(field || ""))}</strong>
               </div>)}</div>
-              {changes.length > 20 && <small className="activity-truncated">Mais {changes.length - 20} alterações disponíveis no registro completo.</small>}
             </details>}
             <footer><UserRound size={12}/><span>{user}</span></footer>
           </div>

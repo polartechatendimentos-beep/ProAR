@@ -67,7 +67,7 @@ export function mergeOperationalView(current:AccessState|null|undefined,incoming
  const visible=projectOperationalState(before,actor,can)!;
  const next:AccessState={...structuredClone(before),moduleRecords:structuredClone(before.moduleRecords||{})};
  for(const [name,records] of Object.entries(incoming.moduleRecords||{})){
-  if(moduleVisible(name,actor,can)&&Array.isArray(records))next.moduleRecords![name]=restore(rows(records),before.moduleRecords?.[name],actor) as Row[];
+  if(name!=="Auditoria operacional"&&moduleVisible(name,actor,can)&&Array.isArray(records))next.moduleRecords![name]=restore(rows(records),before.moduleRecords?.[name],actor) as Row[];
  }
  if(Array.isArray(incoming.customers)&&(admin(actor)||can("clientes.visualizar")||visible.customers?.length)){
   const ids=new Set(rows(visible.customers).map(row=>String(row.id)));
