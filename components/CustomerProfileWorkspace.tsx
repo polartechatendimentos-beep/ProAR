@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Building2, CheckCircle2, MapPin, Search, ShieldCheck } from "lucide-react";
+import { validCnpj } from "../lib/brazilian-tax-id";
 
 type Tab = "cadastro" | "estrutura" | "financeiro" | "historico";
 type Audit = { at: string; action: string; detail: string };
@@ -20,7 +21,7 @@ export function CustomerProfileWorkspace() {
   const creditAvailable = Math.max(0, form.creditLimit - form.creditCommitted);
   const percent = form.creditLimit ? Math.min(100, form.creditCommitted / form.creditLimit * 100) : 0;
   const consult = async () => {
-    const cnpj = digits(form.cnpj); if (cnpj.length !== 14) { setNotice("Informe um CNPJ válido para consulta."); return; }
+    const cnpj = digits(form.cnpj); if (!validCnpj(cnpj)) { setNotice("Informe um CNPJ com dígitos verificadores válidos para consulta."); return; }
     setLoading(true); setNotice("");
     try {
       const response = await fetch(`/api/cnpj/${cnpj}`); const data = await response.json();
