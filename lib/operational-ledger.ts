@@ -81,7 +81,9 @@ function validateRecords(previous: ErpRecord[], next: ErpRecord[], module: strin
   const ids = next.map(item => id(item.id));
   if (ids.some(key => !key) || new Set(ids).size !== ids.length) throw new OperationError(`Identificador duplicado ou vazio em ${module}.`);
   for (const old of previous) {
-    if (!next.some(item => item.id === old.id) && module !== "Lembretes") throw new OperationError(`Não exclua ${module}: ${old.id}. Inative ou cancele com motivo para preservar o histórico.`);
+    if (ids.includes(id(old.id))) continue;
+    if (module === "Lembretes") requireAction(actor, "os.editar");
+    else throw new OperationError(`Não exclua ${module}: ${old.id}. Inative ou cancele com motivo para preservar o histórico.`);
   }
   for (const record of next) {
     const old = previous.find(item => item.id === record.id);
@@ -102,16 +104,27 @@ function sourceKey(record: ErpRecord) {
   return origin ? `${payable(record) ? "P" : "R"}:${origin}:${Number(record.installmentNumber || 1)}` : "";
 }
 function auditChanges(before: ErpRecord[], after: ErpRecord[], module: string, actor: Actor, now: string, audit: ErpRecord[]) {
-  for (const record of after) {
-    const old = before.find(item => item.id === record.id);
+  const previous = new Map(before.map(record => [record.id, record]));
+  const current = new Map(after.map(record => [record.id, record]));
+  for (const recordId of new Set([...previous.keys(), ...current.keys()])) {
+    const old = previous.get(recordId);
+    const record = current.get(recordId);
     if (same(old, record)) continue;
     const fields: ErpRecord = {};
-    for (const key of new Set([...Object.keys(old || {}), ...Object.keys(record)])) {
-      if (/password|token|secret|photo|image|signature/i.test(key)) continue;
-      if (!same(old?.[key], record[key])) fields[key] = { before: old?.[key] ?? null, after: record[key] ?? null };
+    const auditValue = (value: unknown) => value && typeof value === "object"
+      ? (Array.isArray(value) ? `${value.length} item(ns)` : "Dados estruturados")
+      : value ?? null;
+    for (const key of new Set([...Object.keys(old || {}), ...Object.keys(record || {})])) {
+      if (/password|senha|token|secret|key|certificate|certificado|pfx|photo|image|signature|assinatura|hash/i.test(key)) continue;
+      if (!same(old?.[key], record?.[key])) fields[key] = { before: auditValue(old?.[key]), after: auditValue(record?.[key]) };
     }
-    if (!Object.keys(fields).length) continue;
-    audit.push({ id: `AUD-${crypto.randomUUID()}`, module, recordId: record.id, action: old ? "Alteração" : "Criação", user: actor.username, displayName: actor.displayName || actor.username, createdAt: now, reason: record.changeReason || record.cancellationReason || "Operação registrada pelo servidor", changes: fields });
+    audit.push({
+      id: `AUD-${crypto.randomUUID()}`, module, recordId,
+      action: !record ? "Exclusão" : old ? "Alteração" : "Criação",
+      user: actor.username, displayName: actor.displayName || actor.username, createdAt: now,
+      reason: record?.changeReason || record?.cancellationReason || "Operação registrada pelo servidor",
+      changes: fields,
+    });
   }
 }
 
@@ -450,6 +463,8 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
   modules["Contas financeiras"] = accounts;
   modules["Razão financeiro"] = ledger;
   modules["Livro de estoque"] = stock;
+  auditChanges(list(oldModules["Razão financeiro"]), ledger, "Razão financeiro", actor, now, audit);
+  auditChanges(list(oldModules["Livro de estoque"]), stock, "Livro de estoque", actor, now, audit);
   modules["Auditoria operacional"] = audit;
   // The client audit remains available for compatibility; the operational audit is server-authored.
   next._erpLedgerVersion = 1;
