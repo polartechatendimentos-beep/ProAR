@@ -95,7 +95,8 @@ export async function POST(request: NextRequest) {
     consentConfirmed: true, consentConfirmedAt: createdAt, createdAt,
   };
   const inserted = await writeAttempt(db, attemptId, attempt, true);
-  if (inserted.status === 409) {
+  const insertedRows = inserted.ok ? await inserted.json().catch(() => null) : null;
+  if (inserted.status === 409 || (inserted.ok && (!Array.isArray(insertedRows) || insertedRows.length !== 1))) {
     return NextResponse.json({ error: "Este evento já foi enviado ou está em processamento. Consulte o histórico antes de tentar novamente.", duplicate: true }, { status: 409 });
   }
   if (!inserted.ok) return NextResponse.json({ error: "Não foi possível registrar a tentativa de envio com segurança." }, { status: 503 });
@@ -103,7 +104,8 @@ export async function POST(request: NextRequest) {
   try {
     const provider = await sendWhatsAppTemplate(config, to, template, (body.parameters as string[]).map(value => cleanText(value)));
     const messageId = String((provider as { messages?: { id?: string }[] })?.messages?.[0]?.id || "");
-    await writeAttempt(db, attemptId, { ...attempt, status: "accepted", providerMessageId: messageId || undefined, acceptedAt: new Date().toISOString() }, false);
+    const audit = await writeAttempt(db, attemptId, { ...attempt, status: "accepted", providerMessageId: messageId || undefined, acceptedAt: new Date().toISOString() }, false);
+    if (!audit.ok) return NextResponse.json({ sent: true, status: "accepted", auditPending: true, messageId, message: "Meta aceitou a mensagem, mas o registro de auditoria não foi confirmado. Não reenvie antes de verificar o histórico." }, { status: 202 });
     return NextResponse.json({ sent: true, status: "accepted", messageId, message: "Mensagem aceita pela Meta para envio. A confirmação não significa que já foi entregue." });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Falha no provedor WhatsApp.";
