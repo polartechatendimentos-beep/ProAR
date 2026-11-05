@@ -1,4 +1,3 @@
-import "server-only";
 import { evolutionConnectionState, evolutionPairingQr, type EvolutionSettings } from "./whatsapp-evolution";
 
 export function evolutionSettingsForCompany(companyId: string): EvolutionSettings {
