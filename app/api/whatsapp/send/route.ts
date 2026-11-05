@@ -104,7 +104,14 @@ export async function POST(request: NextRequest) {
   try {
     const provider = await sendWhatsAppTemplate(config, to, template, (body.parameters as string[]).map(value => cleanText(value)));
     const messageId = String((provider as { messages?: { id?: string }[] })?.messages?.[0]?.id || "");
-    const audit = await writeAttempt(db, attemptId, { ...attempt, status: "accepted", providerMessageId: messageId || undefined, acceptedAt: new Date().toISOString() }, false);
+    if (!messageId.trim()) {
+      await writeAttempt(db, attemptId, { ...attempt, status: "unknown", checkedAt: new Date().toISOString() }, false).catch(() => undefined);
+      return NextResponse.json({
+        error: "A Meta respondeu sem identificador da mensagem. Verifique o envio antes de tentar novamente.",
+        status: "unknown",
+      }, { status: 502 });
+    }
+    const audit = await writeAttempt(db, attemptId, { ...attempt, status: "accepted", providerMessageId: messageId, acceptedAt: new Date().toISOString() }, false);
     if (!audit.ok) return NextResponse.json({ sent: true, status: "accepted", auditPending: true, messageId, message: "Meta aceitou a mensagem, mas o registro de auditoria não foi confirmado. Não reenvie antes de verificar o histórico." }, { status: 202 });
     return NextResponse.json({ sent: true, status: "accepted", messageId, message: "Mensagem aceita pela Meta para envio. A confirmação não significa que já foi entregue." });
   } catch (error) {
