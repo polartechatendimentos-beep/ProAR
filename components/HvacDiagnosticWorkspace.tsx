@@ -49,7 +49,7 @@ export function HvacDiagnosticWorkspace({order,linkedEquipment=[],errorCodes=[],
   const [code,setCode]=useState("");
   const [blinkPattern,setBlinkPattern]=useState("");
   const [symptom,setSymptom]=useState(String(order.request||order.customerRequest||""));
-  const [measurements,setMeasurements]=useState("");
+  const [measurements,setMeasurements]=useState(String(order.hvacMeasurements || ""));
   const patch=(payload:RecordItem)=>onPatch?.(payload);
   const [search,setSearch]=useState("");
   const [brandFilter,setBrandFilter]=useState("Todas");
@@ -121,7 +121,7 @@ export function HvacDiagnosticWorkspace({order,linkedEquipment=[],errorCodes=[],
 
     {page==="Diagnóstico"&&<div className="diagnostic-page diagnose-layout">
       <article className="diagnostic-panel diagnose-form"><header><div><b>Dados para análise</b><small>O equipamento da OS é usado como contexto automaticamente.</small></div></header>
-        <div className="diagnose-fields"><label>Marca<input value={brand} onChange={e=>setBrand(e.target.value)} placeholder="Marca"/></label><label>Tipo<select value={equipmentType} onChange={e=>setEquipmentType(e.target.value)}><option>Split Hi-Wall</option><option>Cassete</option><option>Piso Teto</option><option>VRF / VRV</option><option>Janela</option><option>Chiller</option><option>Fan Coil</option><option>Outro</option></select></label><label>Modelo<input value={model} onChange={e=>setModel(e.target.value)} placeholder="Modelo"/></label><label>Código de erro<input value={code} onChange={e=>setCode(e.target.value)} placeholder="Ex.: E0"/></label><label>Padrão de piscadas<input value={blinkPattern} onChange={e=>setBlinkPattern(e.target.value)} placeholder="Ex.: LED timer pisca 5x"/></label><label className="wide">Sintoma<textarea value={symptom} onChange={e=>setSymptom(e.target.value)} placeholder="Descreva o comportamento observado..."/></label><label className="wide">Medições realizadas<textarea value={measurements} onChange={e=>setMeasurements(e.target.value)} placeholder="Tensão, corrente, pressões, temperaturas, resistência de sensores..."/></label></div>
+        <div className="diagnose-fields"><label>Marca<input value={brand} onChange={e=>setBrand(e.target.value)} placeholder="Marca"/></label><label>Tipo<select value={equipmentType} onChange={e=>setEquipmentType(e.target.value)}><option>Split Hi-Wall</option><option>Cassete</option><option>Piso Teto</option><option>VRF / VRV</option><option>Janela</option><option>Chiller</option><option>Fan Coil</option><option>Outro</option></select></label><label>Modelo<input value={model} onChange={e=>setModel(e.target.value)} placeholder="Modelo"/></label><label>Código de erro<input value={code} onChange={e=>setCode(e.target.value)} placeholder="Ex.: E0"/></label><label>Padrão de piscadas<input value={blinkPattern} onChange={e=>setBlinkPattern(e.target.value)} placeholder="Ex.: LED timer pisca 5x"/></label><label className="wide">Sintoma<textarea value={symptom} onChange={e=>setSymptom(e.target.value)} placeholder="Descreva o comportamento observado..."/></label><label className="wide">Medições realizadas<textarea value={measurements} disabled={!canEdit} onChange={e=>{setMeasurements(e.target.value);patch({hvacMeasurements:e.target.value});}} placeholder="Tensão, corrente, pressões, temperaturas, resistência de sensores..."/></label></div>
         {manufacturerValidation.status!=="empty"&&<div className={`manufacturer-rule ${manufacturerValidation.status}`}><ShieldAlert size={16}/><span><b>{manufacturerValidation.title}</b><small>{manufacturerValidation.message}</small>{manufacturerValidation.instructions.length>0&&<ul>{manufacturerValidation.instructions.map((item,index)=><li key={index}>{item}</li>)}</ul>}</span></div>}
         {directReference&&<div className="reference-hit"><CheckCircle2 size={16}/><span><b>Referência localizada no banco</b><small>{directReference.brand} • {directReference.code||directReference.blinkPattern} • {directReference.title}</small></span></div>}
         <button className="diagnostic-primary" onClick={()=>void runDiagnosis()} disabled={loading}><Sparkles size={15}/>{loading?"Consultando referências e analisando...":"Executar diagnóstico assistido"}</button>
@@ -141,7 +141,17 @@ export function HvacDiagnosticWorkspace({order,linkedEquipment=[],errorCodes=[],
       </article>
     </div>}
 
-    {page==="Ferramentas"&&<DiagnosticTools/>}
+    {page==="Ferramentas"&&<>
+      <DiagnosticTools/>
+      <article className="diagnostic-panel">
+        <h4>Registro do teste de estanqueidade</h4>
+        <p>Superaquecimento e sub-resfriamento são medições operacionais. A conclusão de estanqueidade depende do teste realizado em campo.</p>
+        <label>Método, condições do teste e conclusão do técnico
+          <textarea value={String(order.hvacLeakTest || "")} disabled={!canEdit} maxLength={2000}
+            onChange={event=>patch({hvacLeakTest:event.target.value})}/>
+        </label>
+      </article>
+    </>}
 
     {page==="Histórico"&&<div className="diagnostic-page"><article className="diagnostic-panel"><header><div><b>Histórico desta Ordem de Serviço</b><small>Os resultados ficam vinculados à OS e acompanham a rastreabilidade do atendimento.</small></div></header>{history.length?<div className="diagnostic-history">{history.map(item=><article key={item.id}><span><History size={15}/></span><div><b>{item.result?.summary||item.symptoms||"Diagnóstico técnico"}</b><small>{[item.brand,item.model,item.code,item.blinkPattern].filter(Boolean).join(" • ")}</small><time>{new Date(item.createdAt).toLocaleString("pt-BR")}</time></div><button onClick={()=>{setResult(item.result||null);setBrand(item.brand||"");setModel(item.model||"");setCode(item.code||"");setBlinkPattern(item.blinkPattern||"");setSymptom(item.symptoms||"");setPage("Diagnóstico")}}>Abrir</button></article>)}</div>:<div className="diagnostic-empty"><History size={25}/><b>Nenhum diagnóstico salvo.</b><span>Ao aplicar uma análise à OS, ela aparecerá aqui.</span></div>}</article></div>}
 
