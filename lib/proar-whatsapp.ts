@@ -16,6 +16,7 @@ export type WhatsAppConfig = {
   tenderTo: string;
   tenderTemplate: string;
   reminderTemplate: string;
+  appointmentTemplate: string;
   updatedAt?: string;
   updatedBy?: string;
 };
@@ -30,6 +31,7 @@ const defaults: WhatsAppConfig = {
   tenderTo: "5517991567798",
   tenderTemplate: "nova_licitacao_proar",
   reminderTemplate: "lembrete_higienizacao",
+  appointmentTemplate: "os_agendamento_proar",
 };
 
 function key() {
@@ -114,8 +116,8 @@ export async function testWhatsAppConnection(config: WhatsAppConfig) {
 
 export async function sendWhatsAppTemplate(config: WhatsAppConfig, to: string, template: string, parameters: string[]) {
   if (!config.active || !config.phoneNumberId || !config.accessToken) throw new Error("Integração do WhatsApp não está ativa");
-  const response = await fetch(`https://graph.facebook.com/${config.apiVersion || "v23.0"}/${config.phoneNumberId}/messages`, { method: "POST", headers: { Authorization: `Bearer ${config.accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", to: normalizeWhatsAppNumber(to, config.defaultCountry), type: "template", template: { name: template, language: { code: "pt_BR" }, components: [{ type: "body", parameters: parameters.map(text => ({ type: "text", text })) }] } }) });
-  const result = await response.json();
+  const response = await fetch(`https://graph.facebook.com/${config.apiVersion || "v23.0"}/${config.phoneNumberId}/messages`, { method: "POST", headers: { Authorization: `Bearer ${config.accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", to: normalizeWhatsAppNumber(to, config.defaultCountry), type: "template", template: { name: template, language: { code: "pt_BR" }, components: [{ type: "body", parameters: parameters.map(text => ({ type: "text", text })) }] } }), signal: AbortSignal.timeout(15000) });
+  const result = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(result?.error?.message ?? `WhatsApp respondeu ${response.status}`);
   return result;
 }

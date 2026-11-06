@@ -5,7 +5,8 @@ export type FieldRecord = Record<string, unknown>;
 export type FieldSupportState = { companyId: string; _revision: number; records: FieldRecord[]; requests: Record<string, { fingerprint: string; recordId: string }> };
 export type FieldSupportActor = { employeeId: string; name: string; username: string; manager: boolean };
 export type FieldSupportCommand = { requestId: string; action: string; data: FieldRecord };
-export class FieldSupportError extends Error { status:number; constructor(message: string, status = 422) { super(message); this.status=status; } }
+import { FieldSupportError } from "./field-support-error.ts";
+export { FieldSupportError } from "./field-support-error.ts";
 export const VEHICLE_CHECKS = ["pneus", "farois", "oleo", "agua", "lataria"] as const;
 const text = (value: unknown, max = 300) => String(value ?? "").trim().slice(0, max);
 const validId = (value: unknown) => /^[A-Za-z0-9_-]{1,120}$/.test(String(value || ""));

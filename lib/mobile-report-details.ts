@@ -1,4 +1,4 @@
-import { FieldSupportError } from "./field-support.ts";
+import { FieldSupportError } from "./field-support-error.ts";
 export const fieldMeasurements=[{key:"pressure",label:"Pressão",unit:"psi",min:0,max:10000},{key:"temperature",label:"Temperatura",unit:"°C",min:-100,max:300},{key:"voltage",label:"Tensão",unit:"V",min:0,max:1000},{key:"current",label:"Corrente",unit:"A",min:0,max:1000}] as const;
 export type FieldMeasurements=Partial<Record<typeof fieldMeasurements[number]["key"],string>>;
 export function validateFieldMeasurements(value:unknown):FieldMeasurements{
