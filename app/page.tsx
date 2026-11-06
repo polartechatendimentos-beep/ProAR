@@ -182,6 +182,8 @@ type ServiceOrder = {
   trackingToken?: string;
   whatsappPhone?: string;
   whatsappUpdatesEnabled?: boolean;
+  whatsappAutomaticConsent?: boolean;
+  whatsappConfirmation?: { status: string; date?: string; time?: string };
   whatsappAppointmentReminderEnabled?: boolean;
   whatsappStatusUpdatesEnabled?: boolean;
   appointmentReminderHours?: number;
@@ -872,7 +874,7 @@ function Customers({ onOpen, onDelete, onUpdate, onUpdateStructure, onDeleteStru
   useEffect(()=>{const beforeUnload=(event:BeforeUnloadEvent)=>{if(!customerDirty)return;event.preventDefault();event.returnValue=""};window.addEventListener("beforeunload",beforeUnload);return()=>window.removeEventListener("beforeunload",beforeUnload)},[customerDirty]);
   if (selectedCustomer) return <CustomerDetail customerName={selectedCustomer} customers={customers} structures={structures} serviceOrders={serviceOrders} modules={modules} canEdit={canEdit} onUpdateStructure={onUpdateStructure} onDeleteStructure={onDeleteStructure} onBack={() => setSelectedCustomer("")} onOpen={name=>name==="Licitações"?window.dispatchEvent(new CustomEvent("proar:navigate",{detail:name})):onOpen(name)}/>;
   return <section className="module-page">
-    <div className="module-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Pesquisar cliente, CPF ou CNPJ..." /></label><button className="outline-btn"><Filter size={14}/> Filtros</button><button type="button" className="primary-btn" data-testid="customer-new-button" aria-haspopup="dialog" onClick={() => onOpen("Novo cliente")}><Plus size={16}/> Novo cliente</button></div>
+    <div className="module-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Pesquisar cliente, CPF ou CNPJ..." /></label><button className="outline-btn"><Filter size={14}/> Filtros</button><a className="outline-btn" href="/crm-whatsapp"><MessageCircle size={14}/> CRM WhatsApp</a><button type="button" className="primary-btn" data-testid="customer-new-button" aria-haspopup="dialog" onClick={() => onOpen("Novo cliente")}><Plus size={16}/> Novo cliente</button></div>
     <div className="module-summary">
       <article><span><UsersRound size={19}/></span><div><small>CLIENTES ATIVOS</small><strong>{customers.filter(item => item.status === "Ativo").length}</strong><em>Cadastros reais</em></div></article>
       <article><span><Building2 size={19}/></span><div><small>UNIDADES CADASTRADAS</small><strong>{customers.reduce((total, item) => total + item.units, 0)}</strong><em>Vinculadas aos clientes</em></div></article>
@@ -964,23 +966,40 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: so
     return candidates;
   }).filter((item, index, all) => all.findIndex(candidate => candidate.order.id === item.order.id && candidate.equipment === item.equipment && candidate.date === item.date) === index)
     .sort((a, b) => a.daysLeft - b.daysLeft || a.date.localeCompare(b.date));
+  const sendOfficialWhatsApp = async (order: ServiceOrder, kind: "appointment" | "pmoc", parameters: string[], eventKey: string, manualMessage: string) => {
+    const customer = customers.find(item => item.name === order.client);
+    const phone = String(order.whatsappPhone || customer?.whatsapp || customer?.phone || "").replace(/\D/g, "");
+    if (!phone) return window.alert("O cliente desta OS não possui WhatsApp cadastrado.");
+    if (!window.confirm("Confirma que o cliente autorizou receber esta mensagem pelo WhatsApp?")) return;
+    try {
+      const response = await fetch("/api/whatsapp/send", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({
+        originId:order.id, kind, parameters, eventKey, consentConfirmed:true
+      }) });
+      const data = await response.json().catch(() => ({}));
+      if ((response.status === 409 && data.duplicate === true) || data.status === "unknown") {
+        window.alert(data.error || "Este aviso já foi enviado ou está em processamento.");
+        return;
+      }
+      if (!response.ok) throw new Error(data.error || "Não foi possível enviar pelo WhatsApp Business.");
+      window.alert(data.message || "Mensagem aceita pela Meta para envio. A entrega ainda depende da confirmação do WhatsApp.");
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Falha no WhatsApp Business.";
+      if (window.confirm(reason + "\n\nDeseja abrir o WhatsApp com a mensagem pronta para envio manual?")) {
+        const internationalPhone = phone.startsWith("55") ? phone : "55" + phone;
+        window.open("https://wa.me/" + internationalPhone + "?text=" + encodeURIComponent(manualMessage), "_blank", "noopener,noreferrer");
+      }
+    }
+  };
   const sendWhatsApp = (order: ServiceOrder) => {
     const customer = customers.find(item => item.name === order.client);
-    const phone = String(customer?.whatsapp || customer?.phone || "").replace(/\D/g, "");
-    if (!phone) return window.alert("O cliente desta OS não possui WhatsApp cadastrado.");
-    const internationalPhone = phone.startsWith("55") ? phone : "55" + phone;
-    const scheduled = order.date ? " prevista para " + new Date(order.date + "T12:00:00").toLocaleDateString("pt-BR") + (order.time ? " às " + order.time : "") : "";
-    const message = "Olá " + order.client + ", aqui é da PolarTech. Estou entrando em contato sobre a OS " + order.id + ", do serviço " + order.service + ", na unidade " + (order.unit || "informada") + scheduled + ". Como podemos ajudar?";
-    window.open("https://wa.me/" + internationalPhone + "?text=" + encodeURIComponent(message), "_blank", "noopener,noreferrer");
+    const scheduled = order.date ? new Date(order.date + "T12:00:00").toLocaleDateString("pt-BR") + (order.time ? " às " + order.time : "") : "a combinar";
+    const message = "Olá " + order.client + ", aqui é da PolarTech. Estou entrando em contato sobre a OS " + order.id + ", do serviço " + order.service + ", na unidade " + (order.unit || "informada") + ", prevista para " + scheduled + ". Como podemos ajudar?";
+    void sendOfficialWhatsApp(order, "appointment", [order.client, order.id, order.service || "atendimento técnico", order.unit || "unidade informada", scheduled], "appointment:" + (order.date || "") + ":" + (order.time || ""), message);
   };
   const sendPmocWhatsApp = (order: ServiceOrder, equipment: string, date: string) => {
-    const customer = customers.find(item => item.name === order.client);
-    const phone = String(customer?.whatsapp || customer?.phone || "").replace(/\D/g, "");
-    if (!phone) return window.alert("O cliente desta OS não possui WhatsApp cadastrado.");
-    const internationalPhone = phone.startsWith("55") ? phone : "55" + phone;
     const due = new Date(date + "T12:00:00").toLocaleDateString("pt-BR");
     const message = "Olá " + order.client + ", aqui é da PolarTech. A manutenção preventiva do equipamento " + equipment + ", na unidade " + (order.unit || "informada") + ", está prevista para " + due + ". Podemos combinar o agendamento?";
-    window.open("https://wa.me/" + internationalPhone + "?text=" + encodeURIComponent(message), "_blank", "noopener,noreferrer");
+    void sendOfficialWhatsApp(order, "pmoc", [order.client, equipment, order.unit || "unidade informada", due], "pmoc:" + equipment + ":" + date, message);
   };
   const emitNfse = async (order: ServiceOrder) => {
     const customer = customers.find(item => item.name === order.client);
@@ -1030,10 +1049,21 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: so
 function Agenda({ serviceOrders, onOpen, onSelect }: { serviceOrders: ServiceOrder[]; onOpen: (name: string) => void; onSelect: (order: ServiceOrder) => void }) {
   const [visibility,setVisibility]=useState("Em aberto");
   const isClosed=(value:string)=>/conclu[ií]d|cancelad/i.test(value);
-  const scheduled = [...serviceOrders].filter(order => order.date && (visibility === "Todas" || visibility === "Concluídas" ? /conclu[ií]d/i.test(order.status) : visibility === "Canceladas" ? /cancelad/i.test(order.status) : visibility === "Hoje" ? order.date === new Date().toISOString().slice(0,10) : !isClosed(order.status))).sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`));
+  const confirmation = (order: ServiceOrder) => order.whatsappConfirmation?.date === order.date &&
+    order.whatsappConfirmation?.time === order.time ? order.whatsappConfirmation?.status : undefined;
+  const scheduled = serviceOrders.filter(order => {
+    if (!order.date) return false;
+    if (visibility === "Todas") return true;
+    if (visibility === "Concluídas") return /conclu[ií]d/i.test(order.status);
+    if (visibility === "Canceladas") return /cancelad/i.test(order.status);
+    if (visibility === "Hoje") return order.date === new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+    if (isClosed(order.status)) return false;
+    if (visibility === "Em aberto") return true;
+    return confirmation(order) === visibility;
+  }).sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`));
   return <section className="module-page">
-    <div className="module-toolbar"><div><span className="section-kicker"><CalendarDays size={12}/> AGENDA OPERACIONAL</span><h2>Serviços agendados</h2><p>Por padrão, somente ordens operacionais em aberto.</p></div><div className="toolbar-actions"><label>Exibir<select value={visibility} onChange={e=>setVisibility(e.target.value)}><option>Em aberto</option><option>Todas</option><option>Concluídas</option><option>Canceladas</option><option>Hoje</option></select></label><button className="primary-btn" onClick={() => onOpen("Nova ordem de serviço")}><Plus size={16}/> Agendar serviço</button></div></div>
-    <div className="panel customer-panel"><div className="agenda-hint"><Zap size={13}/> Clique duas vezes em um agendamento para abrir a ordem de serviço.</div><div className="table-wrap"><table><thead><tr><th>DATA</th><th>HORÁRIO</th><th>ORDEM</th><th>CLIENTE</th><th>ENDEREÇO</th><th>TÉCNICO</th><th>SITUAÇÃO</th><th /></tr></thead><tbody>{scheduled.map(order => <tr className="clickable-row" title="Clique duas vezes para abrir a ordem" onDoubleClick={() => onSelect(order)} key={`agenda-${order.id}`}><td><strong>{new Date(`${order.date}T12:00:00`).toLocaleDateString("pt-BR")}</strong></td><td>{order.time || "A definir"}</td><td><b className="order-id">{order.id}</b></td><td>{order.client}<small className="agenda-unit">{order.unit}</small></td><td><button className="address-button" onClick={() => onSelect(order)}><MapPin size={13}/><span>{order.address || "Endereço não informado"}</span></button></td><td>{order.tech}</td><td><span className={`status ${order.tone}`}><i/> {order.status}</span></td><td><button className="open-client" onClick={() => onSelect(order)}>Abrir <ChevronRight size={13}/></button></td></tr>)}</tbody></table></div>{!scheduled.length && <div className="linked-empty"><CalendarDays size={24}/><h4>Nenhum serviço agendado</h4><p>Informe a data ao criar uma ordem de serviço.</p></div>}</div>
+    <div className="module-toolbar"><div><span className="section-kicker"><CalendarDays size={12}/> AGENDA OPERACIONAL</span><h2>Serviços agendados</h2><p>Por padrão, somente ordens operacionais em aberto.</p></div><div className="toolbar-actions"><label>Exibir<select value={visibility} onChange={e=>setVisibility(e.target.value)}><option>Em aberto</option><option>Todas</option><option>Concluídas</option><option>Canceladas</option><option>Hoje</option><option>Confirmada</option><option>Reagendamento solicitado</option></select></label><button className="primary-btn" onClick={() => onOpen("Nova ordem de serviço")}><Plus size={16}/> Agendar serviço</button></div></div>
+    <div className="panel customer-panel"><div className="agenda-hint"><Zap size={13}/> Clique duas vezes em um agendamento para abrir a ordem de serviço.</div><div className="table-wrap"><table><thead><tr><th>DATA</th><th>HORÁRIO</th><th>ORDEM</th><th>CLIENTE</th><th>ENDEREÇO</th><th>TÉCNICO</th><th>SITUAÇÃO</th><th /></tr></thead><tbody>{scheduled.map(order => <tr className="clickable-row" title="Clique duas vezes para abrir a ordem" onDoubleClick={() => onSelect(order)} key={`agenda-${order.id}`}><td><strong>{new Date(`${order.date}T12:00:00`).toLocaleDateString("pt-BR")}</strong></td><td>{order.time || "A definir"}</td><td><b className="order-id">{order.id}</b></td><td>{order.client}<small className="agenda-unit">{order.unit}</small></td><td><button className="address-button" onClick={() => onSelect(order)}><MapPin size={13}/><span>{order.address || "Endereço não informado"}</span></button></td><td>{order.tech}</td><td><span className={`status ${order.tone}`}><i/> {order.status}</span>{confirmation(order) && <small className="agenda-unit">{confirmation(order)}</small>}</td><td><button className="open-client" onClick={() => onSelect(order)}>Abrir <ChevronRight size={13}/></button></td></tr>)}</tbody></table></div>{!scheduled.length && <div className="linked-empty"><CalendarDays size={24}/><h4>Nenhum serviço agendado</h4><p>Informe a data ao criar uma ordem de serviço.</p></div>}</div>
   </section>;
 }
 
@@ -1307,7 +1337,11 @@ function OrderDetail({ order, customerPhone, company, catalog, contracts, close,
           <div className="os-tracking-grid">
             <label>Telefone / WhatsApp<input value={currentOrder.whatsappPhone ?? customerPhone ?? ""} onChange={event => update({ whatsappPhone:event.target.value })} placeholder="(00) 00000-0000"/></label>
             <label className="tracking-toggle"><input type="checkbox" checked={currentOrder.whatsappUpdatesEnabled !== false} onChange={event => update({ whatsappUpdatesEnabled:event.target.checked, trackingToken:trackingToken() })}/><span><b>Cliente recebe atualizações</b><small>Status e fotos liberadas</small></span></label>
+            {currentOrder.whatsappConfirmation && currentOrder.whatsappConfirmation.date === currentOrder.date &&
+              currentOrder.whatsappConfirmation.time === currentOrder.time &&
+              <p role="status">Resposta do cliente no WhatsApp — {currentOrder.whatsappConfirmation.status}</p>}
             <label className="tracking-toggle"><input type="checkbox" checked={currentOrder.whatsappAppointmentReminderEnabled !== false} onChange={event => update({ whatsappAppointmentReminderEnabled:event.target.checked, trackingToken:trackingToken() })}/><span><b>Lembrete de agendamento</b><small>Antes do atendimento</small></span></label>
+            <label className="tracking-toggle"><input type="checkbox" checked={currentOrder.whatsappAutomaticConsent === true} onChange={event => update({ whatsappAutomaticConsent:event.target.checked })}/><span><b>Cliente autorizou lembrete automático por WhatsApp</b></span></label>
             <label>Antecedência do lembrete<select value={currentOrder.appointmentReminderHours ?? 24} onChange={event => update({ appointmentReminderHours:Number(event.target.value), trackingToken:trackingToken() })}><option value="2">2 horas antes</option><option value="24">24 horas antes</option><option value="48">48 horas antes</option></select></label>
           </div>
           {trackingUrl && <div className="tracking-link"><MessageCircle size={18}/><div><b>Link exclusivo do cliente</b><small>Mostra somente status, fotos e atualizações liberadas.</small></div><button type="button" onClick={() => navigator.clipboard.writeText(trackingUrl)}>Copiar link</button><button type="button" disabled={!whatsappPhone} onClick={() => window.open(`https://wa.me/${whatsappPhone.startsWith("55") ? whatsappPhone : `55${whatsappPhone}`}?text=${encodeURIComponent(`Acompanhe sua Ordem de Serviço ${currentOrder.id}: ${trackingUrl}`)}`, "_blank", "noopener,noreferrer")}>Enviar WhatsApp</button></div>}
@@ -1995,6 +2029,8 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
   const [wabaId, setWabaId] = useState("449236708270435");
   const [businessPhone, setBusinessPhone] = useState("+55 17 2122-2806");
   const [token, setToken] = useState("");
+  const [whatsAppAppointmentTemplate, setWhatsAppAppointmentTemplate] = useState("os_agendamento_proar");
+  const [whatsAppPmocTemplate, setWhatsAppPmocTemplate] = useState("lembrete_higienizacao");
   const [whatsAppBusy,setWhatsAppBusy]=useState(false);
   const [whatsAppStatus,setWhatsAppStatus]=useState<{configured:boolean;connected:boolean;tokenPreview?:string;verifiedName?:string;displayPhone?:string}>({configured:false,connected:false});
   const [saved, setSaved] = useState("");
@@ -2064,6 +2100,8 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
       const data=await response.json(); if(!response.ok)throw new Error(data.error||"Não foi possível carregar a configuração do WhatsApp.");
       setPhoneNumberId(String(data.phoneNumberId||""));
       setWabaId(String(data.wabaId||""));
+      setWhatsAppAppointmentTemplate(String(data.appointmentTemplate||"os_agendamento_proar"));
+      setWhatsAppPmocTemplate(String(data.reminderTemplate||"lembrete_higienizacao"));
       setWhatsAppStatus({configured:Boolean(data.tokenConfigured),connected:false,tokenPreview:data.tokenPreview||""});
       setToken("");
     }).catch(error=>setSaved(error instanceof Error?error.message:"Não foi possível carregar a configuração do WhatsApp.")).finally(()=>setWhatsAppBusy(false));
@@ -2073,7 +2111,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
     setSaved("Salvando configuração do WhatsApp...");
     try{
       const response=await fetch("/api/whatsapp",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({
-        active:true,phoneNumberId:phoneNumberId.trim(),wabaId:wabaId.trim(),...(token.trim()?{accessToken:token.trim()}:{})
+        active:true,phoneNumberId:phoneNumberId.trim(),wabaId:wabaId.trim(),appointmentTemplate:whatsAppAppointmentTemplate.trim(),reminderTemplate:whatsAppPmocTemplate.trim(),...(token.trim()?{accessToken:token.trim()}:{})
       })});
       const data=await response.json(); if(!response.ok)throw new Error(data.error||"Não foi possível salvar a configuração do WhatsApp.");
       setWhatsAppStatus({configured:Boolean(data.tokenConfigured),connected:false,tokenPreview:data.tokenPreview||""});
@@ -2203,7 +2241,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
     <div className="settings-layout"><nav className="settings-nav">{[{name:"Empresa",icon:Building2,text:"Dados e logomarca"},{name:"WhatsApp",icon:MessageCircle,text:"API oficial da Meta"},{name:"Google Agenda",icon:CalendarDays,text:"Sincronização de OS e agenda"},{name:"Fiscal",icon:FileText,text:"NF-e, NFC-e e NFS-e"},...(isAdministrator?[{name:"Inteligência Artificial",icon:Sparkles,text:"Credencial OpenAI protegida"}]:[]),{name:"Segurança",icon:ShieldCheck,text:"Acessos e proteção"}].map(item => <button key={item.name} className={tab === item.name ? "active" : ""} onClick={() => setTab(item.name as typeof tab)}><item.icon size={17}/><span><b>{item.name}</b><small>{item.text}</small></span></button>)}</nav>
       <div className="settings-card"><header><div><small>CONFIGURAÇÃO • {tab.toUpperCase()}</small><h3>{tab === "WhatsApp" ? "WhatsApp Business Platform" : tab === "Google Agenda" ? "Integração com Google Agenda" : tab === "Empresa" ? "Cadastro da empresa" : tab === "Fiscal" ? "Configuração fiscal" : tab === "Inteligência Artificial" ? "Credencial segura da OpenAI" : "Segurança do sistema"}</h3></div><span className="settings-status"><i/> {tab === "Google Agenda" ? googleCalendarStatus.connected ? `Conectado${googleCalendarStatus.email ? ` • ${googleCalendarStatus.email}` : ""}` : "Não conectado" : tab === "Inteligência Artificial" ? aiStatus.configured ? `Configurada • final ${aiStatus.last4}` : aiStatus.source === "environment" ? "Fallback do servidor" : "Não configurada" : "Configuração disponível"}</span></header>
         {tab === "Empresa" && <div className="settings-form company-settings-form"><label>Razão social / Nome empresarial<input value={companyName} onChange={event => setCompanyName(event.target.value)}/></label><label>Nome fantasia<input value={tradeName} onChange={event => setTradeName(event.target.value)}/></label><label>CNPJ<input value={companyDoc} onChange={event => setCompanyDoc(formatCnpj(event.target.value))} placeholder="00.000.000/0000-00"/></label><label>Telefone<input value={businessPhone} onChange={event => setBusinessPhone(event.target.value)}/></label><label>E-mail<input type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="contato@empresa.com.br"/></label><label>Cidade<input list="proar-cities" value={city} onChange={event => setCity(event.target.value)} placeholder="Selecione ou digite a cidade"/><datalist id="proar-cities">{cities.map(item => <option key={item}>{item}</option>)}</datalist></label><label>Estado<select value={state} onChange={event => setState(event.target.value)}>{["SP","MG","PR","RJ","MS","GO","SC","RS"].map(item => <option key={item}>{item}</option>)}</select></label><label className="wide">Endereço completo<input value={address} onChange={event => setAddress(event.target.value)} placeholder="Rua, número e bairro"/></label><div className="wide company-logo-field"><div className="company-logo-preview">{logo ? <img src={logo} alt="Logomarca da empresa"/> : <Building2 size={30}/>}</div><div><b>Logomarca dos relatórios</b><p>Será utilizada nos cabeçalhos de PDF, impressão, orçamentos e ordens de serviço.</p><label className="logo-upload"><ImagePlus size={15}/> Selecionar logomarca<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={event => readLogo(event.target.files?.[0])}/></label>{logo && <button className="logo-remove" type="button" onClick={() => setLogo("")}><Trash2 size={13}/> Remover</button>}</div></div></div>}
-        {tab === "WhatsApp" && <div className="settings-form whatsapp-settings-form"><div className="wide whatsapp-account-status"><MessageCircle size={20}/><div><small>WHATSAPP BUSINESS PLATFORM</small><b>{whatsAppStatus.connected?(whatsAppStatus.verifiedName||"Conta conectada"):whatsAppStatus.configured?"Credencial salva • conexão ainda não testada":"Integração não configurada"}</b><span>{whatsAppStatus.connected?(whatsAppStatus.displayPhone||businessPhone):whatsAppStatus.tokenPreview?`Token ${whatsAppStatus.tokenPreview}`:"Configure os IDs e o token permanente."}</span></div>{whatsAppStatus.connected?<CheckCircle2 size={19}/>:<AlertTriangle size={19}/>}</div><label>Phone Number ID<input value={phoneNumberId} onChange={event => setPhoneNumberId(event.target.value)} inputMode="numeric"/><small>ID do número, diferente do telefone.</small></label><label>WABA ID<input value={wabaId} onChange={event => setWabaId(event.target.value)} inputMode="numeric"/><small>ID da conta WhatsApp Business.</small></label><label className="wide">Token permanente<input type="password" value={token} onChange={event => setToken(event.target.value)} autoComplete="new-password" placeholder="Cole o token gerado pelo Utilizador do Sistema"/><small>Por segurança, o token nunca será mostrado depois de salvo.</small></label><div className="wide settings-security-note"><ShieldCheck size={17}/><span><b>Permissões necessárias</b><small>whatsapp_business_management e whatsapp_business_messaging</small></span></div><div className="wide settings-footer-actions"><button className="primary-btn" disabled={whatsAppBusy||!phoneNumberId.trim()||!wabaId.trim()||(!token.trim()&&!whatsAppStatus.configured)} onClick={()=>void saveWhatsAppConfiguration()}><Save size={14}/>{whatsAppBusy?"Salvando...":"Salvar API WhatsApp"}</button><button className="outline-btn" disabled={whatsAppBusy||!whatsAppStatus.configured} onClick={()=>void testWhatsAppConfiguration()}><Zap size={14}/> Testar conexão</button></div></div>}
+        {tab === "WhatsApp" && <div className="settings-form whatsapp-settings-form"><a className="wide outline-btn" href="/crm-whatsapp">Abrir CRM WhatsApp • Caixa de entrada</a><div className="wide whatsapp-account-status"><MessageCircle size={20}/><div><small>WHATSAPP BUSINESS PLATFORM</small><b>{whatsAppStatus.connected?(whatsAppStatus.verifiedName||"Conta conectada"):whatsAppStatus.configured?"Credencial salva • conexão ainda não testada":"Integração não configurada"}</b><span>{whatsAppStatus.connected?(whatsAppStatus.displayPhone||businessPhone):whatsAppStatus.tokenPreview?`Token ${whatsAppStatus.tokenPreview}`:"Configure os IDs e o token permanente."}</span></div>{whatsAppStatus.connected?<CheckCircle2 size={19}/>:<AlertTriangle size={19}/>}</div><label>Phone Number ID<input value={phoneNumberId} onChange={event => setPhoneNumberId(event.target.value)} inputMode="numeric"/><small>ID do número, diferente do telefone.</small></label><label>WABA ID<input value={wabaId} onChange={event => setWabaId(event.target.value)} inputMode="numeric"/><small>ID da conta WhatsApp Business.</small></label><label>Modelo aprovado para agendamento<input value={whatsAppAppointmentTemplate} onChange={event => setWhatsAppAppointmentTemplate(event.target.value)} placeholder="os_agendamento_proar"/><small>Nome exato do template aprovado na Meta.</small></label><label>Modelo aprovado para PMOC<input value={whatsAppPmocTemplate} onChange={event => setWhatsAppPmocTemplate(event.target.value)} placeholder="lembrete_higienizacao"/><small>Nome exato do template aprovado na Meta.</small></label><label className="wide">Token permanente<input type="password" value={token} onChange={event => setToken(event.target.value)} autoComplete="new-password" placeholder="Cole o token gerado pelo Utilizador do Sistema"/><small>Por segurança, o token nunca será mostrado depois de salvo.</small></label><div className="wide settings-security-note"><ShieldCheck size={17}/><span><b>Permissões necessárias</b><small>whatsapp_business_management e whatsapp_business_messaging</small></span></div><div className="wide settings-footer-actions"><button className="primary-btn" disabled={whatsAppBusy||!phoneNumberId.trim()||!wabaId.trim()||(!token.trim()&&!whatsAppStatus.configured)} onClick={()=>void saveWhatsAppConfiguration()}><Save size={14}/>{whatsAppBusy?"Salvando...":"Salvar API WhatsApp"}</button><button className="outline-btn" disabled={whatsAppBusy||!whatsAppStatus.configured} onClick={()=>void testWhatsAppConfiguration()}><Zap size={14}/> Testar conexão</button></div></div>}
         {tab === "Google Agenda" && <div className="settings-form google-calendar-settings">
           <div className="wide google-calendar-connection-card"><CalendarDays size={24}/><div><small>GOOGLE CALENDAR</small><b>{googleCalendarStatus.connected ? "Agenda conectada" : "Agenda ainda não conectada"}</b><span>{googleCalendarStatus.connected ? (googleCalendarStatus.email || "Conta Google autorizada") : "Conecte sua conta Google para sincronizar os agendamentos das Ordens de Serviço."}</span></div><span className={`integration-state ${googleCalendarStatus.connected?"connected":"disconnected"}`}>{googleCalendarStatus.connected?"Conectado":"Desconectado"}</span></div>
           <div className="wide settings-security-note"><ShieldCheck size={17}/><span><b>Conexão por usuário e empresa</b><small>Os tokens OAuth ficam criptografados no servidor. O ProAR solicita acesso ao Google Calendar e nunca armazena sua senha do Google.</small></span></div>

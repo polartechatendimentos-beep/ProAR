@@ -206,8 +206,10 @@ async function neonRest(path: string, init: RequestInit) {
     query = `SELECT ${selectColumns(urlParams)} FROM ${table}${buildWhere(urlParams, values)}`;
     const order = urlParams.get("order");
     if (order) {
-      const [column, direction = "asc"] = order.split(".");
-      query += ` ORDER BY ${identifier(column)} ${direction.toLowerCase() === "desc" ? "DESC" : "ASC"}`;
+      query += ` ORDER BY ${order.split(",").map(term => {
+        const [column, direction = "asc"] = term.split(".");
+        return `${identifier(column)} ${direction.toLowerCase() === "desc" ? "DESC" : "ASC"}`;
+      }).join(", ")}`;
     }
     const limit = urlParams.get("limit");
     if (limit && /^\d+$/.test(limit)) query += ` LIMIT ${Number(limit)}`;

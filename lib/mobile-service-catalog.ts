@@ -1,4 +1,4 @@
-import { FieldSupportError } from "./field-support.ts";
+import { FieldSupportError } from "./field-support-error.ts";
 type Item=Record<string,unknown>;
 export type FieldServiceOption={id:string;name:string};
 const normalize=(value:unknown)=>String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase();

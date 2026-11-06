@@ -2,7 +2,7 @@ import { addFieldService } from "./mobile-service-catalog.ts";
 export const mobileMutationActions=["add-service","register-equipment","request-exception","decide-exception","pause-attendance","resume-attendance","visit-no-service","request-material","request-scope","request-reschedule","decide-request","internal-message","report-delay","set-duration","set-warranty"];
 import { applyAttendanceAction, attendanceActions, type AttendanceCommand } from "./mobile-attendance-actions.ts";
 import { createHash } from "node:crypto";
-import { FieldSupportError } from "./field-support.ts";
+import { FieldSupportError } from "./field-support-error.ts";
 import { assignedToSession, canSeeAllMobileOrders, isOpenMobileOrder, type MobileFieldSession } from "./mobile-field.ts";
 import { applyFieldOrder, eligibleFieldEquipment, fieldOrderFingerprint, type FieldOrderCommand } from "./mobile-workday.ts";
 
