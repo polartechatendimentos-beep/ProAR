@@ -2,6 +2,7 @@ import { databaseFetch, masterDatabaseConfig } from "../../../../lib/supabase-re
 import { NextRequest, NextResponse } from "next/server";
 import { searchAutomaticTenders, type PncpTender } from "../../../../lib/licitacoes-search";
 import { loadWhatsAppConfig, sendWhatsAppTemplate } from "../../../../lib/proar-whatsapp";
+import { eligibleCustomerReminder, reminderTodaySaoPaulo } from "../../../../lib/whatsapp-customer-reminders";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -64,14 +65,14 @@ async function processCustomerReminders() {
   const rows = await response.json();
   const state = rows[0]?.payload;
   if (!state?.moduleRecords?.Lembretes) return { sent: 0, pending: 0 };
-  const today = new Date().toISOString().slice(0, 10);
-  const due = state.moduleRecords.Lembretes.filter((item: Record<string, unknown>) => item.status === "Agendado" && String(item.date ?? "") <= today);
+  const today = reminderTodaySaoPaulo();
+  const due = state.moduleRecords.Lembretes.filter((item: Record<string, unknown>) => eligibleCustomerReminder(item, today));
   let sent = 0;
+  const config = await loadWhatsAppConfig();
   for (const reminder of due) {
-    const config = await loadWhatsAppConfig();
-    const to = String(reminder.category ?? "").replace(/\D/g, "");
+    const to = String(reminder.phone ?? reminder.whatsappPhone ?? reminder.category ?? "").replace(/\D/g, "");
     if (!config.active || !to) continue;
-    try { await sendWhatsAppTemplate(config, to, config.reminderTemplate, [String(reminder.client ?? "cliente"), String(reminder.reminderMessage ?? reminder.description ?? "Está na hora da higienização.").slice(0, 300)]); reminder.status = "Enviado"; reminder.description = `${reminder.description} • WhatsApp enviado em ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`; sent += 1; } catch (error) { console.error("Reminder WhatsApp failed", error); }
+    try { const result = await sendWhatsAppTemplate(config, to, config.reminderTemplate, [String(reminder.client ?? "cliente"), String(reminder.reminderMessage ?? reminder.description ?? "Está na hora da higienização.").slice(0, 300)]); reminder.whatsappMessageId = String((result as {messages?:Array<{id?:string}>}).messages?.[0]?.id ?? ""); reminder.whatsappSentAt = new Date().toISOString(); reminder.status = "Enviado"; reminder.description = `${reminder.description} • WhatsApp enviado em ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`; sent += 1; } catch (error) { console.error("Reminder WhatsApp failed", error); }
   }
   if (sent) {
     const save = await databaseFetch(`${url}/rest/v1/proar_state?on_conflict=id`, { method: "POST", headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ id: "main", payload: state, updated_at: new Date().toISOString() }) });
