@@ -19,7 +19,10 @@ export async function requestEvolutionQr(companyId: string) {
   const result = await evolutionPairingQr(evolutionSettingsForCompany(companyId));
   // Return only provider-generated pairing data, not arbitrary provider metadata.
   const data = result as { base64?: unknown; code?: unknown; pairingCode?: unknown; count?: unknown } | null;
-  const base64 = typeof data?.base64 === "string" && data.base64.startsWith("data:image/png;base64,") && data.base64.length < 100000 ? data.base64 : null;
+  const raw = typeof data?.base64 === "string" ? data.base64 : "";
+  // Evolution commonly returns raw base64 or a PNG data URI, depending on version.
+  const png = raw.startsWith("data:image/png;base64,") ? raw.slice("data:image/png;base64,".length) : raw;
+  const base64 = png.length > 100 && png.length < 150000 && /^[A-Za-z0-9+/=]+$/.test(png) ? `data:image/png;base64,${png}` : null;
   const pairingCode = typeof data?.pairingCode === "string" ? data.pairingCode.slice(0, 100) : null;
-  return { provider: "evolution", base64, pairingCode, connected: !base64 && !pairingCode };
+  return { provider: "evolution", base64, pairingCode, connected: false };
 }
