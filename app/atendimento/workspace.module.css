@@ -264,3 +264,42 @@
 .workspaceFocused .desk {height:calc(100dvh - 158px)}
 @media(prefers-color-scheme:dark){.contact .urgentBadge{background:#582b2b;color:#ffd3cb}.contact .waitingBadge{color:#d9c47d}}
 @media(max-width:700px){.focusToggle span{display:none}.replyEditorRow{grid-template-columns:1fr}.replyEditorRow .replyText{grid-column:auto}.workspaceFocused .desk{height:auto}.sectorPills button{min-height:30px}.queueTabs button{font-size:11px}}
+
+/* Chatdesk visual hierarchy: make incoming messages and awaiting replies prominent. */
+.workspace{--desk-bg:#edf4fc;--blue:#145eb9;--blue-soft:#e3f0ff;--line:#d6e4f3;--shadow:0 8px 24px #173d6810}
+.header{padding:15px 18px;border:1px solid #d6e6f7;border-radius:14px;background:linear-gradient(110deg,#fff 0%,#f0f7ff 100%);box-shadow:0 4px 18px #1b5a9a0a}
+.header h1{color:#0b3c72}
+.tabs{border-bottom:2px solid #c5daf3}
+.workspace .tabs button[aria-pressed=true]{background:#dcecff;color:#0c53a1;border-color:#a5cdf7;box-shadow:inset 0 -3px 0 #267bd7}
+.queue{background:linear-gradient(180deg,#fff,#f8fbff)}
+.queueTitle h2{color:#103f70}
+.workspace .contact{border:1px solid #dce9f7!important;border-left:4px solid #b4cee8!important;border-radius:12px!important;margin:0 0 9px!important;padding:13px 14px!important;background:#fff!important;box-shadow:0 3px 10px #123e6d08;transition:background .15s,border-color .15s,transform .15s}
+.workspace .contact:hover:not(:disabled){background:#eef6ff!important;border-color:#a5c9ee!important;transform:translateY(-1px)}
+.workspace .contact.selected{background:#e3f0ff!important;border-color:#8fbef1!important;border-left-color:#1165c4!important;box-shadow:0 5px 16px #1e70c51c}
+.contact.selected:before{display:none}
+.contact strong{color:#153c68;font-size:13px}
+.contact span{color:#294d72;font-size:12px;font-weight:550;max-height:45px;line-height:1.5}
+.contact small{color:#58738e}
+.urgentBadge{display:inline-block!important;width:fit-content;background:#ffdfd9!important;color:#9b2b20!important;border:1px solid #f0a59b;border-radius:6px;padding:3px 7px;font-weight:750!important}
+.waitingBadge{display:inline-block!important;width:fit-content;background:#fff0cb!important;color:#8c5705!important;border:1px solid #eecb75;border-radius:6px;padding:3px 7px;font-weight:750!important}
+.conversation{background:#f3f8ff}
+.chatHeader{background:linear-gradient(100deg,#eaf3ff,#fff);border-bottom:2px solid #bcd8f5}
+.chatHeader h2{font-size:16px;color:#0e457e}
+.messages{background-color:#e9f2fc;background-image:radial-gradient(#a6c7e738 .8px,transparent .8px);background-size:16px 16px;gap:16px;padding:22px}
+.messages article{max-width:min(85%,660px);padding:13px 16px;border-radius:14px;box-shadow:0 4px 14px #1d4e7812}
+.messages article small{font-size:11px;font-weight:750;letter-spacing:.01em}
+.messages article p{font-size:14px!important;line-height:1.65;color:#18334e!important;margin:7px 0 9px}
+.messages article time{font-size:10px;color:#58738d}
+.incoming{background:#fff!important;border:1px solid #a9c9e9!important;border-left:5px solid #237ad0!important;border-top-left-radius:3px!important}
+.incoming small{color:#145ea9!important}
+.outgoing{background:#d8f5e8!important;border:1px solid #9ed6b9!important;border-right:5px solid #159467!important;border-top-right-radius:3px!important}
+.outgoing small{color:#08744e!important}
+.note{background:#fff0c5!important;border:1px solid #e7c76c!important;border-left:5px solid #dc9a22!important}
+.note small{color:#865506!important}
+.event{background:#e1e9f3!important;border:1px solid #c7d6e6!important;color:#48647f!important;box-shadow:none!important}
+.event p{color:#48647f!important;font-size:11px!important}
+.composer{background:#fff;border-top:2px solid #c5daf3;box-shadow:0 -5px 20px #1e56890b}
+.workspace .content .composer textarea{background:#f8fbff!important;border-color:#b4d2f0!important;font-size:13px!important}
+.workspace .sendBar button{background:#087f60!important;color:#fff!important;border-color:#087f60!important}
+@media(max-width:700px){.header{padding:12px}.messages{padding:12px;gap:11px}.messages article{max-width:94%;padding:11px 12px}.messages article p{font-size:13px!important}.workspace .contact{padding:11px!important}}
+@media(prefers-reduced-motion:reduce){.workspace .contact{transition:none}.workspace .contact:hover:not(:disabled){transform:none}}
