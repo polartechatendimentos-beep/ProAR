@@ -76,3 +76,15 @@ export function appointmentReplyAllowed(order: ActionRow, customer: ActionRow | 
   const event = Date.parse(eventAt), sent = Date.parse(String(job?.createdAt || ""));
   return Boolean(customer && customer.id === order.customerId && actionPhoneSafe(customer.whatsapp || customer.phone) === phone && !/cancelad|conclu[ií]d|finalizad/i.test(String(order.status)) && job?.status === "accepted" && job.sourceId === appointmentSource(order) && Number.isFinite(event) && Number.isFinite(sent) && event >= sent && event <= now.getTime()+300000 && now.getTime()-event < 86400000 && new Date(`${order.date}T${order.time}:00-03:00`) > now);
 }
+
+export function chatCustomerContext(state: ActionState, rawPhone: string) {
+  const phone = actionPhone(rawPhone);
+  const matches = state.customers.filter(customer=>[customer.whatsapp,customer.phone].some(value=>actionPhoneSafe(value)===phone));
+  if (matches.length !== 1) return {customer:null,ambiguous:matches.length>1,orders:[],equipment:[],orderCount:0,equipmentCount:0};
+  const customer = matches[0];
+  const uniqueName = state.customers.filter(row=>row.name===customer.name).length===1;
+  const belongs = (row:ActionRow) => row.customerId ? row.customerId===customer.id : uniqueName && row.client===customer.name;
+  const orders = state.serviceOrders.filter(belongs).sort((a,b)=>`${b.date||""} ${b.time||""}`.localeCompare(`${a.date||""} ${a.time||""}`));
+  const equipment = (state.moduleRecords.Equipamentos || []).filter(belongs);
+  return {customer:{id:customer.id,name:customer.name,address:customer.address,phone:customer.phone},ambiguous:false,orderCount:orders.length,equipmentCount:equipment.length,orders:orders.slice(0,5).map(row=>({id:row.id,service:row.service,status:row.status,date:row.date,time:row.time})),equipment:equipment.slice(0,5).map(row=>({id:row.id,name:row.name,brand:row.brand,model:row.model,capacityBtus:row.capacityBtus,serialNumber:row.serialNumber}))};
+}

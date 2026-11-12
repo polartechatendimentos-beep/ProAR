@@ -34,12 +34,12 @@ export async function POST(request: NextRequest) {
   try {
     await assertActiveWhatsAppCompany(access.companyId);
     const raw = await request.text();
-    if (raw.length > 15000) return reply({ error: "Solicitação muito grande." }, 413);
+    if (raw.length > 60000) return reply({ error: "Solicitação muito grande." }, 413);
     const body = JSON.parse(raw);
     if (!body || typeof body !== "object" || Array.isArray(body)) return reply({ error: "Solicitação inválida." }, 400);
     if (body.action === "settings") {
       if (!access.actor.admin) return reply({ error: "Somente o administrador configura o assistente." }, 403);
-      const settings = await saveChatSettings(access.companyId, { revision: Number(body.revision), botEnabled: body.botEnabled === true, companyName: String(body.companyName || ""), greeting: String(body.greeting || "") });
+      const settings = await saveChatSettings(access.companyId, { revision: Number(body.revision), botEnabled: body.botEnabled === true, companyName: String(body.companyName || ""), greeting: String(body.greeting || ""), quickReplies: body.quickReplies });
       return reply({ settings, saved: true });
     }
     const phone = String(body.phone || "");
