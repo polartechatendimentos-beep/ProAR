@@ -379,3 +379,19 @@ label.status-filter select option,.status-filter select option{background:#08101
 .proar-edit-content{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:20px 22px}.proar-edit-footer{border-top:1px solid #31516c;flex-wrap:wrap}.proar-edit-footer>span{font-size:12px;color:#bcd5ed}.proar-edit-footer>div{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .proar-edit-content :is(input,select,textarea){max-width:100%;min-width:0}.proar-edit-content label{min-width:0}
 @media(max-width:680px){.proar-edit-overlay{padding:0}.proar-edit-shell{height:100dvh;max-height:100dvh;border-radius:0;border:0}.proar-edit-header,.proar-edit-footer{padding:12px 14px}.proar-edit-content{padding:14px}.proar-edit-footer>div{width:100%}.proar-edit-footer>div>button{flex:1}}
+
+/* OS creation: readable client search on the white input, including typed text and options. */
+.os-create-layer .customer-search-control{background:#fff!important;border:1px solid #8baed0!important}
+.os-create-layer .customer-search-control>input{background:#fff!important;color:#102b49!important;-webkit-text-fill-color:#102b49!important;font-size:14px!important;font-weight:600!important;opacity:1!important}
+.os-create-layer .customer-search-control>input::placeholder{color:#56728d!important;-webkit-text-fill-color:#56728d!important;opacity:1!important}
+.os-create-layer .customer-search-control:focus-within{border-color:#1768df!important;box-shadow:0 0 0 3px #1768df25!important}
+.os-create-layer .customer-search-results{background:#fff!important;color:#102b49!important}
+.os-create-layer .customer-search-results button{color:#102b49!important}
+.os-create-layer .customer-search-results button:hover{background:#e8f2ff!important}
+.service-picker-quantity{display:flex;flex-direction:column;gap:3px;flex:none;min-width:65px;align-items:center;padding:5px 7px;background:#eaf3ff;border:1px solid #b6d3f4;border-radius:8px}
+.service-picker-quantity>span{font-size:10px!important;font-weight:750;color:#164b83!important}
+.service-picker-quantity>input{width:58px;min-height:32px;border:1px solid #8cb7e6;border-radius:6px;background:#fff;color:#102b49;text-align:center;font-size:14px;font-weight:750}
+.service-picker-grid label.selected{border-color:#3588e5;background:#f0f7ff}
+.service-picker-grid b{font-size:11px!important;line-height:1.4!important}
+.service-picker-grid small{font-size:10px!important;line-height:1.35!important;color:#62758c!important}
+@media(max-width:650px){.service-picker-quantity{min-width:58px;padding:4px}.service-picker-quantity>input{width:50px}}
