@@ -171,6 +171,8 @@ type ServiceOrder = {
   reminderUnit?: "Dias" | "Meses";
   reminderDate?: string;
   reminderMessage?: string;
+  whatsappConsent?: boolean;
+  whatsappOptOut?: boolean;
   reminderStatus?: "Pendente" | "Agendado" | "Enviado";
   lastMaintenanceDate?: string;
   reviewPeriodMonths?: 3 | 6 | 12;
@@ -475,6 +477,8 @@ type ModuleRecord = {
   purchaseId?: string;
   installmentNumber?: number;
   reminderMessage?: string;
+  whatsappConsent?: boolean;
+  whatsappOptOut?: boolean;
   serviceOrderId?: string;
   unit?: string;
   structureId?: string;
@@ -1372,7 +1376,7 @@ function OrderDetail({ order, customerPhone, company, catalog, contracts, close,
           <div className="order-add-items"><label><Search size={14}/><input value={itemSearch} onChange={event => setItemSearch(event.target.value)} placeholder={`Buscar ${itemsTab.toLowerCase()} para adicionar após o lançamento...`}/></label>{itemSearch && <div className="order-add-results">{availableCatalogItems.slice(0,8).map(item => <button type="button" key={item.id} onClick={() => {addCatalogItem(item);setItemSearch("");}}><Plus size={13}/><span><b>{item.name}</b><small>{item.category || item.kind || "Cadastro"}</small></span></button>)}{!availableCatalogItems.length && <small>Nenhum item disponível.</small>}</div>}</div>
           {itemsTab === "Produtos" && <div className={`service-reminder ${currentOrder.reminderEnabled ? "enabled" : ""}`}>
             <div className="reminder-heading"><span><Bell size={18}/></span><div><small>RELACIONAMENTO PÓS-SERVIÇO</small><h4>Lembrete automático para o cliente</h4><p>Após o check-out, o ProAR agenda uma mensagem de manutenção ou higienização.</p></div><label className="reminder-switch"><input type="checkbox" checked={Boolean(currentOrder.reminderEnabled)} onChange={event => configureReminder({ reminderEnabled: event.target.checked })}/><i/></label></div>
-            {currentOrder.reminderEnabled && <div className="reminder-fields"><label>Enviar após<input type="number" min="1" max="60" value={currentOrder.reminderAmount ?? 6} onChange={event => configureReminder({ reminderAmount: Math.max(1, Number(event.target.value) || 1) })}/></label><label>Período<select value={currentOrder.reminderUnit ?? "Meses"} onChange={event => configureReminder({ reminderUnit: event.target.value as "Dias" | "Meses" })}><option>Dias</option><option>Meses</option></select></label><label>Data prevista<input type="date" value={currentOrder.reminderDate ?? reminderDate(6, "Meses", currentOrder.checkOutAt)} onChange={event => update({ reminderDate: event.target.value })}/></label><label className="wide">Mensagem<textarea value={currentOrder.reminderMessage ?? "Olá! Está na hora de realizar a higienização preventiva do seu ar-condicionado. Vamos agendar?"} onChange={event => configureReminder({ reminderMessage: event.target.value })}/></label><div className="reminder-summary"><MessageCircle size={15}/><span><b>{customerPhone || "Cliente sem WhatsApp cadastrado"}</b><small>{currentOrder.checkOutAt ? `Agendado para ${new Date(`${currentOrder.reminderDate}T12:00:00`).toLocaleDateString("pt-BR")}` : "Será agendado automaticamente quando o técnico fizer o check-out."}</small></span></div></div>}
+            {currentOrder.reminderEnabled && <div className="reminder-fields"><label>Enviar após<input type="number" min="1" max="60" value={currentOrder.reminderAmount ?? 6} onChange={event => configureReminder({ reminderAmount: Math.max(1, Number(event.target.value) || 1) })}/></label><label>Período<select value={currentOrder.reminderUnit ?? "Meses"} onChange={event => configureReminder({ reminderUnit: event.target.value as "Dias" | "Meses" })}><option>Dias</option><option>Meses</option></select></label><label>Data prevista<input type="date" value={currentOrder.reminderDate ?? reminderDate(6, "Meses", currentOrder.checkOutAt)} onChange={event => update({ reminderDate: event.target.value })}/></label><label className="wide">Mensagem<textarea value={currentOrder.reminderMessage ?? "Olá! Está na hora de realizar a higienização preventiva do seu ar-condicionado. Vamos agendar?"} onChange={event => configureReminder({ reminderMessage: event.target.value })}/></label><label className="wide"><input type="checkbox" checked={currentOrder.whatsappConsent === true} onChange={event => update({ whatsappConsent: event.target.checked })}/> O cliente autorizou receber este lembrete por WhatsApp</label><label className="wide"><input type="checkbox" checked={currentOrder.whatsappOptOut === true} onChange={event => update({ whatsappOptOut: event.target.checked })}/> O cliente solicitou não receber mensagens</label><p className="wide">O envio automático exige autorização registrada e fica bloqueado quando o cliente solicita a interrupção.</p><div className="reminder-summary"><MessageCircle size={15}/><span><b>{customerPhone || "Cliente sem WhatsApp cadastrado"}</b><small>{currentOrder.checkOutAt ? `Agendado para ${new Date(`${currentOrder.reminderDate}T12:00:00`).toLocaleDateString("pt-BR")}` : "Será agendado automaticamente quando o técnico fizer o check-out."}</small></span></div></div>}
           </div>}
         </section>
         <section className="order-map compact-address">
@@ -4370,7 +4374,7 @@ export default function Home() {
     const currentReminders = updatedModules.Lembretes ?? [];
     if (updatedOrder.status === "Concluída" && updatedOrder.reminderEnabled && updatedOrder.reminderDate) {
       const customer = customerRecords.find(item => item.name === updatedOrder.client);
-      const reminder: ModuleRecord = { id: reminderId, name: `Lembrete pós-serviço • ${updatedOrder.service}`, client: updatedOrder.client, description: updatedOrder.reminderMessage || "Está na hora de realizar a higienização preventiva do seu ar-condicionado.", reminderMessage: updatedOrder.reminderMessage || "Está na hora de realizar a higienização preventiva do seu ar-condicionado.", createdAt: new Date().toLocaleString("pt-BR"), status: "Agendado", date: updatedOrder.reminderDate, category: customer?.phone || "", serviceOrderId: updatedOrder.id };
+      const reminder: ModuleRecord = { id: reminderId, name: `Lembrete pós-serviço • ${updatedOrder.service}`, client: updatedOrder.client, description: updatedOrder.reminderMessage || "Está na hora de realizar a higienização preventiva do seu ar-condicionado.", reminderMessage: updatedOrder.reminderMessage || "Está na hora de realizar a higienização preventiva do seu ar-condicionado.", createdAt: new Date().toLocaleString("pt-BR"), status: "Agendado", date: updatedOrder.reminderDate, category: customer?.phone || "", serviceOrderId: updatedOrder.id, whatsappConsent: updatedOrder.whatsappConsent === true, whatsappOptOut: updatedOrder.whatsappOptOut === true };
       updatedModules = { ...updatedModules, Lembretes: [reminder, ...currentReminders.filter(item => item.id !== reminderId)] };
     } else if (!updatedOrder.reminderEnabled) {
       updatedModules = { ...updatedModules, Lembretes: currentReminders.filter(item => item.id !== reminderId) };

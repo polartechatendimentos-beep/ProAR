@@ -71,7 +71,7 @@ async function processCustomerReminders() {
   const state = rows[0]?.payload;
   if (!state?.moduleRecords?.Lembretes) return { sent: 0, pending: 0 };
   const today = new Date().toISOString().slice(0, 10);
-  const due = state.moduleRecords.Lembretes.filter((item: Record<string, unknown>) => item.status === "Agendado" && String(item.date ?? "") <= today);
+  const due = state.moduleRecords.Lembretes.filter((item: Record<string, unknown>) => item.whatsappConsent === true && item.whatsappOptOut !== true && item.status === "Agendado" && String(item.date ?? "") <= today);
   let sent = 0;
   for (const reminder of due) {
     const config = await loadWhatsAppConfig(companyId);

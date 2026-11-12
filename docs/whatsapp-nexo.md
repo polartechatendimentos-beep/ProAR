@@ -21,7 +21,7 @@ Configurar as variáveis de homologação somente para a branch `feat/proar-what
 
 ## Envios agendados
 
-O cron `/api/cron/whatsapp` está programado a cada cinco minutos. Processa somente empresas ativas com envios habilitados e conexão aberta. Cada lembrete agendado recebe um registro de tentativa único por empresa, identificador e data. A reserva é persistida antes de enviar, impedindo que duas execuções do worker enviem a mesma tarefa. Falhas sem confirmação não são reenviadas automaticamente; devem ser conferidas no WhatsApp.
+O cron `/api/cron/whatsapp` está programado a cada cinco minutos. Processa somente empresas ativas com envios habilitados e conexão aberta. Cada lembrete exige autorização registrada na OS e não pode ter pedido de interrupção marcado. Cada lembrete agendado recebe um registro de tentativa único por empresa, identificador e data. A reserva é persistida antes de enviar, impedindo que duas execuções do worker enviem a mesma tarefa. Falhas sem confirmação não são reenviadas automaticamente; devem ser conferidas no WhatsApp.
 
 O histórico distingue aceitação pelo servidor, processamento e resultado desconhecido. Aceitação não comprova entrega. Ele não armazena o corpo da mensagem e mostra o destinatário mascarado. O worker não sobrescreve o cadastro de lembretes nem outros dados operacionais. O histórico de envios é a fonte do estado da tentativa.
 

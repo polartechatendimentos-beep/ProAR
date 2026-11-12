@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
           for (const reminder of reminders) {
             if (Date.now() - started > 80000 || summary.accepted + summary.unknown >= 20) { await saveCursor(company.id); summary.deferred = true; return NextResponse.json(summary); }
             if (companySent >= 5) break;
-            if (reminder.status !== "Agendado" || typeof reminder.id !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(String(reminder.date || "")) || String(reminder.date) > today) continue;
+            if (reminder.whatsappConsent !== true || reminder.whatsappOptOut === true || reminder.status !== "Agendado" || typeof reminder.id !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(String(reminder.date || "")) || String(reminder.date) > today) continue;
             const sourceId = `reminder:${reminder.id}:${reminder.date}`;
             if (attempted.has(evolutionJobId(company.id, sourceId))) continue;
             let to = String(reminder.category || "").replace(/\D/g, "");

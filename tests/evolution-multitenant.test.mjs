@@ -59,7 +59,7 @@ test('scheduled worker resolves each company database and never mixes recipients
  evolutionJobPrefix:id=>`jobs-${id}:`,evolutionJobId:(id,source)=>`${id}:${source}`,
  dispatchEvolutionJob:async(company,id,to,text)=>{sends.push({company,id,to,text});return {status:'accepted'};},
  supabaseRest:async(path,options)=>{if(options)return Response.json([]);if(path.startsWith('proar_state'))return Response.json([]);return Response.json([{id:'a',trade_name:'Empresa A'},{id:'b',trade_name:'Empresa B'}]);},
- databaseFetch:async(url,options)=>{urls.push({url,options});if(url.includes('select=id&'))return Response.json([]);const a=url.includes('db-a');return Response.json([{payload:{_companyId:a?'a':'b',moduleRecords:{Lembretes:[{id:'R1',date:'2020-01-01',status:'Agendado',category:a?'17999990001':'17999990002',client:a?'Cliente A':'Cliente B',reminderMessage:'Lembrete'}]}}}]);}
+ databaseFetch:async(url,options)=>{urls.push({url,options});if(url.includes('select=id&'))return Response.json([]);const a=url.includes('db-a');return Response.json([{payload:{_companyId:a?'a':'b',moduleRecords:{Lembretes:[{id:'R1',date:'2020-01-01',status:'Agendado',whatsappConsent:true,category:a?'17999990001':'17999990002',client:a?'Cliente A':'Cliente B',reminderMessage:'Lembrete'},{id:'R2',date:'2020-01-01',status:'Agendado',category:'17999990003',whatsappConsent:false},{id:'R3',date:'2020-01-01',status:'Agendado',category:'17999990004',whatsappConsent:true,whatsappOptOut:true}]}}}]);}
  });
  const request={headers:new Headers({authorization:'Bearer test-only'})};
  assert.equal((await handler({headers:new Headers()})).status,401);
