@@ -7,6 +7,8 @@ export const runtime = "nodejs";
 const headers = { "Cache-Control": "no-store, private" };
 function operator(request: NextRequest) {
   const session = readSession(request.cookies.get("proar_session")?.value);
+  const expectedCompany = request.headers.get("x-proar-company-id");
+  if (expectedCompany && expectedCompany !== session?.companyId) return null;
   return session?.companyId && (session.permissions.includes("*") || session.permissions.includes("Configurações")) ? { ...session, companyId: session.companyId } : null;
 }
 function sameOrigin(request: NextRequest) {

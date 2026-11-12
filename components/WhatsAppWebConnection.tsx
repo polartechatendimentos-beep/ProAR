@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 
 type Connection = { configured?: boolean; needsProvisioning?: boolean; state?: "open" | "connecting" | "close"; qr?: string; error?: string; automationEnabled?: boolean; automationAvailable?: boolean };
 
-export function WhatsAppWebConnection() {
+export function WhatsAppWebConnection({ companyId }: { companyId: string }) {
   const [connection, setConnection] = useState<Connection | null>(null);
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState<{ status: string; recipient: string; createdAt: string; error?: string }[]>([]);
 
   async function loadHistory() {
     try {
-      const response = await fetch("/api/whatsapp/web/history", { cache: "no-store" });
+      const response = await fetch("/api/whatsapp/web/history", { cache: "no-store", headers: { "X-Proar-Company-ID": companyId } });
       if (!response.ok) throw new Error();
       const data = await response.json();
       setHistory(data.items || []);
@@ -21,7 +21,7 @@ export function WhatsAppWebConnection() {
   async function refresh(pair = false) {
     setBusy(true);
     try {
-      const response = await fetch("/api/whatsapp/web", { method: pair ? "POST" : "GET", cache: "no-store" });
+      const response = await fetch("/api/whatsapp/web", { method: pair ? "POST" : "GET", cache: "no-store", headers: { "X-Proar-Company-ID": companyId } });
       const data: Connection = await response.json();
       setConnection(previous => ({
         ...data,
@@ -37,7 +37,7 @@ export function WhatsAppWebConnection() {
   async function toggleAutomation() {
     setBusy(true);
     try {
-      const response = await fetch("/api/whatsapp/web", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ automationEnabled: !connection?.automationEnabled }) });
+      const response = await fetch("/api/whatsapp/web", { method: "PUT", headers: { "Content-Type": "application/json", "X-Proar-Company-ID": companyId }, body: JSON.stringify({ automationEnabled: !connection?.automationEnabled }) });
       const data: Connection = await response.json();
       setConnection(previous => ({ ...previous, ...data }));
     } catch { setConnection(previous => ({ ...previous, error: "Não foi possível salvar os envios automáticos." })); }
@@ -51,7 +51,7 @@ export function WhatsAppWebConnection() {
     const controller = new AbortController();
     async function checkPairing() {
       try {
-        const response = await fetch("/api/whatsapp/web", { cache: "no-store", signal: controller.signal });
+        const response = await fetch("/api/whatsapp/web", { cache: "no-store", signal: controller.signal, headers: { "X-Proar-Company-ID": companyId } });
         if (!response.ok) return;
         const data: Connection = await response.json();
         if (active && data.state === "open") setConnection(data);
@@ -68,7 +68,7 @@ export function WhatsAppWebConnection() {
       window.clearTimeout(timer);
       window.clearTimeout(timeout);
     };
-  }, [connection?.qr]);
+  }, [connection?.qr, companyId]);
 
   return <div className="settings-form whatsapp-settings-form">
     <div className="wide">

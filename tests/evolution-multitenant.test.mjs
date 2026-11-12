@@ -26,6 +26,7 @@ test('connection API rejects anonymous/unauthorized and cross-origin calls befor
  assert.equal((await active.POST({...request,headers:new Headers({'sec-fetch-site':'cross-site'})})).status,403);
  assert.equal((await active.PUT({...request,headers:new Headers({'sec-fetch-site':'same-origin',origin:'https://other.test'})})).status,403);
  assert.equal(calls.length,0);
+ assert.equal((await active.GET({...request,headers:new Headers({'x-proar-company-id':'b'})})).status,403);assert.equal(calls.length,0);
  const result=await active.GET(request);assert.equal(result.body.needsProvisioning,true);assert.ok(calls.every(id=>id==='a'));
 });
 test('tenant store refuses foreign decrypted records and never falls back to primary tenant database',async()=>{
