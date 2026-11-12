@@ -3270,7 +3270,7 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
   const [financialStatus, setFinancialStatus] = useState<Customer["financialStatus"]>("Liberado");
   const [address, setAddress] = useState("");
   const [addressValidated, setAddressValidated] = useState(false);
-  const [showAddressMap, setShowAddressMap] = useState(false);
+  useEffect(() => {setAddressValidated(false);},[address]);
   const [date, setDate] = useState("");
   const [description, setDescription] = useState("");
   const requestedModule = title.includes("•") ? title.split("•").pop()!.trim() : title.replace(/^Novo(a)?\s+/i, "");
@@ -3505,7 +3505,7 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
       setNeighborhood(result.neighborhood || ""); setCustomerCity(result.city || ""); setCustomerState(result.state || "");
       setStateRegistration(result.stateRegistration || ""); setCnaeMain(result.cnaeMain || ""); setTaxStatus(result.taxStatus || "");
       const fullAddress=composeCustomerAddress({street:result.street||"",addressNumber:"",complement:result.complement||"",neighborhood:result.neighborhood||"",city:result.city||"",state:result.state||"",zipCode:result.zipCode||""});
-      setAddress(fullAddress); setAddressValidated(false); setShowAddressMap(false);
+      setAddress(fullAddress); setAddressValidated(false); 
       setDocumentLookup({loading:false,message:"CNPJ localizado. Confira e altere qualquer dado antes de salvar.",kind:"ok"});
     } catch (error) { setDocumentLookup({loading:false,message:error instanceof Error ? error.message : "Não foi possível consultar o CNPJ.",kind:"error"}); }
   };
@@ -3865,11 +3865,12 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
             <label className="text-slate-200 font-semibold text-xs complement">Complemento<input value={complement} onChange={event => {setComplement(event.target.value); setAddress(composeCustomerAddress({complement:event.target.value}));}}/></label>
             <label className="text-slate-200 font-semibold text-xs city">Cidade<input value={customerCity} onChange={event => {setCustomerCity(event.target.value); setAddress(composeCustomerAddress({city:event.target.value}));}}/></label>
             <label className="text-slate-200 font-semibold text-xs state">UF<input maxLength={2} value={customerState} onChange={event => {const value=event.target.value.toUpperCase(); setCustomerState(value); setAddress(composeCustomerAddress({state:value}));}}/></label>
-            <label className="text-slate-200 font-semibold text-xs full">Endereço completo<input value={address} onChange={event => { setAddress(event.target.value); setAddressValidated(false); setShowAddressMap(false); }} placeholder="Endereço consolidado para atendimento"/></label>
+            <label className="text-slate-200 font-semibold text-xs full">Endereço completo<input value={address} onChange={event => { setAddress(event.target.value); setAddressValidated(false);  }} placeholder="Endereço consolidado para atendimento"/></label>
             <div className="full address-validation compact">
               <div><span className="map-validation-icon"><MapPin size={17}/></span><div><b>Validar localização</b><small>Confira o endereço antes de salvar.</small></div></div>
-              <button type="button" disabled={!address.trim()} onClick={() => { setShowAddressMap(true); setAddressValidated(true); }}>{addressValidated ? <CheckCircle2 size={15}/> : <Search size={15}/>} {addressValidated ? "Validado" : "Validar no mapa"}</button>
-              {showAddressMap && address.trim() && <div className="address-map-preview"><iframe title={`Validação de ${address}`} src={`https://www.google.com/maps?q=${encodeURIComponent(address)}&output=embed`} loading="lazy" referrerPolicy="no-referrer-when-downgrade"/><a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`} target="_blank" rel="noreferrer">Ver resultado completo no Google Maps <ArrowRight size={12}/></a></div>}
+              <a className="customer-map-external" href={address.trim() ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}` : undefined} target="_blank" rel="noopener noreferrer" aria-disabled={!address.trim()} onClick={event => {if (!address.trim()) event.preventDefault();}}>Abrir no Google Maps <ArrowRight size={13}/></a>
+              <label className="customer-map-confirm"><input type="checkbox" checked={addressValidated} disabled={!address.trim()} onChange={event => setAddressValidated(event.target.checked)}/> Conferi o endereço informado</label>
+              <small className="customer-map-note">A conferência é manual. O Google Maps abre em outra aba; a localização não é validada automaticamente.</small>
             </div>
           </div>
         </section>
