@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';import {stripTypeScriptTypes} from 'node:module';import {runInNewContext} from 'node:vm';import {createHash} from 'node:crypto';
-import {localTriage,localOrderDraft,applyChatCommand,canReadChat,chatSectors} from '../lib/chatdesk-local.ts';
+import {localTriage,localOrderDraft,applyChatCommand,canReadChat,chatSectors,chatQueuePriority,sortChatQueue} from '../lib/chatdesk-local.ts';
 import {chatWebhookToken,validChatWebhookToken,parseEvolutionInbound} from '../lib/chatdesk-events.ts';
 const source=async path=>stripTypeScriptTypes(await readFile(new URL(path,import.meta.url),'utf8')).replace(/^import .*;$/gm,'').replace(/^export /gm,'');
 const actor={username:'jose',displayName:'José da Silva',role:'Técnico',admin:false,sectors:['Técnico'],writeSectors:['Técnico'],canWrite:true};
@@ -68,4 +68,17 @@ test('only a manager can record renewed consent and automatic replies remain pau
  const blocked={...chat(),optOut:true};assert.throws(()=>applyChatCommand(blocked,actor,{requestId:id,action:'consent',text:'Cliente autorizou por telefone'},'2026-11-12T11:00:00Z'),/Somente a gestão/);
  const renewed=applyChatCommand(blocked,{...actor,admin:true},{requestId:id,action:'consent',text:'Cliente autorizou por telefone'},'2026-11-12T11:00:00Z').chat;
  assert.equal(renewed.optOut,false);assert.equal(renewed.botPaused,true);assert.equal(renewed.messages.at(-1).direction,'event');assert.ok(renewed.messages.at(-1).text.includes('Cliente autorizou por telefone'));
+});
+
+test('priority queue ranks real urgent inbound and overdue unanswered conversations before closed items',()=>{
+ const now=Date.parse('2026-11-12T13:00:00Z');
+ const urgent={...chat(),phone:'5517999990001',messages:[{id:'u',direction:'in',text:'Cheiro de queimado no ar',at:'2026-11-12T12:58:00Z'}],updatedAt:'2026-11-12T12:58:00Z'};
+ const overdue={...chat(),phone:'5517999990002',messages:[{id:'o',direction:'in',text:'Preciso de orçamento',at:'2026-11-12T10:00:00Z'}],updatedAt:'2026-11-12T10:00:00Z'};
+ const replied={...chat(),phone:'5517999990003',messages:[{id:'i',direction:'in',text:'Olá',at:'2026-11-12T12:00:00Z'},{id:'r',direction:'out',actor:'jose',text:'Olá!',at:'2026-11-12T12:05:00Z'}],updatedAt:'2026-11-12T12:05:00Z'};
+ const closed={...urgent,phone:'5517999990004',stage:'Concluído'};
+ assert.equal(chatQueuePriority(urgent,now).urgent,true);
+ assert.equal(chatQueuePriority(overdue,now).waitingMinutes,180);
+ assert.equal(chatQueuePriority(replied,now).waiting,false);
+ assert.equal(chatQueuePriority(closed,now).urgent,false);
+ assert.deepEqual(sortChatQueue([closed,replied,overdue,urgent],now).map(x=>x.phone),[urgent.phone,overdue.phone,replied.phone,closed.phone]);
 });
