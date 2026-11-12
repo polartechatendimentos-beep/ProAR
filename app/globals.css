@@ -379,3 +379,5 @@ label.status-filter select option,.status-filter select option{background:#08101
 .proar-edit-content{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:20px 22px}.proar-edit-footer{border-top:1px solid #31516c;flex-wrap:wrap}.proar-edit-footer>span{font-size:12px;color:#bcd5ed}.proar-edit-footer>div{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .proar-edit-content :is(input,select,textarea){max-width:100%;min-width:0}.proar-edit-content label{min-width:0}
 @media(max-width:680px){.proar-edit-overlay{padding:0}.proar-edit-shell{height:100dvh;max-height:100dvh;border-radius:0;border:0}.proar-edit-header,.proar-edit-footer{padding:12px 14px}.proar-edit-content{padding:14px}.proar-edit-footer>div{width:100%}.proar-edit-footer>div>button{flex:1}}
+
+.os-report-variant-actions{display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap}.os-report-variant-actions>.outline-btn{white-space:nowrap}@media(max-width:760px){.os-report-variant-actions{width:100%}.os-report-variant-actions>.outline-btn{flex:1 1 150px;justify-content:center}}
