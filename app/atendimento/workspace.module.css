@@ -208,3 +208,19 @@
   .chatHeader {padding:12px}
   .composer {padding:12px}
 }
+
+.systemActions {display:grid;gap:18px;margin-bottom:20px}
+.systemActions>form {display:grid;gap:16px;max-width:800px;padding:20px;border:1px solid var(--line);border-radius:12px;background:var(--surface-soft)}
+.systemActions label {display:grid;gap:7px;font-size:12px;color:var(--ink);min-width:0}
+.systemActions form>button {justify-self:start;background:var(--blue);color:#fff;border-color:var(--blue)}
+.systemActions .actions {padding:0;background:transparent;align-items:end}
+.systemActions .actions>label {flex:1;min-width:160px}
+.systemActions caption {text-align:left;padding:12px 0;font-size:13px;font-weight:650;color:var(--ink)}
+.systemActions details {padding:12px 15px;border:1px solid var(--line);border-radius:9px;font-size:12px}
+.systemActions summary {cursor:pointer;font-weight:600}
+.systemActions hr {margin:4px 0}
+.actionReview {padding:22px;border:1px solid #9dbfe0;border-radius:12px;background:var(--surface-soft);max-width:800px}
+.actionReview h3 {margin:0 0 12px;font-size:16px}
+.actionReview>p {white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;line-height:1.8}
+.actionReview button:first-child {background:var(--blue);border-color:var(--blue);color:#fff}
+@media(max-width:700px){.systemActions>form,.actionReview{padding:14px}.systemActions .actions>label{min-width:100%;width:100%}}

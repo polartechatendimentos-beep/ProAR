@@ -1,3 +1,4 @@
+import { recordAppointmentReply } from "../../../../../../lib/chatdesk-appointment-reply";
 import { NextRequest, NextResponse } from "next/server";
 import { validChatWebhookToken, parseEvolutionInbound } from "../../../../../../lib/chatdesk-events";
 import { requiredSecret } from "../../../../../../lib/security-env";
@@ -34,9 +35,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ co
         next.updatedAt = new Date().toISOString();
         return next;
       });
+      // Runs on redelivery too: if the chat write succeeded but the agenda failed, retry safely.
+      const appointmentHandled = !triage.optOut && await recordAppointmentReply(companyId, event);
       const chat = result.chat;
       const recentBot = chat?.messages.some(message => message.actor === "local-assistant" && Date.now() - Date.parse(message.at) < 300000);
-      if (!result.changed || !chat || !settings.botEnabled || chat.optOut || chat.botPaused || chat.assignee || recentBot || !await tenantEvolutionAutomationEnabled(companyId)) continue;
+      if (appointmentHandled || !result.changed || !chat || !settings.botEnabled || chat.optOut || chat.botPaused || chat.assignee || recentBot || !await tenantEvolutionAutomationEnabled(companyId)) continue;
       const botId = `local:${event.id}`;
       const text = `*Assistente automático${settings.companyName ? ` — ${settings.companyName}` : ""}:*\n${settings.greeting ? settings.greeting + "\n\n" : ""}${triage.reply}`;
       // Reserve ownership in the conversation as well as in the outbox. A human

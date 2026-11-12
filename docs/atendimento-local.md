@@ -41,3 +41,15 @@ Novas mensagens, comandos e mudanças de estado usam gravação otimista com rev
 - Conferir login, dois clientes com bases provisionadas, setor de cada colaborador, recepção real, assinatura, nota interna, transferência, teste de envio, interrupção e reconexão.
 - Dimensionar a VPS para o número de empresas simultâneas. O código não compra nem aumenta o plano.
 - Não há IA generativa, interpretação de imagens, anexos pelo chat, indicadores de ROI fictícios ou emissão fiscal automática por texto de cliente.
+
+## Ações operacionais (cadastros, agenda e confirmação)
+
+A aba **Ações no sistema** consulta o estado operacional através da mesma sessão e projeção de permissões do ERP. A busca retorna até 30 clientes, 50 OS e 50 resumos de registros do módulo escolhido; não devolve credenciais, anexos ou o snapshot completo. Não existe acesso irrestrito nem execução de texto recebido no WhatsApp.
+
+O assistente continua local e guiado, sem modelo generativo externo. Os formulários preparam comandos limitados para cadastrar um cliente inicial (nome, telefone e endereço), criar uma OS agendada e solicitar confirmação pelo WhatsApp. Cadastro fiscal completo permanece no módulo Clientes. A revisão expira em cinco minutos e é assinada, vinculada à empresa, usuário, comando e versão dos dados. Mudança concorrente exige nova revisão. Gravações usam o mesmo endpoint transacional, permissões, validações e auditoria do ERP. Repetir a mesma solicitação não duplica o cadastro ou a OS.
+
+Agendamento exige cliente existente, técnico ativo disponível na consulta, data/hora futura de Brasília e duração entre 15 e 480 minutos. Há bloqueio de sobreposição do técnico ou cliente; registros antigos sem duração reservam 60 minutos. Ainda não aplica disponibilidade de turnos, feriados ou tempo de deslocamento. Perfis técnicos com visão parcial não distribuem a agenda da equipe. A seleção de técnicos depende de permissão para consultar Funcionários nesta etapa.
+
+O pedido de confirmação deriva destinatário, serviço e horário da OS; tem chave de envio durável por empresa, OS e horário, respeita opt-out e não cria confirmação por inferência de entrega. O cliente responde exatamente `CONFIRMAR OS-...` ou `REAGENDAR OS-...`. No webhook autenticado, somente uma resposta do telefone do cliente vinculado, posterior a um envio aceito para o horário atual, recente e antes do atendimento pode atualizar o campo de confirmação. REAGENDAR registra solicitação, preserva o horário e requer tratamento pela equipe. Mensagens antigas, de outro telefone ou com instruções extras não executam ações. A atualização é concorrente, auditada e reprocessável; usa a persistência operacional com a revisão vigente. Recebimento precisa estar ativado na conexão da empresa.
+
+Limites: ainda não interpreta livremente pedidos em linguagem natural, cria cadastros/agendamentos autonomamente a partir de mensagens de clientes, nem realiza mutações financeiras/fiscais pelo chat. As ações disponíveis são explícitas e respeitam o perfil autenticado.
