@@ -67,3 +67,22 @@ export function applyChatCommand(chat: ChatConversation, actor: ChatActor, comma
   next.requests = [...next.requests, command.requestId].slice(-1500); next.updatedAt = now;
   return { chat: next, replay: false };
 }
+
+/** Prioridade operacional da fila carregada: sem métricas inventadas ou SLA presumido. */
+export function chatQueuePriority(chat: ChatConversation, nowMs: number) {
+  const customerMessages = chat.messages.filter(message => message.direction === "in");
+  const lastCustomer = customerMessages.at(-1);
+  const lastHumanReply = chat.messages.filter(message => message.direction === "out" && message.actor !== "local-assistant").at(-1);
+  const waiting = Boolean(lastCustomer && (!lastHumanReply || Date.parse(lastCustomer.at) > Date.parse(lastHumanReply.at)));
+  const elapsedMs = lastCustomer ? Math.max(0, nowMs - Date.parse(lastCustomer.at)) : 0;
+  const urgent = Boolean(waiting && lastCustomer && localTriage(lastCustomer.text).urgent);
+  const open = chat.stage !== "Concluído";
+  const band = !open ? 4 : urgent ? 0 : waiting && elapsedMs >= 60 * 60 * 1000 ? 1 : waiting ? 2 : 3;
+  return { band, waiting: open && waiting, urgent: open && urgent, waitingMinutes: open && waiting ? Math.floor(elapsedMs / 60000) : 0 };
+}
+export function sortChatQueue(items: ChatConversation[], nowMs: number) {
+  return [...items].sort((a, b) => {
+    const pa = chatQueuePriority(a, nowMs), pb = chatQueuePriority(b, nowMs);
+    return pa.band - pb.band || (pa.waiting && pb.waiting ? pb.waitingMinutes - pa.waitingMinutes : 0) || Date.parse(b.updatedAt) - Date.parse(a.updatedAt);
+  });
+}
