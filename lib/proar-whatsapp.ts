@@ -2,6 +2,8 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 import { get, put } from "@vercel/blob";
 import { databaseFetch } from "./supabase-rest";
 import { resolveTenantDb, tenantHeaders } from "./tenant-rest";
+import { sendEvolutionTextWithConfig } from "./proar-evolution";
+import { evolutionConnection, tenantEvolutionAutomationEnabled } from "./evolution-tenant";
 
 const storagePath = (companyId:string) => `proar/whatsapp/${createHash("sha256").update(companyId).digest("hex").slice(0,24)}/config.enc`;
 const databaseRecordId = (companyId:string) => `whatsapp-config:${createHash("sha256").update(companyId).digest("hex").slice(0,24)}`;
@@ -112,7 +114,21 @@ export async function testWhatsAppConnection(config: WhatsAppConfig) {
   return result as { id?: string; display_phone_number?: string; verified_name?: string; quality_rating?: string };
 }
 
-export async function sendWhatsAppTemplate(config: WhatsAppConfig, to: string, template: string, parameters: string[]) {
+export async function sendWhatsAppTemplate(config: WhatsAppConfig, to: string, template: string, parameters: string[], companyId: string) {
+  if (await tenantEvolutionAutomationEnabled(companyId)) {
+    let text: string;
+    if (template === config.tenderTemplate && parameters.length === 3) {
+      text = `ProAR • ${parameters[0]} nova(s) oportunidade(s) de licitação\n\n${parameters[1]}\n${parameters[2]}`;
+    } else if (template === config.reminderTemplate && parameters.length === 2) {
+      text = `Olá, ${parameters[0]}!\n\n${parameters[1]}\n\nPolarTech Ar Condicionado`;
+    } else {
+      throw new Error("Modelo de mensagem não configurado para o WhatsApp Web.");
+    }
+    const stored = await evolutionConnection(companyId);
+    if (!stored) throw new Error("Conexão do WhatsApp não encontrada.");
+    const accepted = await sendEvolutionTextWithConfig(stored.config, normalizeWhatsAppNumber(to, config.defaultCountry), text);
+    return { messages: [{ id: accepted.messageId }], status: accepted.status, provider: "evolution" };
+  }
   if (!config.active || !config.phoneNumberId || !config.accessToken) throw new Error("Integração do WhatsApp não está ativa");
   const response = await fetch(`https://graph.facebook.com/${config.apiVersion || "v23.0"}/${config.phoneNumberId}/messages`, { method: "POST", headers: { Authorization: `Bearer ${config.accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", to: normalizeWhatsAppNumber(to, config.defaultCountry), type: "template", template: { name: template, language: { code: "pt_BR" }, components: [{ type: "body", parameters: parameters.map(text => ({ type: "text", text })) }] } }) });
   const result = await response.json();

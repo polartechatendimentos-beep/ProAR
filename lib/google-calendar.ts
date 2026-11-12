@@ -63,6 +63,10 @@ export function verifyGoogleState(state:string) {
   try{const parsed=JSON.parse(Buffer.from(payload,"base64url").toString("utf8")) as {companyId:string;username:string;exp:number};return parsed.exp>Date.now()?parsed:null;}catch{return null;}
 }
 
+export function googleOAuthConfigured() {
+  return Boolean(process.env.GOOGLE_CALENDAR_CLIENT_ID?.trim() && process.env.GOOGLE_CALENDAR_CLIENT_SECRET?.trim());
+}
+
 export function googleOAuthConfig(origin:string) {
   const clientId=process.env.GOOGLE_CALENDAR_CLIENT_ID?.trim()||"";
   const clientSecret=process.env.GOOGLE_CALENDAR_CLIENT_SECRET?.trim()||"";

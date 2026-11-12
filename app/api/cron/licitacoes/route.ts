@@ -2,6 +2,7 @@ import { databaseFetch, masterDatabaseConfig } from "../../../../lib/supabase-re
 import { NextRequest, NextResponse } from "next/server";
 import { searchAutomaticTenders, type PncpTender } from "../../../../lib/licitacoes-search";
 import { loadWhatsAppConfig, sendWhatsAppTemplate } from "../../../../lib/proar-whatsapp";
+import { tenantEvolutionAutomationEnabled } from "../../../../lib/evolution-tenant";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -49,15 +50,20 @@ async function saveStore(store: TenderStore) {
 }
 
 async function notifyWhatsApp(items: PncpTender[]) {
-  const config = await loadWhatsAppConfig();
-  if (!config.active || !config.accessToken || !config.phoneNumberId || !items.length) return "Aguardando configuração da API oficial do WhatsApp";
+  const companyId = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
+  const config = await loadWhatsAppConfig(companyId);
+  const evolution = await tenantEvolutionAutomationEnabled(companyId);
+  if ((!evolution && (!config.active || !config.accessToken || !config.phoneNumberId)) || !items.length) return "Aguardando configuração do WhatsApp";
   const first = items[0];
   const url = first.orgaoEntidade?.cnpj && first.anoCompra && first.sequencialCompra ? `https://pncp.gov.br/app/editais/${first.orgaoEntidade.cnpj}/${first.anoCompra}/${first.sequencialCompra}` : "https://pncp.gov.br/app/editais";
-  await sendWhatsAppTemplate(config, config.tenderTo, config.tenderTemplate, [String(items.length), (first.objetoCompra ?? "Nova oportunidade").slice(0, 180), url]);
+  await sendWhatsAppTemplate(config, config.tenderTo, config.tenderTemplate, [String(items.length), (first.objetoCompra ?? "Nova oportunidade").slice(0, 180), url], companyId);
   return "Enviado";
 }
 
 async function processCustomerReminders() {
+  const companyId = process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
+  // Evolution reminders use a separate tenant-scoped worker with durable deduplication.
+  if (await tenantEvolutionAutomationEnabled(companyId)) return { sent: 0, pending: 0, delegated: true };
   const { url, key } = supabaseConfig();
   const response = await databaseFetch(`${url}/rest/v1/proar_state?id=eq.main&select=payload`, { headers: { apikey: key, Authorization: `Bearer ${key}` }, cache: "no-store" });
   if (!response.ok) throw new Error(await response.text());
@@ -68,10 +74,10 @@ async function processCustomerReminders() {
   const due = state.moduleRecords.Lembretes.filter((item: Record<string, unknown>) => item.status === "Agendado" && String(item.date ?? "") <= today);
   let sent = 0;
   for (const reminder of due) {
-    const config = await loadWhatsAppConfig();
+    const config = await loadWhatsAppConfig(companyId);
     const to = String(reminder.category ?? "").replace(/\D/g, "");
     if (!config.active || !to) continue;
-    try { await sendWhatsAppTemplate(config, to, config.reminderTemplate, [String(reminder.client ?? "cliente"), String(reminder.reminderMessage ?? reminder.description ?? "Está na hora da higienização.").slice(0, 300)]); reminder.status = "Enviado"; reminder.description = `${reminder.description} • WhatsApp enviado em ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`; sent += 1; } catch (error) { console.error("Reminder WhatsApp failed", error); }
+    try { await sendWhatsAppTemplate(config, to, config.reminderTemplate, [String(reminder.client ?? "cliente"), String(reminder.reminderMessage ?? reminder.description ?? "Está na hora da higienização.").slice(0, 300)], companyId); reminder.status = "Enviado"; reminder.description = `${reminder.description} • WhatsApp enviado em ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`; sent += 1; } catch (error) { console.error("Reminder WhatsApp failed", error); }
   }
   if (sent) {
     const save = await databaseFetch(`${url}/rest/v1/proar_state?on_conflict=id`, { method: "POST", headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ id: "main", payload: state, updated_at: new Date().toISOString() }) });
