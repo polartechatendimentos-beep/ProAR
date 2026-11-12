@@ -67,3 +67,28 @@ export function applyChatCommand(chat: ChatConversation, actor: ChatActor, comma
   next.requests = [...next.requests, command.requestId].slice(-1500); next.updatedAt = now;
   return { chat: next, replay: false };
 }
+
+/** Indicadores somente das conversas carregadas e visíveis ao operador.
+ * Não representa toda a base quando há paginação nem substitui auditoria histórica.
+ */
+export function loadedChatMetrics(chats: ChatConversation[]) {
+  const sectors: Record<string, number> = {};
+  let completed = 0, unanswered = 0, firstReplyTotalMs = 0, firstReplySamples = 0;
+  for (const chat of chats) {
+    sectors[chat.sector] = (sectors[chat.sector] || 0) + 1;
+    if (chat.stage === "Concluído") completed++;
+    const inbound = chat.messages.filter(message => message.direction === "in").sort((a,b) => Date.parse(a.at)-Date.parse(b.at));
+    const human = chat.messages.filter(message => message.direction === "out" && Boolean(message.actor) && message.actor !== "local-assistant").sort((a,b) => Date.parse(a.at)-Date.parse(b.at));
+    const lastInbound = inbound.at(-1);
+    const lastReply = human.at(-1);
+    if (chat.stage !== "Concluído" && lastInbound && (!lastReply || Date.parse(lastReply.at) < Date.parse(lastInbound.at))) unanswered++;
+    if (inbound.length && human.length) {
+      const first = inbound[0], reply = human.find(message => Date.parse(message.at) >= Date.parse(first.at));
+      if (reply) {
+        const delta = Date.parse(reply.at) - Date.parse(first.at);
+        if (Number.isFinite(delta) && delta >= 0) { firstReplyTotalMs += delta; firstReplySamples++; }
+      }
+    }
+  }
+  return { total: chats.length, completed, unanswered, sectors, firstReplySamples, averageFirstReplyMinutes: firstReplySamples ? Math.round(firstReplyTotalMs / firstReplySamples / 60000) : null };
+}
