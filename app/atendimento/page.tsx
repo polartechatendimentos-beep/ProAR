@@ -16,6 +16,7 @@ const statusLabel = (value?: string) => value === "accepted" ? "Aceito pelo serv
 export default function Atendimento() {
   const [tab, setTab] = useState<typeof tabs[number]>("Atendimentos");
   const [queue, setQueue] = useState<Queue | null>(null);
+  const [queueClock, setQueueClock] = useState(0);
   const [selected, setSelected] = useState("");
   const [chat, setChat] = useState<ChatConversation | null>(null);
   const [search, setSearch] = useState("");
@@ -41,6 +42,7 @@ export default function Atendimento() {
       if (!response.ok) throw new Error(data.error || "Central indisponível.");
       setQueue(previous => ({ ...data, items: offset && previous ? [...new Map([...previous.items, ...data.items].map(item => [item.phone, item])).values()] : data.items }));
       setSettings(previous => previous || data.settings);
+      setQueueClock(Date.now());
       setLoadError("");
     } catch (error) { setLoadError(error instanceof Error ? error.message : "Falha ao carregar."); }
     finally { setLoading(false); }
@@ -62,7 +64,7 @@ export default function Atendimento() {
     const timer = window.setInterval(() => { if (document.visibilityState === "visible") { void loadQueue(); if (selected) void loadChat(selected); } }, 15000);
     return () => window.clearInterval(timer);
   }, [loadQueue, loadChat, selected]);
-  const filtered = useMemo(() => sortChatQueue((queue?.items || []).filter(item => (!mine || item.assignee === queue?.actor.username) && (sector === "Todos" || item.sector === sector) && `${item.name} ${item.phone} ${item.messages.at(-1)?.text || ""}`.toLowerCase().includes(search.toLowerCase())), Date.now()), [queue, mine, sector, search]);
+  const filtered = useMemo(() => sortChatQueue((queue?.items || []).filter(item => (!mine || item.assignee === queue?.actor.username) && (sector === "Todos" || item.sector === sector) && `${item.name} ${item.phone} ${item.messages.at(-1)?.text || ""}`.toLowerCase().includes(search.toLowerCase())), queueClock), [queue, mine, sector, search, queueClock]);
   const assistant = localTriage(chat?.messages.filter(item => item.direction === "in").at(-1)?.text || "");
   const draft = chat ? localOrderDraft(chat) : null;
   const canWrite = Boolean(queue?.actor.admin || (chat && queue?.actor.writeSectors.includes(chat.sector)));
@@ -113,7 +115,7 @@ export default function Atendimento() {
     {queue && tab === "Atendimentos" && <div className={styles.desk}>
       <aside className={styles.queue}><div className={styles.queueTitle}><div><span className={styles.eyebrow}>CAIXA DE ENTRADA</span><h2>Conversas <span>{filtered.length}</span></h2></div><Inbox size={20}/></div><label className={styles.searchField}><Search size={16}/><input aria-label="Buscar atendimento" value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar cliente ou conversa"/></label><div className={styles.filters}><select aria-label="Filtrar setor" value={sector} onChange={event => setSector(event.target.value)}><option>Todos</option>{queue.actor.sectors.map(item => <option key={item}>{item}</option>)}</select><label><input type="checkbox" checked={mine} onChange={event => setMine(event.target.checked)}/> Meus</label></div>
         {!filtered.length && <div className={styles.queueEmpty}><span><Inbox size={26}/></span><b>{search || mine || sector !== "Todos" ? "Nenhum resultado" : "Sua fila está organizada"}</b><p>{search || mine || sector !== "Todos" ? "Experimente outro termo ou ajuste os filtros para encontrar o atendimento." : "As novas conversas aparecerão aqui quando o WhatsApp da empresa estiver conectado."}</p>{queue.actor.admin && !search && <button onClick={() => setTab("Conexão")}><Plug size={14}/> Configurar WhatsApp</button>}</div>}
-        {filtered.map(item => <button key={item.phone} className={`${styles.contact} ${selected === item.phone ? styles.selected : ""}`} onClick={() => { selectConversation(item.phone); setTab("Atendimentos"); }}><strong>{item.name}</strong>{(() => { const priority = chatQueuePriority(item, Date.now()); return priority.urgent ? <small role="status">⚠ Urgência técnica • aguardando resposta</small> : priority.waiting ? <small>Aguardando resposta • {priority.waitingMinutes < 60 ? `${priority.waitingMinutes} min` : `${Math.floor(priority.waitingMinutes / 60)} h`}</small> : null; })()}<small>{item.sector} • {item.stage}</small><span>{item.messages.at(-1)?.text || "Sem mensagens"}</span><small>{item.assignee ? `Responsável: ${item.assignee}` : "Aguardando responsável"}</small></button>)}
+        {filtered.map(item => <button key={item.phone} className={`${styles.contact} ${selected === item.phone ? styles.selected : ""}`} onClick={() => { selectConversation(item.phone); setTab("Atendimentos"); }}><strong>{item.name}</strong>{(() => { const priority = chatQueuePriority(item, queueClock); return priority.urgent ? <small role="status">⚠ Urgência técnica • aguardando resposta</small> : priority.waiting ? <small>Aguardando resposta • {priority.waitingMinutes < 60 ? `${priority.waitingMinutes} min` : `${Math.floor(priority.waitingMinutes / 60)} h`}</small> : null; })()}<small>{item.sector} • {item.stage}</small><span>{item.messages.at(-1)?.text || "Sem mensagens"}</span><small>{item.assignee ? `Responsável: ${item.assignee}` : "Aguardando responsável"}</small></button>)}
         {queue.hasMore && <button disabled={busy} onClick={() => void loadQueue(queue.nextOffset)}>Carregar mais atendimentos</button>}
       </aside>
       <section className={styles.conversation} aria-label="Conversa">{!chat ? <div className={styles.chatEmpty}><div className={styles.emptyIllustration} aria-hidden="true"><span/><MessageSquare size={39}/><i><ShieldCheck size={17}/></i></div><span className={styles.eyebrow}>CONVERSAS COM CONTEXTO</span><h2>Um atendimento mais próximo,<br/>do início ao próximo passo.</h2><p>Selecione uma conversa na caixa de entrada para responder, consultar o histórico ou encaminhar à equipe certa.</p><div className={styles.emptyFeatures}><span><UserRound size={15}/> Respostas identificadas</span><span><StickyNote size={15}/> Notas da equipe</span><span><ShieldCheck size={15}/> Histórico por empresa</span></div></div> : <>
