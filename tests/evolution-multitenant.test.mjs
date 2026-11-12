@@ -69,3 +69,10 @@ test('scheduled worker resolves each company database and never mixes recipients
  assert.equal(sends[1].company,'b');assert.equal(sends[1].to,'5517999990002');assert.ok(sends[1].text.endsWith('Empresa B'));
  assert.ok(urls.every(({url,options})=>url.includes(`db-${options.headers.key}.test`)));
 });
+test('manual test uses the session company and a durable caller request id; no arbitrary message body is accepted',async()=>{
+ const code=await source('../app/api/whatsapp/web/test/route.ts');let sent;
+ const handler=runInNewContext(code+'\nPOST',{NextResponse:{json},readSession:()=>({companyId:'a',permissions:['*']}),assertActiveWhatsAppCompany:async id=>assert.equal(id,'a'),dispatchEvolutionJob:async(...args)=>{sent=args;return {status:'accepted'};}});
+ const request={headers:new Headers({'sec-fetch-site':'same-origin',origin:'https://proar.test','x-proar-company-id':'a'}),nextUrl:new URL('https://proar.test'),cookies:{get:()=>undefined},json:async()=>({to:'17999990000',requestId:'00000000-0000-4000-a000-000000000001',companyId:'b',text:'forged'})};
+ const result=await handler(request);assert.equal(result.body.status,'accepted');assert.equal(sent[0],'a');assert.equal(sent[1],'test:00000000-0000-4000-a000-000000000001');assert.equal(sent[2],'5517999990000');assert.ok(!sent[3].includes('forged'));
+ sent=null;assert.equal((await handler({...request,headers:new Headers({'sec-fetch-site':'same-origin','x-proar-company-id':'b'})})).status,403);assert.equal(sent,null);
+});

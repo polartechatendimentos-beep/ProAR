@@ -6,7 +6,8 @@ export class EvolutionError extends Error {
 
 export function evolutionConfig(companyId: string): EvolutionConfig | null {
   const env = process.env;
-  if (!companyId || companyId !== env.PROAR_EVOLUTION_COMPANY_ID) return null;
+  const legacyCompany = env.PROAR_EVOLUTION_COMPANY_ID || env.PROAR_PRIMARY_COMPANY_ID;
+  if (!companyId || companyId !== legacyCompany) return null;
   if (!env.PROAR_EVOLUTION_URL || !env.PROAR_EVOLUTION_API_KEY || !env.PROAR_EVOLUTION_INSTANCE) return null;
   const base = new URL(env.PROAR_EVOLUTION_URL);
   if (base.protocol !== "https:" || base.username || base.password || base.search || base.hash ||

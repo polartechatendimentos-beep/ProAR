@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Connection = { configured?: boolean; needsProvisioning?: boolean; state?: "open" | "connecting" | "close"; qr?: string; error?: string; automationEnabled?: boolean; automationAvailable?: boolean };
 
 export function WhatsAppWebConnection({ companyId }: { companyId: string }) {
   const [connection, setConnection] = useState<Connection | null>(null);
   const [busy, setBusy] = useState(false);
+  const [testNumber, setTestNumber] = useState("");
+  const [testMessage, setTestMessage] = useState("");
+  const testRequestId = useRef<string | null>(null);
   const [history, setHistory] = useState<{ status: string; recipient: string; createdAt: string; error?: string }[]>([]);
 
   async function loadHistory() {
@@ -41,6 +44,18 @@ export function WhatsAppWebConnection({ companyId }: { companyId: string }) {
       const data: Connection = await response.json();
       setConnection(previous => ({ ...previous, ...data }));
     } catch { setConnection(previous => ({ ...previous, error: "Não foi possível salvar os envios automáticos." })); }
+    finally { setBusy(false); }
+  }
+
+  async function sendTest() {
+    setBusy(true);
+    testRequestId.current ||= crypto.randomUUID();
+    try {
+      const response = await fetch("/api/whatsapp/web/test", { method: "POST", headers: { "Content-Type": "application/json", "X-Proar-Company-ID": companyId }, body: JSON.stringify({ to: testNumber, requestId: testRequestId.current }) });
+      const data = await response.json();
+      setTestMessage(data.status === "accepted" ? "Mensagem de teste aceita pelo servidor. Confira o recebimento no WhatsApp." : data.status === "duplicate" ? "Este teste já foi registrado. Confira o histórico." : data.status === "disconnected" ? "WhatsApp desconectado. Conecte o aparelho para testar." : data.error || "Envio sem confirmação. Confira o histórico antes de repetir.");
+      await loadHistory();
+    } catch { setTestMessage("Teste sem confirmação. Confira o histórico antes de repetir."); }
     finally { setBusy(false); }
   }
 
@@ -94,6 +109,11 @@ export function WhatsAppWebConnection({ companyId }: { companyId: string }) {
         <button type="button" className="secondary-btn" disabled={busy || (!connection.automationEnabled && connection.state !== "open")} onClick={() => void toggleAutomation()}>{connection.automationEnabled ? "Desativar envios automáticos" : "Ativar envios automáticos"}</button>
       </div>}
       {connection?.configured && <div>
+        {connection.state === "open" && <div>
+          <label>Número autorizado para receber o teste<input type="tel" maxLength={25} value={testNumber} placeholder="(17) 99999-9999" onChange={event => { setTestNumber(event.target.value); testRequestId.current = null; setTestMessage(""); }}/></label>
+          <button type="button" className="secondary-btn" disabled={busy || !testNumber.trim()} onClick={() => void sendTest()}>Enviar mensagem de teste</button>
+          <p role="status">{testMessage}</p>
+        </div>}
         <button type="button" className="secondary-btn" disabled={busy} onClick={() => void loadHistory()}>Atualizar histórico de envios</button>
         <ul>{history.map((item, index) => <li key={`${item.createdAt}-${index}`}>
           {new Date(item.createdAt).toLocaleString("pt-BR")} • {item.recipient} • {item.status === "accepted" ? "Aceito pelo servidor" : item.status === "processing" ? "Em processamento; conferir antes de reenviar" : "Aguardando conferência"}{item.error ? ` • ${item.error}` : ""}
