@@ -5,7 +5,7 @@ import { assertActiveWhatsAppCompany } from "./evolution-tenant";
 import { resolveTenantDb, tenantHeaders } from "./tenant-rest";
 import { databaseFetch, supabaseRest } from "./supabase-rest";
 import { commitJsonState } from "./state-commit";
-import { chatSectors, canReadChat, type ChatActor, type ChatConversation, type ChatSector, type LocalChatSettings } from "./chatdesk-local";
+import { chatSectors, canReadChat, chatQueueSummary, defaultChatQuickReplies, validateChatQuickReplies, type ChatQuickReply, type ChatActor, type ChatConversation, type ChatSector, type LocalChatSettings } from "./chatdesk-local";
 
 export function chatAccess(request: NextRequest) {
   const session = sessionFromRequest(request);
@@ -66,7 +66,7 @@ export async function listChats(companyId: string, actor: ChatActor, offset: num
   const response = await databaseFetch(`${db.url}/rest/v1/proar_state?select=payload&id=like.${chatPrefix(companyId)}*&order=updated_at.desc&limit=101&offset=${offset}`, { headers: tenantHeaders(db.key), cache: "no-store" });
   if (!response.ok) throw new Error("Fila indisponível.");
   const rows = await response.json() as { payload: ChatConversation }[];
-  return { items: rows.slice(0, 100).map(row => row.payload).filter(chat => chat.companyId === companyId && canReadChat(actor, chat)).map(chat => ({ ...chat, messages: chat.messages.slice(-1), requests: [] })), hasMore: rows.length > 100, nextOffset: offset + Math.min(rows.length, 100) };
+  return { items: rows.slice(0, 100).map(row => row.payload).filter(chat => chat.companyId === companyId && canReadChat(actor, chat)).map(chatQueueSummary), hasMore: rows.length > 100, nextOffset: offset + Math.min(rows.length, 100) };
 }
 const settingsId = (companyId: string) => `chatdesk-settings:${createHash("sha256").update(companyId).digest("hex")}`;
 export async function chatSettings(companyId: string): Promise<LocalChatSettings> {
@@ -76,19 +76,19 @@ export async function chatSettings(companyId: string): Promise<LocalChatSettings
   const rows = await response.json();
   const stored = rows[0]?.payload;
   if (stored && stored.companyId !== companyId) throw new Error("Configuração inválida.");
-  if (stored) return stored;
+  if (stored) return {...stored,quickReplies:stored.quickReplies || defaultChatQuickReplies};
   const companyResponse = await supabaseRest(`proar_companies?select=id,trade_name,legal_name&id=eq.${encodeURIComponent(companyId)}&limit=1`);
   if (!companyResponse.ok) throw new Error("Não foi possível carregar a identificação da empresa.");
   const companies = await companyResponse.json();
   if (companies[0]?.id !== companyId) throw new Error("Empresa não identificada.");
-  return { companyId, revision: 0, botEnabled: false, companyName: String(companies[0].trade_name || companies[0].legal_name || "").slice(0, 100), greeting: "" };
+  return { companyId, revision: 0, botEnabled: false, companyName: String(companies[0].trade_name || companies[0].legal_name || "").slice(0, 100), greeting: "", quickReplies: defaultChatQuickReplies };
 }
-export async function saveChatSettings(companyId: string, input: { revision: number; botEnabled: boolean; companyName: string; greeting: string }) {
+export async function saveChatSettings(companyId: string, input: { revision: number; botEnabled: boolean; companyName: string; greeting: string; quickReplies?: ChatQuickReply[] }) {
   await assertActiveWhatsAppCompany(companyId);
   const db = await chatDb(companyId);
   const previous = await chatSettings(companyId);
   if (input.revision !== previous.revision) throw new Error("Configuração alterada por outro administrador. Atualize a página.");
-  const payload = { companyId, revision: previous.revision + 1, botEnabled: input.botEnabled === true, companyName: String(input.companyName || "").trim().slice(0, 100), greeting: String(input.greeting || "").trim().slice(0, 500) };
+  const payload = { companyId, revision: previous.revision + 1, botEnabled: input.botEnabled === true, companyName: String(input.companyName || "").trim().slice(0, 100), greeting: String(input.greeting || "").trim().slice(0, 500), quickReplies: validateChatQuickReplies(input.quickReplies === undefined ? previous.quickReplies || defaultChatQuickReplies : input.quickReplies) };
   const result = await commitJsonState(databaseFetch, db.url, tenantHeaders(db.key), settingsId(companyId), previous.revision ? previous as unknown as Record<string, unknown> : null, payload);
   if (!result.ok) throw new Error("Não foi possível salvar. Atualize a configuração e tente novamente.");
   return payload;

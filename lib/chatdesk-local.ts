@@ -3,15 +3,15 @@ export type ChatSector = typeof chatSectors[number];
 export const chatStages = ["Novo contato", "Em atendimento", "Orçamento", "Aguardando cliente", "Concluído"] as const;
 export type ChatStage = typeof chatStages[number];
 export type ChatMessage = { id: string; direction: "in" | "out" | "note" | "event"; text: string; at: string; actor?: string; status?: string; providerMessageId?: string };
-export type ChatConversation = { companyId: string; phone: string; name: string; sector: ChatSector; stage: ChatStage; assignee: string; revision: number; botPaused: boolean; optOut: boolean; messages: ChatMessage[]; requests: string[]; updatedAt: string; orderId?: string };
+export type ChatConversation = { companyId: string; phone: string; name: string; sector: ChatSector; stage: ChatStage; assignee: string; revision: number; botPaused: boolean; optOut: boolean; messages: ChatMessage[]; requests: string[]; updatedAt: string; orderId?: string; queueActivity?: { incoming?: ChatMessage; humanReplyAt?: string } };
 export type ChatActor = { username: string; displayName: string; role: string; sectors: ChatSector[]; writeSectors: ChatSector[]; canWrite: boolean; admin: boolean };
-export type LocalChatSettings = { companyId: string; revision: number; botEnabled: boolean; companyName: string; greeting: string };
+export type LocalChatSettings = { companyId: string; revision: number; botEnabled: boolean; companyName: string; greeting: string; quickReplies?: ChatQuickReply[] };
 const normalized = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 export function localTriage(text: string) {
   const value = normalized(text);
-  const urgent = /(?:cheiro de queimad|fumaca|faisca|choque eletric|curto.circuito)/.test(value);
-  const optOut = /(?:nao (?:quero|desejo) (?:mais )?receber|pare de (?:me )?enviar|cancelar (?:as )?mensagens|remover meu (?:numero|contato))/.test(value) || /^(?:sair|parar|stop|cancelar)[.!\s]*$/.test(value.trim());
-  const matches: [ChatSector, RegExp][] = [["Financeiro", /boleto|\bpix\b|nota fiscal|cobranca|pagamento|financeiro/], ["PMOC", /\bpmoc\b|contrato|laudo|preventiva|certificado/], ["Comercial", /orcamento|preco|comprar|venda|instalacao/], ["Técnico", /nao gela|vazando|vazamento|erro|defeito|barulho|manutencao|parou de gelar/]];
+  const urgent = /(?:cheiro de queimad|fumaca|faisca|choque eletric|curto.circuito|fio(?:s)? (?:esta(?:o)? )?derretend|disjuntor (?:esta )?(?:desarmand|caind)|tomada (?:esta )?(?:esquentand|derretend))/.test(value);
+  const optOut = /(?:nao (?:quero|desejo) (?:mais )?receber|nao (?:me )?(?:mande|envie) mais mensagens|pare de (?:me )?enviar|pare de mandar mensagens|retire meu (?:numero|contato)|cancelar (?:as )?mensagens|remover meu (?:numero|contato))/.test(value) || /^(?:sair|parar|stop|cancelar)[.!\s]*$/.test(value.trim());
+  const matches: [ChatSector, RegExp][] = [["Financeiro", /boleto|\bpix\b|nota fiscal|cobranca|pagamento|financeiro/], ["PMOC", /\bpmoc\b|contrato|laudo|preventiva|certificado/], ["Comercial", /orcamento|preco|comprar|venda|instalacao/], ["Técnico", /nao gela|vazando|vazamento|erro|defeito|barulho|manutencao|higienizacao|limpeza do ar|parou de gelar/]];
   const found = matches.filter(([, expression]) => expression.test(value)).map(([sector]) => sector);
   const sector: ChatSector = urgent ? "Técnico" : found[0] || "Geral";
   const suggestions: Record<ChatSector, string> = {
@@ -66,4 +66,44 @@ export function applyChatCommand(chat: ChatConversation, actor: ChatActor, comma
   }
   next.requests = [...next.requests, command.requestId].slice(-1500); next.updatedAt = now;
   return { chat: next, replay: false };
+}
+
+export type ChatQuickReply = { shortcut: string; sector: ChatSector | "Todos"; text: string };
+export const defaultChatQuickReplies: ChatQuickReply[] = [
+  {shortcut:"/endereco",sector:"Todos",text:"Pode informar o endereço completo e um ponto de referência para o atendimento?"},
+  {shortcut:"/etiqueta",sector:"Técnico",text:"Pode enviar uma foto legível da etiqueta do equipamento e informar o sintoma observado?"},
+  {shortcut:"/agenda",sector:"Todos",text:"Quais dias e períodos são melhores para você? Vou conferir a disponibilidade na nossa agenda."},
+  {shortcut:"/pmoc",sector:"PMOC",text:"Informe a unidade e a quantidade de equipamentos para conferirmos seu atendimento de manutenção e PMOC."},
+];
+export function validateChatQuickReplies(value: unknown): ChatQuickReply[] {
+  if (!Array.isArray(value) || value.length > 30) throw new Error("Cadastre até 30 respostas rápidas.");
+  const seen = new Set<string>();
+  return value.map(item => {
+    if (!item || typeof item !== "object") throw new Error("Resposta rápida inválida.");
+    const shortcut = String(item.shortcut || "").trim().toLowerCase();
+    const text = String(item.text || "").trim();
+    const sector = String(item.sector || "");
+    if (!/^\/[a-z0-9_-]{2,24}$/.test(shortcut) || seen.has(shortcut)) throw new Error("Use atalhos únicos como /agenda ou /etiqueta.");
+    if (text.length < 3 || text.length > 1200 || !["Todos",...chatSectors].includes(sector)) throw new Error("Informe o setor e um texto de 3 a 1200 caracteres.");
+    seen.add(shortcut);
+    return {shortcut,text,sector:sector as ChatQuickReply["sector"]};
+  });
+}
+export function chatQueuePriority(chat: ChatConversation, nowMs: number) {
+  const lastCustomer = chat.queueActivity?.incoming || chat.messages.filter(message=>message.direction==="in").at(-1);
+  const humanReplyAt = chat.queueActivity?.humanReplyAt || chat.messages.filter(message=>message.direction==="out" && message.actor!=="local-assistant" && (!message.status || message.status==="accepted")).at(-1)?.at;
+  const customerAt = Date.parse(lastCustomer?.at || "");
+  const waiting = chat.stage!=="Concluído" && Number.isFinite(customerAt) && (!humanReplyAt || customerAt > Date.parse(humanReplyAt));
+  const elapsed = waiting && Number.isFinite(nowMs) ? Math.max(0,nowMs-customerAt) : 0;
+  const urgent = Boolean(waiting && lastCustomer && localTriage(lastCustomer.text).urgent);
+  return {waiting,urgent,waitingMinutes:Math.floor(elapsed/60000),band:chat.stage==="Concluído"?4:urgent?0:waiting?1:2};
+}
+export function sortChatQueue(items: ChatConversation[], nowMs: number) {
+  return [...items].sort((a,b)=>{const first=chatQueuePriority(a,nowMs),second=chatQueuePriority(b,nowMs);return first.band-second.band || second.waitingMinutes-first.waitingMinutes || Date.parse(b.updatedAt)-Date.parse(a.updatedAt);});
+}
+export function chatQueueSummary(chat: ChatConversation) {
+  // Internal notes never replace the latest customer request or count as a public reply.
+  const incoming = chat.messages.filter(message=>message.direction==="in").at(-1);
+  const humanReplyAt = chat.messages.filter(message=>message.direction==="out" && message.actor!=="local-assistant" && (!message.status || message.status==="accepted")).at(-1)?.at;
+  return { ...chat, messages:chat.messages.filter(message=>message.direction==="in"||message.direction==="out").slice(-1),requests:[],queueActivity:{incoming,humanReplyAt} };
 }
