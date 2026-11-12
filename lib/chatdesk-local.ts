@@ -9,8 +9,8 @@ export type LocalChatSettings = { companyId: string; revision: number; botEnable
 const normalized = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 export function localTriage(text: string) {
   const value = normalized(text);
-  const urgent = /(?:cheiro de queimad|fumaca|faisca|choque eletric|curto.circuito)/.test(value);
-  const optOut = /(?:nao (?:quero|desejo) (?:mais )?receber|pare de (?:me )?enviar|cancelar (?:as )?mensagens|remover meu (?:numero|contato))/.test(value) || /^(?:sair|parar|stop|cancelar)[.!\s]*$/.test(value.trim());
+  const urgent = /(?:cheiro de queimad|fumaca|faisca|choque eletric|curto.circuito|fio(?:s)? derretend|disjuntor (?:desarmand|caind)|tomada (?:esquentand|derretend))/.test(value);
+  const optOut = /(?:nao (?:quero|desejo) (?:mais )?receber|nao (?:me )?(?:mande|envie) mais mensagens|pare de (?:me )?enviar|pare de mandar mensagens|cancelar (?:as )?mensagens|remover meu (?:numero|contato)|retire meu (?:numero|contato))/.test(value) || /^(?:sair|parar|stop|cancelar)[.!\s]*$/.test(value.trim());
   const matches: [ChatSector, RegExp][] = [["Financeiro", /boleto|\bpix\b|nota fiscal|cobranca|pagamento|financeiro/], ["PMOC", /\bpmoc\b|contrato|laudo|preventiva|certificado/], ["Comercial", /orcamento|preco|comprar|venda|instalacao/], ["Técnico", /nao gela|vazando|vazamento|erro|defeito|barulho|manutencao|parou de gelar/]];
   const found = matches.filter(([, expression]) => expression.test(value)).map(([sector]) => sector);
   const sector: ChatSector = urgent ? "Técnico" : found[0] || "Geral";
