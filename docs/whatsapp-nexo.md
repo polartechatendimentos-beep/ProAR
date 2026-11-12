@@ -36,4 +36,4 @@ A execução tem orçamento de tempo, cursor persistente entre empresas, até ci
 5. Conferir a capacidade da VPS antes de ampliar o número de clientes conectados. O plano atual tem 1 vCore e 2 GB de RAM; o código não aumenta o plano automaticamente.
 6. Ativar o bloqueio geral somente após homologação; publicar produção somente com a versão validada.
 
-Esta etapa não incorpora caixa de entrada, webhooks de recebimento nem atendimento por IA. Esses recursos exigem integração com o CRM e validação de eventos reais.
+A central em `/atendimento` acrescenta recebimento de texto por evento autenticado, resposta com assinatura do operador, notas internas, transferências, funil CRM e assistente local por regras. Consulte `atendimento-local.md` para escopo, limites e homologação. Não há IA generativa nem interpretação de anexos.

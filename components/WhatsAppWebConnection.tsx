@@ -53,7 +53,7 @@ export function WhatsAppWebConnection({ companyId }: { companyId: string }) {
     try {
       const response = await fetch("/api/whatsapp/web/test", { method: "POST", headers: { "Content-Type": "application/json", "X-Proar-Company-ID": companyId }, body: JSON.stringify({ to: testNumber, requestId: testRequestId.current }) });
       const data = await response.json();
-      setTestMessage(data.status === "accepted" ? "Mensagem de teste aceita pelo servidor. Confira o recebimento no WhatsApp." : data.status === "duplicate" ? "Este teste já foi registrado. Confira o histórico." : data.status === "disconnected" ? "WhatsApp desconectado. Conecte o aparelho para testar." : data.error || "Envio sem confirmação. Confira o histórico antes de repetir.");
+      setTestMessage(data.status === "accepted" ? "Mensagem de teste aceita pelo servidor. Confira o recebimento no WhatsApp." : data.status === "duplicate" ? "Este teste já foi registrado. Confira o histórico." : data.status === "disconnected" ? "WhatsApp desconectado. Conecte o aparelho para testar." : data.status === "blocked-optout" ? "Esse destinatário solicitou a interrupção das mensagens." : data.error || "Envio sem confirmação. Confira o histórico antes de repetir.");
       await loadHistory();
     } catch { setTestMessage("Teste sem confirmação. Confira o histórico antes de repetir."); }
     finally { setBusy(false); }
@@ -116,7 +116,7 @@ export function WhatsAppWebConnection({ companyId }: { companyId: string }) {
         </div>}
         <button type="button" className="secondary-btn" disabled={busy} onClick={() => void loadHistory()}>Atualizar histórico de envios</button>
         <ul>{history.map((item, index) => <li key={`${item.createdAt}-${index}`}>
-          {new Date(item.createdAt).toLocaleString("pt-BR")} • {item.recipient} • {item.status === "accepted" ? "Aceito pelo servidor" : item.status === "processing" ? "Em processamento; conferir antes de reenviar" : "Aguardando conferência"}{item.error ? ` • ${item.error}` : ""}
+          {new Date(item.createdAt).toLocaleString("pt-BR")} • {item.recipient} • {item.status === "accepted" ? "Aceito pelo servidor" : item.status === "processing" ? "Em processamento; conferir antes de reenviar" : item.status === "blocked-optout" ? "Bloqueado por pedido do cliente" : "Aguardando conferência"}{item.error ? ` • ${item.error}` : ""}
         </li>)}</ul>
       </div>}
     </div>

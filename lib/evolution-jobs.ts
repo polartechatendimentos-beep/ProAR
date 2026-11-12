@@ -3,10 +3,20 @@ import { databaseFetch } from "./supabase-rest";
 import { resolveTenantDb, tenantHeaders } from "./tenant-rest";
 import { evolutionConnection } from "./evolution-tenant";
 import { evolutionRequestWithConfig, sendEvolutionTextWithConfig } from "./proar-evolution";
+import { readChat } from "./chatdesk-store";
 
 export const evolutionJobPrefix = (companyId: string) => `whatsapp-send:${createHash("sha256").update(companyId).digest("hex")}:`;
 export const evolutionJobId = (companyId: string, sourceId: string) => evolutionJobPrefix(companyId) + createHash("sha256").update(sourceId).digest("hex");
 export async function dispatchEvolutionJob(companyId: string, sourceId: string, to: string, text: string) {
+  if ((await readChat(companyId, to))?.optOut) {
+    const db = await resolveTenantDb(companyId);
+    if (!db.url || !db.key) throw new Error("Base da empresa indisponível.");
+    const at = new Date().toISOString();
+    const blocked = await databaseFetch(`${db.url}/rest/v1/proar_state?on_conflict=id`, { method: "POST", headers: { ...tenantHeaders(db.key), Prefer: "resolution=ignore-duplicates,return=minimal" },
+      body: JSON.stringify({ id: evolutionJobId(companyId, sourceId), payload: { companyId, status: "blocked-optout", sourceId, recipient: `••••${to.slice(-4)}`, createdAt: at }, updated_at: at }) });
+    if (!blocked.ok) throw new Error("Não foi possível registrar o bloqueio de envio.");
+    return { status: "blocked-optout" };
+  }
   const stored = await evolutionConnection(companyId);
   if (!stored) throw new Error("WhatsApp não configurado.");
   const state = await evolutionRequestWithConfig(stored.config, "instance/connectionState");

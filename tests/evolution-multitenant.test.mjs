@@ -40,7 +40,7 @@ test('tenant store refuses foreign decrypted records and never falls back to pri
 });
 test('concurrent jobs send only once and ambiguous sends never automatically retry',async()=>{
  const code=await source('../lib/evolution-jobs.ts');let sends=0;const rows=new Map();let fail=false;
- const context={createHash,Date,JSON,encodeURIComponent,evolutionConnection:async()=>({config:{}}),evolutionRequestWithConfig:async()=>({instance:{state:'open'}}),resolveTenantDb:async()=>({url:'https://db.test',key:'test'}),tenantHeaders:()=>({}),sendEvolutionTextWithConfig:async()=>{sends++;if(fail)throw Error('timeout');return {messageId:'accepted-id'};},databaseFetch:async(url,options)=>{
+ const context={createHash,Date,JSON,encodeURIComponent,readChat:async()=>null,evolutionConnection:async()=>({config:{}}),evolutionRequestWithConfig:async()=>({instance:{state:'open'}}),resolveTenantDb:async()=>({url:'https://db.test',key:'test'}),tenantHeaders:()=>({}),sendEvolutionTextWithConfig:async()=>{sends++;if(fail)throw Error('timeout');return {messageId:'accepted-id'};},databaseFetch:async(url,options)=>{
  const body=JSON.parse(options.body);
  if(options.method==='POST'){if(rows.has(body.id))return Response.json([]);rows.set(body.id,body);return Response.json([body]);}
  const id=decodeURIComponent(url.split('id=eq.')[1]);rows.set(id,{...rows.get(id),...body});return Response.json([]);
