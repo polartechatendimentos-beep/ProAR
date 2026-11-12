@@ -1,3 +1,4 @@
+import {assertOrderScheduleChanges} from "../../../lib/order-schedule-validation";
 import { projectOperationalState, mergeOperationalView } from "../../../lib/state-access";
 import { NextRequest, NextResponse } from "next/server";
 import { readSession } from "../../../lib/proar-auth";
@@ -204,6 +205,7 @@ export async function PUT(request: NextRequest) {
     const mergedBody=mergeOperationalView(current,cleanBody,session,p=>hasPermission(session,p as Permission));
     if (Array.isArray(mergedBody.serviceOrders)) await guardTechnicianOsChanges(session,current?.serviceOrders||[],mergedBody.serviceOrders);
     const validated = prepareOperationalState(current || null, mergedBody, { username: session.username, displayName: session.displayName, can: permission => hasPermission(session, permission as Permission) });
+    try{assertOrderScheduleChanges(current?.serviceOrders||[],validated.serviceOrders||[]);}catch(error){throw new OperationError(error instanceof Error?error.message:"Programação inválida.",409);}
     const userLimit=await companyUserLimit(company);
     if(userLimit!==null){
       const masterUsers=await masterActiveUsernames(company);

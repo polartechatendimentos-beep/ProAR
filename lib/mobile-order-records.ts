@@ -12,10 +12,12 @@ export type ReceiptCompany={name:string;legalName?:string;document?:string;phone
 export function serviceOrderDocumentData(order:Item,company?:ReceiptCompany) {
   const photos=order.photos as Record<string,unknown>|undefined,signatures=readOrderSignatures(order);
   const stages=(["before","after"] as const).flatMap(stage=>{
-    const all=[...(Array.isArray(photos?.[stage])?photos[stage] as unknown[]:[]),order[stage==="before"?"photoBefore":"photoAfter"]].filter(safeImage);
+    const all=[...(Array.isArray(photos?.[stage])?photos[stage] as unknown[]:[]),...(Array.isArray(photos?.[stage==="before"?"Antes":"Depois"])?photos[stage==="before"?"Antes":"Depois"] as unknown[]:[]),order[stage==="before"?"photoBefore":"photoAfter"]].filter(safeImage);
     return [...new Set(all)].slice(0,10).map((src,index)=>({id:`${stage}-${index}`,label:`${stage==="before"?"Antes":"Depois"} ${index+1}`,src}));
   });
-  return {id:text(order.id,100),client:text(order.client,150),unit:text(order.unit,120),address:text(order.address,250),service:text(order.service,300),status:text(order.status,70),completedAt:text(order.checkOutAt,40),scheduledDate:text(order.date,32),diagnosis:text(order.diagnosis,4000),report:text(order.executedService,8000),signer:signatures.client.name,technician:text(signatures.technician.name||order.tech,120),signatures,company,photos:stages};
+  const extra=Object.entries(photos||{}).filter(([category])=>!["before","after","Antes","Depois"].includes(category)).flatMap(([category,items])=>(Array.isArray(items)?items:[]).filter(safeImage).map((src,index)=>({id:`extra-${category}-${index}`,label:`${category} ${index+1}`,src})));
+  const all=[...stages,...extra].slice(0,30);
+  return {id:text(order.id,100),client:text(order.client,150),unit:text(order.unit,120),address:text(order.address,250),service:text(order.service,300),status:text(order.status,70),completedAt:text(order.checkOutAt,40),scheduledDate:text(order.date,32),diagnosis:text(order.diagnosis,4000),report:text(order.executedService,8000),signer:signatures.client.name,technician:text(signatures.technician.name||order.tech,120),signatures,company,photos:all};
 }
 export function fieldOrderReceipt(order:Item,company?:ReceiptCompany) {
   if(isOpenMobileOrder(order.status)||/cancelad/i.test(String(order.status))||!order.checkOutAt)return null;

@@ -34,8 +34,10 @@ test("diagnostic handoffs become actionable central pending items",()=>{
 
 test("OS workspace keeps recoverable local autosave and clears it after confirmed save",async()=>{
   const source=await readFile(new URL("../components/ServiceOrderWorkspace.tsx",import.meta.url),"utf8");
-  assert.ok(source.includes("proar-os-draft:"));
-  assert.ok(source.includes("Rascunho local recuperado automaticamente"));
+  const state=await readFile(new URL("../lib/order-workspace-state.ts",import.meta.url),"utf8");
+  assert.ok(state.includes("proar-os-draft:v2:"));
+  assert.ok(source.includes("restoreWorkspaceDraft(companyId,baseOrder"));
+  assert.ok(source.includes("Rascunho recuperado. Revise e salve"));
   assert.ok(source.includes("localStorage.removeItem(autosaveKey)"));
 });
 
