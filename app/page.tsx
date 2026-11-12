@@ -3269,6 +3269,40 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
   const [balancePosted, setBalancePosted] = useState(0);
   const [financialStatus, setFinancialStatus] = useState<Customer["financialStatus"]>("Liberado");
   const [address, setAddress] = useState("");
+  const [cepLookup, setCepLookup] = useState<{loading:boolean;message:string;kind:""|"ok"|"error"}>({loading:false,message:"",kind:""});
+  useEffect(() => {
+    if (!isNewCustomer && !isLinkedStructure) return;
+    const digits = zipCode.replace(/\D/g, "");
+    if (digits.length !== 8) { setCepLookup({loading:false,message:"",kind:""}); return; }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setCepLookup({loading:true,message:"Consultando CEP...",kind:""});
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${digits}/json/`,{signal:controller.signal});
+        if (!response.ok) throw new Error("Serviço de CEP indisponível.");
+        const data = await response.json() as {erro?:boolean;logradouro?:string;bairro?:string;localidade?:string;uf?:string;complemento?:string};
+        if (controller.signal.aborted) return;
+        if (data.erro) {setCepLookup({loading:false,message:"CEP não encontrado. Preencha o endereço manualmente.",kind:"error"});return;}
+        const nextStreet = data.logradouro || "";
+        const nextNeighborhood = data.bairro || "";
+        const nextCity = data.localidade || "";
+        const nextState = data.uf || "";
+        setStreet(nextStreet);setNeighborhood(nextNeighborhood);setCustomerCity(nextCity);setCustomerState(nextState);
+        setAddress(current => {
+          const previousAuto = [street,addressNumber,complement,neighborhood,customerCity && customerState ? `${customerCity}/${customerState}` : customerCity || customerState,zipCode ? `CEP ${zipCode}` : ""].filter(Boolean).join(", ");
+          if (current.trim() && current !== previousAuto && current !== `CEP ${zipCode}`) return current;
+          return [nextStreet,addressNumber,complement,nextNeighborhood,nextCity && nextState ? `${nextCity}/${nextState}` : nextCity || nextState,`CEP ${zipCode}`].filter(Boolean).join(", ");
+        });
+        setAddressValidated(false);setShowAddressMap(false);
+        setCepLookup({loading:false,message:"Endereço localizado. Confira o número e o complemento.",kind:"ok"});
+      } catch (error) {
+        if (!controller.signal.aborted) setCepLookup({loading:false,message:"Não foi possível consultar o CEP. Preencha manualmente.",kind:"error"});
+      }
+    },350);
+    return () => {window.clearTimeout(timer);controller.abort();};
+  // Lookup only when CEP changes; do not reset manually edited fields on other updates.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[zipCode,isNewCustomer,isLinkedStructure]);
   const [addressValidated, setAddressValidated] = useState(false);
   const [showAddressMap, setShowAddressMap] = useState(false);
   const [date, setDate] = useState("");
@@ -3858,7 +3892,7 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
         <section className="wide customer-create-section">
           <header><span>02</span><div><b>Endereço</b><small>Localização principal do cadastro</small></div></header>
           <div className="customer-create-grid address">
-            <label className="text-slate-200 font-semibold text-xs cep">CEP<input value={zipCode} onChange={event => {setZipCode(event.target.value); setAddress(composeCustomerAddress({zipCode:event.target.value}));}} placeholder="00000-000"/></label>
+            <label className="text-slate-200 font-semibold text-xs cep">CEP<input inputMode="numeric" maxLength={9} value={zipCode} onChange={event => {const digits=event.target.value.replace(/\D/g,"").slice(0,8);const formatted=digits.length>5?`${digits.slice(0,5)}-${digits.slice(5)}`:digits;setZipCode(formatted);setAddress(composeCustomerAddress({zipCode:formatted}));}} placeholder="00000-000" aria-describedby="customer-cep-status"/><small id="customer-cep-status" role="status" aria-live="polite">{cepLookup.loading?"Consultando CEP...":cepLookup.message}</small></label>
             <label className="text-slate-200 font-semibold text-xs street">Logradouro<input value={street} onChange={event => {setStreet(event.target.value); setAddress(composeCustomerAddress({street:event.target.value}));}}/></label>
             <label className="text-slate-200 font-semibold text-xs number">Número<input value={addressNumber} onChange={event => {setAddressNumber(event.target.value); setAddress(composeCustomerAddress({addressNumber:event.target.value}));}}/></label>
             <label className="text-slate-200 font-semibold text-xs neighborhood">Bairro<input value={neighborhood} onChange={event => {setNeighborhood(event.target.value); setAddress(composeCustomerAddress({neighborhood:event.target.value}));}}/></label>
@@ -4116,7 +4150,7 @@ export default function Home() {
     const onOnline = () => setOnline(true);
     const onOffline = () => { setOnline(false); setDatabaseMode("offline"); };
     window.addEventListener("online", onOnline); window.addEventListener("offline", onOffline);
-    const runId = `BOOT-${new Date().toISOString().replace(/\\D/g,"").slice(0,14)}-${Math.random().toString(36).slice(2,7).toUpperCase()}`;
+    const runId = `BOOT-${new Date().toISOString().replace(/\D/g,"").slice(0,14)}-${Math.random().toString(36).slice(2,7).toUpperCase()}`;
     setBootRunId(runId); setBootError(""); setCheckingSession(true);
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 12000);
