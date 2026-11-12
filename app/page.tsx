@@ -3694,7 +3694,7 @@ function Modal({ title, customers, structures, catalogRecords, supplierRecords, 
               <article className="os-create-card">
                 <div className="os-create-card-head"><span><UsersRound size={15}/> Técnico / Equipe Responsável</span></div>
                 <div className="os-assignment-toggle"><button type="button" className="active">Colaborador</button><button type="button" disabled title="Cadastre equipes no módulo de funcionários para habilitar">Equipe de Campo</button></div>
-                <label>Técnico empenhado<select value={tech} onChange={event => setTech(event.target.value)}><option value="">Sem técnico atribuído • definir depois</option>{employeeRecords.filter(employee => employee.status !== "Inativo" && /técnico|tecnico/i.test(`${employee.employeeRole} ${employee.category}`)).map(employee => <option key={employee.id} value={employee.name}>{employee.name}</option>)}</select></label>
+                <label>Técnico empenhado<select value={tech} onChange={event => setTech(event.target.value)}><option value="">Sem técnico atribuído • definir depois</option>{employeeRecords.filter(employee => !/inativ|desligad/i.test(employee.status || "") && Boolean(employee.name?.trim())).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR")).map(employee => <option key={employee.id} value={employee.name}>{employee.name}{employee.employeeRole ? ` • ${employee.employeeRole}` : ""}</option>)}</select></label>
               </article>
 
               <article className="os-create-card">
