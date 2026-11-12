@@ -2,7 +2,8 @@ import { jsPDF } from "jspdf";
 import type {FieldOrderReceipt} from "./mobile-order-records";
 import {safeSignatureImage} from "./service-order-signatures.ts";
 const navy:[number,number,number]=[17,43,70],blue:[number,number,number]=[22,116,189],muted:[number,number,number]=[76,96,116];
-export function buildServiceOrderReceiptPdf(receipt:FieldOrderReceipt,selectedPhotos:string[]=[]) {
+export type ServiceOrderReportVariant = "simplificada" | "tecnica" | "comercial";
+export function buildServiceOrderReceiptPdf(receipt:FieldOrderReceipt,selectedPhotos:string[]=[],variant:ServiceOrderReportVariant="simplificada",orderData:Record<string,unknown>={}) {
   const pdf=new jsPDF({unit:"mm",format:"a4",compress:true}),margin=16,width=178,bottom=275;
   let y=16;
   const clean=(value:unknown)=>String(value??"").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,"");
@@ -11,7 +12,7 @@ export function buildServiceOrderReceiptPdf(receipt:FieldOrderReceipt,selectedPh
     pdf.setFillColor(...navy);pdf.rect(0,0,210,continued?20:37,"F");
     const logo=!continued&&safeSignatureImage(receipt.company?.logo),available=logo?132:width;
     pdf.setTextColor(255,255,255);pdf.setFont("helvetica","bold");pdf.setFontSize(continued?12:logo?14:17);
-    let title=continued?`OS ${clean(receipt.id)} - continuação`:receipt.completedAt?"COMPROVANTE DE ATENDIMENTO":"RELATÓRIO DA ORDEM DE SERVIÇO";
+    let title=continued?`OS ${clean(receipt.id)} - continuação`:variant==="tecnica"?"RELATÓRIO TÉCNICO DA OS":variant==="comercial"?"RELATÓRIO COMERCIAL DA OS":receipt.completedAt?"COMPROVANTE DE ATENDIMENTO":"RELATÓRIO DA ORDEM DE SERVIÇO";
     while(pdf.getTextWidth(title)>available&&title.length>8)title=title.slice(0,-2);
     pdf.text(title,margin,continued?13:16);
     if(!continued){pdf.setFontSize(11);let name=clean(receipt.company?.name||"ProAR - Ordem de serviço");while(pdf.getTextWidth(name)>available&&name.length>8)name=name.slice(0,-2);pdf.text(name,margin,25);pdf.setFontSize(9);pdf.text(clean(receipt.company?.document?`CNPJ/CPF: ${receipt.company.document}`:"Registro do serviço executado"),margin,31);if(logo){pdf.setFillColor(255,255,255);pdf.roundedRect(157,4,37,28,2,2,"F");image(logo,159,6,33,24);}}
@@ -29,6 +30,25 @@ export function buildServiceOrderReceiptPdf(receipt:FieldOrderReceipt,selectedPh
   section("SERVIÇO SOLICITADO");paragraph(receipt.service);
   section("DIAGNÓSTICO TÉCNICO");paragraph(receipt.diagnosis);
   section("SERVIÇO EXECUTADO");paragraph(receipt.report);
+  if(variant==="tecnica") {
+    const fields:[string,string][]=[
+      ["EQUIPAMENTOS / IDENTIFICAÇÃO",clean(orderData.equipmentDescription||orderData.equipmentLabelCode||orderData.equipmentId||"Não registrado")],
+      ["CHECKLIST E VERIFICAÇÕES",clean(orderData.checklistNotes||orderData.checklist||"Não registrado")],
+      ["MEDIÇÕES TÉCNICAS",clean(orderData.measurements||orderData.technicalMeasurements||"Não registrado")],
+      ["MATERIAIS E PEÇAS UTILIZADOS",clean(orderData.materialsUsed||"Não registrado")],
+      ["OBSERVAÇÕES E RECOMENDAÇÕES",clean(orderData.notes||orderData.observations||"Não registrado")]
+    ];
+    for(const [heading,value] of fields){section(heading);paragraph(value);}
+  }
+  if(variant==="comercial"){
+    section("ITENS E QUANTIDADES");
+    const entries=Array.isArray(orderData.serviceItems)?orderData.serviceItems:Array.isArray(orderData.items)?orderData.items:[];
+    if(entries.length){for(const entry of entries.slice(0,80)){if(!entry||typeof entry!=="object")continue;const item=entry as Record<string,unknown>;const quantity=Number(item.quantity??item.qty??1);const unit=Number(item.unitPrice??item.price??0);paragraph(`${clean(item.name||item.description||"Item")} | Qtd.: ${Number.isFinite(quantity)?quantity:1} | Unit.: R$ ${Number.isFinite(unit)?unit.toFixed(2).replace(".",","):"não informado"}`,9);}}
+    else paragraph("Itens detalhados não registrados. Consulte os serviços descritos na OS.",9);
+    section("VALORES DO ATENDIMENTO");
+    const total=Number(orderData.total);paragraph(Number.isFinite(total)?`Total registrado: R$ ${total.toFixed(2).replace(".",",")}`:"Valor total não registrado",10);
+    if(orderData.paymentMethod)section("CONDIÇÃO DE PAGAMENTO"),paragraph(clean(orderData.paymentMethod),9);
+  }
   room(110);section("ASSINATURAS DO ATENDIMENTO");
   const top=y,boxWidth=85,boxHeight=60;
   for(const [index,entry] of [receipt.signatures.client,receipt.signatures.technician].entries()){
