@@ -30,6 +30,17 @@ export function FiscalWorkspace({
   const [config,setConfig]=useState<FiscalConfig|null>(null);
   const [loading,setLoading]=useState(true);
   const [dfeLoading,setDfeLoading]=useState(false);
+  const [selectedOs,setSelectedOs]=useState<string[]>([]);
+  const [preview,setPreview]=useState<{groups?:{ids:string[];cents:number;description:string}[];pending?:{id:string;message:string}[];error?:string}|null>(null);
+  const [previewBusy,setPreviewBusy]=useState(false);
+  const reviewSelection=async(ids:string[])=>{
+    setPreviewBusy(true);setPreview(null);
+    try {
+      const response=await fetch("/api/nfse/preview",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({orderIds:ids})});
+      setPreview(await response.json());
+    } catch {setPreview({error:"Prévia fiscal indisponível."});}
+    finally {setPreviewBusy(false);}
+  };
   const [dfe,setDfe]=useState<FiscalRecord[]>([]);
 
   const loadConfig=async()=>{
@@ -60,7 +71,7 @@ export function FiscalWorkspace({
   const completedServices=serviceOrders.filter(item=>/conclu[ií]da/i.test(String(item.status??"")));
   const certificateOk=config?.certificate?.status==="Válido";
 
-  const nfseCandidates=useMemo(()=>completedServices.filter(item=>!item.invoiceNumber),[serviceOrders]);
+  const nfseCandidates=useMemo(()=>completedServices.filter(item=>!item.invoiceNumber&&!item.nfseAccessKey&&!/autorizad|emitid|processando|transmitindo|cancelad/i.test(String(item.nfseStatus??""))),[serviceOrders]);
   const nfceCandidates=useMemo(()=>sales.filter(item=>!item.invoiceNumber&&((item.purchaseItems??[]).some((x:FiscalRecord)=>x.kind==="Produto")||item.kind==="Produto")),[sales]);
   const nfeCandidates=useMemo(()=>sales.filter(item=>!item.invoiceNumber),[sales]);
 
@@ -77,6 +88,7 @@ export function FiscalWorkspace({
     finally{setDfeLoading(false);}
   };
 
+  const selectedOrders=nfseCandidates.filter(item=>selectedOs.includes(String(item.id)));
   const candidateRows = tab==="NFS-e" ? nfseCandidates : tab==="NFC-e" ? nfceCandidates : nfeCandidates;
 
   return <section className="fiscal-workspace">
@@ -97,7 +109,7 @@ export function FiscalWorkspace({
     {tab==="Visão geral"&&<div className="fiscal-grid">
       <article><div className="fiscal-card-icon"><FileText size={20}/></div><div><small>MODELO 55</small><h3>NF-e</h3><p>Venda de mercadorias, devoluções, complementares e demais operações fiscais com produtos.</p><button onClick={()=>setTab("NF-e")}>Abrir NF-e</button></div></article>
       <article><div className="fiscal-card-icon"><ReceiptText size={20}/></div><div><small>MODELO 65</small><h3>NFC-e</h3><p>Venda ao consumidor final com CSC, série, ambiente e validação fiscal antes da transmissão.</p><button onClick={()=>setTab("NFC-e")}>Abrir NFC-e</button></div></article>
-      <article><div className="fiscal-card-icon"><Landmark size={20}/></div><div><small>MIRASSOL / SP</small><h3>NFS-e</h3><p>Serviços originados de OS concluída, com código de serviço, ISS e dados municipais.</p><button onClick={()=>setTab("NFS-e")}>Abrir NFS-e</button></div></article>
+      <article><div className="fiscal-card-icon"><Landmark size={20}/></div><div><small>PADRÃO NACIONAL</small><h3>NFS-e</h3><p>Serviços originados de OS concluída, com código de serviço, ISS e dados municipais.</p><button onClick={()=>setTab("NFS-e")}>Abrir NFS-e</button></div></article>
       <article><div className="fiscal-card-icon"><RefreshCw size={20}/></div><div><small>DISTRIBUIÇÃO</small><h3>NF-e destinadas / DF-e</h3><p>Consulta de documentos destinados ao CNPJ da empresa usando certificado e provedor configurados.</p><button onClick={()=>setTab("DF-e")}>Consultar DF-e</button></div></article>
       <section className="fiscal-config-summary">
         <header><div><b>Saúde da configuração fiscal</b><small>Os dados sensíveis permanecem no cofre fiscal.</small></div><button onClick={()=>void loadConfig()}><RefreshCw size={14}/> Atualizar</button></header>
@@ -107,7 +119,8 @@ export function FiscalWorkspace({
 
     {(tab==="NF-e"||tab==="NFC-e"||tab==="NFS-e")&&<div className="fiscal-list-panel">
       <header><div><small>FILA DE EMISSÃO • {tab.toUpperCase()}</small><h3>{tab==="NFS-e"?"Ordens de serviço elegíveis":"Vendas elegíveis"}</h3><p>Os documentos passam obrigatoriamente pela pré-validação fiscal antes da transmissão.</p></div><span>{candidateRows.length} pendente(s)</span></header>
-      {candidateRows.length?<div className="table-wrap"><table><thead><tr><th>ORIGEM</th><th>CLIENTE</th><th>DESCRIÇÃO</th><th>VALOR</th><th>SITUAÇÃO</th></tr></thead><tbody>{candidateRows.map(item=><tr key={item.id}><td><b>{item.id}</b></td><td>{item.client||"—"}</td><td>{item.service||item.name||item.description||"—"}</td><td>{Number(item.total??item.value??0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</td><td><span className="fiscal-state pending">Preparar emissão</span></td></tr>)}</tbody></table></div>:<div className="fiscal-empty"><CheckCircle2 size={24}/><b>Nenhum documento pendente nesta fila.</b><span>Novas operações elegíveis aparecerão automaticamente aqui.</span></div>}
+      {candidateRows.length?<div className="table-wrap"><table><thead><tr>{tab==="NFS-e"&&<th>SELECIONAR</th>}<th>ORIGEM</th><th>CLIENTE</th><th>DESCRIÇÃO</th><th>VALOR</th><th>SITUAÇÃO</th></tr></thead><tbody>{candidateRows.map(item=><tr key={item.id}>{tab==="NFS-e"&&<td><input type="checkbox" aria-label={`Selecionar OS ${item.id}`} checked={selectedOs.includes(String(item.id))} disabled={previewBusy||!selectedOs.includes(String(item.id))&&selectedOrders.length>=100} onChange={event=>{const id=String(item.id);const checked=event.target.checked;setPreview(null);setSelectedOs(current=>checked?[...new Set([...current,id])].slice(0,100):current.filter(value=>value!==id));}}/></td>}<td><b>{item.id}</b></td><td>{item.client||"—"}</td><td>{item.service||item.name||item.description||"—"}</td><td>{Number(item.total??item.value??0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</td><td><span className="fiscal-state pending">Preparar emissão</span></td></tr>)}</tbody></table></div>:<div className="fiscal-empty"><CheckCircle2 size={24}/><b>Nenhum documento pendente nesta fila.</b><span>Novas operações elegíveis aparecerão automaticamente aqui.</span></div>}
+      {tab==="NFS-e"&&<section aria-label="Seleção para faturamento"><p>{selectedOrders.length} de até 100 OS selecionadas. A transmissão nacional ainda não está habilitada.</p>{selectedOrders.length>0&&<><button type="button" className="outline-btn" disabled={previewBusy} onClick={()=>{setSelectedOs([]);setPreview(null);}}>Limpar seleção</button> <button type="button" className="primary-btn" disabled={previewBusy} onClick={()=>void reviewSelection(selectedOrders.map(item=>String(item.id)))}>{previewBusy?"Conferindo…":"Conferir grupos no servidor"}</button><div role="status">{preview?.error}{preview?.pending?.map(item=><p key={item.id}>{item.id}: {item.message}</p>)}{preview?.groups?.map(group=><p key={group.ids.join("|")}>{group.ids.join(", ")} — {(group.cents/100).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}: {group.description}</p>)}</div><details><summary>Revisar OS selecionadas</summary><ul>{selectedOrders.map(item=><li key={item.id}>{item.id} • {item.client||"Tomador não informado"} • {item.service||item.description||"Serviço não informado"}</li>)}</ul></details></>}</section>}
       <div className="fiscal-flow-note"><ShieldCheck size={17}/><span><b>Fluxo protegido</b><small>Pré-validar → Transmitir → Processando/Autorizada/Rejeitada → armazenar XML, protocolo e representação fiscal.</small></span></div>
     </div>}
 
