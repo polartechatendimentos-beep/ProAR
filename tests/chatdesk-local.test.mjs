@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';import {stripTypeScriptTypes} from 'node:module';import {runInNewContext} from 'node:vm';import {createHash} from 'node:crypto';
-import {localTriage,localOrderDraft,applyChatCommand,canReadChat,chatSectors} from '../lib/chatdesk-local.ts';
+import {localTriage,localOrderDraft,applyChatCommand,canReadChat,chatSectors,loadedChatMetrics} from '../lib/chatdesk-local.ts';
 import {chatWebhookToken,validChatWebhookToken,parseEvolutionInbound} from '../lib/chatdesk-events.ts';
 const source=async path=>stripTypeScriptTypes(await readFile(new URL(path,import.meta.url),'utf8')).replace(/^import .*;$/gm,'').replace(/^export /gm,'');
 const actor={username:'jose',displayName:'José da Silva',role:'Técnico',admin:false,sectors:['Técnico'],writeSectors:['Técnico'],canWrite:true};
@@ -68,4 +68,14 @@ test('only a manager can record renewed consent and automatic replies remain pau
  const blocked={...chat(),optOut:true};assert.throws(()=>applyChatCommand(blocked,actor,{requestId:id,action:'consent',text:'Cliente autorizou por telefone'},'2026-11-12T11:00:00Z'),/Somente a gestão/);
  const renewed=applyChatCommand(blocked,{...actor,admin:true},{requestId:id,action:'consent',text:'Cliente autorizou por telefone'},'2026-11-12T11:00:00Z').chat;
  assert.equal(renewed.optOut,false);assert.equal(renewed.botPaused,true);assert.equal(renewed.messages.at(-1).direction,'event');assert.ok(renewed.messages.at(-1).text.includes('Cliente autorizou por telefone'));
+});
+
+test('manager metrics count only supplied tenant-scoped loaded chats and exclude closed from unanswered',()=>{
+ const a=chat();
+ const closed={...chat(),phone:'5517999990001',stage:'Concluído',sector:'PMOC'};
+ const m=loadedChatMetrics([a,closed]);
+ assert.equal(m.total,2);assert.equal(m.completed,1);assert.equal(m.unanswered,1);
+ assert.equal(m.sectors['Técnico'],1);assert.equal(m.sectors.PMOC,1);
+ assert.equal(m.averageFirstReplyMinutes,null);
+ assert.deepEqual(loadedChatMetrics([]).sectors,{});
 });
