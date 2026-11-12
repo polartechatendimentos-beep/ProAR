@@ -1,4 +1,5 @@
 "use client";
+import {OperationalAgenda} from "../components/OperationalAgenda";
 import {BiddingDocumentsWorkspace} from "@/components/BiddingDocumentsWorkspace";
 
 import { createPortal } from "react-dom";
@@ -1033,13 +1034,7 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: so
 }
 
 function Agenda({ serviceOrders, onOpen, onSelect }: { serviceOrders: ServiceOrder[]; onOpen: (name: string) => void; onSelect: (order: ServiceOrder) => void }) {
-  const [visibility,setVisibility]=useState("Em aberto");
-  const isClosed=(value:string)=>/conclu[ií]d|cancelad/i.test(value);
-  const scheduled = [...serviceOrders].filter(order => order.date && (visibility === "Todas" || visibility === "Concluídas" ? /conclu[ií]d/i.test(order.status) : visibility === "Canceladas" ? /cancelad/i.test(order.status) : visibility === "Hoje" ? order.date === new Date().toISOString().slice(0,10) : !isClosed(order.status))).sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`));
-  return <section className="module-page">
-    <div className="module-toolbar"><div><span className="section-kicker"><CalendarDays size={12}/> AGENDA OPERACIONAL</span><h2>Serviços agendados</h2><p>Por padrão, somente ordens operacionais em aberto.</p></div><div className="toolbar-actions"><label>Exibir<select value={visibility} onChange={e=>setVisibility(e.target.value)}><option>Em aberto</option><option>Todas</option><option>Concluídas</option><option>Canceladas</option><option>Hoje</option></select></label><button className="primary-btn" onClick={() => onOpen("Nova ordem de serviço")}><Plus size={16}/> Agendar serviço</button></div></div>
-    <div className="panel customer-panel"><div className="agenda-hint"><Zap size={13}/> Clique duas vezes em um agendamento para abrir a ordem de serviço.</div><div className="table-wrap"><table><thead><tr><th>DATA</th><th>HORÁRIO</th><th>ORDEM</th><th>CLIENTE</th><th>ENDEREÇO</th><th>TÉCNICO</th><th>SITUAÇÃO</th><th /></tr></thead><tbody>{scheduled.map(order => <tr className="clickable-row" title="Clique duas vezes para abrir a ordem" onDoubleClick={() => onSelect(order)} key={`agenda-${order.id}`}><td><strong>{new Date(`${order.date}T12:00:00`).toLocaleDateString("pt-BR")}</strong></td><td>{order.time || "A definir"}</td><td><b className="order-id">{order.id}</b></td><td>{order.client}<small className="agenda-unit">{order.unit}</small></td><td><button className="address-button" onClick={() => onSelect(order)}><MapPin size={13}/><span>{order.address || "Endereço não informado"}</span></button></td><td>{order.tech}</td><td><span className={`status ${order.tone}`}><i/> {order.status}</span></td><td><button className="open-client" onClick={() => onSelect(order)}>Abrir <ChevronRight size={13}/></button></td></tr>)}</tbody></table></div>{!scheduled.length && <div className="linked-empty"><CalendarDays size={24}/><h4>Nenhum serviço agendado</h4><p>Informe a data ao criar uma ordem de serviço.</p></div>}</div>
-  </section>;
+  return <OperationalAgenda orders={serviceOrders} onCreate={()=>onOpen("Nova ordem de serviço")} onSelect={onSelect}/>;
 }
 
 async function imageFileToDataUrl(file: File) {
