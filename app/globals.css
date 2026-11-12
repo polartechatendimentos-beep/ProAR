@@ -379,3 +379,15 @@ label.status-filter select option,.status-filter select option{background:#08101
 .proar-edit-content{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:20px 22px}.proar-edit-footer{border-top:1px solid #31516c;flex-wrap:wrap}.proar-edit-footer>span{font-size:12px;color:#bcd5ed}.proar-edit-footer>div{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .proar-edit-content :is(input,select,textarea){max-width:100%;min-width:0}.proar-edit-content label{min-width:0}
 @media(max-width:680px){.proar-edit-overlay{padding:0}.proar-edit-shell{height:100dvh;max-height:100dvh;border-radius:0;border:0}.proar-edit-header,.proar-edit-footer{padding:12px 14px}.proar-edit-content{padding:14px}.proar-edit-footer>div{width:100%}.proar-edit-footer>div>button{flex:1}}
+
+/* Registration dialogs: independent of sticky topbar and clipped page containers. */
+.modal-layer.app-shell{position:fixed!important;inset:0!important;z-index:10000!important;min-height:0!important;height:100dvh;max-height:100dvh;display:grid;place-items:center;padding:clamp(8px,2vh,22px);overflow:hidden;isolation:isolate;background:rgba(1,7,15,.78)}
+.modal-layer.app-shell>.modal{width:min(1100px,100%);height:min(90dvh,100%);max-height:90dvh;min-height:0;display:flex;flex-direction:column;overflow:hidden;border-radius:16px}
+.modal-layer.app-shell>.modal>.modal-head{position:relative;top:auto;flex:none;z-index:2;padding:15px 20px;background:#0c233c;color:#f0f7ff}
+.modal-layer.app-shell>.modal>.modal-head h2{color:#fff}
+.modal-layer.app-shell>.modal>.form-grid{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;align-content:start;padding:16px 20px;scrollbar-gutter:stable}
+.modal-layer.app-shell>.modal>.modal-actions{position:relative;bottom:auto;flex:none;padding:12px 20px;background:#0a1d32;z-index:2}
+.modal-layer.app-shell>.modal :is(input,select,textarea){min-width:0;max-width:100%}
+.modal-layer.app-shell>.modal :is(label,section){min-width:0}
+.modal-layer.app-shell>.modal-head>button{flex:none}
+@media(max-width:700px){.modal-layer.app-shell{padding:0}.modal-layer.app-shell>.modal{height:100dvh;max-height:100dvh;width:100%;border-radius:0}.modal-layer.app-shell>.modal>.form-grid{grid-template-columns:minmax(0,1fr);padding:12px}.modal-layer.app-shell>.modal>.modal-head{padding:12px 14px}.modal-layer.app-shell>.modal>.modal-actions{padding:10px 14px;flex-wrap:wrap}.modal-layer.app-shell>.modal>.modal-actions button{flex:1;min-width:120px}}
