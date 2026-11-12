@@ -370,3 +370,12 @@ label.status-filter select option,.status-filter select option{background:#08101
 .os-inline-customer-actions{display:flex;flex-wrap:wrap;gap:8px}
 .os-inline-customer-actions button{flex:1;min-height:40px;white-space:normal}
 .os-inline-customer p.os-inline-customer-error{color:#fecaca;background:#451a26;padding:10px;border-radius:8px}
+
+/* Shared editing surface. Opt-in only: legacy modals remain unchanged until migrated. */
+.proar-edit-overlay{position:fixed;inset:0;z-index:9999;background:rgba(1,9,24,.78);display:grid;place-items:center;padding:clamp(8px,2vw,24px)}
+.proar-edit-shell{width:min(1280px,100%);height:min(92dvh,100%);min-height:0;display:flex;flex-direction:column;overflow:hidden;border:1px solid #2d567b;border-radius:16px;background:#09182b;color:#f0f7ff;box-shadow:0 28px 90px #0009;outline:none}
+.proar-edit-header,.proar-edit-footer{flex:none;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 22px;background:#0d2440}
+.proar-edit-header{border-bottom:1px solid #31516c}.proar-edit-header h2{margin:0;color:#fff;font-size:clamp(18px,2vw,24px)}.proar-edit-header p{margin:4px 0 0;color:#bed3e9;font-size:13px}.proar-edit-header>button{color:#fff;background:transparent;border:1px solid #436485;border-radius:8px;min-width:38px;min-height:38px;cursor:pointer;font-size:24px}
+.proar-edit-content{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:20px 22px}.proar-edit-footer{border-top:1px solid #31516c;flex-wrap:wrap}.proar-edit-footer>span{font-size:12px;color:#bcd5ed}.proar-edit-footer>div{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.proar-edit-content :is(input,select,textarea){max-width:100%;min-width:0}.proar-edit-content label{min-width:0}
+@media(max-width:680px){.proar-edit-overlay{padding:0}.proar-edit-shell{height:100dvh;max-height:100dvh;border-radius:0;border:0}.proar-edit-header,.proar-edit-footer{padding:12px 14px}.proar-edit-content{padding:14px}.proar-edit-footer>div{width:100%}.proar-edit-footer>div>button{flex:1}}
