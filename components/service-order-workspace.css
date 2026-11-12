@@ -5,3 +5,19 @@
 .mobile-guided-checklist{display:none}.mobile-guided-checklist header{display:flex;justify-content:space-between;align-items:center}.mobile-guided-checklist>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:9px}.mobile-guided-checklist label{display:flex;gap:7px;align-items:center;min-height:40px;padding:7px 9px;border:1px solid #dce7ef;border-radius:10px;background:#fff;font-size:12px}.mobile-guided-checklist small{display:block;margin-top:8px;color:#8a5b00}@media(max-width:1024px){.mobile-guided-checklist{display:block;margin:8px 0 12px;padding:12px;border:1px solid #cfe0ee;border-radius:14px;background:#f8fbfd}}@media(max-width:420px){.mobile-guided-checklist>div{grid-template-columns:1fr}}
 
 .mobile-equipment-passport{display:none}@media(max-width:1024px){.mobile-equipment-passport{display:flex;flex-direction:column;gap:5px;margin:8px 0;padding:11px 12px;border:1px solid #dce7ef;border-radius:13px;background:#fff}.mobile-equipment-passport small{color:#6a7d90}.mobile-equipment-passport span{font-size:12px;font-weight:600}}
+
+/* Compact OS workspace: keeps advanced fields accessible without overwhelming the first view. */
+.os-compact-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;background:#e9f2ff;border-bottom:1px solid #c6dbf2}
+.os-compact-toolbar>div{display:grid;gap:3px}.os-compact-toolbar b{color:#123d6b;font-size:14px}.os-compact-toolbar small{color:#426788;font-size:12px}
+.os-compact-summary{padding:18px;display:grid;gap:18px}.os-compact-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.os-compact-metrics article{display:grid;align-content:start;gap:8px;min-width:0;padding:16px;border:1px solid #c8dbee;border-radius:12px;background:#fff}
+.os-compact-metrics small{font-size:11px;font-weight:700;text-transform:uppercase;color:#54718e}.os-compact-metrics b{font-size:14px;color:#102f50;overflow-wrap:anywhere}
+.os-compact-actions{display:flex;gap:10px;flex-wrap:wrap}.os-compact-actions button{background:#155dc1;color:#fff;border:1px solid #155dc1;border-radius:9px;padding:10px 14px;font-weight:700;cursor:pointer}.os-compact-actions button:first-child{background:#fff;color:#1458a4}
+.os-compact-actions button:focus-visible,.os-compact-toolbar button:focus-visible{outline:3px solid #60a5fa;outline-offset:2px}
+.os-compact-note{font-size:12px;color:#526d88;margin:0}
+.os-report-preview{display:grid;justify-items:center;gap:10px;padding:18px;background:#e7edf5;border-radius:12px;margin:12px 0}
+.os-report-paper{width:min(100%,480px);aspect-ratio:210/297;background:#fff;color:#172b46;box-shadow:0 8px 26px #172b4622;padding:clamp(15px,4vw,32px);display:flex;flex-direction:column;gap:12px}
+.os-report-paper header{display:flex;justify-content:space-between;gap:8px;border-bottom:2px solid #155dc1;padding-bottom:12px;color:#13549e}.os-report-paper header span{font-size:11px}.os-report-paper h4{font-size:17px;margin:6px 0}.os-report-paper p{margin:0;font-size:12px;overflow-wrap:anywhere}
+.os-report-signatures{margin-top:auto;display:grid;grid-template-columns:1fr 1fr;gap:18px}.os-report-signatures span{border-top:1px solid #74859c;padding-top:6px;text-align:center;font-size:10px}.os-report-preview>small{color:#526d88;text-align:center}
+@media(max-width:900px){.os-compact-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:540px){.os-compact-toolbar{align-items:flex-start;flex-direction:column}.os-compact-metrics{grid-template-columns:1fr}.os-compact-summary{padding:12px}.os-compact-actions button{width:100%}.os-report-preview{padding:8px}.os-report-paper{min-height:440px}.os-report-paper header{flex-direction:column}}
