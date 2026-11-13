@@ -120,7 +120,7 @@ export function ServiceOrderWorkspace({ order, companyId, baseOrder, dirty, onCh
     const structureCustomerName = text(item, "client", "customer", "customerName");
     return normalizeCustomerKey(structureCustomerName) === normalizeCustomerKey(selectedCustomerName);
   });
-  const {structure:selectedStructure,roomValue,roomLabel:selectedRoom}=orderLocation(draft,structures);
+  const {structure:selectedStructure,roomValue,roomLabel:selectedRoom}=orderLocation({...draft,customerId:selectedCustomerId||draft.customerId},structures);
   const selectedEquipmentIds = Array.isArray(draft.equipmentIds) ? draft.equipmentIds as string[] : typeof draft.equipmentId === "string" ? [draft.equipmentId] : [];
   const availableEquipment = equipment.filter(item => {
     const sameCustomer = draft.customerId && item.customerId ? item.customerId === draft.customerId : text(item, "client", "customer", "customerName") === draft.client;
