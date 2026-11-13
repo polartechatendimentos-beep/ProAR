@@ -1,14 +1,21 @@
 "use client";
-import {useMemo,useState} from "react";
+import {useMemo,useState,useSyncExternalStore} from "react";
 import {CalendarDays,ChevronLeft,ChevronRight,Plus,Search,Clock,MapPin,UserRound,AlertCircle} from "lucide-react";
 import {agendaToday,agendaDates,validAgendaDate,navigateAgenda,closedAgendaOrder,filterAgendaOrders,type AgendaMode,type AgendaOrder} from "../lib/agenda-calendar";
 import {orderEndTime,orderReadiness,type OrderScheduleSeed} from "../lib/order-workspace-state";
 import {agendaInsights} from "../lib/agenda-insights";
 import styles from "./OperationalAgenda.module.css";
+import {preferredAgendaMode} from "../lib/daily-usability";
+const narrowQuery="(max-width: 700px)";
+const narrowSnapshot=()=>window.matchMedia(narrowQuery).matches;
+const subscribeNarrow=(notify:()=>void)=>{const media=window.matchMedia(narrowQuery);media.addEventListener("change",notify);return()=>media.removeEventListener("change",notify);};
+const serverNarrow=()=>false;
 const modes:AgendaMode[]=["Dia","Semana","Mês","Técnico","Lista"];
 const label=(day:string,options:Intl.DateTimeFormatOptions={day:"2-digit",month:"short"})=>new Date(`${day}T12:00:00Z`).toLocaleDateString("pt-BR",{...options,timeZone:"UTC"});
 export function OperationalAgenda<T extends AgendaOrder>({companyId,orders,onCreate,onSelect,onScheduleUpdate,customers=[],technicians:staff=[]}:{companyId:string;orders:T[];onCreate:(seed:OrderScheduleSeed)=>void;onSelect:(order:T)=>void;onScheduleUpdate?:(order:T)=>Promise<unknown>;customers?:Record<string,unknown>[];technicians?:string[]}){
- const [mode,setMode]=useState<AgendaMode>("Semana"),[day,setDay]=useState(agendaToday),[status,setStatus]=useState("Em aberto"),[tech,setTech]=useState(""),[query,setQuery]=useState(""),[overdue,setOverdue]=useState(false);
+ const narrow=useSyncExternalStore(subscribeNarrow,narrowSnapshot,serverNarrow);
+ const [selectedMode,setMode]=useState<AgendaMode|null>(null),[day,setDay]=useState(agendaToday),[status,setStatus]=useState("Em aberto"),[tech,setTech]=useState(""),[query,setQuery]=useState(""),[overdue,setOverdue]=useState(false);
+ const mode=useMemo(()=>preferredAgendaMode(narrow,selectedMode),[narrow,selectedMode]);
  const [editing,setEditing]=useState<T|null>(null),[quick,setQuick]=useState({date:"",time:"",tech:"",duration:""}),[quickBusy,setQuickBusy]=useState(false),[quickNotice,setQuickNotice]=useState("");
  const today=agendaToday();
  const filtered=useMemo(()=>filterAgendaOrders(orders,{status,tech,query,today,overdueOnly:overdue}),[orders,status,tech,query,today,overdue]);

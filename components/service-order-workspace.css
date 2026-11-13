@@ -11,3 +11,26 @@
 .os-complementary:not([data-area="Ordem"]):not([data-area="Relatórios"]){border:0;min-height:200px}.os-area-empty{padding:24px!important;font-size:13px!important;color:#627b92!important}.os-embedded .os-summary-grid .os-side-column{align-content:start}.os-embedded .os-room-card dl{display:none}.os-embedded .os-room-card{padding:14px}.os-embedded .os-room-card h3{font-size:15px}.os-embedded .os-close-check .os-close-list{gap:5px}.os-embedded .os-close-check h3{font-size:14px}
 .os-complementary{min-inline-size:0;border:0}.os-embedded .os-editor-fields{border:0;min-inline-size:0}.os-create-general{align-items:start}.os-create-tabs button{white-space:nowrap}.os-create-tab-panel>.os-create-card{margin-bottom:16px}.os-report-preview [role="alert"]{padding:14px;border:1px solid #e2aaaa;border-radius:8px;background:#fff1f1;color:#942929!important}
 .os-guided-review summary{font-size:14px;font-weight:650;color:#385e7f;cursor:pointer}.os-guided-items{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:15px}.os-guided-items label{display:flex;align-items:center;gap:9px;font-size:12px!important;padding:10px;border:1px solid #dce7ef;border-radius:8px}.os-embedded.os-workspace .os-guided-items input{width:17px!important;height:17px!important;min-height:17px!important;flex-shrink:0}.os-notice.os-notice-error{border:1px solid #e6acac;color:#942d2d!important;background:#fff0f0}@media(max-width:700px){.os-guided-items{grid-template-columns:1fr}}
+
+/* Keep daily work visible on narrow screens without removing secondary actions. */
+.os-location-toggle{display:none}
+@media(max-width:700px){
+ .order-detail-modal .order-detail-head{padding:10px 12px;gap:7px}
+ .order-detail-modal .order-detail-head h2{font-size:16px!important;margin:3px 0;line-height:1.3}
+ .order-detail-modal .order-detail-head>div:first-child>span,.order-detail-modal .order-detail-head>div:first-child>p{display:none}
+ .order-detail-modal .order-detail-actions{gap:5px}
+ .order-detail-modal .order-detail-actions>button{padding:7px 8px;min-height:34px;font-size:10px!important}
+ .os-context-tabs{padding:5px 8px;gap:3px}
+ .os-context-tabs button{padding:7px 9px;min-height:34px;font-size:11px!important}
+ .os-embedded .os-workspace-header{padding:7px 10px}
+ .os-embedded .os-header-actions{gap:7px;align-items:center;flex-wrap:nowrap}
+ .os-embedded .os-header-actions .os-primary-button{white-space:nowrap;padding:9px 10px;font-size:12px}
+ .os-embedded .os-shared-save-state{font-size:10px!important;max-width:100px}
+ .os-location-toggle{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;padding:11px 12px;border:0;border-bottom:1px solid #b9ccdf;background:#eaf2fc;color:#173e63!important;text-align:left;font-size:12px!important;font-weight:650;cursor:pointer}
+ .os-location-toggle span{flex-shrink:0;text-decoration:underline}
+ .os-location-section:not(.expanded) .os-location-bar{display:none}
+ .os-embedded .os-location-bar{padding:10px 12px;gap:9px}
+ .os-embedded .os-tabs{padding:4px 8px}
+ .os-embedded .os-tabs button{padding:9px 8px;min-height:36px;font-size:11px}
+ .os-embedded .os-summary-grid{padding:10px;gap:10px}
+}

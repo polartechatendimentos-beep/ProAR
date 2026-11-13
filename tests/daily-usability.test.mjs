@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {preferredAgendaMode,sortOrdersByTime} from '../lib/daily-usability.ts';
+test('daily work is chronological, unscheduled last, without mutating the source',()=>{const input=[{id:'OS-12',time:'12:30'},{id:'OS-11',time:'14:30'},{id:'OS-10',time:'08:30'},{id:'OS-9',time:''},{id:'OS-8',time:'99:00'}];assert.deepEqual(sortOrdersByTime(input).map(o=>o.id),['OS-10','OS-12','OS-11','OS-8','OS-9']);assert.equal(input[0].id,'OS-12');});
+test('mobile defaults to day, desktop to week, and explicit operator choice survives resizing',()=>{assert.equal(preferredAgendaMode(true,null),'Dia');assert.equal(preferredAgendaMode(false,null),'Semana');assert.equal(preferredAgendaMode(true,'Mês'),'Mês');assert.equal(preferredAgendaMode(false,'Dia'),'Dia');});
