@@ -2,3 +2,41 @@
 .agenda.agenda .filters label{color:#526b85!important}.agenda .filters :is(input,select){-webkit-text-fill-color:#1f3e5f!important;color-scheme:light!important}.agenda .filters input::placeholder{color:#7b8da4!important;-webkit-text-fill-color:#7b8da4!important;opacity:1}
 .insights{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px;align-items:start}.insights details{padding:14px;background:#fff;border:1px solid var(--line);border-radius:10px;min-width:0}.insights details[open]{grid-column:1/-1}.insights summary{cursor:pointer;font-size:12px;font-weight:700;color:#274968!important}.insights summary b{display:inline-block;padding:1px 6px;margin-left:7px;background:#eaf2fc;border-radius:5px;color:#2769b1}.insights summary span{display:block;font-size:10px!important;font-weight:400;color:#6a7f96;margin-top:5px}.insights p{font-size:11px!important;color:#64788f!important}.pendingList{display:grid;gap:8px;margin-top:13px}.pendingList>button{align-items:flex-start;flex-direction:column;text-align:left}.pendingList small{font-size:10px!important;color:#64788f!important}.pendingList article{display:flex;gap:8px;flex-wrap:wrap;background:#fff7e9;padding:9px;border-radius:8px}.metricsScroll{overflow-x:auto;margin-top:14px}.metricsScroll table{width:100%;border-collapse:collapse;min-width:610px}.agenda .metricsScroll :is(td,th){font-size:12px!important;color:#294b6f!important;padding:11px!important;border-bottom:1px solid var(--line);text-align:left;background:#fff!important}.agenda .metricsScroll th{background:#eff4fa!important;font-weight:650}.agenda button:disabled{opacity:.45;cursor:not-allowed}@media(max-width:700px){.insights{grid-template-columns:1fr}.insights details[open]{grid-column:auto}}
 .activeFilters{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0}.agenda .activeFilters button{font-size:10px!important;min-height:29px;padding:5px 9px;border-radius:18px;background:#eaf2fc}.agenda .readinessBadge{font-size:9px!important;background:#fff4d9;color:#805a10;padding:3px 6px;border-radius:5px}.pendingRow{display:flex;gap:8px;align-items:stretch}.pendingRow>button:first-child{display:flex;flex:1;align-items:flex-start;flex-direction:column;text-align:left}.quickLayer{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:20px;background:#071a30a6}.quickPanel{width:min(620px,100%);max-height:92dvh;overflow:auto;background:#fff;border-radius:15px;border:1px solid #ccdded;padding:22px;color:#1e3c58}.quickPanel header{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}.quickPanel header span{font-size:10px;letter-spacing:1px;color:#2673bd;font-weight:750}.quickPanel h3{font-size:18px!important;margin:6px 0}.quickPanel form{display:grid;grid-template-columns:1fr 1fr;gap:14px}.quickPanel label{display:grid;gap:6px;font-size:12px!important;color:#45677f!important}.agenda .quickPanel :is(input,select){width:100%;color:#193a57!important;-webkit-text-fill-color:#193a57!important;color-scheme:light!important;background:#f8fbff!important;border:1px solid #ccdaea!important;border-radius:8px!important;padding:10px!important;font-size:13px!important}.quickPanel form>p,.quickPanel footer{grid-column:1/-1}.quickPanel footer{display:flex;justify-content:flex-end;gap:9px;padding-top:10px}@media(max-width:700px){.quickPanel{padding:16px}.quickPanel form{grid-template-columns:1fr}.pendingRow{flex-wrap:wrap}}
+
+/* Agenda: color hierarchy inspired by PolarTech blue; functional accents remain legible. */
+.agenda{--blue:#155ed1;background:linear-gradient(150deg,#eaf3ff 0%,#f4f7fc 55%,#edf5ff 100%);border-color:#bdd4f1}
+.agenda .hero{padding:18px 20px;border-radius:15px;background:linear-gradient(110deg,#092a52,#1455a2 78%,#187bd1);box-shadow:0 10px 22px #0e4d8d20}
+.agenda .hero :is(h2,p),.agenda .hero .kicker{color:#fff!important}
+.agenda .hero .kicker{opacity:.8}
+.agenda .hero .primary{background:#fff!important;color:#1357a4!important;border-color:#fff}
+.agenda .stats>button:nth-child(1){background:#e6f3ff;border-color:#91c5fa}
+.agenda .stats>button:nth-child(2){background:#fff1e9;border-color:#f4b58f}
+.agenda .stats>div:nth-child(3){background:#fff8df;border-color:#ead28c}
+.agenda .stats>div:nth-child(4){background:#eaf7f1;border-color:#9ad7ba}
+.agenda .stats>button:nth-child(1) b{color:#125cba!important}
+.agenda .stats>button:nth-child(2) b{color:#b94e17!important}
+.agenda .stats>div:nth-child(3) b{color:#956600!important}
+.agenda .stats>div:nth-child(4) b{color:#087a54!important}
+.agenda .modes{background:#dce9fb;border-color:#bcd2ed}
+.agenda .modes button[aria-pressed=true]{background:#155ed1!important;color:#fff!important;border-color:#155ed1!important;box-shadow:0 3px 10px #155ed133}
+.agenda .filters{background:#f8fbff;border-color:#c4d9f3;box-shadow:0 4px 14px #2c6caa0c}
+.agenda .insights details:nth-child(1){background:#fff9ed;border-color:#efcf86;border-top:4px solid #e9a23b}
+.agenda .insights details:nth-child(2){background:#fff0ef;border-color:#efb9b2;border-top:4px solid #dc6757}
+.agenda .insights details:nth-child(3){background:#edf9f3;border-color:#a6d9bd;border-top:4px solid #2c9c6c}
+.agenda .insights details:nth-child(1) summary b{background:#ffe5ae;color:#805009}
+.agenda .insights details:nth-child(2) summary b{background:#ffd9d4;color:#9d3027}
+.agenda .insights details:nth-child(3) summary b{background:#c8f0db;color:#116d46}
+.agenda .calendarScroll{border-color:#bcd2eb;box-shadow:0 6px 18px #235d9b12}
+.agenda .day{background:#fff}
+.agenda .day:nth-child(7n+1),.agenda .day:nth-child(7n){background:#f5f8ff}
+.agenda .today{background:#e1efff!important;box-shadow:inset 0 3px 0 #2475db}
+.agenda .outside{background:#edf1f6!important}
+.agenda .day:has(.event){background:#f7fbff}
+.agenda .today:has(.event){background:#e1efff}
+.agenda .event{background:#eaf3ff;border-color:#9dc7f7;border-left:4px solid #2475db}
+.agenda .event:hover{background:#dcecff;border-color:#6ba9f0}
+.agenda .overdueEvent{background:#fff1e7;border-color:#e8bc8d;border-left-color:#e28c2e}
+.agenda .event .eventStatus{background:#d3e7ff;color:#164d8c}
+.agenda .technicians>section{background:#edf5ff;border-color:#b5d3f4}
+.agenda .dateBadge{background:#d8e9ff;color:#1256a0}
+@media(max-width:700px){.agenda .hero{padding:14px}.agenda .stats>div,.agenda .stats>button{min-height:82px}}
