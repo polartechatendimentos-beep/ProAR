@@ -11,6 +11,7 @@ import { HvacDiagnosticWorkspace } from "@/components/HvacDiagnosticWorkspace";
 import { EquipmentLabelControl } from "@/components/EquipmentLabelControl";
 import { isEquipmentLabelCode, normalizeEquipmentLabelCode } from "@/lib/equipment-label-associations";
 import {orderStatusOptions,orderStatusTone,orderReadiness,orderRevenueChanged,preserveWorkspaceAmounts,workspaceDraftKey,makeWorkspaceDraft,restoreWorkspaceDraft} from "../lib/order-workspace-state";
+import {orderLocation,orderCustomerPatch} from "../lib/order-location";
 import "./service-order-workspace.css";
 
 export type WorkspaceOrder = {
@@ -102,6 +103,7 @@ export function ServiceOrderWorkspace({ order, companyId, baseOrder, dirty, onCh
     tradeName: text(item, "tradeName", "nomeFantasia"),
     doc: text(item, "doc", "cnpj", "cpf"),
     phone: text(item, "phone", "whatsapp"),
+    address: text(item,"address"),
     contact: text(item, "contact", "responsible"),
     organizationType:text(item,"organizationType"),
   })).filter(item => item.id && item.name);
@@ -118,8 +120,7 @@ export function ServiceOrderWorkspace({ order, companyId, baseOrder, dirty, onCh
     const structureCustomerName = text(item, "client", "customer", "customerName");
     return normalizeCustomerKey(structureCustomerName) === normalizeCustomerKey(selectedCustomerName);
   });
-  const selectedStructure = customerStructures.find(item => text(item, "name", "unit") === String(draft.room || "")) || customerStructures.find(item => text(item, "name", "unit") === draft.unit) || structures.find(item => text(item, "name", "unit") === draft.unit);
-  const selectedRoom = text(selectedStructure, "room", "environment", "ambiente", "name") || String(draft.environment || draft.room || "Sala/Ambiente não informado");
+  const {structure:selectedStructure,roomValue,roomLabel:selectedRoom}=orderLocation(draft,structures);
   const selectedEquipmentIds = Array.isArray(draft.equipmentIds) ? draft.equipmentIds as string[] : typeof draft.equipmentId === "string" ? [draft.equipmentId] : [];
   const availableEquipment = equipment.filter(item => {
     const sameCustomer = draft.customerId && item.customerId ? item.customerId === draft.customerId : text(item, "client", "customer", "customerName") === draft.client;
@@ -268,9 +269,9 @@ export function ServiceOrderWorkspace({ order, companyId, baseOrder, dirty, onCh
     </header>
 
     <div className="os-location-bar">
-      <label>Cliente<CustomerSearchSelect customers={customerOptions} value={selectedCustomerId} valueMode="id" disabled={!canEdit} locationId={String(draft.structureId || draft.roomId || draft.sectorId || draft.unitId || "")} onLocationChange={selection=>setDraft(current=>({...current,...selection,equipmentIds:[]}))} onChange={(value, selected) => setDraft(current => ({ ...current, client:selected?.name || "", customerId:value || undefined, unit:"", unitId:undefined, sector:"", sectorId:undefined, room:"", roomId:undefined, structureId:undefined, equipmentIds:[] }))} /></label>
+      <label>Cliente<CustomerSearchSelect customers={customerOptions} value={selectedCustomerId} valueMode="id" disabled={!canEdit} locationId={String(draft.structureId || draft.roomId || draft.sectorId || draft.unitId || "")} onLocationChange={selection=>setDraft(current=>({...current,...selection,environment:undefined,equipmentIds:[],equipmentId:undefined,equipmentLabelCode:undefined}))} onChange={(value,selected)=>setDraft(current=>({...current,...orderCustomerPatch(current,value,selected as unknown as RecordItem)}))} /></label>
       <ChevronRight size={15}/><label className={municipal?"municipal-legacy-location":""}>Unidade / setor<select disabled={!canEdit || saving} value={draft.unit} onChange={event => setField("unit", event.target.value)}><option>{draft.unit || "Selecionar"}</option>{customerStructures.map(item => <option key={text(item, "id", "name")} value={text(item, "name", "unit")}>{text(item, "name", "unit")}</option>)}</select></label>
-      <ChevronRight size={15}/><label className={municipal?"municipal-legacy-location":""}>Sala / ambiente<input disabled={!canEdit || saving} value={selectedRoom} onChange={event => setField("environment", event.target.value)} placeholder="Sala ou ambiente"/></label>
+      <ChevronRight size={15}/><label className={municipal?"municipal-legacy-location":""}>Sala / ambiente<input disabled={!canEdit || saving} value={roomValue} onChange={event => setField("environment", event.target.value)} placeholder="Sala ou ambiente"/></label>
       <div className="os-location-summary"><MapPin size={15}/><span>{draft.unit || "Local não informado"} <b>›</b> {selectedRoom}</span></div>
     </div>
 
