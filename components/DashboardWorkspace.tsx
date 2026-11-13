@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Activity, AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, Boxes, CalendarDays, ChartNoAxesCombined, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock3, FileChartColumn, FileText, Filter, MoreHorizontal, ShieldCheck, ShoppingBag, ShoppingCart, TrendingUp, UsersRound, WalletCards, Zap } from "lucide-react";
+import {sortOrdersByTime} from "../lib/daily-usability";
 import { deriveOperationalActions } from "@/lib/action-center";
 
 type DashboardOrder = { id:string; client:string; unit:string; service:string; tech:string; date:string; time:string; status:string; tone:string; avatar:string };
@@ -39,7 +40,7 @@ export function DashboardWorkspace({ onNavigate, serviceOrders, modules, role }:
     const statusOk = status === "Todos" || order.status === status;
     return inPeriod && techOk && statusOk;
   });
-  const todayOrders = serviceOrders.filter(order => order.date === todayIso && (technician === "Todos" || order.tech === technician) && (status === "Todos" || order.status === status));
+  const todayOrders = sortOrdersByTime(serviceOrders.filter(order => order.date === todayIso && (technician === "Todos" || order.tech === technician) && (status === "Todos" || order.status === status)));
   const overdueOrders = serviceOrders.filter(order => order.date && order.date < todayIso && !/conclu[ií]d|cancelad/i.test(order.status) && (technician === "Todos" || order.tech === technician) && (status === "Todos" || order.status === status));
   const workItems = deriveOperationalActions(serviceOrders, modules).slice(0, 8);
   const financialRecords = (modules.Financeiro ?? []).filter(record => {

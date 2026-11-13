@@ -78,6 +78,7 @@ function money(value: number) {
 }
 
 export function ServiceOrderWorkspace({ order, companyId, baseOrder, dirty, onChange, hideBody=false, onViewReport, onShowEditor, customers = [], employees = [], structures = [], equipment = [], serviceOrders = [], errorCodes = [], manuals = [], catalogSource = [], canEdit, onSave, onSyncEquipmentDiagnostic, onToggleEquipmentLabel, onLinkHistoricalOrder, onAssignEquipmentLabel, canManageLabels = false, onClose }: Props) {
+  const [locationExpanded,setLocationExpanded]=useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("Resumo");
   const draft=order;
   const setDraft=onChange;
@@ -268,13 +269,15 @@ export function ServiceOrderWorkspace({ order, companyId, baseOrder, dirty, onCh
       <div className="os-header-actions"><small className="os-shared-save-state" role="status">{saving?"Salvando…":dirty?"Alterações não salvas":"Sem alterações pendentes"}</small><span className={`os-status ${orderStatusTone(draft.status)}`}><i/> {draft.status}</span><button className="os-primary-button" disabled={!canEdit || saving || !dirty} onClick={() => void save()}><Save size={15}/> {saving ? "Salvando..." : "Salvar OS"}</button></div>
     </header>
 
-    <div className="os-location-bar">
+    <div className={`os-location-section ${locationExpanded?"expanded":""}`}><button type="button" className="os-location-toggle" aria-expanded={locationExpanded} aria-controls="os-location-fields" onClick={()=>setLocationExpanded(value=>!value)}>Cliente e local • {selectedCustomerName} <span>{locationExpanded?"Recolher":"Alterar"}</span></button>
+    <div className="os-location-bar" id="os-location-fields">
       <label>Cliente<CustomerSearchSelect customers={customerOptions} value={selectedCustomerId} valueMode="id" disabled={!canEdit} locationId={String(draft.structureId || draft.roomId || draft.sectorId || draft.unitId || "")} onLocationChange={selection=>setDraft(current=>({...current,...selection,environment:undefined,equipmentIds:[],equipmentId:undefined,equipmentLabelCode:undefined}))} onChange={(value,selected)=>setDraft(current=>({...current,...orderCustomerPatch(current,value,selected as unknown as RecordItem)}))} /></label>
       <ChevronRight size={15}/><label className={municipal?"municipal-legacy-location":""}>Unidade / setor<select disabled={!canEdit || saving} value={draft.unit} onChange={event => setField("unit", event.target.value)}><option>{draft.unit || "Selecionar"}</option>{customerStructures.map(item => <option key={text(item, "id", "name")} value={text(item, "name", "unit")}>{text(item, "name", "unit")}</option>)}</select></label>
       <ChevronRight size={15}/><label className={municipal?"municipal-legacy-location":""}>Sala / ambiente<input disabled={!canEdit || saving} value={roomValue} onChange={event => setField("environment", event.target.value)} placeholder="Sala ou ambiente"/></label>
       <div className="os-location-summary"><MapPin size={15}/><span>{draft.unit || "Local não informado"} <b>›</b> {selectedRoom}</span></div>
     </div>
 
+    </div>
     <nav className="os-tabs" aria-label="Abas da ordem de serviço">{tabs.map(tab => <button key={tab} className={activeTab === tab ? "active" : ""} onClick={() => setActiveTab(tab)}>{tab}</button>)}</nav>
     {notice && <div className={`os-notice ${/^(Não|Informe|Conflito|Para concluir|Esta OS|Gravação)/.test(notice)?"os-notice-error":""}`} role={/^(Não|Informe|Conflito|Para concluir|Esta OS|Gravação)/.test(notice)?"alert":"status"}>{notice.startsWith("✓")&&<Check size={15}/>} {notice}</div>}
 
