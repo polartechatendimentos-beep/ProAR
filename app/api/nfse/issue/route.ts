@@ -58,7 +58,7 @@ export async function POST(request:NextRequest){
   const signedXml=decodeXml(dpsXmlGZipB64);
   if(!signedXml.includes("<DPS")||!signedXml.includes("<Signature")||!signedXml.includes("<infDPS"))return NextResponse.json({error:"O documento compactado não contém uma DPS XML assinada."},{status:422});
   const production=String(fiscal.company?.environment||"Homologação")==="Produção";
-  const response=await nationalPost(production?"sefin.nfse.gov.br":"sefin.producaorestrita.nfse.gov.br",Buffer.from(certificate.pfxBase64,"base64"),certificate.password,JSON.stringify({dpsXmlGZipB64}));
+  const response=await nationalPost(production?"sefin.nfse.gov.br":"sefin.producaorestrita.nfse.gov.br",Buffer.from(certificate.pfxBase64!,"base64"),certificate.password!,JSON.stringify({dpsXmlGZipB64}));
   const result=response.data as Record<string,unknown>;
   if(response.status<200||response.status>=300)return NextResponse.json({issued:false,status:"Rejeitada",error:"A SEFIN Nacional rejeitou a DPS.",details:result},{status:422});
   const nfseXml=decodeXml(result?.nfseXmlGZipB64);const key=String(result?.chaveAcesso||result?.chNFSe||result?.key||"");
