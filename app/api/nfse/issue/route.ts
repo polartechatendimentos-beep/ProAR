@@ -44,13 +44,14 @@ function nationalPost(hostname:string,pfx:Buffer,passphrase:string,body:string):
 function decodeXml(value:unknown):string{if(typeof value!=="string"||value.length>8_000_000)return "";try{return gunzipSync(Buffer.from(value,"base64")).toString("utf8");}catch{return "";}}
 export async function POST(request:NextRequest){
  const access=requirePermission(request,"fiscal.emitir");if(!access.ok)return NextResponse.json({error:access.error},{status:access.status});
+ const companyId=access.session.companyId;if(!companyId)return NextResponse.json({error:"Sessão sem empresa vinculada."},{status:403});
  try{
   const body=await request.json();const validation=validateFiscalPayload({...body,kind:"NFSE"});
   if(!validation.valid)return NextResponse.json({error:"Pré-validação fiscal reprovada.",validation},{status:422});
   if(!body?.serviceOrderId||!body?.customer?.document||!body?.service?.description||Number(body?.service?.value||0)<=0)return NextResponse.json({error:"Informe OS, CPF/CNPJ do tomador, descrição e valor do serviço."},{status:400});
   const dpsXmlGZipB64=String(body?.dpsXmlGZipB64||"");
   if(!dpsXmlGZipB64||dpsXmlGZipB64.length>5_000_000)return NextResponse.json({error:"A emissão municipal foi desativada. A SEFIN Nacional exige DPS completa, validada no XSD vigente e assinada digitalmente. Nenhuma nota foi enviada."},{status:422});
-  const fiscal=await loadFiscal(access.session.companyId);const certificate=fiscal.certificate;
+  const fiscal=await loadFiscal(companyId);const certificate=fiscal.certificate;
   if(!certificate?.pfxBase64||!certificate.password)return NextResponse.json({error:"Cadastre o certificado A1 desta empresa na Configuração Fiscal."},{status:428});
   if(new Date(certificate.validTo).getTime()<=Date.now())return NextResponse.json({error:"O certificado A1 desta empresa está vencido."},{status:422});
   const nfse=fiscal.nfse||{};
