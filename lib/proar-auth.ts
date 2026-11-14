@@ -41,12 +41,12 @@ export function createSessionForUser(user: Omit<ProARUser, "passwordHash" | "act
   return `v2.${data}.${sign(`v2.${data}`)}`;
 }
 export function readSession(token?: string | null): Omit<ProARUser, "passwordHash" | "active"> | null {
-  if (!token) return null;
+  if (!token || token.length > 16384 || token.split(".").length !== 3) return null;
   if (token.startsWith("v2.")) {
     const [, data, signature] = token.split("."); if (!data || !signature || !safeEqual(signature, sign(`v2.${data}`))) return null;
-    try { const parsed = JSON.parse(Buffer.from(data, "base64url").toString("utf8")); if (!parsed.exp || parsed.exp < Date.now() / 1000) return null; if (parsed.trialExpiresAt && new Date(parsed.trialExpiresAt).getTime() < Date.now()) return null; return { username: parsed.username, displayName: parsed.displayName, role: parsed.role, permissions: parsed.permissions ?? [], companyId: parsed.companyId, companySlug: parsed.companySlug, trialExpiresAt: parsed.trialExpiresAt, legacy: parsed.legacy === true, entitledModules: Array.isArray(parsed.entitledModules) ? parsed.entitledModules : undefined }; } catch { return null; }
+    try { const parsed = JSON.parse(Buffer.from(data, "base64url").toString("utf8")); if (typeof parsed.exp !== "number" || !Number.isFinite(parsed.exp) || parsed.exp <= Date.now() / 1000 || typeof parsed.username !== "string" || !parsed.username || typeof parsed.role !== "string" || !Array.isArray(parsed.permissions ?? []) || !(parsed.permissions ?? []).every((p: unknown) => typeof p === "string")) return null; if (parsed.trialExpiresAt && new Date(parsed.trialExpiresAt).getTime() < Date.now()) return null; return { username: parsed.username, displayName: parsed.displayName, role: parsed.role, permissions: parsed.permissions ?? [], companyId: parsed.companyId, companySlug: parsed.companySlug, trialExpiresAt: parsed.trialExpiresAt, legacy: parsed.legacy === true, entitledModules: Array.isArray(parsed.entitledModules) ? parsed.entitledModules : undefined }; } catch { return null; }
   }
-  const [encodedUsername, expiresAt, signature] = token.split("."); if (!encodedUsername || !expiresAt || !signature || Number(expiresAt) < Date.now() / 1000) return null;
-  const payload = `${encodedUsername}.${expiresAt}`; if (!safeEqual(signature, sign(payload))) return null; const username = decodeURIComponent(encodedUsername); const user = users().find(item => item.username === username); if (!user) return null;
+  const [encodedUsername, expiresAt, signature] = token.split("."); if (!encodedUsername || !expiresAt || !signature || !Number.isFinite(Number(expiresAt)) || Number(expiresAt) <= Date.now() / 1000) return null;
+  const payload = `${encodedUsername}.${expiresAt}`; if (!safeEqual(signature, sign(payload))) return null; let username: string; try { username = decodeURIComponent(encodedUsername); } catch { return null; } const user = users().find(item => item.active && item.username === username); if (!user) return null;
   return { username: user.username, displayName: user.displayName, role: user.role, permissions: user.permissions };
 }

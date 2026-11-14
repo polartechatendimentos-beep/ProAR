@@ -1,3 +1,4 @@
+import { AuthRequestError, assertAuthOrigin, readAuthBody, authString } from "../../../lib/auth-request-security";
 import { timingSafeEqual } from "node:crypto";
 import { resolveTenantDb, tenantHeaders } from "../../../lib/tenant-rest";
 import { employeeStateKeys, tenantEmployeeCandidate } from "../../../lib/tenant-employee-auth";
@@ -109,7 +110,10 @@ export async function GET(request: NextRequest) {
 }
 
 async function handlePostAuth(request: NextRequest) {
-  const { username = "", password = "", tenant = "" } = await request.json();
+  const body = await readAuthBody(request);
+  const username = authString(body, "username");
+  const password = authString(body, "password", 1024);
+  const tenant = authString(body, "tenant", 80);
   const hostTenant = tenantSlugFromHost(request.headers.get("host"));
   const resolvedTenant = hostTenant || String(tenant || "").trim().toLowerCase();
   if (resolvedTenant && supabaseConfigured()) {
@@ -202,6 +206,7 @@ export async function POST(request: NextRequest) {
   try {
     return await handlePostAuth(request);
   } catch (error) {
+    if (error instanceof AuthRequestError) return NextResponse.json({ error:error.message }, {status:error.status});
     const descriptor=classifyProarError(error);
     console.error("AUTH_POST_FAILED", {
       name:error instanceof Error ? error.name : "Error",
@@ -219,4 +224,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function DELETE() { const response = NextResponse.json({ authenticated: false }); response.cookies.set(COOKIE_NAME, "", { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 0 }); return response; }
+export async function DELETE(request: NextRequest) {
+  try { assertAuthOrigin(request); } catch { return NextResponse.json({error:"Origem da solicitação não autorizada."}, {status:403}); }
+ const response = NextResponse.json({ authenticated: false }); response.cookies.set(COOKIE_NAME, "", { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 0 }); return response; }

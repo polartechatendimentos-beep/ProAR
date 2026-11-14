@@ -1,16 +1,23 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { verifyPassword } from "../lib/password.ts";
 
-test("Manager keeps the requested bootstrap administrator as a hash, never plaintext",async()=>{
-  const source=await readFile(new URL("../lib/manager-auth.ts",import.meta.url),"utf8");
-  assert.ok(source.includes('BOOTSTRAP_MANAGER_USER = "admin"'));
-  const match=source.match(/BOOTSTRAP_MANAGER_PASSWORD_HASH = "([^"]+)"/);
-  assert.ok(match?.[1]);
-  assert.equal(verifyPassword("232325",match[1]),true);
-  assert.equal(verifyPassword("232326",match[1]),false);
-  assert.ok(!source.includes('managerPassword = () => "232325"'));
+test("Manager fails closed without a configured password",async()=>{
+  const { validateManagerCredentials } = await import("../lib/manager-auth.ts");
+  const oldUser=process.env.PROAR_MANAGER_USER;
+  const oldPassword=process.env.PROAR_MANAGER_PASSWORD;
+  try {
+    process.env.PROAR_MANAGER_USER="audit-admin";
+    delete process.env.PROAR_MANAGER_PASSWORD;
+    assert.equal(validateManagerCredentials("audit-admin",""),false);
+    process.env.PROAR_MANAGER_PASSWORD="test-only-unique-password";
+    assert.equal(validateManagerCredentials("audit-admin","test-only-unique-password"),true);
+    assert.equal(validateManagerCredentials("other-admin","test-only-unique-password"),false);
+    assert.equal(validateManagerCredentials("audit-admin","wrong-password"),false);
+  } finally {
+    if(oldUser===undefined) delete process.env.PROAR_MANAGER_USER; else process.env.PROAR_MANAGER_USER=oldUser;
+    if(oldPassword===undefined) delete process.env.PROAR_MANAGER_PASSWORD; else process.env.PROAR_MANAGER_PASSWORD=oldPassword;
+  }
 });
 
 test("Manager dashboard exposes health, audit, tenant detail and rollout metadata",async()=>{
