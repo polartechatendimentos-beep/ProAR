@@ -2040,6 +2040,10 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
   const [fiscalIe, setFiscalIe] = useState("");
   const [fiscalIm, setFiscalIm] = useState("");
   const [fiscalServiceCode, setFiscalServiceCode] = useState("");
+  const [fiscalMunicipalityCode,setFiscalMunicipalityCode]=useState("");
+  const [fiscalNationalServiceCode,setFiscalNationalServiceCode]=useState("");
+  const [fiscalNbsCode,setFiscalNbsCode]=useState("");
+  const [fiscalIssWithheld,setFiscalIssWithheld]=useState(false);
   const [fiscalIssRate, setFiscalIssRate] = useState("");
   const [fiscalRpsSeries, setFiscalRpsSeries] = useState("");
   const [fiscalNfceSeries, setFiscalNfceSeries] = useState("1");
@@ -2074,6 +2078,10 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
       setFiscalIe(String(data.company?.stateRegistration || ""));
       setFiscalIm(String(data.company?.municipalRegistration || ""));
       setFiscalServiceCode(String(data.nfse?.serviceCode || ""));
+      setFiscalMunicipalityCode(String(data.company?.municipalityCode || ""));
+      setFiscalNationalServiceCode(String(data.nfse?.nationalServiceCode || ""));
+      setFiscalNbsCode(String(data.nfse?.nbsCode || ""));
+      setFiscalIssWithheld(Boolean(data.nfse?.issWithheld));
       setFiscalIssRate(String(data.nfse?.issRate || ""));
       setFiscalRpsSeries(String(data.nfse?.rpsSeries || ""));
       setFiscalNfceSeries(String(data.nfce?.series || "1"));
@@ -2164,8 +2172,8 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
     setFiscalBusy(true); setSaved("Salvando configuração fiscal protegida...");
     try {
       const response=await fetch("/api/fiscal-config",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({
-        company:{environment:fiscalEnvironment,taxRegime:fiscalTaxRegime,stateRegistration:fiscalIe,municipalRegistration:fiscalIm},
-        nfse:{serviceCode:fiscalServiceCode,issRate:fiscalIssRate,rpsSeries:fiscalRpsSeries},
+        company:{environment:fiscalEnvironment,taxRegime:fiscalTaxRegime,stateRegistration:fiscalIe,municipalRegistration:fiscalIm,municipalityCode:fiscalMunicipalityCode},
+        nfse:{serviceCode:fiscalServiceCode,nationalServiceCode:fiscalNationalServiceCode,nbsCode:fiscalNbsCode,issRate:fiscalIssRate,issWithheld:fiscalIssWithheld,rpsSeries:fiscalRpsSeries},
         nfce:{series:fiscalNfceSeries,cscId:fiscalCscId,...(fiscalCsc.trim()?{csc:fiscalCsc.trim()}:{})},
       })});
       const data=await response.json(); if(!response.ok)throw new Error(data.error || "Não foi possível salvar a configuração fiscal.");
@@ -2246,8 +2254,12 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
           <label>Regime tributário<select value={fiscalTaxRegime} onChange={event=>setFiscalTaxRegime(event.target.value)}><option>Simples Nacional</option><option>Lucro Presumido</option><option>Lucro Real</option></select></label>
           <label>Inscrição Estadual<input value={fiscalIe} onChange={event=>setFiscalIe(event.target.value)} placeholder="IE da empresa"/></label>
           <label>Inscrição Municipal<input value={fiscalIm} onChange={event=>setFiscalIm(event.target.value)} placeholder="IM da empresa"/></label>
-          <label>Código de serviço NFS-e<input value={fiscalServiceCode} onChange={event=>setFiscalServiceCode(event.target.value)} placeholder="Código municipal/nacional"/></label>
-          <label>ISS padrão (%)<input type="number" min="0" step="0.01" value={fiscalIssRate} onChange={event=>setFiscalIssRate(event.target.value)} placeholder="0,00"/></label>
+          <label>Código IBGE do município<input inputMode="numeric" maxLength={7} value={fiscalMunicipalityCode} onChange={event=>setFiscalMunicipalityCode(event.target.value.replace(/\D/g,"").slice(0,7))} placeholder="Ex.: 3530300"/><small>Usado para consultar parâmetros do município na SEFIN Nacional.</small></label>
+          <label>Código municipal do serviço<input value={fiscalServiceCode} onChange={event=>setFiscalServiceCode(event.target.value)} placeholder="Conforme cadastro da prefeitura"/></label>
+          <label>Código nacional do serviço (cTribNac)<input inputMode="numeric" value={fiscalNationalServiceCode} onChange={event=>setFiscalNationalServiceCode(event.target.value.replace(/\D/g,"").slice(0,6))} placeholder="Conforme lista nacional"/></label>
+          <label>Código NBS<input value={fiscalNbsCode} onChange={event=>setFiscalNbsCode(event.target.value)} placeholder="Conforme serviço prestado"/></label>
+          <label>ISS padrão (%)<input type="number" min="0" max="5" step="0.01" value={fiscalIssRate} onChange={event=>setFiscalIssRate(event.target.value)} placeholder="0,00"/><small>Configure a alíquota confirmada para o serviço e município.</small></label>
+          <label className="wide fiscal-option"><input type="checkbox" checked={fiscalIssWithheld} onChange={event=>setFiscalIssWithheld(event.target.checked)}/> ISS retido pelo tomador</label>
           <label>Série RPS / DPS<input value={fiscalRpsSeries} onChange={event=>setFiscalRpsSeries(event.target.value)} placeholder="Série configurada"/></label>
           <label>Série NFC-e<input value={fiscalNfceSeries} onChange={event=>setFiscalNfceSeries(event.target.value)} placeholder="1"/></label>
           <label>ID CSC<input value={fiscalCscId} onChange={event=>setFiscalCscId(event.target.value)} placeholder="Identificador do CSC"/></label>
