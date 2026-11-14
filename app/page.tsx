@@ -503,6 +503,10 @@ type ModuleRecord = {
   progress?: number;
   commission?: number;
   cost?: number;
+  retailPrice?: number;
+  wholesalePrice?: number;
+  wholesaleMinQuantity?: number;
+  technicalSheet?: string;
   costLines?: CostLine[];
   costTaxPercent?: number;
   costMarginPercent?: number;
