@@ -1,6 +1,7 @@
 import {assertOrderScheduleChanges} from "../../../lib/order-schedule-validation";
 import { projectOperationalState, mergeOperationalView } from "../../../lib/state-access";
 import { after, NextRequest, NextResponse } from "next/server";
+import { createSaveTiming } from "../../../lib/save-timing";
 import { readSession } from "../../../lib/proar-auth";
 import { resolveTenantDb } from "../../../lib/tenant-rest";
 import { databaseFetch, commitNeonOperationalState, PRIMARY_DATABASE_URL, supabaseRest } from "../../../lib/supabase-rest";
@@ -192,20 +193,35 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const session = sessionFor(request); if (!session) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
+  const timing=createSaveTiming("/api/state:PUT");
+  let activePhaseName="setup";
+  let activePhase=timing.startPhase();
+  const beginPhase=(name:string)=>{
+    timing.endPhase(activePhaseName,activePhase);
+    activePhaseName=name;
+    activePhase=timing.startPhase();
+  };
+  const respond=(body:unknown,init:ResponseInit={})=>{
+    timing.endPhase(activePhaseName,activePhase);
+    return timing.finish(NextResponse.json(body,init));
+  };
+  const session = sessionFor(request); if (!session) return respond({ error: "Sessão inválida." }, { status: 401 });
   try {
     const body = await request.json(); const company = companyKey(request, session); const db = await resolveTenantDb(company); if (!db.url || !db.key) throw new Error("Banco indisponível");
     const id = db.dedicated ? "main" : company;
+    beginPhase("database_read");
     const currentResponse = await stateRest(db, `proar_state?id=eq.${encodeURIComponent(id)}&select=payload`);
     if (!currentResponse.ok) throw new Error("Falha ao ler a versão vigente");
     const currentRows = currentResponse.ok ? await currentResponse.json() as { payload?: StatePayload }[] : []; const current = currentRows[0]?.payload; const currentRevision = Number(current?._revision || 0); const baseRevision = Number(body._baseRevision || 0);
-    if(current?._companyId&&String(current._companyId)!==company)return NextResponse.json({error:"Base operacional de outra empresa."},{status:403});
-    if (current && baseRevision !== currentRevision) return NextResponse.json({ error: "A base online possui uma versão mais recente.", conflict: true, state: projectOperationalState(current,session,p=>hasPermission(session,p as Permission)) }, { status: 409 });
+    beginPhase("domain_validation");
+    if(current?._companyId&&String(current._companyId)!==company)return respond({error:"Base operacional de outra empresa."},{status:403});
+    if (current && baseRevision !== currentRevision) return respond({ error: "A base online possui uma versão mais recente.", conflict: true, state: projectOperationalState(current,session,p=>hasPermission(session,p as Permission)) }, { status: 409 });
     const { _baseRevision: _ignoredBase, _force: _ignoredForce, companyId: _ignoredCompany, ...cleanBody } = body;
     const mergedBody=mergeOperationalView(current,cleanBody,session,p=>hasPermission(session,p as Permission));
     if (Array.isArray(mergedBody.serviceOrders)) await guardTechnicianOsChanges(session,current?.serviceOrders||[],mergedBody.serviceOrders);
     const validated = prepareOperationalState(current || null, mergedBody, { username: session.username, displayName: session.displayName, can: permission => hasPermission(session, permission as Permission) });
     try{assertOrderScheduleChanges(current?.serviceOrders||[],validated.serviceOrders||[]);}catch(error){throw new OperationError(error instanceof Error?error.message:"Programação inválida.",409);}
+    beginPhase("tenant_checks");
     const currentUsers=employeeUsernames(current);
     const nextUsers=employeeUsernames(validated as StatePayload);
     const userListChanged=currentUsers.size!==nextUsers.size||[...currentUsers].some(username=>!nextUsers.has(username));
@@ -229,12 +245,13 @@ export async function PUT(request: NextRequest) {
         await createStateSnapshot({companyId:company,stateId:id,payload:current,reason:"automatic-checkpoint",createdBy:session.username}).catch(()=>false);
       });
     };
+    beginPhase("database_write");
     let response: Response;
     if (db.url === PRIMARY_DATABASE_URL) {
       const confirmed = await commitNeonOperationalState(id, current ? currentRevision : null, payload, independentOperationalRows(company, payload, current));
-      if (!confirmed) return NextResponse.json({ error: "A base online foi alterada durante esta gravação.", conflict: true, state: projectOperationalState(await readState(db,id,company),session,p=>hasPermission(session,p as Permission)) }, { status: 409 });
+      if (!confirmed) return respond({ error: "A base online foi alterada durante esta gravação.", conflict: true, state: projectOperationalState(await readState(db,id,company),session,p=>hasPermission(session,p as Permission)) }, { status: 409 });
       scheduleCheckpoint();
-      return NextResponse.json({ saved: true, state: projectOperationalState(confirmed,session,p=>hasPermission(session,p as Permission)), dedicatedDatabase: db.dedicated, canonicalCompanyId: company, transactionalRecords: true });
+      return respond({ saved: true, state: projectOperationalState(confirmed,session,p=>hasPermission(session,p as Permission)), dedicatedDatabase: db.dedicated, canonicalCompanyId: company, transactionalRecords: true });
     }
     if (current) {
       const revisionFilter = current._revision === undefined ? "payload->>_revision=is.null" : `payload->>_revision=eq.${currentRevision}`;
@@ -255,16 +272,16 @@ export async function PUT(request: NextRequest) {
     const confirmed = confirmedRows[0]?.payload;
     if (!confirmed || Number(confirmed._revision || 0) !== currentRevision + 1) {
       const latest = await readState(db, id,company);
-      return NextResponse.json({ error: "A base online foi alterada durante esta gravação.", conflict: true, state: projectOperationalState(latest,session,p=>hasPermission(session,p as Permission)) }, { status: 409 });
+      return respond({ error: "A base online foi alterada durante esta gravação.", conflict: true, state: projectOperationalState(latest,session,p=>hasPermission(session,p as Permission)) }, { status: 409 });
     }
     scheduleCheckpoint();
-    return NextResponse.json({ saved: true, state: projectOperationalState(confirmed,session,p=>hasPermission(session,p as Permission)), dedicatedDatabase: db.dedicated, canonicalCompanyId: company });
+    return respond({ saved: true, state: projectOperationalState(confirmed,session,p=>hasPermission(session,p as Permission)), dedicatedDatabase: db.dedicated, canonicalCompanyId: company });
   } catch (error) {
-    if (error instanceof OperationError || error instanceof FieldSupportError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof OperationError || error instanceof FieldSupportError) return respond({ error: error.message }, { status: error.status });
     const company=companyKey(request,session);
     const descriptor=classifyProarError(error);
     void recordSystemIncident({companyId:company,module:"Sincronização",operation:"Gravar estado operacional",error,code:descriptor.code,route:"/api/state"});
-    return NextResponse.json({ error: descriptor.userMessage, code:descriptor.code }, { status: 503 });
+    return respond({ error: descriptor.userMessage, code:descriptor.code }, { status: 503 });
   }
 }
 
