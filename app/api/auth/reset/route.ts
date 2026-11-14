@@ -1,3 +1,4 @@
+import { AuthRequestError, readAuthBody, authString } from "../../../../lib/auth-request-security";
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { hashPassword } from "../../../../lib/password";
@@ -6,10 +7,11 @@ import { tenantSlugFromHost } from "../../../../lib/tenant-host";
 
 const hash=(value:string)=>createHash("sha256").update(value).digest("hex");
 
-export async function POST(request: NextRequest){
+async function handlePost(request: NextRequest){
+  const body = await readAuthBody(request);
+  const token = authString(body, "token", 256);
+  const raw = authString(body, "password", 1024);
   if(!supabaseConfigured()) return NextResponse.json({error:"Recuperação indisponível."},{status:503});
-  const {token="",password=""}=await request.json();
-  const raw=String(password);
   if(raw.length<10||!/[A-Z]/.test(raw)||!/[a-z]/.test(raw)||!/[0-9]/.test(raw)) return NextResponse.json({error:"Use pelo menos 10 caracteres, com maiúscula, minúscula e número."},{status:400});
   const tokenHash=hash(String(token)); const id=`password-reset-${tokenHash}`;
   const response=await supabaseRest(`proar_state?select=payload&id=eq.${encodeURIComponent(id)}&limit=1`);
@@ -20,4 +22,12 @@ export async function POST(request: NextRequest){
   if(!updated.ok) return NextResponse.json({error:"Não foi possível redefinir a senha."},{status:502});
   await supabaseRest(`proar_state?id=eq.${encodeURIComponent(id)}`,{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({payload:{...record,used:true,usedAt:new Date().toISOString()},updated_at:new Date().toISOString()})});
   return NextResponse.json({saved:true});
+}
+
+export async function POST(request: NextRequest) {
+  try { return await handlePost(request); }
+  catch (error) {
+    if (error instanceof AuthRequestError) return NextResponse.json({error:error.message}, {status:error.status});
+    return NextResponse.json({error:"Não foi possível processar a solicitação."}, {status:500});
+  }
 }
