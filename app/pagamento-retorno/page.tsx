@@ -1,0 +1,2 @@
+import Link from 'next/link';
+export default function Return(){return <main style={{maxWidth:600,margin:'10vh auto',padding:28,fontFamily:'system-ui'}}><h1>Pagamento em conferência</h1><p>O retorno do checkout não comprova o recebimento. A confirmação será feita pelo sistema após consultar o Mercado Pago.</p><p>Se você já pagou, não faça um novo pagamento. Em caso de dúvida, fale com a empresa que enviou a cobrança.</p><Link href="/">Voltar ao início</Link></main>}
