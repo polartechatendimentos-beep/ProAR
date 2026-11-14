@@ -27,6 +27,12 @@ export async function POST(request: NextRequest) {
     const contentLength=Number(request.headers.get("content-length")||0);
     if(contentLength>262144)return respond({error:"Operação muito grande. Divida a alteração em etapas menores."},{status:413});
     const command = await request.json() as OperationalCommand;
+    const categoryByAction: Record<string, string> = {
+      settle: "financial", reverse: "financial", cancel: "financial", dates: "financial",
+      receive: "purchases", account: "accounts", stock: "inventory", "stock-transfer": "inventory",
+      reconcile: "reconciliation", "approval-decide": "approvals",
+    };
+    timing.setCategory(categoryByAction[command.action] || "other");
     guardOperationalCommand(inferRuleContext(command as unknown as Record<string,unknown>));
     const company = session.companyId || process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
     const db = await resolveTenantDb(session.companyId);
@@ -39,6 +45,7 @@ export async function POST(request: NextRequest) {
     // Retry disjoint commands against the latest snapshot. The expected target record
     // still prevents silently replaying an operation over somebody else's edit.
     for (let attempt = 0; attempt < 3; attempt += 1) {
+      timing.setAttempts(attempt + 1);
       beginPhase("database_read");
       const response = await databaseFetch(`${baseUrl}?id=eq.${encodeURIComponent(stateId)}&select=payload`, { headers, cache: "no-store" });
       if (!response.ok) throw new Error("Falha ao ler a base");
