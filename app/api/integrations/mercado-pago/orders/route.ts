@@ -1,21 +1,2 @@
-import { randomUUID } from "node:crypto";
-import { NextResponse } from "next/server";
-import { createMercadoPagoOrder } from "@/lib/mercado-pago";
-
-export const runtime = "nodejs";
-
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const idempotencyKey = String(body.idempotencyKey || randomUUID());
-    const order = await createMercadoPagoOrder({
-      amount: Number(body.amount),
-      externalReference: String(body.externalReference || ""),
-      payerEmail: String(body.payerEmail || ""),
-      payment: body.payment,
-    }, idempotencyKey);
-    return NextResponse.json({ ok: true, idempotencyKey, order });
-  } catch (error) {
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Falha ao processar pagamento" }, { status: 400 });
-  }
-}
+import {NextRequest,NextResponse} from "next/server";import {requirePermission,sessionCompany} from "@/lib/permissions";import {assertAuthOrigin,AuthRequestError} from "@/lib/auth-request-security";
+export const runtime="nodejs";export async function POST(r:NextRequest){try{assertAuthOrigin(r);const a=requirePermission(r,"financeiro.baixar");if(!a.ok)return NextResponse.json({error:a.error},{status:a.status});const s=sessionCompany(a.session);if(!s.ok)return NextResponse.json({error:s.error},{status:s.status});return NextResponse.json({error:"Esta rota antiga não opera recebimentos de clientes. Use o painel Financeiro → Receber com Mercado Pago. Reembolsos devem ser conferidos no Mercado Pago."},{status:410});}catch(e){return NextResponse.json({error:e instanceof AuthRequestError?e.message:"Operação indisponível."},{status:e instanceof AuthRequestError?e.status:503});}}
