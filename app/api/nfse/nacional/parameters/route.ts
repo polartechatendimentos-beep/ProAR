@@ -1,6 +1,6 @@
 import { createDecipheriv, createHash } from "node:crypto";
 import { get } from "@vercel/blob";
-import https from "node:https";
+import * as https from "node:https";
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission, sessionCompany } from "../../../../../lib/permissions";
 import { databaseFetch } from "../../../../../lib/supabase-rest";
