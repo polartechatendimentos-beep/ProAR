@@ -1,6 +1,6 @@
 import {assertOrderScheduleChanges} from "../../../lib/order-schedule-validation";
 import { projectOperationalState, mergeOperationalView } from "../../../lib/state-access";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { readSession } from "../../../lib/proar-auth";
 import { resolveTenantDb } from "../../../lib/tenant-rest";
 import { databaseFetch, commitNeonOperationalState, PRIMARY_DATABASE_URL, supabaseRest } from "../../../lib/supabase-rest";
@@ -206,28 +206,34 @@ export async function PUT(request: NextRequest) {
     if (Array.isArray(mergedBody.serviceOrders)) await guardTechnicianOsChanges(session,current?.serviceOrders||[],mergedBody.serviceOrders);
     const validated = prepareOperationalState(current || null, mergedBody, { username: session.username, displayName: session.displayName, can: permission => hasPermission(session, permission as Permission) });
     try{assertOrderScheduleChanges(current?.serviceOrders||[],validated.serviceOrders||[]);}catch(error){throw new OperationError(error instanceof Error?error.message:"Programação inválida.",409);}
-    const userLimit=await companyUserLimit(company);
-    if(userLimit!==null){
-      const masterUsers=await masterActiveUsernames(company);
-      const currentUsers=new Set([...masterUsers,...employeeUsernames(current)]);
-      const nextUsers=new Set([...masterUsers,...employeeUsernames(validated as StatePayload)]);
-      if(nextUsers.size>userLimit&&nextUsers.size>currentUsers.size){
-        throw new OperationError(`Limite do plano atingido: este plano permite ${userLimit} usuários ativos. Inative um usuário ou faça upgrade do plano.`,409);
+    const currentUsers=employeeUsernames(current);
+    const nextUsers=employeeUsernames(validated as StatePayload);
+    const userListChanged=currentUsers.size!==nextUsers.size||[...currentUsers].some(username=>!nextUsers.has(username));
+    if(userListChanged&&company!==PRIMARY_COMPANY_ID){
+      const [userLimit,masterUsers]=await Promise.all([companyUserLimit(company),masterActiveUsernames(company)]);
+      if(userLimit!==null){
+        const currentUserCount=new Set([...masterUsers,...currentUsers]).size;
+        const nextUserCount=new Set([...masterUsers,...nextUsers]).size;
+        if(nextUserCount>userLimit&&nextUserCount>currentUserCount){
+          throw new OperationError(`Limite do plano atingido: este plano permite ${userLimit} usuários ativos. Inative um usuário ou faça upgrade do plano.`,409);
+        }
       }
     }
     const payload = { ...validated, _revision: currentRevision + 1, _updatedAt: new Date().toISOString(), _companyId: company };
     const updatedAt = new Date().toISOString();
-    if (current) {
-      const previousUpdatedAt=Date.parse(String(current._updatedAt||""));
-      const checkpointDue=currentRevision%10===0 || !Number.isFinite(previousUpdatedAt) || Date.now()-previousUpdatedAt>60*60*1000;
-      if(checkpointDue) {
+    const previousUpdatedAt=Date.parse(String(current?._updatedAt||""));
+    const checkpointDue=Boolean(current)&&(currentRevision%10===0||!Number.isFinite(previousUpdatedAt)||Date.now()-previousUpdatedAt>60*60*1000);
+    const scheduleCheckpoint=()=>{
+      if(!current||!checkpointDue)return;
+      after(async()=>{
         await createStateSnapshot({companyId:company,stateId:id,payload:current,reason:"automatic-checkpoint",createdBy:session.username}).catch(()=>false);
-      }
-    }
+      });
+    };
     let response: Response;
     if (db.url === PRIMARY_DATABASE_URL) {
       const confirmed = await commitNeonOperationalState(id, current ? currentRevision : null, payload, independentOperationalRows(company, payload, current));
       if (!confirmed) return NextResponse.json({ error: "A base online foi alterada durante esta gravação.", conflict: true, state: projectOperationalState(await readState(db,id,company),session,p=>hasPermission(session,p as Permission)) }, { status: 409 });
+      scheduleCheckpoint();
       return NextResponse.json({ saved: true, state: projectOperationalState(confirmed,session,p=>hasPermission(session,p as Permission)), dedicatedDatabase: db.dedicated, canonicalCompanyId: company, transactionalRecords: true });
     }
     if (current) {
@@ -251,6 +257,7 @@ export async function PUT(request: NextRequest) {
       const latest = await readState(db, id,company);
       return NextResponse.json({ error: "A base online foi alterada durante esta gravação.", conflict: true, state: projectOperationalState(latest,session,p=>hasPermission(session,p as Permission)) }, { status: 409 });
     }
+    scheduleCheckpoint();
     return NextResponse.json({ saved: true, state: projectOperationalState(confirmed,session,p=>hasPermission(session,p as Permission)), dedicatedDatabase: db.dedicated, canonicalCompanyId: company });
   } catch (error) {
     if (error instanceof OperationError || error instanceof FieldSupportError) return NextResponse.json({ error: error.message }, { status: error.status });
