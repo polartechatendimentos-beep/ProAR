@@ -110,7 +110,7 @@ export function FiscalWorkspace({
   const submitNfe=async()=>{
     if(!nfeOrigin)return;
     setNfeBusy(true);setNfeNotice("");
-    const payload={saleId:nfeOrigin.id,model:nfeKind==="NF-e"?55:65,series:nfeSeries,operationNature:nfeNature,freightModality:nfeFreight,paymentMethod:nfePayment,total:nfeTotal,company:{document:company.cnpj||"",stateRegistration:config?.company?.stateRegistration||"",municipalRegistration:config?.company?.municipalRegistration||"",taxRegime:config?.company?.taxRegime||""},customer:nfeCustomer,items:nfeLines,config:{cscId:config?.nfce?.cscId||"",environment:config?.company?.environment||"Homologação"}};
+    const payload={saleId:nfeOrigin.id,model:nfeKind==="NF-e"?55:65,series:nfeSeries,operationNature:nfeNature,freightModality:nfeFreight,paymentMethod:nfePayment,total:nfeTotal,company:{document:company.cnpj||"",state:config?.company?.state||"",stateRegistration:config?.company?.stateRegistration||"",municipalRegistration:config?.company?.municipalRegistration||"",taxRegime:config?.company?.taxRegime||""},customer:nfeCustomer,items:nfeLines,config:{cscId:config?.nfce?.cscId||"",environment:config?.company?.environment||"Homologação"}};
     try{
       const response=await fetch(nfeKind==="NF-e"?"/api/nfe/issue":"/api/nfce/issue",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...payload,idempotencyKey:crypto.randomUUID()})});
       const result=await response.json().catch(()=>({}));
