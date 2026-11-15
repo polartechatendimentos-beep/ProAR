@@ -12,7 +12,7 @@ const LEGACY_STORAGE_PATH = "proar/configuracao-fiscal.enc";
 const storagePath = (companyId:string) => `proar/fiscal/${createHash("sha256").update(companyId).digest("hex").slice(0,24)}/configuracao-fiscal.enc`;
 const recordId = (companyId:string) => `fiscal-config:${createHash("sha256").update(companyId).digest("hex").slice(0,24)}`;
 
-type FiscalRecord = { company?:Record<string,string|boolean>; nfce?:Record<string,string|boolean>; certificate?:{pfxBase64:string;password:string;validTo:string} };
+type FiscalRecord = { company?:Record<string,string|boolean>; nfce?:Record<string,string|boolean>; certificate?:{pfxBase64:string;password:string;validTo:string;document:string} };
 function decryptRecord(value:string):FiscalRecord{
  const secret=process.env.PROAR_FISCAL_ENCRYPTION_KEY??process.env.PROAR_TENANT_MASTER_KEY??"";
  if(secret.length<32)throw new Error("STORAGE_NOT_CONFIGURED");
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       ...body,
       kind:"NFCE",
       series:String(body.series||nfce.series||""),
-      company:{...body.company,state:String(fiscal.company?.state||"").toUpperCase()},
+      company:{...body.company,document:String(fiscal.certificate?.document||""),state:String(fiscal.company?.state||"").toUpperCase(),stateRegistration:String(fiscal.company?.stateRegistration||"")},
       config:{csc,cscId,environment:String(fiscal.company?.environment||"Homologação")},
     });
     if (!validation.valid) return NextResponse.json({ error:"Pré-validação fiscal reprovada.", validation }, { status:422 });
@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${providerToken}`, "Idempotency-Key": idempotencyKey },
       body: JSON.stringify({
         ...body,
+        company:{...body.company,document:String(fiscal.certificate.document||""),state:String(fiscal.company?.state||"").toUpperCase(),stateRegistration:String(fiscal.company?.stateRegistration||"")},
         series:String(body.series||nfce.series||"1"),
         config:{csc,cscId,environment:String(fiscal.company?.environment||"Homologação")},
         certificate:{pfxBase64:fiscal.certificate.pfxBase64,password:fiscal.certificate.password},
