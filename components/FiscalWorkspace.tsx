@@ -5,6 +5,7 @@ import { AlertTriangle, CheckCircle2, FileCheck2, FileClock, FileText, Landmark,
 import { notifyError, notifySuccess } from "@/lib/ui-feedback";
 
 type FiscalRecord = Record<string, any>;
+type NfeLine = { id:string; productId:string; description:string; quantity:number; unitValue:number; ncm:string; cest:string; cfop:string; cst:string; csosn:string; taxOrigin:string; unit:string; };
 type FiscalConfig = {
   company?: Record<string, any>;
   nfe?: Record<string, any>;
@@ -20,17 +21,28 @@ export function FiscalWorkspace({
   serviceOrders,
   company,
   onNavigate,
+  onSaveRecord,
 }: {
   modules: Record<string, FiscalRecord[]>;
   serviceOrders: FiscalRecord[];
   company: { cnpj?: string; tradeName?: string };
   onNavigate: (name:string)=>void;
+  onSaveRecord?: (module:string,record:FiscalRecord)=>void;
 }) {
   const [tab,setTab]=useState<"Visão geral"|"NF-e"|"NFC-e"|"NFS-e"|"DF-e">("Visão geral");
   const [config,setConfig]=useState<FiscalConfig|null>(null);
   const [loading,setLoading]=useState(true);
   const [dfeLoading,setDfeLoading]=useState(false);
   const [dfe,setDfe]=useState<FiscalRecord[]>([]);
+  const [nfeOrigin,setNfeOrigin]=useState<FiscalRecord|null>(null);
+  const [nfeCustomer,setNfeCustomer]=useState({name:"",document:"",address:"",stateRegistration:""});
+  const [nfeNature,setNfeNature]=useState("");
+  const [nfeSeries,setNfeSeries]=useState("");
+  const [nfePayment,setNfePayment]=useState("");
+  const [nfeFreight,setNfeFreight]=useState("9");
+  const [nfeLines,setNfeLines]=useState<NfeLine[]>([]);
+  const [nfeBusy,setNfeBusy]=useState(false);
+  const [nfeNotice,setNfeNotice]=useState("");
 
   const loadConfig=async()=>{
     setLoading(true);
