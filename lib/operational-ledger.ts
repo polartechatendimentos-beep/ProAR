@@ -442,36 +442,68 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
     addMovement({ id: `MAN-${entry.id}`, productId: entry.productId, quantity: entry.movementType === "Transferência" ? 0 : entry.movementType === "Saída" ? -quantity : quantity, transferQuantity: entry.movementType === "Transferência" ? quantity : undefined, kind: entry.movementType, sourceType: entry.sourceType || "", sourceId: entry.sourceId || "", sourceName: entry.sourceName || "", destinationType: entry.destinationType || "Estoque central", destinationId: entry.destinationId || "", destinationName: entry.destinationName || "", createdAt: now, user: actor.username, reason: entry.changeReason || entry.description }, stock);
   }
   const catalogForUsage = [...products, ...list(modules.Serviços).map(item => ({...item, kind:"Serviço"}))].map((item: ErpRecord) => ({...item, id: String(item.id), name: String(item.name || ""), kind: String(item.kind || "Produto"), technicalSheet: item.technicalSheet}));
-  for (const order of list(next.serviceOrders)) {
-    const before = list(old.serviceOrders).find(item => item.id === order.id);
-    if (!/conclu[ií]da/i.test(order.status || "") || /conclu[ií]da/i.test(before?.status || "")) continue;
-    const legacyMovement = list(oldModules.Estoque).some(item => item.serviceOrderId === order.id && /sa[ií]da/i.test(item.category || ""));
-    if (legacyMovement) continue;
-    for (const item of list(order.catalogItems)) {
-      const catalogItem=catalogForUsage.find(product=>product.id===item.id);
-      if(list(catalogItem?.technicalSheet).length&&!item.materialsConfirmed) throw new OperationError(`Confirme o consumo real dos materiais da ficha técnica de ${item.name||catalogItem?.name} antes de concluir a OS.`);
+  // Reconcile against the immutable ledger, so retries and reopening do not consume twice.
+  function reconcileConsumption(record: ErpRecord, field: string, desired: {productId:string;quantity:number}[], sourceType: string, sourceId: string) {
+    const prior = stock.filter(row => row[field] === record.id && /^(OS-STOCK-|SALE-STOCK-|CONSUMPTION-)/.test(String(row.id)));
+    const balances = new Map<string, {productId:string;type:string;location:string;quantity:number}>();
+    for (const row of prior) {
+      const type = row.sourceType || "Estoque central", location = row.sourceId || "";
+      const key = JSON.stringify([row.productId,type,location]);
+      const entry = balances.get(key) || {productId:row.productId,type,location,quantity:0};
+      entry.quantity += Number(row.quantity); balances.set(key,entry);
     }
-    const consumption = expandTechnicalSheet(list(order.catalogItems).map(item => ({...item, id: String(item.id)})), catalogForUsage);
-    const sourceType = order.vehicleId ? "Veículo" : "Estoque central";
-    const sourceId = String(order.vehicleId || "");
-    for (const line of consumption) {
-      if (!products.some(product => product.id === line.productId)) throw new OperationError("A OS contém material sem produto válido no catálogo.");
-      const available = stockBalanceAtLocation(stock, line.productId, sourceType, sourceId);
-      if (available + 1e-9 < line.quantity) throw new OperationError(`Saldo insuficiente de ${products.find(product => product.id === line.productId)?.name} em ${sourceType === "Veículo" ? `veículo ${sourceId}` : "estoque central"}: disponível ${available}.`);
-      addMovement({ id: `OS-STOCK-${order.id}-${line.productId}`, productId: line.productId, serviceOrderId: order.id, quantity: -line.quantity, kind: "Saída", sourceType, sourceId, sourceName: sourceId, createdAt: now, user: actor.username, reason: "Consumo confirmado ao concluir a OS" }, stock);
+    for (const line of desired) {
+      const key = JSON.stringify([line.productId,sourceType,sourceId]);
+      const entry = balances.get(key) || {productId:line.productId,type:sourceType,location:sourceId,quantity:0};
+      entry.quantity += line.quantity; balances.set(key,entry);
+    }
+    // Positive corrections return materials before any new withdrawals are checked.
+    const corrections = [...balances.values()].map(row=>({...row,delta:-Math.round(row.quantity*1000)/1000})).filter(row=>row.delta!==0).sort((a,b)=>b.delta-a.delta);
+    for (const row of corrections) {
+      if (!products.some(product=>product.id===row.productId)) throw new OperationError("Material sem cadastro válido no catálogo.");
+      if (row.delta<0 && stockBalanceAtLocation(stock,row.productId,row.type,row.location)+1e-9 < -row.delta) throw new OperationError("Saldo insuficiente no local de origem para ajustar o consumo.");
+      addMovement({id:`CONSUMPTION-${crypto.randomUUID()}`,productId:row.productId,[field]:record.id,quantity:row.delta,kind:row.delta>0?"Estorno":"Saída",sourceType:row.type,sourceId:row.location,createdAt:now,user:actor.username,reason:record.changeReason || record.cancellationReason || "Conferência do consumo registrado"},stock);
     }
   }
-  for (const sale of list(modules.Vendas)) {
-    const before = list(oldModules.Vendas).find(item => item.id === sale.id);
-    if (before || canceled(sale)) continue;
-    const items = list(sale.purchaseItems).map(item => ({ id: String(item.productId || item.id), quantity: Number(item.quantity), kind: item.kind }));
-    const consumption = expandTechnicalSheet(items, catalogForUsage);
-    for (const line of consumption) {
-      if (!products.some(product => product.id === line.productId)) throw new OperationError("A venda contém produto sem cadastro válido no catálogo.");
-      const available = stockBalanceAtLocation(stock, line.productId, "Estoque central");
-      if (available + 1e-9 < line.quantity) throw new OperationError(`Saldo insuficiente de ${products.find(product => product.id === line.productId)?.name} para concluir a venda: disponível ${available}.`);
-      addMovement({ id: `SALE-STOCK-${sale.id}-${line.productId}`, productId: line.productId, saleId: sale.id, quantity: -line.quantity, kind: "Saída", sourceType: "Estoque central", sourceId: "", sourceName: "", createdAt: now, user: actor.username, reason: `Consumo de estoque da venda ${sale.id}` }, stock);
+  for (const order of list(next.serviceOrders)) {
+    const before = list(old.serviceOrders).find(item=>item.id===order.id);
+    const items = list(order.catalogItems);
+    for (const item of items) {
+      const previous = list(before?.catalogItems).find(row=>row.id===item.id);
+      const definition = catalogForUsage.find(row=>row.id===item.id);
+      item.technicalSheetSnapshot = structuredClone(previous?.technicalSheetSnapshot ?? list(definition?.technicalSheet));
     }
+    const tracked = stock.some(row=>row.serviceOrderId===order.id && /^(OS-STOCK-|CONSUMPTION-)/.test(String(row.id)));
+    if (canceled(order)) {
+      if(tracked && !canceled(before||{})) {
+        if(!String(order.changeReason || order.cancellationReason || "").trim()) throw new OperationError("Informe o motivo do cancelamento para estornar os materiais.");
+        reconcileConsumption(order,"serviceOrderId",[],"Estoque central","");
+      }
+      continue;
+    }
+    if (!/conclu[ií]da/i.test(order.status || "") || same(before,order)) continue;
+    if (!tracked && /conclu[ií]da/i.test(before?.status || "")) continue;
+    if (list(oldModules.Estoque).some(item=>item.serviceOrderId===order.id && /sa[ií]da/i.test(item.category||""))) continue;
+    for (const item of items) if(list(item.technicalSheetSnapshot).length && !item.materialsConfirmed) throw new OperationError(`Confirme o consumo real dos materiais de ${item.name || item.id}.`);
+    const definitions = items.map(item=>({id:String(item.id),kind:item.kind,technicalSheet:item.technicalSheetSnapshot}));
+    const consumption = expandTechnicalSheet(items.map(item=>({...item,id:String(item.id)})),definitions);
+    reconcileConsumption(order,"serviceOrderId",consumption,order.vehicleId?"Veículo":"Estoque central",String(order.vehicleId||""));
+  }
+  for (const sale of list(modules.Vendas)) {
+    const before = list(oldModules.Vendas).find(item=>item.id===sale.id);
+    const tracked = stock.some(row=>row.saleId===sale.id && /^(SALE-STOCK-|CONSUMPTION-)/.test(String(row.id)));
+    // Historical sales without ledger entries must not consume stock retroactively.
+    if (before && !tracked || same(before,sale)) continue;
+    if (canceled(sale) && !canceled(before||{}) && tracked && !String(sale.changeReason || sale.cancellationReason || "").trim()) throw new OperationError("Informe o motivo do cancelamento para estornar os materiais.");
+    const definitions = list(sale.purchaseItems).map(item=>{
+      const productId=String(item.productId||item.id);
+      const previous=list(before?.purchaseItems).find(row=>String(row.productId||row.id)===productId);
+      item.technicalSheetSnapshot=structuredClone(previous?.technicalSheetSnapshot ?? list(catalogForUsage.find(row=>row.id===productId)?.technicalSheet));
+      return {id:productId,kind:item.kind,technicalSheet:item.technicalSheetSnapshot};
+    });
+    const items = list(sale.purchaseItems).map(item=>({id:String(item.productId||item.id),quantity:Number(item.quantity),kind:item.kind}));
+    const consumption = canceled(sale)?[]:expandTechnicalSheet(items,definitions);
+    reconcileConsumption(sale,"saleId",consumption,"Estoque central","");
   }
   for (const product of products) {
     const balance = stock.filter(item => item.productId === product.id).reduce((sum, item) => sum + Math.round(Number(item.quantity) * 1000), 0) / 1000;
