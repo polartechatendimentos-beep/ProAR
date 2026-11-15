@@ -149,7 +149,7 @@ export async function GET(request: NextRequest) {
     },
     envService("nfe","NF-e / SEFAZ-SP",["SEFAZ_SP_NFE_API_URL","SEFAZ_SP_NFE_API_TOKEN"],"Adaptador configurado.","Adaptador de emissão ainda não configurado."),
     envService("nfce","NFC-e / SEFAZ-SP",["SEFAZ_SP_NFCE_API_URL","SEFAZ_SP_NFCE_API_TOKEN"],"Adaptador configurado.","Adaptador/CSC ainda precisa de configuração."),
-    envService("nfse","NFS-e Mirassol",["MIRASSOL_NFSE_API_URL","MIRASSOL_NFSE_API_TOKEN"],"Integração municipal configurada.","Integração municipal ainda não configurada."),
+    envService("nfse","NFS-e Nacional / SEFIN",["PROAR_SEFIN_NACIONAL_ADAPTER_URL","PROAR_SEFIN_NACIONAL_ADAPTER_TOKEN"],"Adaptador nacional configurado.","Adaptador SEFIN Nacional ainda não configurado; DPS não será transmitida."),
     envService("dfe","Distribuição DF-e",["NFE_DISTRIBUTION_API_URL","NFE_DISTRIBUTION_API_TOKEN"],"Consulta de documentos destinados configurada.","Consulta DF-e ainda não configurada."),
     envService("payments","Mercado Pago",["MERCADO_PAGO_ACCESS_TOKEN"],"Cobrança integrada configurada.","Credencial de cobrança não configurada neste ambiente."),
     {

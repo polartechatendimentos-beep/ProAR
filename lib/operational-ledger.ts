@@ -3,6 +3,7 @@ import { validateTracking, pipelineRecordId } from "./tender-pipeline.ts";
 import { nextPmocDate, type PmocPlan } from "./technical-compliance.ts";
 import { validateProcurementData, priceComposition, qualificationReadiness, brazilDay } from "./procurement-readiness.ts";
 import { prepareOrderSignatures, safeSignatureImage } from "./service-order-signatures.ts";
+import { expandTechnicalSheet } from "./catalog-quantity-pricing.ts";
 /* eslint-disable @typescript-eslint/no-explicit-any, @next/next/no-assign-module-variable */
 // Dynamic records retain the fields of the historical ERP snapshots.
 export type ErpRecord = Record<string, any>;
@@ -27,6 +28,8 @@ function stockBalanceAtLocation(movements: ErpRecord[], productId: string, type:
       const quantity=Number(movement.transferQuantity ?? movement.quantity ?? 0);
       if(stockLocationKey(movement.sourceType,movement.sourceId,movement.sourceName)===target) total-=quantity;
       if(stockLocationKey(movement.destinationType,movement.destinationId,movement.destinationName)===target) total+=quantity;
+    } else if(movement.sourceType) {
+      if(stockLocationKey(movement.sourceType,movement.sourceId,movement.sourceName)===target) total+=Number(movement.quantity || 0);
     } else if(stockLocationKey(movement.destinationType,movement.destinationId,movement.destinationName)===target) {
       total+=Number(movement.quantity || 0);
     }
@@ -43,7 +46,7 @@ const payable = (record: ErpRecord) => record.transactionType === "Pagar" || /pa
 const canceled = (record: ErpRecord) => /cancelad/i.test(record.status || "");
 const permissionFor: Record<string, string> = {
   Financeiro: "financeiro.editar", "Contas financeiras": "financeiro.editar",
-  Produtos: "estoque.editar", Estoque: "estoque.editar", Compras: "compras.editar",
+  Produtos: "estoque.editar", Estoque: "estoque.editar", Ferramentas: "estoque.editar", Compras: "compras.editar",
   Equipamentos: "equipamentos.editar", "Unidades e setores": "clientes.editar",
   "Acompanhamento de licitações": "licitacoes.editar", "Documentação / Habilitação": "licitacoes.editar", "Composições de licitação": "licitacoes.editar", Funcionários: "configuracoes.editar", Certames: "licitacoes.editar", Empenhos: "licitacoes.editar",
   Obras: "obras.editar", Orçamentos: "comercial.editar", Vendas: "comercial.editar", Serviços: "catalogo.editar", Fornecedores: "compras.editar", "Conciliações": "financeiro.conciliar", Lembretes: "os.editar", Aprovações: "aprovacoes.aprovar",
@@ -387,6 +390,16 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
       delete product.stockAdjustmentReason;
     }
   }
+  for (const catalogItem of [...products, ...list(modules.Serviços)]) {
+    const wholesalePrice = catalogItem.wholesalePrice;
+    const minimumQuantity = catalogItem.wholesaleMinimumQuantity;
+    if ((wholesalePrice != null || minimumQuantity != null) && (!Number.isFinite(Number(wholesalePrice)) || Number(wholesalePrice) < 0 || !Number.isFinite(Number(minimumQuantity)) || Number(minimumQuantity) <= 0)) {
+      throw new OperationError(`Preço de atacado inválido em ${catalogItem.name}. Informe preço não negativo e quantidade mínima maior que zero.`);
+    }
+    for (const line of list(catalogItem.technicalSheet)) {
+      if (!products.some(component => component.id === line.productId) || !Number.isFinite(Number(line.quantityPerUnit)) || Number(line.quantityPerUnit) <= 0) throw new OperationError(`Ficha técnica inválida em ${catalogItem.name}. Vincule materiais válidos e quantidades maiores que zero.`);
+    }
+  }
   for (const purchase of list(modules.Compras)) {
     const before = list(oldModules.Compras).find(item => item.id === purchase.id);
     const receipts = list(purchase.receiptHistory);
@@ -428,15 +441,36 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
     if (!String(entry.changeReason || entry.description || "").trim()) throw new OperationError("Informe o motivo do movimento.");
     addMovement({ id: `MAN-${entry.id}`, productId: entry.productId, quantity: entry.movementType === "Transferência" ? 0 : entry.movementType === "Saída" ? -quantity : quantity, transferQuantity: entry.movementType === "Transferência" ? quantity : undefined, kind: entry.movementType, sourceType: entry.sourceType || "", sourceId: entry.sourceId || "", sourceName: entry.sourceName || "", destinationType: entry.destinationType || "Estoque central", destinationId: entry.destinationId || "", destinationName: entry.destinationName || "", createdAt: now, user: actor.username, reason: entry.changeReason || entry.description }, stock);
   }
+  const catalogForUsage = [...products, ...list(modules.Serviços).map(item => ({...item, kind:"Serviço"}))].map((item: ErpRecord) => ({...item, id: String(item.id), name: String(item.name || ""), kind: String(item.kind || "Produto"), technicalSheet: item.technicalSheet}));
   for (const order of list(next.serviceOrders)) {
     const before = list(old.serviceOrders).find(item => item.id === order.id);
     if (!/conclu[ií]da/i.test(order.status || "") || /conclu[ií]da/i.test(before?.status || "")) continue;
     const legacyMovement = list(oldModules.Estoque).some(item => item.serviceOrderId === order.id && /sa[ií]da/i.test(item.category || ""));
     if (legacyMovement) continue;
-    for (const item of list(order.catalogItems).filter(item => item.kind === "Produto")) {
-      const quantity = Number(item.quantity ?? 1);
-      if (!products.some(product => product.id === item.id) || !Number.isFinite(quantity) || quantity <= 0) throw new OperationError("Produto ou quantidade inválida na OS.");
-      addMovement({ id: `OS-STOCK-${order.id}-${item.id}`, productId: item.id, serviceOrderId: order.id, quantity: -quantity, kind: "Saída", createdAt: now, user: actor.username, reason: "Conclusão da OS" }, stock);
+    for (const item of list(order.catalogItems)) {
+      const catalogItem=catalogForUsage.find(product=>product.id===item.id);
+      if(list(catalogItem?.technicalSheet).length&&!item.materialsConfirmed) throw new OperationError(`Confirme o consumo real dos materiais da ficha técnica de ${item.name||catalogItem?.name} antes de concluir a OS.`);
+    }
+    const consumption = expandTechnicalSheet(list(order.catalogItems).map(item => ({...item, id: String(item.id)})), catalogForUsage);
+    const sourceType = order.vehicleId ? "Veículo" : "Estoque central";
+    const sourceId = String(order.vehicleId || "");
+    for (const line of consumption) {
+      if (!products.some(product => product.id === line.productId)) throw new OperationError("A OS contém material sem produto válido no catálogo.");
+      const available = stockBalanceAtLocation(stock, line.productId, sourceType, sourceId);
+      if (available + 1e-9 < line.quantity) throw new OperationError(`Saldo insuficiente de ${products.find(product => product.id === line.productId)?.name} em ${sourceType === "Veículo" ? `veículo ${sourceId}` : "estoque central"}: disponível ${available}.`);
+      addMovement({ id: `OS-STOCK-${order.id}-${line.productId}`, productId: line.productId, serviceOrderId: order.id, quantity: -line.quantity, kind: "Saída", sourceType, sourceId, sourceName: sourceId, createdAt: now, user: actor.username, reason: "Consumo confirmado ao concluir a OS" }, stock);
+    }
+  }
+  for (const sale of list(modules.Vendas)) {
+    const before = list(oldModules.Vendas).find(item => item.id === sale.id);
+    if (before || canceled(sale)) continue;
+    const items = list(sale.purchaseItems).map(item => ({ id: String(item.productId || item.id), quantity: Number(item.quantity), kind: item.kind }));
+    const consumption = expandTechnicalSheet(items, catalogForUsage);
+    for (const line of consumption) {
+      if (!products.some(product => product.id === line.productId)) throw new OperationError("A venda contém produto sem cadastro válido no catálogo.");
+      const available = stockBalanceAtLocation(stock, line.productId, "Estoque central");
+      if (available + 1e-9 < line.quantity) throw new OperationError(`Saldo insuficiente de ${products.find(product => product.id === line.productId)?.name} para concluir a venda: disponível ${available}.`);
+      addMovement({ id: `SALE-STOCK-${sale.id}-${line.productId}`, productId: line.productId, saleId: sale.id, quantity: -line.quantity, kind: "Saída", sourceType: "Estoque central", sourceId: "", sourceName: "", createdAt: now, user: actor.username, reason: `Consumo de estoque da venda ${sale.id}` }, stock);
     }
   }
   for (const product of products) {
@@ -482,7 +516,7 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
   }
   const next = structuredClone(state);
   const modules = next.moduleRecords ||= {};
-  const module = ["settle", "reverse", "cancel", "dates"].includes(command.action) ? "Financeiro" : command.action === "receive" ? "Compras" : command.action === "account" ? "Contas financeiras" : ["stock","stock-transfer"].includes(command.action) ? "Estoque" : command.action === "reconcile" ? "Conciliações" : command.action === "approval-decide" ? "Aprovações" : "";
+  const module = ["settle", "reverse", "cancel", "dates"].includes(command.action) ? "Financeiro" : command.action === "receive" ? "Compras" : command.action === "account" ? "Contas financeiras" : ["stock","stock-transfer"].includes(command.action) ? "Estoque" : command.action === "tool" ? "Ferramentas" : command.action === "reconcile" ? "Conciliações" : command.action === "approval-decide" ? "Aprovações" : "";
   if (!module) throw new OperationError("Operação desconhecida.");
   const records = modules[module] ||= [];
   const record = records.find(item => item.id === command.recordId);
@@ -520,6 +554,15 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
       if (!records.length) records.push(...defaultFinancialAccounts());
       records.push({ id: operationId, name: String(data.name || "").trim(), type: data.type || "Banco", openingBalance: cash(cents(data.openingBalance)), status: "Ativo", createdAt: now });
       break;
+    case "tool": {
+      requireAction(actor, "estoque.editar");
+      if (!String(data.name || "").trim() || !String(data.vehicleId || "").trim() || !["Em uso","Em manutenção","Avariada","Baixada"].includes(String(data.condition || ""))) throw new OperationError("Informe ferramenta, veículo e condição válida.");
+      const history=list(record?.history);
+      const change={id:operationId,vehicleId:String(data.vehicleId).trim(),condition:String(data.condition),serialNumber:String(data.serialNumber||"").trim(),user:actor.username,createdAt:now};
+      if(record){record.name=String(data.name).trim();record.vehicleId=change.vehicleId;record.condition=change.condition;record.serialNumber=change.serialNumber;record.history=[...history,change];record.updatedAt=now;record.updatedBy=actor.username;}
+      else records.push({id:operationId,name:String(data.name).trim(),kind:"Ferramenta",vehicleId:change.vehicleId,condition:change.condition,serialNumber:change.serialNumber,history:[change],createdAt:now,createdBy:actor.username});
+      break;
+    }
     case "stock":
       requireAction(actor, data.movementType === "Ajuste" ? "estoque.ajustar" : "estoque.editar");
       records.push({ id: operationId, name: `${data.movementType} de estoque`, productId: data.productId, quantity: data.quantity, movementType: data.movementType, destinationType: data.destinationType || "Estoque central", destinationId: data.destinationId || "", destinationName: data.destinationName || "", changeReason: data.reason, description: data.reason, createdAt: now });

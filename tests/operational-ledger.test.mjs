@@ -262,3 +262,14 @@ test("redução do desconto para a alçada dispensa aprovação pendente",()=>{
   assert.equal(next.moduleRecords.Orçamentos[0].approvalStatus,"Dispensado");
   assert.equal(next.moduleRecords["Aprovações"].find(item=>item.sourceId==="O1").status,"Cancelado");
 });
+
+test("consumo do veículo não reduz novamente saldo do estoque central",()=>{
+ const initial=base();
+ const moved=run(initial,command("stock-transfer",{productId:"P1",quantity:3,sourceType:"Estoque central",destinationType:"Veículo",destinationId:"V1",reason:"Equipe"},undefined));
+ moved.serviceOrders=[{id:"OS-V",status:"Aberta",vehicleId:"V1",catalogItems:[{id:"P1",kind:"Produto",quantity:2}]}];
+ const draft=structuredClone(moved);draft.serviceOrders[0].status="Concluída";
+ const closed=prepareOperationalState(moved,draft,admin);
+ const transferred=run(closed,command("stock-transfer",{productId:"P1",quantity:7,sourceType:"Estoque central",destinationType:"Veículo",destinationId:"V2",reason:"Outra equipe"},undefined));
+ assert.equal(transferred.moduleRecords.Produtos[0].stockCurrent,8);
+ assert.throws(()=>run(transferred,command("stock-transfer",{productId:"P1",quantity:2,sourceType:"Veículo",sourceId:"V1",destinationType:"Veículo",destinationId:"V2",reason:"Sem saldo"},undefined)),/insuficiente/);
+});
