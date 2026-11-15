@@ -2044,6 +2044,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
   const [fiscalEnvironment, setFiscalEnvironment] = useState("Homologação");
   const [fiscalTaxRegime, setFiscalTaxRegime] = useState("Simples Nacional");
   const [fiscalIe, setFiscalIe] = useState("");
+  const [fiscalIssuerState,setFiscalIssuerState]=useState("SP");
   const [fiscalIm, setFiscalIm] = useState("");
   const [fiscalServiceCode, setFiscalServiceCode] = useState("");
   const [fiscalMunicipalityCode,setFiscalMunicipalityCode]=useState("");
@@ -2083,6 +2084,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
       setFiscalEnvironment(String(data.company?.environment || "Homologação"));
       setFiscalTaxRegime(String(data.company?.taxRegime || "Simples Nacional"));
       setFiscalIe(String(data.company?.stateRegistration || ""));
+      setFiscalIssuerState(String(data.company?.state||"SP").toUpperCase());
       setFiscalIm(String(data.company?.municipalRegistration || ""));
       setFiscalServiceCode(String(data.nfse?.serviceCode || ""));
       setFiscalMunicipalityCode(String(data.company?.municipalityCode || ""));
@@ -2180,7 +2182,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
     setFiscalBusy(true); setSaved("Salvando configuração fiscal protegida...");
     try {
       const response=await fetch("/api/fiscal-config",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({
-        company:{environment:fiscalEnvironment,taxRegime:fiscalTaxRegime,stateRegistration:fiscalIe,municipalRegistration:fiscalIm,municipalityCode:fiscalMunicipalityCode},
+        company:{environment:fiscalEnvironment,taxRegime:fiscalTaxRegime,state:fiscalIssuerState,stateRegistration:fiscalIe,municipalRegistration:fiscalIm,municipalityCode:fiscalMunicipalityCode},
         nfe:{series:fiscalNfeSeries},
         nfse:{serviceCode:fiscalServiceCode,nationalServiceCode:fiscalNationalServiceCode,nbsCode:fiscalNbsCode,issRate:fiscalIssRate,issWithheld:fiscalIssWithheld,rpsSeries:fiscalRpsSeries},
         nfce:{series:fiscalNfceSeries,cscId:fiscalCscId,...(fiscalCsc.trim()?{csc:fiscalCsc.trim()}:{})},
@@ -2262,6 +2264,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
           <div className={`wide settings-security-note fiscal-environment-note ${fiscalEnvironment === "Produção" ? "production" : "homologation"}`}><ShieldCheck size={17}/><span><b>{fiscalEnvironment === "Produção" ? "AMBIENTE DE PRODUÇÃO" : "AMBIENTE DE HOMOLOGAÇÃO"}</b><small>{fiscalEnvironment === "Produção" ? "Configuração destinada a documentos fiscais reais. Alterações exigem confirmação." : "Use este ambiente para testes antes de habilitar emissões reais."}</small></span></div>
           <label>Ambiente<select value={fiscalEnvironment} onChange={event=>setFiscalEnvironment(event.target.value)}><option>Homologação</option><option>Produção</option></select></label>
           <label>Regime tributário<select value={fiscalTaxRegime} onChange={event=>setFiscalTaxRegime(event.target.value)}><option>Simples Nacional</option><option>Lucro Presumido</option><option>Lucro Real</option></select></label>
+          <label>UF do estabelecimento<input maxLength={2} value={fiscalIssuerState} onChange={event=>setFiscalIssuerState(event.target.value.replace(/[^a-z]/gi,"").toUpperCase().slice(0,2))} placeholder="SP"/></label>
           <label>Inscrição Estadual<input value={fiscalIe} onChange={event=>setFiscalIe(event.target.value)} placeholder="IE da empresa"/></label>
           <label>Inscrição Municipal<input value={fiscalIm} onChange={event=>setFiscalIm(event.target.value)} placeholder="IM da empresa"/></label>
           <label>Código IBGE do município<input inputMode="numeric" maxLength={7} value={fiscalMunicipalityCode} onChange={event=>setFiscalMunicipalityCode(event.target.value.replace(/\D/g,"").slice(0,7))} placeholder="Ex.: 3530300"/><small>Usado para consultar parâmetros do município na SEFIN Nacional.</small></label>
