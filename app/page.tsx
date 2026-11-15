@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 158415)
-Total output lines: 5264
-
 "use client";
 import {ServiceOrderReportPreview} from "../components/ServiceOrderReportPreview";
 import {prepareOrderWorkspaceSave,orderStatusTone,workspaceDraftKey,newOrderSchedulingIssue,type OrderScheduleSeed} from "../lib/order-workspace-state";
@@ -1310,7 +1307,2850 @@ function OrderDetail({ order, customerPhone, company, catalog, contracts, close,
     <button className="modal-backdrop" onClick={requestClose} aria-label="Fechar ordem"/>
       <div className="modal order-detail-modal">
       <div className="modal-head order-detail-head"><div><span>ORDEM DE SERVIÇO</span><h2>{order.id} • {order.client}</h2><p>{order.unit}</p></div><div className="order-detail-actions">{dirty && <small className="order-dirty-indicator">Alterações não salvas</small>}<button className="outline-btn" onClick={()=>setDetailTab("Relatórios")}><FileText size={15}/> Visualizar relatório</button>{canEdit&&<button className="outline-btn google-calendar-sync-btn" disabled={dirty||googleCalendarSyncing||!currentOrder.date} onClick={()=>void syncGoogleCalendar()}><CalendarDays size={15}/>{googleCalendarSyncing?"Sincronizando...":currentOrder.googleCalendarEventId?"Atualizar Google Agenda":"Enviar ao Google Agenda"}</button>}{currentOrder.googleCalendarEventUrl&&<button className="outline-btn" onClick={()=>window.open(currentOrder.googleCalendarEventUrl,"_blank","noopener,noreferrer")}><ArrowRight size={14}/> Abrir evento</button>}{canEdit && onDelete && <button className="outline-btn danger" type="button" onClick={()=>onDelete(currentOrder)}><Trash2 size={15}/> Excluir OS</button>}<button onClick={requestClose} aria-label="Fechar"><X size={18}/></button></div></div>
-      {saveNotice && <div className={`order-save-notice ${saveNotice.startsWith("✓") ? "saved" : saveNotice.startsWith("Não") ? "error" :…108415 tokens truncated…lt = await response.json(); return result.company;
+      {saveNotice && <div className={`order-save-notice ${saveNotice.startsWith("✓") ? "saved" : saveNotice.startsWith("Não") ? "error" : "saving"}`}>{saveNotice}</div>}
+      <nav className="os-context-tabs" aria-label="Áreas da ordem">{["Ordem","Comunicação","Execução","PMOC","Contratos","Relatórios"].map(tab=><button key={tab} aria-current={detailTab===tab?"page":undefined} onClick={()=>setDetailTab(tab)}>{tab}</button>)}</nav>
+      <ServiceOrderWorkspace order={currentOrder} companyId={company.id} baseOrder={confirmedBase} dirty={dirty} onChange={changeWorkspace} hideBody={detailTab!=="Ordem"} onShowEditor={()=>setDetailTab("Ordem")} onViewReport={()=>setDetailTab("Relatórios")} onClose={requestClose} customers={customers as unknown as Record<string, unknown>[]} employees={employees as unknown as Record<string, unknown>[]} structures={structures as unknown as Record<string, unknown>[]} equipment={equipment as unknown as Record<string, unknown>[]} errorCodes={errorCodes as unknown as Record<string, unknown>[]} manuals={manuals as unknown as Record<string, unknown>[]} catalogSource={catalog as unknown as Record<string, unknown>[]} canEdit={canEdit} onSave={async next => await saveChanges(next as ServiceOrder)} onSyncEquipmentDiagnostic={onSyncEquipmentDiagnostic} onToggleEquipmentLabel={onToggleEquipmentLabel} onLinkHistoricalOrder={onLinkHistoricalOrder} onAssignEquipmentLabel={onAssignEquipmentLabel} canManageLabels={canManageLabels} serviceOrders={serviceOrders}/>
+      <fieldset disabled={!canEdit || saving} className="order-detail-content os-complementary" data-area={detailTab}>
+        <div className="order-overview" hidden={detailTab!=="none"}>
+          <article><CalendarDays size={17}/><div><small>AGENDAMENTO</small><strong>{order.date ? new Date(`${order.date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem data"} • {order.time || "A definir"}</strong></div></article>
+          <article><UserCheck size={17}/><div><small>TÉCNICO RESPONSÁVEL</small><strong>{currentOrder.tech || "Não definido"}</strong></div></article>
+          <article><Wrench size={17}/><div><small>SERVIÇO</small><strong>{order.service}</strong></div></article>
+          <article><Activity size={17}/><div><small>SITUAÇÃO</small><strong>{currentOrder.status}</strong></div></article>
+        </div>
+        <section className="os-google-calendar-panel" hidden={detailTab!=="Comunicação"}>
+          <div><CalendarDays size={18}/><span><b>Google Agenda</b><small>{currentOrder.googleCalendarEventId ? `Sincronizado${currentOrder.googleCalendarSyncedAt ? ` • ${new Date(currentOrder.googleCalendarSyncedAt).toLocaleString("pt-BR")}` : ""}` : "Ainda não sincronizado"}</small></span></div>
+          <label className="tracking-toggle"><input type="checkbox" checked={currentOrder.googleCalendarSyncEnabled===true} onChange={event=>update({googleCalendarSyncEnabled:event.target.checked})}/><span><b>Atualizar automaticamente ao salvar</b><small>Reagenda o mesmo evento sem criar duplicidade.</small></span></label>
+          <button className="outline-btn" type="button" disabled={dirty||googleCalendarSyncing||!currentOrder.date} onClick={()=>void syncGoogleCalendar()}><RefreshCw size={14}/>{currentOrder.googleCalendarEventId?"Sincronizar alterações":"Criar evento"}</button>
+        </section>
+        <section className="os-tracking-panel" hidden={detailTab!=="Comunicação"}>
+          <div className="execution-head"><div><span>ACOMPANHAMENTO PELO WHATSAPP</span><h3>Atualizações seguras para o cliente</h3></div><small>{trackingUrl ? "Link ativo" : "Ative ao salvar uma atualização"}</small></div>
+          <div className="os-tracking-grid">
+            <label>Telefone / WhatsApp<input value={currentOrder.whatsappPhone ?? customerPhone ?? ""} onChange={event => update({ whatsappPhone:event.target.value })} placeholder="(00) 00000-0000"/></label>
+            <label className="tracking-toggle"><input type="checkbox" checked={currentOrder.whatsappUpdatesEnabled !== false} onChange={event => update({ whatsappUpdatesEnabled:event.target.checked, trackingToken:trackingToken() })}/><span><b>Cliente recebe atualizações</b><small>Status e fotos liberadas</small></span></label>
+            <label className="tracking-toggle"><input type="checkbox" checked={currentOrder.whatsappAppointmentReminderEnabled !== false} onChange={event => update({ whatsappAppointmentReminderEnabled:event.target.checked, trackingToken:trackingToken() })}/><span><b>Lembrete de agendamento</b><small>Antes do atendimento</small></span></label>
+            <label>Antecedência do lembrete<select value={currentOrder.appointmentReminderHours ?? 24} onChange={event => update({ appointmentReminderHours:Number(event.target.value), trackingToken:trackingToken() })}><option value="2">2 horas antes</option><option value="24">24 horas antes</option><option value="48">48 horas antes</option></select></label>
+          </div>
+          {trackingUrl && <div className="tracking-link"><MessageCircle size={18}/><div><b>Link exclusivo do cliente</b><small>Mostra somente status, fotos e atualizações liberadas.</small></div><button type="button" onClick={() => navigator.clipboard.writeText(trackingUrl)}>Copiar link</button><button type="button" disabled={!whatsappPhone} onClick={() => window.open(`https://wa.me/${whatsappPhone.startsWith("55") ? whatsappPhone : `55${whatsappPhone}`}?text=${encodeURIComponent(`Acompanhe sua Ordem de Serviço ${currentOrder.id}: ${trackingUrl}`)}`, "_blank", "noopener,noreferrer")}>Enviar WhatsApp</button></div>}
+          <p className="tracking-disclaimer">O envio automático exige uma integração WhatsApp Business configurada no ambiente seguro. Sem essa configuração, a mensagem fica pronta para envio pelo botão WhatsApp.</p>
+        </section>
+        <section className="os-status-panel" hidden={detailTab!=="Comunicação"}>
+          <div className="execution-head"><div><span>ATUALIZAÇÃO OPERACIONAL</span><h3>Registrar status, fotos e comunicação</h3></div><small>Observações internas nunca são enviadas ao cliente.</small></div>
+          <div className="status-update-grid"><label>Novo status<select value={statusDraft} onChange={event => {setStatusDraft(event.target.value);setDirty(true);}}>{["Aberta","Agendada","Cliente confirmado","Técnico a caminho","Técnico no local","Em atendimento","Aguardando material","Aguardando aprovação","Aguardando retorno","Serviço concluído","Aguardando assinatura","Concluída","Reagendada","Cancelada"].map(status => <option key={status}>{status}</option>)}</select></label><label>Observação técnica interna<textarea value={internalUpdate} onChange={event => {setInternalUpdate(event.target.value);setDirty(true);}} placeholder="Visível somente para a equipe..."/><button type="button" className="outline-btn" onClick={()=>{const suggestion=improveTechnicalText(internalUpdate);if(suggestion){setInternalUpdate(suggestion);setDirty(true);}}}>✦ Melhorar com IA</button></label><label>Atualização para o cliente<textarea value={customerUpdate} onChange={event => {setCustomerUpdate(event.target.value);setDirty(true);}} placeholder="Texto que será exibido no acompanhamento e preparado para WhatsApp..."/><button type="button" className="outline-btn" onClick={()=>{const suggestion=improveTechnicalText(customerUpdate,"cliente");if(suggestion){setCustomerUpdate(suggestion);setDirty(true);}}}>✦ Melhorar com IA</button></label><label className="os-photo-upload"><Camera size={18}/><b>Adicionar fotos</b><small>{statusPhotos.length ? `${statusPhotos.length} foto(s) anexada(s)` : "Fotos opcionais nesta etapa"}</small><input type="file" accept="image/*" multiple onChange={event => void Promise.all(Array.from(event.target.files ?? []).map(attachStatusPhoto))}/></label></div>
+          {statusPhotos.length > 0 && <div className="os-photo-strip">{statusPhotos.map((photo,index)=><figure key={`${photo.slice(-18)}-${index}`}><img src={photo} alt={`Atualização ${index+1}`}/><button type="button" onClick={()=>setStatusPhotos(current=>current.filter((_,photoIndex)=>photoIndex!==index))}><X size={12}/></button></figure>)}</div>}
+          <div className="status-update-actions"><button className="outline-btn" type="button" onClick={requestAssistance}><Package size={15}/> Levar equipamento para assistência</button><button className="primary-btn" type="button" onClick={registerStatusUpdate}><CheckCircle2 size={15}/> Aplicar atualização ao rascunho</button></div>
+        </section>
+        {availableContracts.length > 0 && <section className="os-contract-panel" hidden={detailTab!=="Contratos"}>
+          <div className="execution-head"><div><span>CONTROLE CONTRATUAL INTERNO</span><h3>Itens utilizados do Certame</h3></div><small>Não substitui os serviços executados e não aparece no relatório técnico do cliente.</small></div>
+          <div className="os-contract-selector">
+            <label>Contratação / Certame<select value={currentOrder.certameId ?? ""} onChange={event => update({ certameId:event.target.value || undefined, contractItems:[] })}><option value="">Selecionar Certame</option>{availableContracts.map(contract => <option key={contract.id} value={contract.id}>{contract.name} • {contract.administrativeProcess || contract.id}</option>)}</select></label>
+            <label>Item contratual<select value={contractItemId} disabled={!selectedContract} onChange={event => setContractItemId(event.target.value)}><option value="">Selecionar item</option>{(selectedContract?.certameItems ?? []).map(item => { const balance=calculateCertameItemBalance(item,item.movements??[]); return <option key={item.id} value={item.id}>{item.code || "Item"} • {item.description} • saldo {balance.availableQuantity}</option>; })}</select></label>
+            <label>Quantidade<input type="number" min="0.001" step="0.001" value={contractQuantity} onChange={event => setContractQuantity(event.target.value)}/></label>
+            <button className="outline-btn" type="button" disabled={!selectedContractItem} onClick={addContractItem}><Plus size={14}/> Reservar ao salvar</button>
+          </div>
+          {(currentOrder.contractItems ?? []).length > 0 && <div className="os-contract-items">{currentOrder.contractItems?.map((item,index)=><article key={`${item.certameItemId}-${index}`}><span><b>{item.description}</b><small>{item.quantity} × {item.unitValue.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</small></span><strong>{(item.quantity*item.unitValue).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</strong><button type="button" disabled={Boolean(item.executionMovementId)} onClick={()=>update({contractItems:(currentOrder.contractItems??[]).filter((_,itemIndex)=>itemIndex!==index)})}><Trash2 size={14}/></button></article>)}</div>}
+        </section>}
+        {assistanceOpen && <section className="assistance-panel" hidden={detailTab!=="Execução"}><div className="execution-head"><div><span>ASSISTÊNCIA TÉCNICA</span><h3>Recebimento obrigatório do equipamento</h3></div><small>Fotos e inspeção preservam o histórico da OS.</small></div>
+          <div className="assistance-form"><label>Equipamento *<input value={assistance.equipment ?? ""} onChange={event=>setAssistance(value=>({...value,equipment:event.target.value}))}/></label><label>Marca<input value={assistance.brand ?? ""} onChange={event=>setAssistance(value=>({...value,brand:event.target.value}))}/></label><label>Modelo<input value={assistance.model ?? ""} onChange={event=>setAssistance(value=>({...value,model:event.target.value}))}/></label><label>Número de série *<input value={assistance.serialNumber ?? ""} onChange={event=>setAssistance(value=>({...value,serialNumber:event.target.value}))}/></label><label>Defeito informado *<textarea value={assistance.reportedDefect ?? ""} onChange={event=>setAssistance(value=>({...value,reportedDefect:event.target.value}))}/></label><label>Acessórios recebidos<input value={assistance.accessories ?? ""} onChange={event=>setAssistance(value=>({...value,accessories:event.target.value}))} placeholder="Controle, cabo, tampa..."/></label><label>Peças/acessórios ausentes<input value={assistance.missingParts ?? ""} onChange={event=>setAssistance(value=>({...value,missingParts:event.target.value}))} placeholder="Descreva ausências identificadas"/></label><label>Responsável pelo recebimento *<input value={assistance.receivedBy ?? ""} onChange={event=>setAssistance(value=>({...value,receivedBy:event.target.value}))}/></label><label>Estado geral<select value={assistance.condition ?? "Bom"} onChange={event=>setAssistance(value=>({...value,condition:event.target.value as AssistanceEntry["condition"]}))}>{["Excelente","Bom","Regular","Com avarias","Danificado"].map(item=><option key={item}>{item}</option>)}</select></label></div>
+          <div className="inspection-checks">{[["riscos","Possui riscos"],["amassados","Possui amassados"],["partesQuebradas","Possui partes quebradas"],["pecasFaltando","Possui peças faltando"],["parafusosAusentes","Parafusos/tampas ausentes"],["oxidacao","Sinais de oxidação"],["manutencaoAnterior","Marcas de manutenção anterior"],["danosAparentes","Danos aparentes"] as const].map(([key,label])=><label key={key}><input type="checkbox" checked={Boolean(assistance.inspection?.[key])} onChange={event=>setAssistance(value=>({...value,inspection:{...(value.inspection ?? {}),[key]:event.target.checked}}))}/>{label}</label>)}</div>
+          <label className="assistance-wide">Observações sobre riscos, avarias e condição{(assistance.condition === "Com avarias" || assistance.condition === "Danificado") ? " *" : ""}<textarea value={assistance.inspectionNotes ?? ""} onChange={event=>setAssistance(value=>({...value,inspectionNotes:event.target.value}))} placeholder="Registre detalhes visuais identificados na entrada..."/></label>
+          <label className="assistance-photo-upload"><Camera size={20}/><b>Fotos obrigatórias de entrada *</b><small>{assistancePhotos.length ? `${assistancePhotos.length} foto(s) anexada(s)` : "Anexe ao menos uma foto antes de confirmar"}</small><input type="file" accept="image/*" multiple onChange={event => void Promise.all(Array.from(event.target.files ?? []).map(attachAssistancePhoto))}/></label>{assistancePhotos.length>0&&<div className="os-photo-strip">{assistancePhotos.map((photo,index)=><figure key={`${photo.slice(-18)}-${index}`}><img src={photo} alt={`Entrada ${index+1}`}/><button type="button" onClick={()=>setAssistancePhotos(current=>current.filter((_,photoIndex)=>photoIndex!==index))}><X size={12}/></button></figure>)}</div>}
+          <div className="status-update-actions"><small>Para confirmar: equipamento, série, defeito, responsável e ao menos uma foto.</small><button className="primary-btn" type="button" onClick={confirmAssistanceEntry} disabled={!assistance.equipment?.trim() || !assistance.serialNumber?.trim() || !assistance.reportedDefect?.trim() || !assistance.receivedBy?.trim() || !assistancePhotos.length || ((assistance.condition === "Com avarias" || assistance.condition === "Danificado") && !assistance.inspectionNotes?.trim())}><CheckCircle2 size={15}/> Confirmar entrada do equipamento</button></div>
+        </section>}
+        {(currentOrder.timeline?.length ?? 0) > 0 && <section className="os-timeline" hidden={detailTab!=="Comunicação"}><div className="execution-head"><div><span>LINHA DO TEMPO</span><h3>Histórico do atendimento</h3></div><small>Eventos não são sobrescritos.</small></div>{[...(currentOrder.timeline ?? [])].reverse().map(event=><article key={event.id}><i/><div><header><b>{event.status}</b><time>{formatMoment(event.createdAt)}</time></header><small>{event.technician || "Equipe ProAR"}</small>{event.internalNote&&<p><strong>Interno:</strong> {event.internalNote}</p>}{event.customerNote&&<p><strong>Cliente:</strong> {event.customerNote}</p>}{event.photos?.length?<div className="os-event-photos">{event.photos.map((photo,index)=><img key={`${photo.slice(-16)}-${index}`} src={photo} alt={`Foto do evento ${index+1}`}/>)}</div>:null}</div></article>)}</section>}
+        <section className="pmoc-panel" hidden={detailTab!=="PMOC"}>
+          <div className="execution-head"><div><span>PMOC E HIGIENIZAÇÃO POR AMBIENTE</span><h3>Plano, evidências e execução técnica</h3></div><small>O certificado registra a execução e não substitui o PMOC.</small></div>
+          <div className="pmoc-status-note"><ShieldCheck size={17}/><span><b>Execução do serviço:</b> {currentOrder.pmocExecutions?.length ? "com registros" : "sem registro"} <i/> <b>PMOC:</b> {!pmoc.hasPmoc ? "não cadastrado" : pmoc.reviewDate && pmoc.reviewDate < new Date().toISOString().slice(0,10) ? "vencido" : "vigente / em revisão"} <i/> <b>Documentação:</b> {pmoc.technicalResponsible && pmoc.responsibilityDocument ? "com dados cadastrados" : "com pendências"}</span></div>
+          <div className="pmoc-grid">
+            <label>Aplicabilidade do PMOC<select value={pmoc.applicability ?? "Verificar aplicabilidade"} onChange={event=>setPmoc(value=>({...value,applicability:event.target.value as PmocRecord["applicability"]}))}><option>Obrigatório</option><option>Não obrigatório</option><option>Verificar aplicabilidade</option></select></label>
+            <label className="tracking-toggle"><input type="checkbox" checked={Boolean(pmoc.hasPmoc)} onChange={event=>setPmoc(value=>({...value,hasPmoc:event.target.checked}))}/><span><b>Possui PMOC</b><small>Vincula as execuções desta OS ao plano</small></span></label>
+            <label>Número / identificação<input value={pmoc.identifier ?? ""} onChange={event=>setPmoc(value=>({...value,identifier:event.target.value}))} placeholder="PMOC-0000"/></label>
+            <label>Data de implantação<input type="date" value={pmoc.implementationDate ?? ""} onChange={event=>setPmoc(value=>({...value,implementationDate:event.target.value}))}/></label>
+            <label>Validade / revisão<input type="date" value={pmoc.reviewDate ?? ""} onChange={event=>setPmoc(value=>({...value,reviewDate:event.target.value}))}/></label>
+            <label>Responsável técnico<input value={pmoc.technicalResponsible ?? ""} onChange={event=>setPmoc(value=>({...value,technicalResponsible:event.target.value}))} placeholder="Selecionar profissional habilitado"/></label>
+            <label>Conselho profissional<input value={pmoc.professionalCouncil ?? ""} onChange={event=>setPmoc(value=>({...value,professionalCouncil:event.target.value}))} placeholder="Conselho / UF"/></label>
+            <label>Registro profissional<input value={pmoc.professionalRegistration ?? ""} onChange={event=>setPmoc(value=>({...value,professionalRegistration:event.target.value}))}/></label>
+            <label>ART / TRT / documento aplicável<input value={pmoc.responsibilityDocument ?? ""} onChange={event=>setPmoc(value=>({...value,responsibilityDocument:event.target.value}))}/></label>
+          </div>
+          <div className="pmoc-plan"><div><b>Plano de manutenção configurável</b><small>Defina a periodicidade conforme o PMOC vigente; o sistema não fixa frequências legais.</small></div>{(pmoc.plan ?? []).map((item,index)=><div className="pmoc-plan-row" key={`${item.activity}-${index}`}><input value={item.activity} onChange={event=>setPmoc(value=>({...value,plan:(value.plan??[]).map((record,itemIndex)=>itemIndex===index?{...record,activity:event.target.value}:record)}))} placeholder="Atividade (ex.: Filtros)"/><input value={item.periodicity} onChange={event=>setPmoc(value=>({...value,plan:(value.plan??[]).map((record,itemIndex)=>itemIndex===index?{...record,periodicity:event.target.value}:record)}))} placeholder="Periodicidade"/><button type="button" className="delete-action" title="Remover atividade" onClick={()=>setPmoc(value=>({...value,plan:(value.plan??[]).filter((_,itemIndex)=>itemIndex!==index)}))}><Trash2 size={14}/></button></div>)}<div className="pmoc-actions"><button type="button" className="outline-btn" onClick={()=>setPmoc(value=>({...value,plan:[...(value.plan??[]),{activity:"",periodicity:""}]}))}><Plus size={14}/> Adicionar atividade</button><button type="button" className="outline-btn" onClick={savePmoc}><CheckCircle2 size={14}/> Aplicar dados do PMOC à OS</button></div></div>
+          <div className="pmoc-execution"><div><span>EXECUÇÃO DE HIGIENIZAÇÃO</span><h4>Registro por setor, sala e equipamento</h4><p>O histórico é acumulativo: uma nova execução não substitui a anterior.</p></div><div className="pmoc-grid"><label>Equipamento *<input value={pmocExecution.equipment ?? ""} onChange={event=>setPmocExecution(value=>({...value,equipment:event.target.value}))} placeholder="Código ou identificação"/></label><label>Setor / sala / ambiente<input value={pmocExecution.location ?? ""} onChange={event=>setPmocExecution(value=>({...value,location:event.target.value}))} placeholder="Unidade • setor • sala"/></label><label>Capacidade instalada (BTU/h)<input type="number" min="0" value={pmocExecution.capacityBtu ?? ""} onChange={event=>setPmocExecution(value=>({...value,capacityBtu:Number(event.target.value)||undefined}))}/></label><label>Estado antes da execução<textarea value={pmocExecution.beforeCondition ?? ""} onChange={event=>setPmocExecution(value=>({...value,beforeCondition:event.target.value}))} placeholder="Filtro, serpentina, turbina, bandeja, dreno e funcionamento..."/></label></div>
+            <div className="pmoc-checklist"><b>Serviços executados *</b>{["Desmontagem","Limpeza dos filtros","Higienização da serpentina","Higienização da turbina/ventilador","Limpeza da bandeja","Limpeza/desobstrução do dreno","Limpeza da carenagem","Aplicação de sanitizante","Lubrificação","Montagem","Teste de funcionamento","Não aplicável"].map(service=><label key={service}><input type="checkbox" checked={Boolean(pmocExecution.services?.includes(service))} onChange={event=>setPmocExecution(value=>({...value,services:event.target.checked?[...(value.services??[]),service]:(value.services??[]).filter(item=>item!==service)}))}/>{service}</label>)}</div>
+            <div className="pmoc-photo-pair"><label className="assistance-photo-upload"><Camera size={18}/><b>Fotos antes</b><small>{pmocBeforePhotos.length ? `${pmocBeforePhotos.length} anexo(s)` : "Conforme configuração do plano"}</small><input type="file" accept="image/*" multiple onChange={event=>void Promise.all(Array.from(event.target.files??[]).map(file=>attachPmocPhoto("before",file)))}/></label><label className="assistance-photo-upload"><Camera size={18}/><b>Fotos depois</b><small>{pmocAfterPhotos.length ? `${pmocAfterPhotos.length} anexo(s)` : "Foto geral, filtro, serpentina ou resultado"}</small><input type="file" accept="image/*" multiple onChange={event=>void Promise.all(Array.from(event.target.files??[]).map(file=>attachPmocPhoto("after",file)))}/></label></div>
+            <div className="pmoc-grid"><label>Produto utilizado<input value={pmocExecution.products?.[0]?.product ?? ""} onChange={event=>setPmocExecution(value=>({...value,products:[{...(value.products?.[0]??{}),product:event.target.value}]}))} placeholder="Produto químico / material"/></label><label>Fabricante / finalidade<input value={`${pmocExecution.products?.[0]?.manufacturer ?? ""}${pmocExecution.products?.[0]?.purpose ? ` • ${pmocExecution.products?.[0]?.purpose}` : ""}`} onChange={event=>setPmocExecution(value=>({...value,products:[{...(value.products?.[0]??{}),product:value.products?.[0]?.product ?? "",manufacturer:event.target.value}]}))} placeholder="Informação documentada"/></label><label>Pendência técnica<select value={pmocExecution.pending?.[0]?.type ?? ""} onChange={event=>setPmocExecution(value=>({...value,pending:event.target.value?[{...(value.pending?.[0]??{}),type:event.target.value,description:value.pending?.[0]?.description ?? "",urgency:value.pending?.[0]?.urgency??"Normal"}]:[]}))}><option value="">Nenhuma</option>{["Filtro danificado","Vazamento","Dreno","Ruído","Oxidação","Serpentina","Motor","Turbina","Sistema elétrico","Controle","Placa","Baixo rendimento","Outro"].map(item=><option key={item}>{item}</option>)}</select></label><label>Observação / recomendação<textarea value={pmocExecution.technicalNote ?? ""} onChange={event=>setPmocExecution(value=>({...value,technicalNote:event.target.value}))} placeholder="Pendências, recomendação e detalhes técnicos..."/></label><label>Próxima manutenção<input type="date" value={pmocExecution.nextMaintenanceDate ?? ""} onChange={event=>setPmocExecution(value=>({...value,nextMaintenanceDate:event.target.value}))}/></label></div>
+            <div className="pmoc-actions"><button className="primary-btn" type="button" disabled={!pmocExecution.equipment?.trim() || !(pmocExecution.services??[]).length} onClick={registerPmocExecution}><CheckCircle2 size={15}/> Registrar execução no PMOC</button><button className="outline-btn" type="button" onClick={()=>window.print()}><FileText size={15}/> Gerar certificado / relatório</button></div>
+          </div>
+          {(currentOrder.pmocExecutions?.length ?? 0) > 0 && <div className="pmoc-history"><b>Execuções anteriores preservadas</b>{[...(currentOrder.pmocExecutions??[])].reverse().map(item=><article key={item.id}><span><strong>{item.equipment}</strong><small>{item.location || currentOrder.unit} • {formatMoment(item.createdAt)}</small></span><em>{item.services.length} serviço(s)</em><span>{item.nextMaintenanceDate ? `Próxima: ${new Date(`${item.nextMaintenanceDate}T12:00:00`).toLocaleDateString("pt-BR")}` : "Próxima manutenção não definida"}</span></article>)}</div>}
+        </section>
+        <section className="preventive-engine" hidden={detailTab!=="PMOC"}>
+          <div className="execution-head"><div><span>MANUTENÇÃO PREVENTIVA</span><h3>Garantia, revisão e alerta automático</h3></div><small>{serviceOrderReviewDate(currentOrder) ? `Próxima revisão: ${new Date(`${serviceOrderReviewDate(currentOrder)}T12:00:00`).toLocaleDateString("pt-BR")}` : "Configure a recorrência"}</small></div>
+          <div className="preventive-fields"><label>Última manutenção<input type="date" value={currentOrder.lastMaintenanceDate ?? currentOrder.date ?? ""} onChange={event => update({ lastMaintenanceDate: event.target.value })}/></label><label>Garantia / revisão<select value={currentOrder.reviewPeriodMonths ?? 6} onChange={event => update({ reviewPeriodMonths: Number(event.target.value) as 3 | 6 | 12 })}><option value="3">3 meses</option><option value="6">6 meses</option><option value="12">12 meses</option></select></label><label>Notificar antes<input type="number" min="1" max="90" value={currentOrder.notifyDaysBefore ?? 15} onChange={event => update({ notifyDaysBefore: Math.max(1, Number(event.target.value) || 15) })}/><small>dias antes</small></label></div>
+        </section>
+        <section className="order-items-panel" hidden={detailTab!=="none"}>
+          <div className="order-item-tabs"><button className={itemsTab === "Serviços" ? "active" : ""} onClick={() => setItemsTab("Serviços")}><Wrench size={15}/> Serviços</button><button className={itemsTab === "Produtos" ? "active" : ""} onClick={() => setItemsTab("Produtos")}><Package size={15}/> Produtos e lembrete</button></div>
+          <div className="execution-head"><div><span>{itemsTab === "Serviços" ? "SERVIÇOS DA ORDEM" : "PRODUTOS UTILIZADOS"}</span><h3>{itemsTab === "Serviços" ? "Serviços executados" : "Produtos, materiais e pós-serviço"}</h3></div><small>{currentOrder.catalogItems?.filter(item => item.kind === itemsTab.slice(0, -1)).length ?? 0} item(ns)</small></div>
+          {currentOrder.catalogItems?.some(item => item.kind === itemsTab.slice(0, -1)) ? <div className="order-item-list">{currentOrder.catalogItems.filter(item => item.kind === itemsTab.slice(0, -1)).map(item => <article key={item.id}><span>{item.kind === "Produto" ? <Package size={16}/> : <Wrench size={16}/>}</span><div><b>{item.name}</b><small>{item.kind} • incluído na OS</small></div><button type="button" className="delete-action" title="Remover item" onClick={() => removeCatalogItem(item.id)}><Trash2 size={14}/></button></article>)}</div> : <div className="catalog-empty">{itemsTab === "Produtos" ? <Package size={19}/> : <Wrench size={19}/>}<span>Nenhum {itemsTab.toLowerCase()} foi vinculado a esta ordem.</span></div>}
+          <div className="order-add-items"><label><Search size={14}/><input value={itemSearch} onChange={event => setItemSearch(event.target.value)} placeholder={`Buscar ${itemsTab.toLowerCase()} para adicionar após o lançamento...`}/></label>{itemSearch && <div className="order-add-results">{availableCatalogItems.slice(0,8).map(item => <button type="button" key={item.id} onClick={() => {addCatalogItem(item);setItemSearch("");}}><Plus size={13}/><span><b>{item.name}</b><small>{item.category || item.kind || "Cadastro"}</small></span></button>)}{!availableCatalogItems.length && <small>Nenhum item disponível.</small>}</div>}</div>
+          {itemsTab === "Produtos" && <div className={`service-reminder ${currentOrder.reminderEnabled ? "enabled" : ""}`}>
+            <div className="reminder-heading"><span><Bell size={18}/></span><div><small>RELACIONAMENTO PÓS-SERVIÇO</small><h4>Lembrete automático para o cliente</h4><p>Após o check-out, o ProAR agenda uma mensagem de manutenção ou higienização.</p></div><label className="reminder-switch"><input type="checkbox" checked={Boolean(currentOrder.reminderEnabled)} onChange={event => configureReminder({ reminderEnabled: event.target.checked })}/><i/></label></div>
+            {currentOrder.reminderEnabled && <div className="reminder-fields"><label>Enviar após<input type="number" min="1" max="60" value={currentOrder.reminderAmount ?? 6} onChange={event => configureReminder({ reminderAmount: Math.max(1, Number(event.target.value) || 1) })}/></label><label>Período<select value={currentOrder.reminderUnit ?? "Meses"} onChange={event => configureReminder({ reminderUnit: event.target.value as "Dias" | "Meses" })}><option>Dias</option><option>Meses</option></select></label><label>Data prevista<input type="date" value={currentOrder.reminderDate ?? reminderDate(6, "Meses", currentOrder.checkOutAt)} onChange={event => update({ reminderDate: event.target.value })}/></label><label className="wide">Mensagem<textarea value={currentOrder.reminderMessage ?? "Olá! Está na hora de realizar a higienização preventiva do seu ar-condicionado. Vamos agendar?"} onChange={event => configureReminder({ reminderMessage: event.target.value })}/></label><label className="wide"><input type="checkbox" checked={currentOrder.whatsappConsent === true} onChange={event => update({ whatsappConsent: event.target.checked })}/> O cliente autorizou receber este lembrete por WhatsApp</label><label className="wide"><input type="checkbox" checked={currentOrder.whatsappOptOut === true} onChange={event => update({ whatsappOptOut: event.target.checked })}/> O cliente solicitou não receber mensagens</label><p className="wide">O envio automático exige autorização registrada e fica bloqueado quando o cliente solicita a interrupção.</p><div className="reminder-summary"><MessageCircle size={15}/><span><b>{customerPhone || "Cliente sem WhatsApp cadastrado"}</b><small>{currentOrder.checkOutAt ? `Agendado para ${new Date(`${currentOrder.reminderDate}T12:00:00`).toLocaleDateString("pt-BR")}` : "Será agendado automaticamente quando o técnico fizer o check-out."}</small></span></div></div>}
+          </div>}
+        </section>
+        <section className="order-map compact-address" hidden={detailTab!=="Execução"}>
+          <div className="order-map-head"><div><span><MapPin size={16}/></span><div><small>ENDEREÇO DO ATENDIMENTO</small><strong>{order.address || "Endereço incompleto"}</strong><em>{order.address ? "Endereço da unidade/cliente" : "⚠ Endereço incompleto"}</em></div></div><div className="address-actions">{order.address && <a href={mapsSearch} target="_blank" rel="noreferrer"><MapPin size={13}/> Abrir no Google Maps</a>}<button type="button" disabled={!order.address} onClick={() => order.address && void navigator.clipboard?.writeText(order.address)}>Copiar endereço</button></div></div>
+        </section>
+        <section className="field-execution" hidden={detailTab!=="Execução"}>
+          <div className="execution-head"><div><span>EXECUÇÃO EM CAMPO</span><h3>Registo do atendimento</h3></div><small>Salve a OS para confirmar os registros de campo</small></div>
+          <div className="check-actions">
+            <button type="button" className={currentOrder.checkInAt ? "done" : ""} onClick={() => !currentOrder.checkInAt && update({ checkInAt: new Date().toISOString(), status: "Em andamento", tone: "blue" })}><LogIn size={18}/><span><b>{currentOrder.checkInAt ? "Check-in realizado" : "Fazer check-in"}</b><small>{currentOrder.checkInAt ? formatMoment(currentOrder.checkInAt) : "Registrar chegada ao cliente"}</small></span></button>
+            <button type="button" disabled={!currentOrder.checkInAt} className={currentOrder.checkOutAt ? "done" : ""} onClick={() => { if (currentOrder.checkOutAt) return; const checkOutAt = new Date().toISOString(); update({ checkOutAt, status: "Concluída", tone: "green", reminderDate: currentOrder.reminderEnabled ? reminderDate(currentOrder.reminderAmount ?? 6, currentOrder.reminderUnit ?? "Meses", checkOutAt) : currentOrder.reminderDate, reminderStatus: currentOrder.reminderEnabled ? "Agendado" : currentOrder.reminderStatus }); }}><LogOut size={18}/><span><b>{currentOrder.checkOutAt ? "Check-out realizado" : "Fazer check-out"}</b><small>{currentOrder.checkOutAt ? formatMoment(currentOrder.checkOutAt) : "Registrar saída do cliente"}</small></span></button>
+          </div>
+          <div className="evidence-grid">
+            <label className={`upload-box photo-evidence ${currentOrder.photoBefore ? "has-photo" : ""}`}>{currentOrder.photoBefore ? <img src={currentOrder.photoBefore} alt="Antes do serviço"/> : <Camera size={23}/>}<b>Foto antes do serviço</b><small>{currentOrder.photoBefore ? "Toque para substituir" : "Abrir câmera ou galeria"}</small><input type="file" accept="image/*" capture="environment" onChange={event => uploadPhoto("photoBefore", event.target.files?.[0])}/></label>
+            <label className={`upload-box photo-evidence ${currentOrder.photoAfter ? "has-photo" : ""}`}>{currentOrder.photoAfter ? <img src={currentOrder.photoAfter} alt="Depois do serviço"/> : <Camera size={23}/>}<b>Foto depois do serviço</b><small>{currentOrder.photoAfter ? "Toque para substituir" : "Abrir câmera ou galeria"}</small><input type="file" accept="image/*" capture="environment" onChange={event => uploadPhoto("photoAfter", event.target.files?.[0])}/></label>
+          </div>
+          <div className="signature-grid">
+            <SignaturePad label="Assinatura do cliente" value={currentOrder.clientSignature} onChange={clientSignature => update({ clientSignature })}/>
+            <SignaturePad label="Assinatura do técnico responsável" value={currentOrder.technicianSignature} onChange={technicianSignature => update({ technicianSignature })}/>
+          </div>
+        </section>
+      </fieldset>
+      {detailTab==="Contratos"&&!availableContracts.length&&<p className="os-area-empty">Nenhum contrato disponível para este cliente.</p>}
+      {detailTab==="Relatórios"&&<ServiceOrderReportPreview key={confirmedBase.id} orderId={confirmedBase.id} company={company as unknown as Record<string,unknown>} dirty={dirty}/>}
+
+      <article className="print-service-order">
+        <header className="print-order-header"><img src={company.logo || "/proar-logo.png"} alt={company.tradeName}/><div><span>ORDEM DE SERVIÇO</span><h1>{currentOrder.id}</h1><p><b>{company.tradeName}</b> • {company.legalName}</p><p>{company.cnpj ? `CNPJ/CPF: ${company.cnpj}` : "CNPJ/CPF não informado"} • {company.phone || "Telefone não informado"}</p><p>{[company.email, company.address, company.city && company.state ? `${company.city}/${company.state}` : company.city || company.state].filter(Boolean).join(" • ")}</p></div></header>
+        <section className="print-order-status"><div><small>SITUAÇÃO</small><strong>{currentOrder.status}</strong></div><div><small>DATA AGENDADA</small><strong>{currentOrder.date ? new Date(`${currentOrder.date}T12:00:00`).toLocaleDateString("pt-BR") : "Não informada"}</strong></div><div><small>HORÁRIO</small><strong>{currentOrder.time || "Não informado"}</strong></div></section>
+        <section className="print-block"><h2>Cliente e local do atendimento</h2><div className="print-info-grid"><div><small>CLIENTE</small><strong>{currentOrder.client}</strong></div><div><small>UNIDADE / SETOR</small><strong>{currentOrder.unit || "Unidade principal"}</strong></div><div className="wide"><small>ENDEREÇO</small><strong>{currentOrder.address || "Não informado"}</strong></div><div><small>TÉCNICO RESPONSÁVEL</small><strong>{currentOrder.tech || "Não informado"}</strong></div><div><small>CHECK-IN</small><strong>{currentOrder.checkInAt ? formatMoment(currentOrder.checkInAt) : "Não realizado"}</strong></div><div><small>CHECK-OUT</small><strong>{currentOrder.checkOutAt ? formatMoment(currentOrder.checkOutAt) : "Não realizado"}</strong></div></div></section>
+        <section className="print-block"><h2>Serviços prestados</h2>{currentOrder.catalogItems?.length ? <div className="print-service-list">{currentOrder.catalogItems.map((item, index) => <div key={item.id}><b>{String(index + 1).padStart(2, "0")}</b><span><strong>{item.name}</strong><small>{item.kind}</small></span></div>)}</div> : <p className="print-description">{currentOrder.service || "Atendimento técnico"}</p>}</section>
+        <section className="print-block print-evidence"><h2>Registo fotográfico</h2><div><figure>{currentOrder.photoBefore ? <img src={currentOrder.photoBefore} alt="Antes do serviço"/> : <div>Foto não adicionada</div>}<figcaption>ANTES DO SERVIÇO</figcaption></figure><figure>{currentOrder.photoAfter ? <img src={currentOrder.photoAfter} alt="Depois do serviço"/> : <div>Foto não adicionada</div>}<figcaption>DEPOIS DO SERVIÇO</figcaption></figure></div></section>
+        <section className="print-block print-signatures"><h2>Confirmação do atendimento</h2><div><figure>{readOrderSignatures(currentOrder as unknown as Record<string,unknown>).client.image ? <img src={readOrderSignatures(currentOrder as unknown as Record<string,unknown>).client.image} alt="Assinatura do cliente"/> : <div/>}<figcaption><strong>Assinatura do cliente</strong><span>{currentOrder.client}</span></figcaption></figure><figure>{readOrderSignatures(currentOrder as unknown as Record<string,unknown>).technician.image ? <img src={readOrderSignatures(currentOrder as unknown as Record<string,unknown>).technician.image} alt="Assinatura do técnico"/> : <div/>}<figcaption><strong>Assinatura do técnico responsável</strong><span>{currentOrder.tech}</span></figcaption></figure></div></section>
+        <footer className="print-order-footer"><span>{company.legalName} • {company.cnpj || "CNPJ não informado"}</span><span>Documento gerado pelo ProAR em {new Date().toLocaleString("pt-BR")}</span></footer>
+      </article>
+    </div>
+  </div>;
+}
+
+function CommercialRecordsManager({ title, records, onConvert, onDelete, onEdit }: { title: "Orçamentos" | "Vendas"; records: ModuleRecord[]; onConvert?: (record: ModuleRecord, target: "Pedido" | "Ordem de serviço") => void; onDelete?: (record: ModuleRecord) => void; onEdit?: (record: ModuleRecord) => void }) {
+  const [query,setQuery]=useState(""); const [status,setStatus]=useState("Todos");
+  const statuses=["Todos",...Array.from(new Set(records.map(item=>item.status||"Sem situação")))];
+  const visible=records.filter(item=>(status==="Todos"||(item.status||"Sem situação")===status)&&`${item.id} ${item.client} ${item.name} ${item.unit||""}`.toLowerCase().includes(query.toLowerCase()));
+  const total=visible.reduce((sum,item)=>sum+(item.value||0),0); const approved=records.filter(item=>/aprov|confirm|convert|fatur|conclu/i.test(item.status||"")).length;
+  return <section className="commercial-manager panel"><header><div><span className="section-kicker"><FileChartColumn size={12}/> GERENCIADOR DE {title.toUpperCase()}</span><h3>Controle comercial</h3><p>{onEdit ? "Dê dois cliques no pedido para editar os dados e itens." : "Consulte, filtre e acompanhe todos os registros sem precisar abrir um por um."}</p></div><div className="commercial-kpis"><span><small>REGISTROS</small><b>{records.length}</b></span><span><small>VALOR FILTRADO</small><b>R$ {total.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></span><span><small>APROVADOS / CONCLUÍDOS</small><b>{approved}</b></span></div></header><div className="commercial-manager-toolbar"><label><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder={`Pesquisar ${title.toLowerCase()} por cliente, número ou unidade...`}/></label><select value={status} onChange={event=>setStatus(event.target.value)}>{statuses.map(item=><option key={item}>{item}</option>)}</select></div>{visible.length?<div className="table-wrap"><table><thead><tr><th>NÚMERO</th><th>CLIENTE / UNIDADE</th><th>SITUAÇÃO</th><th>ITENS</th><th>VALOR</th><th>DATA</th><th>AÇÕES</th></tr></thead><tbody>{visible.map(record=><tr key={record.id} className={onEdit ? "editable-row" : ""} onDoubleClick={()=>onEdit?.(record)} title={onEdit ? "Dê dois cliques para alterar este pedido" : undefined}><td><b className="order-id">{record.id}</b></td><td><strong>{record.client||"—"}</strong><small className="table-description">{record.unit||"Matriz"}</small></td><td><span className={`workflow-status ${/aprov|confirm|convert|fatur|conclu/i.test(record.status||"")?"done":/cancel|reprov|vencid/i.test(record.status||"")?"blocked":""}`}>{record.status||"Registrado"}</span></td><td>{record.purchaseItems?.length??0}</td><td><b>R$ {(record.value??0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></td><td>{record.date?new Date(`${record.date}T12:00:00`).toLocaleDateString("pt-BR"):record.createdAt}</td><td><div className="record-actions">{onEdit&&<button title="Alterar pedido" onClick={event=>{event.stopPropagation();onEdit(record)}}><Edit3 size={14}/></button>}{title==="Orçamentos"&&onConvert&&<><button title="Converter em venda" onClick={()=>onConvert(record,"Pedido")}><ShoppingBag size={14}/></button><button title="Converter em OS" onClick={()=>onConvert(record,"Ordem de serviço")}><ClipboardList size={14}/></button></>}<button title="Imprimir" onClick={()=>window.print()}><ReceiptText size={14}/></button>{onDelete&&<button className="danger" title="Excluir" onClick={()=>onDelete(record)}><Trash2 size={14}/></button>}</div></td></tr>)}</tbody></table></div>:<div className="linked-empty compact"><Search size={20}/><h4>Nenhum registro encontrado</h4><p>Altere os filtros para consultar outros registros.</p></div>}</section>;
+}
+
+function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert, onDelete, onCreateCustomer, onCreateStructure }: { customers: Customer[]; structures: ModuleRecord[]; catalog: ModuleRecord[]; budgets: ModuleRecord[]; onSave: (record: ModuleRecord) => void; onConvert: (record: ModuleRecord, target: "Pedido" | "Ordem de serviço") => void; onDelete: (record: ModuleRecord) => void; onCreateCustomer: (draft: CustomerDraft) => Customer | null; onCreateStructure: (draft: StructureDraft & { client: string }) => ModuleRecord | null }) {
+  const [tab,setTab]=useState<"novo"|"lista">("novo");
+  const [cart, setCart] = useState<PurchaseItem[]>([]);
+  const [search, setSearch] = useState("");
+  const [kindFilter, setKindFilter] = useState<"Todos" | "Produto" | "Serviço">("Todos");
+  const [customer, setCustomer] = useState("");
+  const [budgetCustomerId,setBudgetCustomerId]=useState("");
+  const [unit, setUnit] = useState("");
+  const [validity, setValidity] = useState(7);
+  const [priceTable, setPriceTable] = useState("Padrão");
+  const [reference, setReference] = useState("");
+  const [seller, setSeller] = useState("");
+  const [discount, setDiscount] = useState(0);
+  const [surcharge, setSurcharge] = useState(0);
+  const [payment, setPayment] = useState("PIX");
+  const [observations, setObservations] = useState("");
+  const [notice, setNotice] = useState("");
+  const [quickCreate, setQuickCreate] = useState<"customer" | "structure" | null>(null);
+  const [editingBudgetId,setEditingBudgetId]=useState<string | null>(null);
+  const [editingEndDate,setEditingEndDate]=useState<string | null>(null);
+
+  const items = catalog.filter(item => (item.kind === "Produto" || item.kind === "Serviço") && item.status !== "Inativo" && (kindFilter === "Todos" || item.kind === kindFilter) && `${item.name} ${item.id} ${item.category}`.toLowerCase().includes(search.toLowerCase()));
+  const itemTotal=(item:PurchaseItem)=>item.quantity*item.unitValue*(1-Math.min(100,Math.max(0,item.discountPercent??0))/100);
+  const productsTotal = cart.filter(item => item.kind === "Produto").reduce((sum, item) => sum + itemTotal(item), 0);
+  const servicesTotal = cart.filter(item => item.kind === "Serviço").reduce((sum, item) => sum + itemTotal(item), 0);
+  const additionalCosts = cart.filter(item => item.kind === "Custo adicional").reduce((sum, item) => sum + itemTotal(item), 0);
+  const subtotal = productsTotal + servicesTotal + additionalCosts;
+  const total = Math.max(0, subtotal - discount + surcharge);
+
+  const add = (record: ModuleRecord) => {
+    setCart(current => {
+      const existing = current.find(item => item.productId === record.id);
+      if(existing) return current.map(item => item.productId === record.id ? { ...item, quantity: item.quantity + 1 } : item);
+      return [...current, {
+        id:`ORC-ITEM-${Date.now()}-${current.length}`,
+        productId:record.id,
+        description:record.name,
+        quantity:1,
+        unitValue:record.value ?? 0,
+        kind:record.kind,
+        unitOfMeasure:record.unitOfMeasure || (record.kind==="Serviço"?"SV":"UN"),
+        discountPercent:0,
+      }];
+    });
+    setSearch("");
+  };
+  const update = (id: string, changes: Partial<PurchaseItem>) => setCart(current => current.map(item => item.id === id ? { ...item, ...changes } : item));
+  const clearDraft=()=>{setCart([]);setDiscount(0);setSurcharge(0);setObservations("");setUnit("");setReference("");setSearch("");setEditingBudgetId(null);setEditingEndDate(null);};
+  const editBudget=(record:ModuleRecord)=>{
+    setEditingBudgetId(record.id);
+    setEditingEndDate(record.endDate || null);
+    setCustomer(record.client || "");
+    setUnit(record.structureId || "");
+    setCart((record.purchaseItems || []) as PurchaseItem[]);
+    setDiscount(Number(record.discount || 0));
+    setSurcharge(Number(record.surcharge || 0));
+    setReference(record.reference || "");
+    setSeller(record.seller || "");
+    setPayment(record.paymentMethod || "PIX");
+    const description=String(record.description || "");
+    setObservations(description.includes(" • ") ? description.split(" • ").slice(2).join(" • ") : "");
+    if(record.endDate){
+      const days=Math.max(1,Math.round((new Date(record.endDate+"T12:00:00").getTime()-Date.now())/86400000));
+      setValidity([7,15,30,60].reduce((best,value)=>Math.abs(value-days)<Math.abs(best-days)?value:best,7));
+    }
+    setTab("novo");
+    setNotice(`Alterando ${record.id}. Salve para confirmar as mudanças.`);
+  };
+
+  const save = (status:"Em elaboração"|"Enviado") => {
+    if (!customer || !cart.length) { setNotice("Selecione o cliente e adicione pelo menos um produto ou serviço."); return; }
+    let budgetLocation:HierarchySelection | undefined;
+    const selectedCustomer=customers.find(item=>item.id===budgetCustomerId) || customers.find(item=>item.name===customer);
+    if(selectedCustomer && isMunicipalCustomer(selectedCustomer)) {
+      try { budgetLocation=hierarchySelection(selectedCustomer,customerHierarchy(selectedCustomer,structures,customers),unit); }
+      catch(error) { setNotice(error instanceof Error?error.message:"Local inválido."); return; }
+    }
+    const validUntil = new Date(); validUntil.setDate(validUntil.getDate() + validity);
+    const record: ModuleRecord = {
+      ...(editingBudgetId ? budgets.find(item => item.id === editingBudgetId) : {}),
+      id:editingBudgetId || `ORC-${Date.now().toString().slice(-6)}`,
+      name:`Orçamento • ${customer}`,
+      client:customer,
+      unit:selectedBudgetStructure?.name || "",
+      structureId:selectedBudgetStructure?.id,
+      sector:/secretaria|setor|departamento|diretoria|órgão|area|área/i.test(`${selectedBudgetStructure?.category ?? ""} ${selectedBudgetStructure?.hierarchyLevel ?? ""}`) ? selectedBudgetStructure?.name : undefined,
+      description:`Tabela: ${priceTable} • Condição: ${payment}${reference ? ` • Ref.: ${reference}` : ""}${seller ? ` • Vendedor: ${seller}` : ""}${observations ? ` • ${observations}` : ""}`,
+      createdAt:editingBudgetId ? (budgets.find(item=>item.id===editingBudgetId)?.createdAt || new Date().toLocaleString("pt-BR")) : new Date().toLocaleString("pt-BR"),
+      date:new Date().toISOString().slice(0,10),
+      endDate:editingEndDate || validUntil.toISOString().slice(0,10),
+      status,
+      value:total,
+      subtotal,
+      discount,
+      discountPercent: subtotal > 0 ? (discount / subtotal) * 100 : 0,
+      surcharge,
+      reference,
+      seller,
+      category:"Produtos e serviços",
+      purchaseItems:cart,
+      paymentMethod:payment,
+      ...(budgetLocation || {}),
+    };
+    onSave(record);
+    clearDraft();
+    setNotice(status==="Em elaboração" ? `${record.id} salvo como rascunho.` : `${record.id} finalizado e salvo com sucesso.`);
+    if(status==="Enviado") setTab("lista");
+  };
+
+  const customerUnits = customer ? customerStructures(customer, customers, structures) : [];
+  const selectedBudgetStructure = customerUnits.find(item => item.id === unit);
+  const budgetStructureLabel = (item: ModuleRecord) => {
+    const byId = new Map(customerUnits.map(entry => [entry.id, entry]));
+    const chain: string[] = [];
+    let current: ModuleRecord | undefined = item;
+    const visited = new Set<string>();
+    while (current && !visited.has(current.id) && chain.length < 5) {
+      visited.add(current.id);
+      chain.unshift(current.name);
+      current = current.parentId ? byId.get(current.parentId) : undefined;
+    }
+    return chain.join(" → ");
+  };
+  useEffect(() => {
+    if (customer && !customerUnits.some(item => item.id === unit)) setUnit(customerUnits[0]?.id ?? "");
+  }, [customer, customerUnits, unit]);
+
+  return <section className="budget-pdv budget-workspace">
+    <nav className="budget-workspace-tabs" aria-label="Áreas do orçamento">
+      <button className={tab==="novo"?"active":""} onClick={()=>setTab("novo")}><Plus size={15}/> Novo orçamento</button>
+      <button className={tab==="lista"?"active":""} onClick={()=>setTab("lista")}><FileText size={15}/> Orçamentos <span>{budgets.length}</span></button>
+    </nav>
+
+    {tab==="novo" ? <>
+      <section className="budget-order-head panel">
+        <header><div><span className="section-kicker"><FileText size={12}/> ORÇAMENTO</span><h2>Novo orçamento</h2><p>Monte a proposta comercial em uma única tela, com itens, condições e totais.</p></div><span className="budget-draft-chip">Rascunho</span></header>
+        <div className="budget-order-fields">
+          <div className="budget-customer-field budget-field-wide"><span className="budget-field-label">Cliente</span><CustomerSearchSelect customers={customers} value={customer} customerIdValue={budgetCustomerId} locationId={unit} onLocationChange={selection=>{setUnit(selection.structureId||"");setBudgetCustomerId(selection.customerId);}} onChange={(value,selected) => { setCustomer(value);setBudgetCustomerId(selected?.id||""); setUnit(""); }} />{customer && <small className="budget-customer-selected"><CheckCircle2 size={11}/> Cliente selecionado</small>}</div>
+          <label>Validade<select value={validity} onChange={event => {setValidity(Number(event.target.value));setEditingEndDate(null);}}><option value={7}>7 dias</option><option value={15}>15 dias</option><option value={30}>30 dias</option><option value={60}>60 dias</option></select></label>
+          <label>Tabela de preços<select value={priceTable} onChange={event=>setPriceTable(event.target.value)}><option>Padrão</option><option>Promocional</option><option>Contrato</option><option>Licitação</option></select></label>
+          <label>Referência<input value={reference} onChange={event=>setReference(event.target.value)} placeholder="Ref. comercial, obra ou pedido"/></label>
+          <label>Vendedor<input value={seller} onChange={event=>setSeller(event.target.value)} placeholder="Responsável comercial"/></label>
+          {customer ? <label className="budget-field-wide">Órgão / Diretoria / Unidade / Setor<select value={unit} onChange={event => setUnit(event.target.value)}><option value="">Selecione a estrutura vinculada</option>{customerUnits.map(item => <option key={item.id} value={item.id}>{budgetStructureLabel(item)} • {item.category || "Unidade"}</option>)}</select></label> : <div className="budget-field-wide budget-no-customer"><span>Selecione um cliente para carregar unidades e setores vinculados.</span></div>}
+          <div className="budget-head-actions"><button type="button" className="budget-quick-trigger" onClick={() => setQuickCreate("customer")}><Plus size={13}/> Novo cliente</button>{customer&&<button type="button" className="budget-quick-trigger" onClick={() => setQuickCreate("structure")}><Plus size={13}/> Nova estrutura</button>}</div>
+        </div>
+      </section>
+
+      {notice && <div className="pdv-notice"><CheckCircle2 size={15}/>{notice}<button onClick={() => setNotice("")}><X size={13}/></button></div>}
+
+      <section className="budget-item-entry panel">
+        <header><div><span className="section-kicker"><ShoppingCart size={12}/> ITENS DO ORÇAMENTO</span><h3>Adicionar produto ou serviço</h3></div><div className="budget-kind-tabs">{(["Todos","Produto","Serviço"] as const).map(kind => <button className={kindFilter === kind ? "active" : ""} key={kind} onClick={() => setKindFilter(kind)}>{kind}</button>)}</div></header>
+        <div className="budget-item-command">
+          <label className="budget-item-search"><span>Código / descrição</span><div><Search size={16}/><input value={search} onChange={event=>setSearch(event.target.value)} placeholder="Digite código, produto ou serviço..."/></div>{search.trim()&&<div className="budget-item-results">{items.slice(0,8).map(item=><button key={item.id} onClick={()=>add(item)}><span className={item.kind==="Produto"?"product":"service"}>{item.kind==="Produto"?<Package size={15}/>:<Wrench size={15}/>}</span><div><b>{item.name}</b><small>{item.id} • {item.category || item.kind}</small></div><strong>R$ {(item.value??0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong><Plus size={14}/></button>)}{!items.length&&<small className="budget-item-no-result">Nenhum item encontrado.</small>}</div>}</label>
+          <button className="budget-add-first" disabled={!items.length} onClick={()=>items[0]&&add(items[0])}><Plus size={15}/> Adicionar</button>
+          <button className="budget-clear-search" onClick={()=>setSearch("")}>Limpar</button>
+        </div>
+      </section>
+
+      <section className="budget-line-items panel">
+        <div className="budget-line-table-wrap"><table><thead><tr><th>CÓDIGO</th><th>DESCRIÇÃO</th><th>QTD.</th><th>UN.</th><th>VALOR UNIT.</th><th>DESC. %</th><th>TOTAL</th><th></th></tr></thead><tbody>{cart.map(item=><tr key={item.id}><td><b>{item.productId||item.id}</b><small>{item.kind}</small></td><td><strong>{item.description}</strong></td><td><input aria-label={`Quantidade ${item.description}`} type="number" min="0.001" step="0.001" value={item.quantity} onChange={event=>update(item.id,{quantity:Number(event.target.value)})}/></td><td><input aria-label={`Unidade ${item.description}`} value={item.unitOfMeasure||""} onChange={event=>update(item.id,{unitOfMeasure:event.target.value.toUpperCase().slice(0,6)})}/></td><td><input aria-label={`Valor unitário ${item.description}`} type="number" min="0" step="0.01" value={item.unitValue} onChange={event=>update(item.id,{unitValue:Number(event.target.value)})}/></td><td><input aria-label={`Desconto ${item.description}`} type="number" min="0" max="100" step="0.01" value={item.discountPercent??0} onChange={event=>update(item.id,{discountPercent:Math.min(100,Math.max(0,Number(event.target.value)))})}/></td><td><strong>R$ {itemTotal(item).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></td><td><button title="Remover item" onClick={()=>setCart(current=>current.filter(record=>record.id!==item.id))}><Trash2 size={14}/></button></td></tr>)}</tbody></table></div>
+        {!cart.length&&<div className="budget-lines-empty"><div><Plus size={24}/></div><b>Nenhum item adicionado</b><p>Use a busca acima para localizar produtos e serviços.</p></div>}
+      </section>
+
+      <section className="budget-finish panel">
+        <div className="budget-condition-fields">
+          <label>Forma de pagamento<select value={payment} onChange={event => setPayment(event.target.value)}>{["PIX","Dinheiro","Cartão de crédito","Cartão de débito","Boleto","Transferência","A combinar"].map(item => <option key={item}>{item}</option>)}</select></label>
+          <label>Desconto geral<input type="number" min="0" max={subtotal} step="0.01" value={discount || ""} onChange={event => setDiscount(Math.max(0,Number(event.target.value)))} placeholder="R$ 0,00"/></label>
+          <label>Acréscimo<input type="number" min="0" step="0.01" value={surcharge || ""} onChange={event => setSurcharge(Math.max(0,Number(event.target.value)))} placeholder="R$ 0,00"/></label>
+          <label className="wide">Observações<textarea value={observations} onChange={event => setObservations(event.target.value)} placeholder="Prazo, garantia, condições comerciais e observações do orçamento..."/></label>
+        </div>
+        <div className="budget-summary-bar">
+          <div><small>SUBTOTAL</small><b>R$ {subtotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></div>
+          <div><small>DESCONTO</small><b>- R$ {discount.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></div>
+          <div><small>ACRÉSCIMO</small><b>R$ {surcharge.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></div>
+          <div className="budget-grand-total"><small>TOTAL DO ORÇAMENTO</small><strong>R$ {total.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div>
+          <div className="budget-final-actions"><button className="outline-btn" disabled={!customer||!cart.length} onClick={()=>save("Em elaboração")}><Save size={15}/> Salvar rascunho</button><button className="primary-btn" disabled={!customer||!cart.length} onClick={()=>save("Enviado")}><CheckCircle2 size={16}/> Finalizar orçamento</button></div>
+        </div>
+      </section>
+    </> : <>
+      <div className="budget-saved panel"><header><div><span className="section-kicker"><History size={12}/> ACOMPANHAMENTO COMERCIAL</span><h3>Orçamentos salvos</h3></div><small>{budgets.length} orçamento(s)</small></header>{budgets.length ? <div>{budgets.map(record => <article key={record.id} onDoubleClick={()=>editBudget(record)} title="Dê dois cliques para alterar este orçamento"><span><b>{record.id}</b><strong>{record.client}</strong><small>{record.purchaseItems?.length ?? 0} item(ns) • {record.reference ? `Ref. ${record.reference} • ` : ""}{record.endDate ? `Válido até ${new Date(`${record.endDate}T12:00:00`).toLocaleDateString("pt-BR")}` : record.createdAt}</small></span><em>{record.status}</em><b>R$ {(record.value ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</b><select aria-label={`Status do orçamento ${record.id}`} value={record.status || "Em elaboração"} onChange={event=>onSave({...record,status:event.target.value,changeReason:`Status comercial atualizado para ${event.target.value}`})}>{["Em elaboração","Enviado","Aguardando retorno","Em negociação","Aprovado","Perdido","Cancelado"].map(status=><option key={status}>{status}</option>)}</select><button type="button" onClick={() => editBudget(record)}><Edit3 size={14}/> Alterar</button><button onClick={() => onConvert(record,"Pedido")} disabled={!/Aprovado|Em negociação|Enviado|Aguardando retorno/i.test(record.status||"")}><ShoppingBag size={14}/> Converter em venda</button><button onClick={() => onConvert(record,"Ordem de serviço")} disabled={!/Aprovado|Em negociação|Enviado|Aguardando retorno/i.test(record.status||"")}><ClipboardList size={14}/> Converter em OS</button><button type="button" className="danger" aria-label={`Excluir orçamento ${record.id}`} title="Excluir orçamento" onClick={() => onDelete(record)}><Trash2 size={14}/> Excluir</button></article>)}</div> : <div className="linked-empty"><FileText size={22}/><h4>Nenhum orçamento salvo</h4></div>}</div>
+    </>}
+
+    <BudgetQuickCreateDrawer open={Boolean(quickCreate)} mode={quickCreate ?? "customer"} customerName={customer} customers={customers} structures={structures} onClose={() => setQuickCreate(null)} onCreateCustomer={created => { const result = onCreateCustomer(created); if (result) { setCustomer(result.name); setUnit(""); setNotice("Cliente criado e selecionado no orçamento."); } return result; }} onCreateStructure={created => { const result = onCreateStructure(created); if (result) { setUnit(result.id); setNotice("Estrutura criada e selecionada no orçamento."); } return result; }} />
+  </section>;
+}
+
+type TenderDocument = { sequencialDocumento?: number; tipoDocumentoNome?: string; titulo?: string; dataPublicacaoPncp?: string; url?: string; uri?: string };
+type Tender = { numeroCompra?:string; sourceExternalId?:string; validationStatus?:"active_confirmed"|"history"|"incomplete"; validationReason?:string; situacaoCompraNome?:string; numeroControlePNCP?: string; objetoCompra?: string; modalidadeNome?: string; dataEncerramentoProposta?: string; dataPublicacaoPncp?: string; valorTotalEstimado?: number; linkSistemaOrigem?: string; sourcePortal?: string; distanciaMirassol?: number; anoCompra?: number; sequencialCompra?: number; orgaoEntidade?: { razaoSocial?: string; cnpj?: string }; unidadeOrgao?: { municipioNome?: string; ufSigla?: string; nomeUnidade?: string } };
+type LicitacoesTab = "Habilitação e BDI" | "Radar" | "Empenhos / Saldo Contratual" | "Documentos" | "Auditoria" | "Dados Reais";
+
+function LicitacoesWorkspace({
+  modules, customers, orders, company, onSaveRecord, onDeleteRecord, onReadyToInvoice, onOpenTender,
+}: {
+  modules: Record<string, ModuleRecord[]>;
+  company: TenantCompany;
+  customers: Customer[];
+  orders: ServiceOrder[];
+  onSaveRecord: (moduleName: string, record: ModuleRecord) => Promise<boolean>;
+  onDeleteRecord: (moduleName: string, record: ModuleRecord) => void;
+  onReadyToInvoice: (record: PublicCommitmentRecord) => Promise<boolean>;
+  onOpenTender: (item: Tender) => void;
+}) {
+  const [tab, setTab] = useState<LicitacoesTab>("Radar");
+  const [editingDocument,setEditingDocument]=useState<ModuleRecord|null>(null);
+  const contracts = (modules.Certames ?? []) as PublicContractRecord[];
+  const commitments = (modules.Empenhos ?? []) as PublicCommitmentRecord[];
+  const documents = modules["Documentação / Habilitação"] ?? [];
+  const audits = modules.Auditoria ?? [];
+  const tabs: LicitacoesTab[] = ["Radar", "Habilitação e BDI", "Empenhos / Saldo Contratual", "Documentos", "Auditoria", "Dados Reais"];
+  const publicAudit = audits.filter(item => /certame|empenho|licita|document|públic|public/i.test(`${item.name ?? ""} ${item.description ?? ""} ${item.category ?? ""}`));
+  const realSets = [
+    { label: "Certames", count: contracts.length, detail: "Registros contratuais persistidos no estado compartilhado" },
+    { label: "Empenhos", count: commitments.length, detail: "Empenhos vinculados aos certames e faturamento" },
+    { label: "Documentos", count: documents.length, detail: "Documentação / Habilitação cadastrada no ProAR" },
+    { label: "Auditoria", count: audits.length, detail: "Eventos de rastreabilidade registrados pelo sistema" },
+  ];
+  return <section className="licitacoes-workspace">
+    <header className="licitacoes-workspace-head">
+      <div><span className="section-kicker"><Landmark size={13}/> LICITAÇÕES E CONTRATOS PÚBLICOS</span><h2>Central de Licitações</h2><p>Radar multifonte, execução contratual, documentos e rastreabilidade em um único módulo.</p></div>
+    </header>
+    <nav className="licitacoes-module-tabs" role="tablist" aria-label="Áreas do módulo Licitações">
+      {tabs.map(item => <button key={item} type="button" role="tab" aria-selected={tab===item} className={tab===item?"active":""} onClick={()=>setTab(item)}>{item}</button>)}
+    </nav>
+    {tab==="Radar" && <BiddingModule company={company} trackingRecords={modules["Acompanhamento de licitações"]??[]} onSaveTracking={record=>onSaveRecord("Acompanhamento de licitações",record as ModuleRecord)} qualificationDocuments={documents} onManageDocuments={()=>setTab("Habilitação e BDI")} imported={modules["Oportunidades importadas"]??[]} onImport={record=>onSaveRecord("Oportunidades importadas",record as ModuleRecord)} onOpen={onOpenTender}/>}
+    {tab==="Empenhos / Saldo Contratual" && <div className="licitacoes-tab-stack">
+      <PublicContractsPanel records={contracts} customers={customers} onSave={record=>onSaveRecord("Certames",record as ModuleRecord)} onDelete={record=>onDeleteRecord("Certames",record as ModuleRecord)}/>
+      <PublicCommitmentsPanel orders={orders} contracts={contracts} customers={customers.map(customer=>({name:customer.name,doc:customer.doc}))} commitments={commitments} onSave={record=>onSaveRecord("Empenhos",record as ModuleRecord)} onReadyToInvoice={onReadyToInvoice} onCancel={record=>onSaveRecord("Empenhos",record as ModuleRecord)}/>
+    </div>}
+    {tab==="Habilitação e BDI" && <ProcurementReadinessPanel documents={documents} compositions={modules["Composições de licitação"]??[]} onSave={(module,record)=>onSaveRecord(module,record as ModuleRecord)}/>}
+    {tab==="Documentos" && <section className="licitacoes-data-panel panel"><BiddingDocumentsWorkspace companyName={company.legalName}/><header><div><span className="section-kicker"><FileText size={13}/> HABILITAÇÃO</span><h3>Documentos</h3><p>Documentos reais já cadastrados em Documentação / Habilitação.</p></div><strong>{documents.length} registros</strong></header><div className="licitacoes-record-list">{documents.map(item=><article key={item.id}><div><b>{item.name}</b><small>{item.category || "Documento"} • {item.client || "PolarTech"}</small><p>{item.description || "Sem observação adicional."}</p></div><span>{item.status || "Cadastrado"}</span><div className="record-actions"><button title="Alterar documento" onClick={()=>setEditingDocument({...item})}><Edit3 size={14}/></button><button className="danger" title="Excluir / inativar documento" onClick={()=>onDeleteRecord("Documentação / Habilitação",item)}><Trash2 size={14}/></button></div></article>)}{!documents.length&&<div className="linked-empty"><FileText size={23}/><h4>Nenhum documento cadastrado</h4><p>Esta aba não cria dados fictícios. Cadastros reais aparecerão aqui após confirmação no banco.</p></div>}</div></section>}
+    {tab==="Auditoria" && <section className="licitacoes-data-panel panel"><header><div><span className="section-kicker"><ShieldCheck size={13}/> RASTREABILIDADE</span><h3>Auditoria de Licitações</h3><p>Eventos relacionados a licitações, certames, empenhos e documentação.</p></div><strong>{publicAudit.length} eventos</strong></header><div className="licitacoes-record-list">{publicAudit.slice(0,250).map(item=><article key={item.id}><div><b>{item.name}</b><small>{item.createdAt || item.date || "Data não informada"} • {item.client || "Sistema"}</small><p>{item.description || "Evento registrado."}</p></div><span>{item.status || "Registrado"}</span></article>)}{!publicAudit.length&&<div className="linked-empty"><ShieldCheck size={23}/><h4>Sem eventos específicos de licitações</h4><p>A auditoria será preenchida pelas operações confirmadas no ProAR.</p></div>}</div></section>}
+    {tab==="Dados Reais" && <section className="licitacoes-data-panel panel"><header><div><span className="section-kicker"><Database size={13}/> FONTE DE VERDADE</span><h3>Dados reais do módulo</h3><p>Visão somente leitura dos conjuntos carregados no estado compartilhado do ProAR. Resultados externos do Radar não são convertidos em cadastro automaticamente.</p></div><span className="real-data-badge"><CheckCircle2 size={14}/> Somente leitura</span></header><div className="licitacoes-real-grid">{realSets.map(item=><article key={item.label}><small>{item.label.toUpperCase()}</small><strong>{item.count}</strong><p>{item.detail}</p></article>)}</div><div className="bidding-safety-note"><ShieldCheck size={16}/><span><b>Integridade dos dados</b> Nenhum resultado encontrado nos portais públicos substitui Certames, Empenhos ou documentos existentes sem uma ação confirmada do utilizador.</span></div></section>}
+    {editingDocument&&<div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" aria-label="Fechar" onClick={()=>setEditingDocument(null)}/><div className="modal catalog-edit-modal"><div className="modal-head"><div><span>ALTERAR DOCUMENTO</span><h2>{editingDocument.name}</h2><p>Atualize os dados de habilitação sem criar um novo registro.</p></div><button onClick={()=>setEditingDocument(null)}><X size={18}/></button></div><div className="catalog-edit-form"><label>Nome<input value={editingDocument.name} onChange={event=>setEditingDocument({...editingDocument,name:event.target.value})}/></label><label>Categoria<input value={editingDocument.category||""} onChange={event=>setEditingDocument({...editingDocument,category:event.target.value})}/></label><label>Cliente / órgão<input value={editingDocument.client||""} onChange={event=>setEditingDocument({...editingDocument,client:event.target.value})}/></label><label>Situação<input value={editingDocument.status||""} onChange={event=>setEditingDocument({...editingDocument,status:event.target.value})}/></label><label className="wide">Observações<textarea value={editingDocument.description||""} onChange={event=>setEditingDocument({...editingDocument,description:event.target.value})}/></label></div><div className="modal-actions"><button className="outline-btn" onClick={()=>setEditingDocument(null)}>Cancelar</button><button className="primary-btn" onClick={async()=>{const ok=await onSaveRecord("Documentação / Habilitação",editingDocument);if(ok)setEditingDocument(null)}}><Save size={14}/> Salvar alterações</button></div></div></div>}
+  </section>;
+}
+
+function BiddingModule({ onOpen, imported, onImport, qualificationDocuments, onManageDocuments, trackingRecords, onSaveTracking, company }: { company:TenantCompany; trackingRecords:ModuleRecord[];onSaveTracking:(record:Record<string,unknown>&{id:string;name:string})=>Promise<boolean>; qualificationDocuments:ModuleRecord[]; onManageDocuments:()=>void; onOpen: (tender: Tender) => void; imported:ModuleRecord[];onImport:(record:Record<string,unknown>&{id:string;name:string})=>Promise<boolean> }) {
+  const [diagnostics,setDiagnostics]=useState<RadarDiagnostic[]>([]);
+  const [tenders,setTenders]=useState<Tender[]>([]); const [query,setQuery]=useState("");
+  const [searchCity,setSearchCity]=useState("");const [onlyOpen,setOnlyOpen]=useState(true);const [searchHorizon,setSearchHorizon]=useState(366); const [source,setSource]=useState("Todos"); const [radius,setRadius]=useState(400); const [orderBy,setOrderBy]=useState<"distancia"|"valor">("distancia"); const [loading,setLoading]=useState(true); const [warning,setWarning]=useState(""); const [lastScan,setLastScan]=useState("");
+  const [sourceLabel,setSourceLabel]=useState("Aguardando consulta oficial"); const [partial,setPartial]=useState(false);
+  const [selected,setSelected]=useState<Tender|null>(null); const [documents,setDocuments]=useState<TenderDocument[]>([]); const [documentLoading,setDocumentLoading]=useState(false); const [detailWarning,setDetailWarning]=useState("");
+  const load=async(monitor=true)=>{setLoading(true);setWarning("");const controller=new AbortController();const timeout=window.setTimeout(()=>controller.abort(),125000);try{const params=new URLSearchParams({raio_km:String(radius),termo:query.trim(),ordenar_por:orderBy,municipio:searchCity.trim(),apenasAbertas:String(onlyOpen),dataFinal:new Date(Date.now()+searchHorizon*86400000).toISOString().slice(0,10)}); if(source!=="Todos")params.set("portais",source); const url=monitor?`/api/licitacoes?${params}&monitor=1`:`/api/licitacoes?${params}`;const response=await fetch(url,{cache:"no-store",signal:controller.signal});let result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.error||result.warning||`Consulta de licitações retornou HTTP ${response.status}.`);let data=Array.isArray(result.data)?result.data:[];let effectiveWarning=result.warning||"";if(monitor&&!data.length){const direct=await fetch(`/api/licitacoes?${params}`,{cache:"no-store",signal:controller.signal});const directResult=await direct.json().catch(()=>({}));if(direct.ok){result=directResult;data=Array.isArray(directResult.data)?directResult.data:[];effectiveWarning=directResult.warning||"";}else{effectiveWarning=directResult.error||directResult.warning||`Consulta direta retornou HTTP ${direct.status}.`;}}setDiagnostics(Array.isArray(result.sourceDiagnostics)?result.sourceDiagnostics:[]);setTenders(data);setSourceLabel(String(result.source||"PNCP e portais oficiais"));setPartial(Boolean(result.partial));setWarning(effectiveWarning||(!data.length?"Consulta concluída: nenhuma oportunidade compatível foi localizada nos portais que responderam.":""));setLastScan(result.lastScan||new Date().toISOString());}catch(error){const timedOut=error instanceof DOMException&&error.name==="AbortError";setWarning(timedOut?"A consulta aos portais públicos excedeu 125 segundos e foi interrompida. Isso indica timeout ou indisponibilidade de uma fonte; tente novamente.":error instanceof Error?error.message:"Não foi possível consultar as licitações.");setLastScan(new Date().toISOString());}finally{window.clearTimeout(timeout);setLoading(false);}};
+  useEffect(()=>{
+    const cacheKey="proar:licitacoes:radar:v3";
+    try{
+      const cached=JSON.parse(localStorage.getItem(cacheKey)||"null");
+      if(cached&&Array.isArray(cached.data)&&cached.data.length){
+        setTenders(cached.data);setLastScan(cached.lastScan||cached.savedAt||"");setSourceLabel(cached.source||"Última busca salva");setPartial(Boolean(cached.partial));setWarning("Última busca salva; atualizando fontes oficiais.");
+      }
+    }catch{}
+    void load(false);
+  },[]);
+  useEffect(()=>{
+    if(!loading&&tenders.length)try{localStorage.setItem("proar:licitacoes:radar:v3",JSON.stringify({data:tenders,lastScan,source:sourceLabel,partial,warning,savedAt:new Date().toISOString()}));}catch{}
+  },[loading,tenders,lastScan,sourceLabel,partial,warning]);
+
+  const openDetail=async(item:Tender)=>{setSelected(item);setDocuments([]);setDetailWarning(""); if(!item.orgaoEntidade?.cnpj||!item.anoCompra||!item.sequencialCompra){setDetailWarning("Esta fonte não informou todos os identificadores necessários para consultar os detalhes e anexos automaticamente. Use o portal de origem.");return;}setDocumentLoading(true);try{const identifiers={cnpj:item.orgaoEntidade.cnpj,ano:String(item.anoCompra),sequencial:String(item.sequencialCompra)};const detailResponse=await fetch(`/api/licitacoes?${new URLSearchParams({detail:"1",...identifiers})}`,{cache:"no-store"});const detailResult=await detailResponse.json();if(detailResult.warning)setDetailWarning(detailResult.warning);if(detailResponse.ok&&detailResult.data)setSelected(current=>current?{...current,...detailResult.data}:current);const response=await fetch(`/api/licitacoes?${new URLSearchParams({documents:"1",...identifiers})}`,{cache:"no-store"});const result=await response.json();if(!response.ok)throw new Error(result.error||"Falha ao consultar documentos");setDocuments(Array.isArray(result.data)?result.data:[]);if(result.warning)setDetailWarning(result.warning);}catch(error){setDetailWarning(error instanceof Error?error.message:"Não foi possível consultar edital e anexos.");}finally{setDocumentLoading(false);}};
+  // A API é a fonte de verdade da pesquisa: ela normaliza termos, aplica raio, fonte e ordenação.
+  // Não refiltrar por texto no navegador evita perder resultados como “ar-condicionado” ao buscar “ar condicionado”.
+  const visible=tenders.filter(item=>(item.distanciaMirassol===undefined||item.distanciaMirassol<=radius));
+  const sources=["Todos","PNCP","Portal Municipal","Compras.gov.br","BEC-SP","Portal de Compras Públicas","BLL Compras","Licitações-e"];
+  return <section className="bidding-restored"><TenderRadarTools diagnostics={diagnostics} lastScan={lastScan} query={query} radius={radius} imported={imported} onSave={onImport} onOpen={record=>void openDetail(record as Tender)}/><div className="bidding-hero"><div><span className="section-kicker"><Landmark size={12}/> MONITOR DE OPORTUNIDADES</span><h2>Licitações públicas</h2><p>Radar multifonte para PNCP, BEC-SP, Portal de Compras Públicas, Licitações-e e BLL Compras, com consolidação, distância desde Mirassol/SP e triagem no ProAR.</p></div><div><span><Zap size={16}/><b>Monitor automático ativo</b><small>Base Mirassol/SP • raio de até 1.000 km</small></span><button onClick={()=>void load(false)} disabled={loading}><RefreshCw size={15}/>{loading?"Buscando...":"Buscar agora"}</button></div></div><div className="bidding-query-health" role="status"><span className={loading?"loading":warning?"warning":"online"}>{loading?"Consultando portais":warning?"Consulta com atenção":"Lista carregada"}</span><small>{visible.length} oportunidade(s) • {lastScan?`última consulta ${new Date(lastScan).toLocaleString("pt-BR")}`:"aguardando primeira consulta"}</small><small>Fonte: {sourceLabel}{partial?" • consulta parcial":""} • resultados somente de fontes consultadas</small></div><div className="bidding-filters panel"><label><Search size={16}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="HVAC completo: deixe vazio; ou busque município, processo, PMOC..."/></label><select value={source} onChange={event=>setSource(event.target.value)}>{sources.map(item=><option key={item}>{item}</option>)}</select><select value={radius} onChange={event=>setRadius(Number(event.target.value))} aria-label="Raio desde Mirassol">{[200,400,600,800,1000].map(km=><option key={km} value={km}>Até {km} km</option>)}</select><select value={orderBy} onChange={event=>setOrderBy(event.target.value as "distancia"|"valor")} aria-label="Ordenar resultados"><option value="distancia">Mais próximos</option><option value="valor">Maior valor</option></select><button onClick={()=>void load(false)} disabled={loading}><Filter size={14}/> Aplicar busca</button></div>{warning&&<div className="bidding-warning"><AlertTriangle size={15}/>{warning}</div>}<section className="panel" style={{padding:14,marginBottom:16}} aria-label="Cobertura e resultados da busca de licitações"><div style={{display:"flex",flexWrap:"wrap",gap:12,alignItems:"end"}}><label>Município (opcional)<input value={searchCity} onChange={event=>setSearchCity(event.target.value)} placeholder="Ex.: Olímpia" style={{display:"block",padding:10}}/></label><label>Prazo máximo<select value={searchHorizon} onChange={event=>setSearchHorizon(Number(event.target.value))} style={{display:"block",padding:10}}><option value={30}>Próximos 30 dias</option><option value={90}>Próximos 90 dias</option><option value={366}>Próximos 12 meses • inclui credenciamentos</option></select></label><label style={{display:"flex",gap:8,alignItems:"center"}}><input type="checkbox" checked={onlyOpen} onChange={event=>setOnlyOpen(event.target.checked)}/> Somente prazos em aberto</label><button type="button" className="primary-btn" disabled={loading} onClick={()=>void load(false)}>Pesquisar fontes oficiais</button></div><p style={{fontSize:12}}>Busca de climatização e refrigeração por termos equivalentes. Páginas sem resposta ou limites de varredura aparecem como cobertura parcial; ausência de resultado não comprova ausência de edital.</p><div style={{overflowX:"auto"}}><table style={{width:"100%",minWidth:680}}><thead><tr><th>Município</th><th>Processo / Edital</th><th>Prazo de recebimento</th><th>Situação na fonte</th><th>Abrir</th></tr></thead><tbody>{visible.slice(0,100).map((item,index)=><tr key={item.numeroControlePNCP||item.sourceExternalId||item.linkSistemaOrigem||index}><td>{item.unidadeOrgao?.municipioNome||"Não informado"}/{item.unidadeOrgao?.ufSigla||"—"}</td><td><strong>{item.modalidadeNome||"Modalidade não informada"} {item.numeroCompra||item.numeroControlePNCP||""}</strong><small style={{display:"block",maxWidth:420}}>{item.objetoCompra}</small></td><td style={{fontVariantNumeric:"tabular-nums"}}>{item.dataEncerramentoProposta?new Date(item.dataEncerramentoProposta).toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"}):"Não confirmado"}</td><td>{item.situacaoCompraNome||"Situação não informada"}<small style={{display:"block"}}>{item.validationStatus==="active_confirmed"?"Prazo futuro na fonte • confira itens e edital":item.validationStatus==="history"?"Prazo encerrado / histórico":"Dados incompletos • conferir na origem"}</small><small>{item.sourcePortal||"PNCP"}</small></td><td><button type="button" className="outline-btn" onClick={()=>void openDetail(item)}>Detalhes</button></td></tr>)}</tbody></table>{visible.length>100&&<p>Mostrando os primeiros 100 registros na tabela. O painel abaixo contém os demais resultados carregados.</p>}{!visible.length&&!loading&&<p>Nenhuma oportunidade encontrada com estes filtros nas fontes consultadas. Confira o diagnóstico de cobertura.</p>}</div></section><TenderPipelinePanel company={{name:company.legalName,cnpj:company.cnpj,address:company.address,email:company.email}} tenders={visible} records={trackingRecords} documents={qualificationDocuments} diagnostics={diagnostics} onSave={record=>onSaveTracking(record)} onOpen={item=>void openDetail(item)}/><details className="panel"><summary style={{padding:16,cursor:"pointer",fontWeight:600}}>Análise de edital com IA, portais e ferramentas de apoio</summary><BiddingOperationsWorkspace documents={qualificationDocuments} onManageDocuments={onManageDocuments} diagnostics={diagnostics} tenders={visible} onOpen={item=>{void openDetail(item);onOpen(item);}}/></details><div className="bidding-summary"><article><small>OPORTUNIDADES LOCALIZADAS</small><strong>{visible.length}</strong></article><article><small>RAIO DESDE MIRASSOL</small><strong>{radius} km</strong></article><article><small>ÚLTIMA BUSCA AUTOMÁTICA</small><strong>{lastScan?new Date(lastScan).toLocaleString("pt-BR"):"Aguardando"}</strong></article></div>{loading&&<div className="bidding-loading"><RefreshCw size={24}/>Consultando os portais públicos...</div>}{selected&&<div className="modal-layer tender-detail-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" aria-label="Fechar" onClick={()=>setSelected(null)}/><div className="modal tender-detail-modal"><div className="modal-head"><div><span>FICHA DA LICITAÇÃO</span><h2>{selected.modalidadeNome||"Licitação pública"}</h2><p>{selected.numeroControlePNCP||"Número PNCP não informado"}</p></div><button onClick={()=>setSelected(null)}><X size={18}/></button></div><div className="tender-detail-grid"><label className="wide"><small>OBJETO</small><strong>{selected.objetoCompra||"Não informado"}</strong></label><label><small>ÓRGÃO</small><strong>{selected.orgaoEntidade?.razaoSocial||"Não informado"}</strong></label><label><small>CNPJ DO ÓRGÃO</small><strong>{selected.orgaoEntidade?.cnpj||"Não informado"}</strong></label><label><small>UNIDADE</small><strong>{selected.unidadeOrgao?.nomeUnidade||"Não informada"}</strong></label><label><small>MUNICÍPIO</small><strong>{selected.unidadeOrgao?.municipioNome||"Não informado"}/{selected.unidadeOrgao?.ufSigla||""}</strong></label><label><small>PUBLICAÇÃO</small><strong>{selected.dataPublicacaoPncp?new Date(selected.dataPublicacaoPncp).toLocaleString("pt-BR"):"Não informada"}</strong></label><label><small>ENCERRAMENTO</small><strong>{selected.dataEncerramentoProposta?new Date(selected.dataEncerramentoProposta).toLocaleString("pt-BR"):"Não informado"}</strong></label><label><small>VALOR ESTIMADO</small><strong>{selected.valorTotalEstimado!==undefined?`R$ ${selected.valorTotalEstimado.toLocaleString("pt-BR",{minimumFractionDigits:2})}`:"Não informado pela fonte"}</strong></label><label><small>DISTÂNCIA</small><strong>{selected.distanciaMirassol!==undefined?`${selected.distanciaMirassol} km de Mirassol`:"A confirmar"}</strong></label></div><section className="tender-documents"><header><div><FileText size={17}/><span><b>Edital e documentos</b><small>Documentos oficiais vinculados à contratação.</small></span></div>{documentLoading&&<RefreshCw size={16}/>}</header>{detailWarning&&<div className="bidding-warning"><AlertTriangle size={14}/>{detailWarning}</div>}{documents.length?<div>{documents.map((doc,index)=>{const url=doc.url||doc.uri;return <article key={`${doc.sequencialDocumento||index}-${doc.titulo||"documento"}`}><span><b>{doc.titulo||doc.tipoDocumentoNome||`Documento ${index+1}`}</b><small>{doc.tipoDocumentoNome||"Documento PNCP"}{doc.dataPublicacaoPncp?` • ${new Date(doc.dataPublicacaoPncp).toLocaleDateString("pt-BR")}`:""}</small></span>{url&&<a href={url} target="_blank" rel="noreferrer"><FileText size={14}/> Baixar / abrir</a>}</article>})}</div>:!documentLoading&&<p className="tender-no-docs">Nenhum documento retornado automaticamente. O portal de origem continua disponível abaixo.</p>}</section><div className="modal-actions"><button className="outline-btn" onClick={()=>setSelected(null)}>Fechar</button><TenderPortalLinks tender={selected}/></div></div></div>}</section>;
+}
+
+type SaleItem = { id: string; name: string; code: string; price: number; kind: "Produto" | "Serviço"; unit: string; image?: string };
+type CartItem = SaleItem & { quantity: number };
+
+function SalesPDV({ customers, structures, records, sales, onSave, onDelete }: { customers: Customer[]; structures: ModuleRecord[]; records: ModuleRecord[]; sales: ModuleRecord[]; onSave: (record: ModuleRecord) => void; onDelete: (record: ModuleRecord) => void }) {
+  const [salesView, setSalesView] = useState<"nova" | "historico" | "caixa">("nova");
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState<"itens" | "cliente" | "pagamento" | "opcoes">("itens");
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [discount, setDiscount] = useState(0);
+  const [customer, setCustomer] = useState("");
+  const [saleLocation,setSaleLocation]=useState<HierarchySelection | null>(null);
+  const [unit, setUnit] = useState("");
+  const [payment, setPayment] = useState("PIX");
+  const [payments, setPayments] = useState<{ method: string; amount: number }[]>([]);
+  const [priceTable, setPriceTable] = useState("Padrão");
+  const [selectedItemId, setSelectedItemId] = useState("");
+  const [recentItemId, setRecentItemId] = useState("");
+  const [notice, setNotice] = useState("");
+  const [fullScreen, setFullScreen] = useState(false);
+  const [mobileOsLink,setMobileOsLink]=useState("");
+  const [scannerOpen,setScannerOpen]=useState(false);
+  const scannerVideoRef=useRef<HTMLVideoElement>(null);
+  const [scannerNotice,setScannerNotice]=useState("");
+  const [paymentNotice,setPaymentNotice]=useState("");
+  const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
+  const [editingSale, setEditingSale] = useState<ModuleRecord | null>(null);
+  const pdvRef = useRef<HTMLElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const quickSaleCatalog: SaleItem[] = records.filter(item => (item.kind === "Produto" || item.kind === "Serviço") && item.status !== "Inativo").map(item => ({ id:item.id, name:item.name, code:item.id, price:item.value ?? 0, kind:item.kind!, unit:item.unitOfMeasure || (item.kind === "Serviço" ? "serviço" : "un"), image:item.catalogImage }));
+  const filteredCatalog = quickSaleCatalog.filter(item => `${item.name} ${item.code} ${item.kind}`.toLowerCase().includes(search.toLowerCase()));
+  const subtotal = centsToMoney(cart.reduce((sum, item) => sum + moneyToCents(item.price * item.quantity), 0));
+  const mobileSale = typeof window !== "undefined" && (window.location.pathname==="/mobile" || window.location.pathname.startsWith("/mobile/"));
+  const effectiveDiscount = centsToMoney(moneyToCents(mobileSale ? allowedMobileDiscount(discount,subtotal,5,false) : discount));
+  const startMobileScan=async()=>{if(!scannerVideoRef.current)return;if(!barcodeScannerSupported()){setScannerNotice("Leitura automática não suportada neste navegador. Use o campo de busca/código.");searchRef.current?.focus();return}try{const stop=await openRearCamera(scannerVideoRef.current);setScannerNotice("Aponte a câmera para o código.");const timer=window.setInterval(async()=>{const hit=await scanBarcodeFromVideo(scannerVideoRef.current!);if(hit){setSearch(hit.value);setScannerNotice(`Código ${hit.value} identificado.`);window.clearInterval(timer);stop();setScannerOpen(false);searchRef.current?.focus()}},450);window.setTimeout(()=>{window.clearInterval(timer);stop()},20000)}catch{setScannerNotice("Não foi possível acessar a câmera. Verifique a permissão do aparelho.")}};
+  const prepareMobilePayment=()=>{try{const intent=createMobilePaymentIntent(editingSale?.id||`VENDA-${Date.now()}`,total,payment==="PIX"?"PIX":payment==="Dinheiro"?"Dinheiro":"Cartão");setPaymentNotice(paymentStatusLabel(intent.status))}catch(error){setPaymentNotice(error instanceof Error?error.message:"Não foi possível preparar o pagamento.")}};
+  const total = Math.max(0, centsToMoney(moneyToCents(subtotal) - moneyToCents(effectiveDiscount)));
+  const paidTotal = centsToMoney(payments.reduce((sum, entry) => sum + Math.max(0, moneyToCents(entry.amount)), 0));
+  const hasCashPayment = payments.some(entry => entry.method === "Dinheiro" && entry.amount > 0);
+  const nonCashOverpayment = paidTotal > total && !hasCashPayment;
+  const remaining = Math.max(0, centsToMoney(moneyToCents(total) - moneyToCents(paidTotal)));
+  const change = hasCashPayment ? Math.max(0, centsToMoney(moneyToCents(paidTotal) - moneyToCents(total))) : 0;
+  const selectedCustomer = customers.find(item => item.name === customer);
+  const customerUnits = customer ? customerStructures(customer, customers, structures) : [];
+  useEffect(() => {
+    if (customer && !customerUnits.some(item => item.name === unit)) setUnit(customerUnits[0]?.name ?? "");
+  }, [customer, customerUnits, unit]);
+
+  const markRecentItem = (id: string) => {
+    setRecentItemId(id);
+    window.setTimeout(() => setRecentItemId(current => current === id ? "" : current), 1500);
+  };
+  const addItem = (item: SaleItem, quantity = 1) => {
+    setCart(current => {
+    const existing = current.find(record => record.id === item.id);
+    if (existing) return [{ ...existing, quantity: existing.quantity + quantity }, ...current.filter(record => record.id !== item.id)];
+    return [{ ...item, quantity } , ...current];
+    });
+    setSelectedItemId(item.id); markRecentItem(item.id);
+    requestAnimationFrame(() => searchRef.current?.focus());
+  };
+  const launchCommand = () => {
+    const command = search.trim();
+    if (!command) return;
+    const match = command.match(/^(\d+(?:[.,]\d+)?)\s*(?:x|\*)\s*(.+)$/i);
+    const quantity = match ? Number(match[1].replace(",", ".")) : 1;
+    const term = (match?.[2] ?? command).trim().toLocaleLowerCase("pt-BR");
+    const item = quickSaleCatalog.find(record => `${record.code} ${record.name}`.toLocaleLowerCase("pt-BR") === term)
+      ?? quickSaleCatalog.find(record => `${record.code} ${record.name}`.toLocaleLowerCase("pt-BR").includes(term));
+    if (!item) { setNotice("Produto ou serviço não encontrado."); return; }
+    addItem(item, quantity);
+    setSearch("");
+  };
+  const formatQuantity = (value: number) => value.toLocaleString("pt-BR", { maximumFractionDigits: 3 });
+  const changeQuantity = (id: string, amount: number) => setCart(current => current
+    .map(item => item.id === id ? { ...item, quantity: Math.round((item.quantity + amount) * 1000) / 1000 } : item)
+    .filter(item => item.quantity > 0));
+  const typeQuantity = (id: string, raw: string) => {
+    setQuantityDrafts(current => ({ ...current, [id]: raw }));
+    const quantity = Number(raw.trim().replace(",", "."));
+    if (Number.isFinite(quantity) && quantity > 0) setCart(current => current.map(item => item.id === id ? { ...item, quantity: Math.round(quantity * 1000) / 1000 } : item));
+  };
+  const confirmQuantity = (item: CartItem) => {
+    const raw = quantityDrafts[item.id];
+    const quantity = raw === undefined ? item.quantity : Number(raw.trim().replace(",", "."));
+    setQuantityDrafts(current => ({ ...current, [item.id]: Number.isFinite(quantity) && quantity > 0 ? formatQuantity(Math.round(quantity * 1000) / 1000) : formatQuantity(item.quantity) }));
+  };
+  const finishSale = () => {
+    if (!cart.length) {
+      setNotice("Adicione pelo menos um item à venda.");
+      return;
+    }
+    if (remaining > 0) { setNotice(`Falta pagar R$ ${remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.`); setActiveTab("pagamento"); return; }
+    if (nonCashOverpayment) { setNotice("Valor informado superior ao total da venda. Ajuste o pagamento."); setActiveTab("pagamento"); return; }
+    if (selectedCustomer?.financialStatus === "Bloqueado") { setNotice("Cliente bloqueado pelo financeiro. A venda não pode ser concluída."); return; }
+    if (selectedCustomer?.creditLimit && (selectedCustomer.balancePosted ?? 0) + total > selectedCustomer.creditLimit && payment === "Boleto") { setNotice("Limite de crédito excedido para venda a prazo. Solicite liberação do financeiro."); return; }
+    const sale: ModuleRecord = {
+      ...(editingSale ?? {}), id: editingSale?.id ?? `VEN-${Date.now().toString().slice(-6)}`, name:`Venda • ${customer || "Consumidor final"}`, client:customer || "Consumidor final", unit, paymentMethod:payment, value:total, status:editingSale?.status || "Pedido confirmado", category:"Venda PDV", description:`Subtotal R$ ${subtotal.toLocaleString("pt-BR",{minimumFractionDigits:2})} • desconto R$ ${effectiveDiscount.toLocaleString("pt-BR",{minimumFractionDigits:2})}`, serviceOrderId:mobileOsLink || undefined, purchaseItems:cart.map(item=>({id:item.id,productId:item.id,description:item.name,quantity:item.quantity,unitValue:item.price,kind:item.kind})), createdAt:editingSale?.createdAt ?? new Date().toLocaleString("pt-BR"), date:editingSale?.date ?? new Date().toISOString().slice(0,10),
+    };
+    Object.assign(sale,saleLocation || (editingSale && editingSale.client===customer ? {} : {customerId:undefined,structureId:undefined,unitId:undefined,sectorId:undefined,roomId:undefined,sector:undefined,room:undefined}));
+    onSave(sale);
+    setCart([]); setDiscount(0); setPayments([]); setCustomer(""); setSaleLocation(null); setUnit("Matriz"); setActiveTab("itens"); setEditingSale(null);
+    setNotice(editingSale ? `Pedido ${sale.id} atualizado e sincronizado.` : `Venda ${sale.id} finalizada e sincronizada — R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.`);
+  };
+  const editSavedSale = (sale: ModuleRecord) => {
+    setSaleLocation(null); setEditingSale(sale); setCustomer(sale.client === "Consumidor final" ? "" : sale.client); setUnit(sale.unit || ""); setPayment(sale.paymentMethod || "PIX");
+    const match = sale.description?.match(/desconto R\$ ([\d.,]+)/i); setDiscount(match ? Number(match[1].replace(".","").replace(",",".")) || 0 : 0);
+    setCart((sale.purchaseItems ?? []).map(item => ({ id:item.productId || item.id, name:item.description, code:item.productId || item.id, price:item.unitValue, quantity:item.quantity, kind:item.kind === "Serviço" ? "Serviço" : "Produto", unit:records.find(record => record.id === (item.productId || item.id))?.unitOfMeasure || "un" })));
+    setActiveTab("itens"); setNotice(`Editando ${sale.id}. Ajuste os itens e clique em “Atualizar pedido”.`);
+  };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "F1") { event.preventDefault(); setActiveTab("cliente"); }
+      if (event.key === "F2") { event.preventDefault(); setShortcutsOpen(value => !value); }
+      if (event.key === "F3") { event.preventDefault(); setActiveTab("opcoes"); }
+      if (event.key === "F4") { event.preventDefault(); setActiveTab("pagamento"); }
+      if (event.key === "F5") { event.preventDefault(); setSalesView("historico"); }
+      if (event.key === "F6") { event.preventDefault(); setActiveTab("itens"); searchRef.current?.focus(); }
+      if (event.key === "F7") { event.preventDefault(); setActiveTab("pagamento"); }
+      if (event.key === "F8") { event.preventDefault(); if (selectedItemId) setCart(current => current.filter(item => item.id !== selectedItemId)); }
+      if (event.key === "F9") { event.preventDefault(); if (cart.length && window.confirm("Cancelar a venda atual?")) { setCart([]); setSelectedItemId(""); setNotice("Venda atual cancelada. Nenhum histórico foi alterado."); } }
+      if (event.key === "F10") { event.preventDefault(); setActiveTab("opcoes"); }
+      if (event.key === "F11") { event.preventDefault(); setNotice("Vendedor: utilizador atual."); }
+      if (event.key === "F12") { event.preventDefault(); setSalesView("nova"); setShortcutsOpen(false); }
+      if (event.key === "Escape") setShortcutsOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
+  const toggleFullScreen = async () => {
+    if (!document.fullscreenElement) { await pdvRef.current?.requestFullscreen(); setFullScreen(true); }
+    else { await document.exitFullscreen(); setFullScreen(false); }
+  };
+  return <section className={`pdv-page ${fullScreen ? "pdv-fullscreen" : ""}`} ref={pdvRef}>
+    <div className="sales-top"><h2>Vendas</h2><button className="primary-btn" onClick={()=>{setSalesView("nova");searchRef.current?.focus();}}><Plus size={15}/> Nova venda</button></div>
+    <nav className="sales-mode-tabs"><button className={salesView === "nova" ? "active" : ""} onClick={()=>setSalesView("nova")}>Nova venda</button><button className={salesView === "historico" ? "active" : ""} onClick={()=>setSalesView("historico")}>Histórico</button><button className={salesView === "caixa" ? "active" : ""} onClick={()=>setSalesView("caixa")}>Caixa</button></nav>
+    {salesView === "historico" ? <CommercialRecordsManager title="Vendas" records={sales} onEdit={editSavedSale} onDelete={onDelete}/> : salesView === "caixa" ? <div className="panel pdv-cash-panel"><h3>Caixa</h3><p>Acompanhe as vendas confirmadas e os recebimentos do turno.</p><strong>R$ {sales.filter(item=>item.status !== "Cancelada").reduce((sum,item)=>sum+(item.value??0),0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div> : <>
+    <div className="pdv-command">{mobileSale&&<div className="pdv-mobile-actions"><button onClick={()=>setScannerOpen(v=>!v)}><ScanBarcode size={15}/> Ler código</button><label>Vincular OS<input value={mobileOsLink} onChange={e=>setMobileOsLink(e.target.value)} placeholder="OS-0001"/></label>{cart.length>0&&<button onClick={()=>{const txt=receiptText({id:editingSale?.id||"VENDA",customer:customer||"Consumidor final",total,payment,items:cart.map(i=>({name:i.name,quantity:i.quantity}))});window.open(whatsappReceiptUrl(selectedCustomer?.phone||"",txt),"_blank","noopener,noreferrer")}}><MessageCircle size={15}/> Comprovante</button>}</div>}{scannerOpen&&<div className="pdv-mobile-scanner"><Camera size={18}/><b>Leitor por câmera</b><video ref={scannerVideoRef} playsInline muted/><small>{scannerNotice||"Aponte a câmera para EAN, UPC, Code 128 ou QR."}</small><button onClick={startMobileScan}>Iniciar câmera</button><button onClick={()=>{setScannerOpen(false);searchRef.current?.focus()}}>Busca manual</button></div>}
+      <div><span className="section-kicker"><ShoppingBag size={12}/> VENDA RÁPIDA</span><h2>PDV ProAR</h2><p>Produtos e serviços em um fluxo direto, sem campos desnecessários.</p></div>
+      <div className="pdv-shortcuts"><button onClick={toggleFullScreen}><Grid2X2 size={14}/>{fullScreen ? "Sair da tela cheia" : "Maximizar PDV"}</button><button onClick={() => setShortcutsOpen(true)}><Keyboard size={14}/><kbd>F1</kbd> Atalhos</button><span>Caixa aberto</span></div>
+    </div>
+    <div className="pdv-context"><label>Cliente<CustomerSearchSelect customers={customers} value={customer} locationId={saleLocation?.structureId} onLocationChange={selection=>{setSaleLocation(selection);setUnit(selection.unit);}} emptyValue="" emptyLabel="Consumidor final" onChange={value=>{setCustomer(value);const root=customers.find(item=>item.name===value);setSaleLocation(root?hierarchySelection(root,[]):null);setUnit("");}} /></label><label>Tabela de preço<select value={priceTable} onChange={event=>setPriceTable(event.target.value)}><option>Padrão</option><option>Varejo</option><option>Atacado</option><option>Construtora</option><option>Cliente especial</option></select></label><div className="pdv-top-total"><small>TOTAL DA VENDA</small><strong>R$ {total.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div><button className="outline-btn" onClick={()=>setShortcutsOpen(true)}><Keyboard size={14}/> Atalhos</button><button className="outline-btn" onClick={()=>setActiveTab("opcoes")}><MoreHorizontal size={14}/> Mais opções</button></div>
+    {notice && <div className="pdv-notice"><CheckCircle2 size={15}/>{notice}<button onClick={() => setNotice("")}><X size={13}/></button></div>}
+    <nav className="pdv-tabs" aria-label="Etapas da venda">
+      <button className={activeTab === "itens" ? "active" : ""} onClick={() => setActiveTab("itens")}><ScanBarcode size={15}/><span>Itens</span><kbd>F2</kbd></button>
+      <button className={activeTab === "cliente" ? "active" : ""} onClick={() => setActiveTab("cliente")}><UserRound size={15}/><span>Cliente</span><kbd>F3</kbd></button>
+      <button className={activeTab === "pagamento" ? "active" : ""} onClick={() => setActiveTab("pagamento")}><CreditCard size={15}/><span>Pagamento</span><kbd>F4</kbd></button>
+      <button className={activeTab === "opcoes" ? "active" : ""} onClick={() => setActiveTab("opcoes")}><MoreHorizontal size={15}/><span>Mais opções</span><kbd>F8</kbd></button>
+    </nav>
+    <div className="pdv-operational-grid pdv-operational-grid-modern"><div className="pdv-layout">
+      <div className="pdv-workspace panel">
+        {activeTab === "itens" && <>
+          <label className="pdv-search"><Search size={19}/><input ref={searchRef} autoFocus value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event=>{if(event.key==="Enter"){event.preventDefault();launchCommand();}}} placeholder="Código, produto ou 10xCÓDIGO"/><kbd>F6</kbd></label>
+          <div className="pdv-catalog">{filteredCatalog.map(item => <button key={item.id} onClick={() => addItem(item)}>
+            <span className={`pdv-catalog-thumb ${item.kind === "Serviço" ? "service" : "product"}`}>{item.image?<img src={item.image} alt={item.name}/>:item.kind === "Serviço" ? <Wrench size={17}/> : <Package size={17}/>}</span>
+            <div><small>{item.code} • {item.kind}</small><strong>{item.name}</strong></div>
+            <b>R$ {item.price.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} / {item.unit}</b><Plus size={16}/>
+          </button>)}</div>
+          {!filteredCatalog.length && <div className="linked-empty"><Package size={23}/><h4>Nenhum produto ou serviço cadastrado</h4><p>Cadastre os itens reais nos módulos Produtos e Serviços.</p></div>}
+        </>}
+        {activeTab === "cliente" && <div className="pdv-hidden-panel"><div className="pdv-panel-title"><UserRound size={20}/><div><h3>Cliente da venda</h3><p>Opcional para vendas rápidas.</p></div></div><label>Selecionar cliente<CustomerSearchSelect customers={customers} value={customer} locationId={saleLocation?.structureId} onLocationChange={selection=>{setSaleLocation(selection);setUnit(selection.unit);}} emptyValue="" emptyLabel="Consumidor final" onChange={value=>{setCustomer(value);const root=customers.find(item=>item.name===value);setSaleLocation(root?hierarchySelection(root,[]):null);setUnit("");}} /></label>{customer && <>{customerUnits.length ? <label>Unidade / filial / setor<select value={unit} onChange={event=>setUnit(event.target.value)}>{customerUnits.map(item=><option key={item.name} value={item.name}>{item.name} • {item.category || "Unidade"}</option>)}</select></label> : <p className="field-hint">Nenhuma unidade/filial/setor cadastrado para este cliente.</p>}<div className={`credit-check ${selectedCustomer?.financialStatus === "Bloqueado" ? "blocked" : ""}`}><CircleDollarSign size={17}/><div><b>Crédito</b><small>Disponível R$ {Math.max(0,(selectedCustomer?.creditLimit ?? 0)-(selectedCustomer?.balancePosted ?? 0)).toLocaleString("pt-BR",{minimumFractionDigits:2})}</small></div><strong>{selectedCustomer?.financialStatus ?? "Liberado"}</strong></div></>}<button className="outline-btn"><Plus size={14}/> Cadastro rápido</button></div>}
+        {activeTab === "pagamento" && <div className="pdv-hidden-panel"><div className="pdv-panel-title"><CreditCard size={20}/><div><h3>Pagamentos</h3><p>Informe uma ou mais formas de pagamento.</p></div></div><div className="payment-grid">{["PIX", "Dinheiro", "Cartão de débito", "Cartão de crédito", "Boleto", "Outros"].map(option => <button className={payment === option ? "active" : ""} key={option} onClick={() => { setPayment(option); setPayments(current => current.some(item => item.method === option) ? current : [...current, {method:option, amount:0}]); }}>{option}</button>)}</div><div className="pdv-payment-lines">{payments.map((entry,index)=><label key={`${entry.method}-${index}`}>{entry.method}<CurrencyInput aria-label={"Valor pago em " + entry.method} value={entry.amount} onValueChange={amount=>setPayments(current=>current.map((item,i)=>i===index?{...item,amount}:item))}/><button type="button" onClick={()=>setPayments(current=>current.filter((_,i)=>i!==index))}><X size={13}/></button></label>)}</div><div className="pdv-payment-check"><span>Total da venda <b>R$ {total.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></span><span>Total informado <b>R$ {paidTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></span><span>Falta pagar <b>R$ {remaining.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></span><span>Troco <b>R$ {change.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></span>{nonCashOverpayment && <em>Valor informado superior ao total da venda. Ajuste o pagamento.</em>}</div></div>}
+        {activeTab === "opcoes" && <div className="pdv-hidden-panel"><div className="pdv-panel-title"><Tag size={20}/><div><h3>Opções da venda</h3><p>Recursos menos utilizados ficam ocultos aqui.</p></div></div><label>Desconto em reais<CurrencyInput aria-label="Desconto em reais" value={discount} onValueChange={setDiscount} maxLength={18}/>{mobileSale&&discount>effectiveDiscount&&<small>Limite operacional mobile aplicado: 5% sem autorização gerencial.</small>}</label><label>Observações<textarea placeholder="Informações adicionais para o comprovante..."/></label></div>}
+      </div>
+      <aside className="pdv-cart panel">
+        <div className="pdv-cart-head"><div><ReceiptText size={17}/><span><strong>Venda atual</strong><small>{formatQuantity(cart.reduce((sum, item) => sum + item.quantity, 0))} item(ns)</small></span></div>{cart.length > 0 && <button onClick={() => setCart([])}><Trash2 size={13}/> Limpar</button>}</div>
+        <div className="pdv-cart-items">{cart.length ? cart.map(item => <article className={`${selectedItemId===item.id?"selected":""} ${recentItemId===item.id?"recent":""}`} key={item.id} onClick={()=>setSelectedItemId(item.id)}><div><small>{item.code}</small><strong>{item.name}</strong><span>R$ {item.price.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} / {item.unit}</span></div><div className="quantity"><button onClick={event => { event.stopPropagation(); changeQuantity(item.id, -1); }} aria-label="Diminuir quantidade"><Minus size={12}/></button><label><input className="quantity-input" inputMode="decimal" value={quantityDrafts[item.id] ?? formatQuantity(item.quantity)} onClick={event=>event.stopPropagation()} onChange={event => typeQuantity(item.id, event.target.value)} onBlur={() => confirmQuantity(item)} aria-label={`Quantidade de ${item.name}`}/><small>{item.unit}</small></label><button onClick={event => { event.stopPropagation(); changeQuantity(item.id, 1); }} aria-label="Aumentar quantidade"><Plus size={12}/></button></div><b>R$ {(item.price * item.quantity).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></article>) : <div className="pdv-empty"><ShoppingCart size={29}/><strong>Carrinho vazio</strong><p>Leia um código ou pesquise um produto para iniciar.</p></div>}</div>
+        <div className="pdv-summary"><p><span>Subtotal</span><b>R$ {subtotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></p>{discount > 0 && <p className="discount"><span>Desconto</span><b>− R$ {discount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></p>}<div><span>TOTAL</span><strong>R$ {total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></div><small>{customer || "Consumidor final"} • {payment}</small><button className="finish-sale" disabled={!cart.length} onClick={finishSale}><CheckCircle2 size={17}/>{editingSale ? "Atualizar pedido" : "Finalizar venda"}<kbd>F10</kbd></button></div>
+      </aside>
+    </div></div>
+    {shortcutsOpen && <div className="shortcut-layer" role="dialog" aria-modal="true" aria-label="Atalhos do PDV"><button className="modal-backdrop" onClick={() => setShortcutsOpen(false)} aria-label="Fechar atalhos"/><div className="shortcut-card"><div><span><Keyboard size={19}/></span><div><small>PDV PROAR</small><h3>Atalhos de teclado</h3></div><button onClick={() => setShortcutsOpen(false)} aria-label="Fechar"><X size={16}/></button></div>{[["F1","Abrir esta ajuda"],["F2","Pesquisar produto ou serviço"],["F3","Selecionar cliente"],["F4","Forma de pagamento"],["F8","Desconto e outras opções"],["F10","Finalizar a venda"],["ESC","Fechar janela"]].map(([key,label]) => <p key={key}><kbd>{key}</kbd><span>{label}</span></p>)}</div></div>}
+    </>}
+  </section>;
+}
+
+const moduleStatuses: Record<string, string[]> = {
+  "Compras": ["Rascunho", "Aguardando aprovação", "Aprovada", "Enviada ao fornecedor", "Aguardando entrega", "Recebida parcialmente", "Recebida", "Cancelada", "Devolvida"],
+  "Fornecedores": ["Ativo", "Inativo", "Bloqueado"],
+  "Financeiro": ["Em aberto", "Aguardando aprovação", "Vencida", "Paga parcialmente", "Paga", "Recebida", "Cancelada"],
+  "Funcionários": ["Ativo", "Em férias", "Afastado", "Inativo"],
+  "Obras": ["Planejamento", "Em andamento", "Pausada", "Aguardando material", "Concluída", "Cancelada"],
+};
+
+const managementTabs: Record<string, string[]> = {
+  "Compras": ["Visão geral", "Pedidos", "Aprovação", "Recebimento", "Histórico"],
+  "Fornecedores": ["Visão geral", "Cadastro", "Produtos fornecidos", "Compras", "Avaliação"],
+  "Financeiro": ["Visão geral", "Contas a pagar", "Contas a receber", "Fluxo de caixa", "Conciliação"],
+  "Funcionários": ["Visão geral", "Equipe", "Funções e permissões", "Comissões", "Histórico"],
+  "Obras": ["Visão geral", "Planejamento", "Execução", "Perdas", "Financeiro", "Histórico"],
+};
+
+const managementFlows: Record<string, { title: string; text: string }[]> = {
+  "Compras": [
+    { title: "Solicitação", text: "Materiais e quantidades" },
+    { title: "Aprovação", text: "Validação da gerência" },
+    { title: "Pedido", text: "Envio ao fornecedor" },
+    { title: "Recebimento", text: "Conferência e nota fiscal" },
+    { title: "Integração", text: "Estoque e conta a pagar" },
+  ],
+  "Fornecedores": [
+    { title: "Cadastro", text: "Dados fiscais e contato" },
+    { title: "Catálogo", text: "Produtos e condições" },
+    { title: "Cotação", text: "Preço e prazo" },
+    { title: "Compras", text: "Pedidos vinculados" },
+    { title: "Avaliação", text: "Qualidade e entrega" },
+  ],
+  "Financeiro": [
+    { title: "Previsão", text: "Títulos e vencimentos" },
+    { title: "Aprovação", text: "Conferência financeira" },
+    { title: "Liquidação", text: "Pagamento ou recebimento" },
+    { title: "Caixa", text: "Movimentação por conta" },
+    { title: "Conciliação", text: "Comprovantes e diferenças" },
+  ],
+  "Funcionários": [
+    { title: "Cadastro", text: "Dados e função" },
+    { title: "Acesso", text: "Utilizador e senha" },
+    { title: "Permissões", text: "Módulos autorizados" },
+    { title: "Operação", text: "OS, vendas e tarefas" },
+    { title: "Histórico", text: "Atividades e comissões" },
+  ],
+  "Obras": [
+    { title: "Cadastro", text: "Cliente, endereço e responsáveis" },
+    { title: "Planejamento", text: "Prazo, orçamento e equipe" },
+    { title: "Execução", text: "Serviços, fotos e progresso" },
+    { title: "Controle", text: "Materiais, perdas e ocorrências" },
+    { title: "Conclusão", text: "Financeiro, relatório e entrega" },
+  ],
+};
+
+function downloadCsv(filename: string, rows: string[][]) {
+  const csv = rows.map(row => row.map(cell => `"${String(cell ?? "").replaceAll('"', '""')}"`).join(";")).join("\n");
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" }));
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function ContextReports({ title, options, rows = [] }: { title: string; options: string[]; rows?: string[][] }) {
+  const [open, setOpen] = useState(false);
+  const [notice, setNotice] = useState("");
+  const generate = (option: string, excel = false) => {
+    if (!rows.length) {
+      setNotice("Não há dados para gerar este relatório com os filtros atuais.");
+      return;
+    }
+    const filename = `${title}-${option}`.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9]+/g,"-").toLowerCase();
+    if (excel) downloadCsv(`${filename}.xls`, [["Relatório", option], ["Contexto", title], ["Gerado em", new Date().toLocaleString("pt-BR")], [], ...rows]); else window.print();
+    setOpen(false);
+  };
+  return <div className="context-reports"><button className="outline-btn" onClick={()=>setOpen(value=>!value)}><FileChartColumn size={14}/> Relatórios <ChevronDown size={13}/></button>{notice && <small className="context-report-notice">{notice}</small>}{open && <div className="context-report-menu"><b>RELATÓRIOS DESTE REGISTRO</b>{options.map(option=><button key={option} onClick={()=>generate(option)}>{option}<FileText size={13}/></button>)}<footer><button onClick={()=>generate(options[0] || "Relatório",true)}><ArrowDownRight size={13}/> Exportar Excel</button><button onClick={()=>generate(options[0] || "Relatório")}><FileText size={13}/> Gerar PDF</button></footer></div>}</div>;
+}
+
+function Reports({ modules, customers, serviceOrders, company }: { modules: Record<string, ModuleRecord[]>; customers: Customer[]; serviceOrders: ServiceOrder[]; company: TenantCompany }) {
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [status, setStatus] = useState("Todas");
+  const [client, setClient] = useState("Todos");
+  const [reportLocation,setReportLocation]=useState<HierarchySelection | null>(null);
+  const reportCustomer=customers.find(item=>item.id===reportLocation?.customerId) || customers.find(item=>item.name===client);
+  const reportNodes=reportCustomer?customerHierarchy(reportCustomer,modules["Unidades e setores"]||[],customers):[];
+  const inLocation=(record:ModuleRecord|ServiceOrder)=>!reportLocation?.structureId || matchesHierarchyLocation(record as unknown as Record<string,unknown>,reportNodes,reportLocation.structureId);
+  const [technician, setTechnician] = useState("Todos");
+  const [paymentMethod, setPaymentMethod] = useState("Todas");
+  const [selectedReport, setSelectedReport] = useState("Visão consolidada");
+  const inPeriod = (record: ModuleRecord) => {
+    if (!record.date) return !startDate && !endDate;
+    return (!startDate || record.date >= startDate) && (!endDate || record.date <= endDate);
+  };
+  const matchesStatus = (record: ModuleRecord) => status === "Todas" || (record.status || "").toLowerCase().includes(status.toLowerCase());
+  const filteredModules = Object.fromEntries(Object.entries(modules).map(([key, records]) => [key, records.filter(record => inPeriod(record) && inLocation(record) && matchesStatus(record) && (client === "Todos" || record.client === client) && (paymentMethod === "Todas" || record.paymentMethod === paymentMethod))]));
+  const filteredOrders = serviceOrders.filter(order => inLocation(order) && (client === "Todos" || order.client === client) && (technician === "Todos" || order.tech === technician) && (status === "Todas" || order.status.toLowerCase().includes(status.toLowerCase())) && (!startDate || order.date >= startDate) && (!endDate || order.date <= endDate));
+  const financial = filteredModules.Financeiro ?? [];
+  const billed = financial.filter(record => /Recebida|Paga|aberto|Vencida/i.test(record.status || "")).reduce((sum, record) => sum + (record.value ?? 0), 0);
+  const pending = financial.filter(record => /aberto|Vencida|Pendente|parcial/i.test(record.status || "")).reduce((sum, record) => sum + Math.max(0, (record.value ?? 0) - (record.settledValue ?? 0)), 0);
+  const reportGroups = [
+    { title: "Compras", icon: ShoppingCart, count: filteredModules["Compras"]?.length ?? 0, items: ["Compras por período", "Compras por fornecedor", "Pedidos pendentes", "Comparação de preços"] },
+    { title: "Fornecedores", icon: Store, count: filteredModules["Fornecedores"]?.length ?? 0, items: ["Fornecedores ativos", "Histórico de preços", "Avaliação dos fornecedores", "Total comprado"] },
+    { title: "Financeiro", icon: WalletCards, count: filteredModules["Financeiro"]?.length ?? 0, items: ["Contas a pagar", "Contas a receber", "Fluxo de caixa", "Resultado por centro de custo"] },
+    { title: "Funcionários", icon: BriefcaseBusiness, count: filteredModules["Funcionários"]?.length ?? 0, items: ["Equipe ativa", "Funções e permissões", "Comissões", "Histórico de atividades"] },
+    { title: "Obras", icon: Building2, count: filteredModules["Obras"]?.length ?? 0, items: ["Obras em andamento", "Progresso por obra", "Perdas e ocorrências", "Resultado financeiro"] },
+    { title: "Serviços", icon: Wrench, count: filteredOrders.length, items: ["Ordens abertas", "Ordens concluídas", "Serviços por cliente", "Produtividade técnica"] },
+    { title: "Clientes", icon: UsersRound, count: customers.length, items: ["Clientes ativos", "Histórico de atendimento", "Faturamento por cliente", "Inadimplência"] },
+    { title: "Estoque", icon: Warehouse, count: modules["Produtos"]?.length ?? 0, items: ["Estoque atual", "Produtos sem estoque", "Entradas e saídas", "Valor do estoque"] },
+  ];
+  const exportSummary = () => downloadCsv("relatorio-geral-proar.csv", [["Relatório", selectedReport], ["Período", startDate || "Início", endDate || "Hoje"], ["Situação", status], [], ["Módulo", "Quantidade", "Gerado em"], ...reportGroups.map(group => [group.title, String(group.count), new Date().toLocaleString("pt-BR")])]);
+  return <section className="module-page reports-page">
+    <div className="report-print-company-header"><div>{company.logo ? <img src={company.logo} alt={company.tradeName}/> : null}</div><div><h1>{company.tradeName || company.legalName}</h1><p>{company.legalName}</p><small>{company.cnpj ? `CNPJ/CPF: ${company.cnpj}` : "CNPJ/CPF não informado"}</small><small>{[company.phone, company.email].filter(Boolean).join(" • ")}</small><small>{[company.address, company.city && company.state ? `${company.city}/${company.state}` : company.city || company.state].filter(Boolean).join(" • ")}</small></div></div>
+    <div className="management-hero"><div><span className="section-kicker"><FileChartColumn size={12}/> INTELIGÊNCIA GERENCIAL</span><h2>Central de relatórios</h2><p>Indicadores comerciais, operacionais, financeiros e administrativos com dados reais do ProAR.</p></div><div className="management-actions"><button className="outline-btn" onClick={() => window.print()}><FileText size={14}/> Imprimir</button><button className="primary-btn" onClick={exportSummary}><ArrowDownRight size={14}/> Exportar resumo</button></div></div>
+    <div className="report-kpis"><article><small>TOTAL FATURADO</small><strong>R$ {billed.toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong></article><article><small>TOTAL PENDENTE</small><strong>R$ {pending.toLocaleString("pt-BR", {minimumFractionDigits:2})}</strong></article><article><small>OS CONCLUÍDAS</small><strong>{filteredOrders.filter(order => order.status === "Concluída").length}</strong></article><article><small>REGISTROS FILTRADOS</small><strong>{Object.values(filteredModules).reduce((sum, records) => sum + records.length, 0)}</strong></article></div>
+    <div className="report-filter-bar"><label>Data inicial<input type="date" value={startDate} onChange={event => setStartDate(event.target.value)}/></label><label>Data final<input type="date" value={endDate} onChange={event => setEndDate(event.target.value)}/></label><label>Situação<select value={status} onChange={event => setStatus(event.target.value)}><option>Todas</option><option>Ativo</option><option>Pendente</option><option>Concluído</option><option>Vencida</option><option>Paga</option></select></label><label>Cliente<CustomerSearchSelect customers={customers} value={client} locationId={reportLocation?.structureId} onLocationChange={setReportLocation} emptyValue="Todos" emptyLabel="Todos os clientes" onChange={value => {setClient(value);setReportLocation(null);}} /></label><label>Técnico<select value={technician} onChange={event => setTechnician(event.target.value)}><option>Todos</option>{[...new Set(serviceOrders.map(order => order.tech).filter(Boolean))].map(name => <option key={name}>{name}</option>)}</select></label><label>Pagamento<select value={paymentMethod} onChange={event => setPaymentMethod(event.target.value)}><option>Todas</option><option>Pix</option><option>Boleto</option><option>Cartão de crédito</option><option>Cartão de débito</option><option>Dinheiro</option></select></label><div className="report-active-filter"><Filter size={14}/><span>{selectedReport}</span><button onClick={() => { setStartDate(""); setEndDate(""); setStatus("Todas"); setClient("Todos");setReportLocation(null); setTechnician("Todos"); setPaymentMethod("Todas"); }}>Limpar</button></div></div>
+    <div className="report-grid">{reportGroups.map(({ title, icon: Icon, count, items }) => <article className="report-card" key={title}><div className="report-card-head"><span><Icon size={20}/></span><div><small>MÓDULO</small><h3>{title}</h3></div><b>{count}</b></div><div className="report-links">{items.map(item => <button className={selectedReport === item ? "active" : ""} onClick={() => setSelectedReport(item)} key={item}>{item}<ChevronRight size={13}/></button>)}</div><footer><button onClick={() => window.print()}><FileText size={13}/> PDF</button><button onClick={() => downloadCsv(`relatorio-${title.toLowerCase()}.xls`, [["Relatório", selectedReport], ["Período", startDate || "Início", endDate || "Hoje"], ["Situação", status], ["Cliente", client], ["Técnico", technician], ["Pagamento", paymentMethod], ["Total", String(count)]])}><ArrowDownRight size={13}/> Excel</button><button onClick={() => downloadCsv(`relatorio-${title.toLowerCase()}.csv`, [["Relatório", selectedReport], ["Total", String(count)]])}><ArrowDownRight size={13}/> CSV</button></footer></article>)}</div>
+  </section>;
+}
+
+function FinancialModule({ records, modules, onOpen, onOperation, onIssueInvoice }: { records: ModuleRecord[]; modules: Record<string, ModuleRecord[]>; onOpen: (name: string) => void; onOperation: (command: OperationalCommand) => Promise<void>; onIssueInvoice: (record: ModuleRecord, invoiceNumber: string) => Promise<boolean> }) {
+  return <OperationalFinance records={records} modules={modules} onOpen={onOpen} onOperation={onOperation} onIssueInvoice={(record, number) => onIssueInvoice(record as ModuleRecord, number)}/>;
+}
+
+function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectCompany, isAdministrator }: { companies: TenantCompany[]; activeCompany: TenantCompany; onCompaniesChange: (companies: TenantCompany[]) => void; onSelectCompany: (company: TenantCompany) => void; isAdministrator: boolean }) {
+  const [tab, setTab] = useState<"Empresa" | "WhatsApp" | "Google Agenda" | "Fiscal" | "Diagnóstico" | "Inteligência Artificial" | "Segurança">("Empresa");
+  const [companyName, setCompanyName] = useState(activeCompany.legalName);
+  const [tradeName, setTradeName] = useState(activeCompany.tradeName);
+  const [companyDoc, setCompanyDoc] = useState(activeCompany.cnpj);
+  const [city, setCity] = useState(activeCompany.city);
+  const [state, setState] = useState(activeCompany.state || "SP");
+  const [email, setEmail] = useState(activeCompany.email);
+  const [address, setAddress] = useState(activeCompany.address);
+  const [logo, setLogo] = useState(activeCompany.logo || "");
+  const [phoneNumberId, setPhoneNumberId] = useState("473138105880735");
+  const [wabaId, setWabaId] = useState("449236708270435");
+  const [businessPhone, setBusinessPhone] = useState("+55 17 2122-2806");
+  const [token, setToken] = useState("");
+  const [whatsAppBusy,setWhatsAppBusy]=useState(false);
+  const [whatsAppStatus,setWhatsAppStatus]=useState<{configured:boolean;connected:boolean;tokenPreview?:string;verifiedName?:string;displayPhone?:string}>({configured:false,connected:false});
+  const [healthBusy, setHealthBusy] = useState(false);
+  const [healthError, setHealthError] = useState("");
+  const [healthFiscal, setHealthFiscal] = useState<{taxRegime?:string;serviceCode?:string;serviceSeries?:string;nfceSeries?:string;cscId?:string;cscConfigured?:boolean;certificateStatus?:string;storageProvider?:string}|null>(null);
+  const [healthWhatsApp, setHealthWhatsApp] = useState<{configured?:boolean;state?:string;automationEnabled?:boolean;automationAvailable?:boolean}|null>(null);
+  const [saved, setSaved] = useState("");
+  useEffect(() => {
+    if (!saved) return;
+    notifyFeedback({ message: saved, tone: inferFeedbackTone(saved), title: "Configurações" });
+  }, [saved]);
+  const [aiKey, setAiKey] = useState("");
+  const [aiStatus, setAiStatus] = useState<{configured:boolean;last4:string|null;source:string}>({configured:false,last4:null,source:"none"});
+  const [aiBusy, setAiBusy] = useState(false);
+  const [googleCalendarBusy, setGoogleCalendarBusy] = useState(false);
+  const [googleCalendarStatus, setGoogleCalendarStatus] = useState<{connected:boolean;configured?:boolean;email?:string|null;calendarId?:string;connectedAt?:string|null;error?:string}>({connected:false});
+  const [fiscalBusy, setFiscalBusy] = useState(false);
+  const [fiscalEnvironment, setFiscalEnvironment] = useState("Homologação");
+  const [fiscalTaxRegime, setFiscalTaxRegime] = useState("Simples Nacional");
+  const [fiscalIe, setFiscalIe] = useState("");
+  const [fiscalIm, setFiscalIm] = useState("");
+  const [fiscalServiceCode, setFiscalServiceCode] = useState("");
+  const [fiscalIssRate, setFiscalIssRate] = useState("");
+  const [fiscalRpsSeries, setFiscalRpsSeries] = useState("");
+  const [fiscalNfceSeries, setFiscalNfceSeries] = useState("1");
+  const [fiscalCscId, setFiscalCscId] = useState("");
+  const [fiscalCsc, setFiscalCsc] = useState("");
+  const [fiscalCscConfigured, setFiscalCscConfigured] = useState(false);
+  const [fiscalCertificate, setFiscalCertificate] = useState<File | null>(null);
+  const [fiscalCertificatePassword, setFiscalCertificatePassword] = useState("");
+  const [fiscalCertificateInfo, setFiscalCertificateInfo] = useState<{fileName?:string;validTo?:string;status?:string;daysToExpiry?:number;expiryLevel?:string}|null>(null);
+  const [fiscalStorageProvider,setFiscalStorageProvider]=useState("");
+  useEffect(() => {
+    const stored = JSON.parse(localStorage.getItem(companyStorageKey(activeCompany.id, "settings")) || "{}");
+    setCompanyName(activeCompany.legalName);
+    setTradeName(activeCompany.tradeName);
+    setCompanyDoc(activeCompany.cnpj);
+    setCity(activeCompany.city);
+    setState(activeCompany.state || "SP");
+    setEmail(activeCompany.email);
+    setAddress(activeCompany.address);
+    setLogo(activeCompany.logo || "");
+    setPhoneNumberId(stored.phoneNumberId || "473138105880735");
+    setWabaId(stored.wabaId || "449236708270435");
+    setBusinessPhone(stored.businessPhone || "+55 17 2122-2806");
+  }, [activeCompany]);
+  useEffect(() => {
+    if (tab !== "Fiscal") return;
+    setFiscalBusy(true);
+    fetch("/api/fiscal-config", {cache:"no-store"}).then(async response => {
+      const data=await response.json(); if(!response.ok) throw new Error(data.error || "Não foi possível carregar a configuração fiscal.");
+      setFiscalEnvironment(String(data.company?.environment || "Homologação"));
+      setFiscalTaxRegime(String(data.company?.taxRegime || "Simples Nacional"));
+      setFiscalIe(String(data.company?.stateRegistration || ""));
+      setFiscalIm(String(data.company?.municipalRegistration || ""));
+      setFiscalServiceCode(String(data.nfse?.serviceCode || ""));
+      setFiscalIssRate(String(data.nfse?.issRate || ""));
+      setFiscalRpsSeries(String(data.nfse?.rpsSeries || ""));
+      setFiscalNfceSeries(String(data.nfce?.series || "1"));
+      setFiscalCscId(String(data.nfce?.cscId || ""));
+      setFiscalCscConfigured(Boolean(data.nfce?.cscConfigured));
+      setFiscalCsc("");
+      setFiscalCertificateInfo(data.certificate || null);
+      setFiscalStorageProvider(String(data.storage?.provider || ""));
+    }).catch(error=>setSaved(error instanceof Error?error.message:"Não foi possível consultar a configuração fiscal.")).finally(()=>setFiscalBusy(false));
+  }, [activeCompany.id, tab]);
+  useEffect(() => {
+    if(tab!=="WhatsApp")return;
+    setWhatsAppBusy(true);
+    fetch("/api/whatsapp",{cache:"no-store"}).then(async response=>{
+      const data=await response.json(); if(!response.ok)throw new Error(data.error||"Não foi possível carregar a configuração do WhatsApp.");
+      setPhoneNumberId(String(data.phoneNumberId||""));
+      setWabaId(String(data.wabaId||""));
+      setWhatsAppStatus({configured:Boolean(data.tokenConfigured),connected:false,tokenPreview:data.tokenPreview||""});
+      setToken("");
+    }).catch(error=>setSaved(error instanceof Error?error.message:"Não foi possível carregar a configuração do WhatsApp.")).finally(()=>setWhatsAppBusy(false));
+  },[activeCompany.id,tab]);
+  useEffect(() => {
+    if(tab!=="Diagnóstico")return;
+    let active=true;
+    setHealthBusy(true);setHealthError("");setHealthFiscal(null);setHealthWhatsApp(null);
+    Promise.all([
+      fetch("/api/fiscal-config",{cache:"no-store"}),
+      fetch("/api/whatsapp/web",{cache:"no-store",headers:{"X-Proar-Company-ID":activeCompany.id}}),
+    ]).then(async([fiscalResponse,whatsAppResponse])=>{
+      const [fiscal,whatsApp]=await Promise.all([fiscalResponse.json(),whatsAppResponse.json()]);
+      if(!fiscalResponse.ok)throw new Error(fiscal.error||"Não foi possível consultar a configuração fiscal.");
+      if(!whatsAppResponse.ok)throw new Error(whatsApp.error||"Não foi possível consultar a conexão NexoCloud.");
+      if(!active)return;
+      setHealthFiscal({
+        taxRegime:String(fiscal.company?.taxRegime||""),serviceCode:String(fiscal.nfse?.serviceCode||""),
+        serviceSeries:String(fiscal.nfse?.rpsSeries||""),nfceSeries:String(fiscal.nfce?.series||""),cscId:String(fiscal.nfce?.cscId||""),
+        cscConfigured:Boolean(fiscal.nfce?.cscConfigured),certificateStatus:String(fiscal.certificate?.status||""),
+        storageProvider:String(fiscal.storage?.provider||""),
+      });
+      setHealthWhatsApp({configured:Boolean(whatsApp.configured),state:String(whatsApp.state||""),automationEnabled:Boolean(whatsApp.automationEnabled),automationAvailable:Boolean(whatsApp.automationAvailable)});
+    }).catch(error=>{if(active)setHealthError(error instanceof Error?error.message:"Não foi possível consultar a saúde da configuração.");})
+      .finally(()=>{if(active)setHealthBusy(false);});
+    return()=>{active=false;};
+  },[activeCompany.id,tab]);
+  const saveWhatsAppConfiguration=async()=>{
+    setWhatsAppBusy(true);
+    setSaved("Salvando configuração do WhatsApp...");
+    try{
+      const response=await fetch("/api/whatsapp",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+        active:true,phoneNumberId:phoneNumberId.trim(),wabaId:wabaId.trim(),...(token.trim()?{accessToken:token.trim()}:{})
+      })});
+      const data=await response.json(); if(!response.ok)throw new Error(data.error||"Não foi possível salvar a configuração do WhatsApp.");
+      setWhatsAppStatus({configured:Boolean(data.tokenConfigured),connected:false,tokenPreview:data.tokenPreview||""});
+      setToken("");
+      setSaved("✓ Configuração do WhatsApp salva no cofre da empresa.");
+    }catch(error){setSaved(error instanceof Error?error.message:"Não foi possível salvar a configuração do WhatsApp.");}
+    finally{setWhatsAppBusy(false);}
+  };
+  const testWhatsAppConfiguration=async()=>{
+    setWhatsAppBusy(true); setSaved("Testando conexão com a Meta...");
+    try{
+      const response=await fetch("/api/whatsapp",{method:"POST"}); const data=await response.json();
+      if(!response.ok)throw new Error(data.error||"Falha ao testar o WhatsApp.");
+      setWhatsAppStatus(current=>({...current,connected:true,verifiedName:data.verified_name||"",displayPhone:data.display_phone_number||""}));
+      setSaved(`✓ WhatsApp conectado${data.verified_name?` • ${data.verified_name}`:""}.`);
+    }catch(error){setWhatsAppStatus(current=>({...current,connected:false}));setSaved(error instanceof Error?error.message:"Falha no teste do WhatsApp.");}
+    finally{setWhatsAppBusy(false);}
+  };
+  useEffect(() => {
+    if (tab !== "Google Agenda") return;
+    setGoogleCalendarBusy(true);
+    fetch("/api/integrations/google-calendar/status",{cache:"no-store"}).then(async response=>{
+      const data=await response.json(); if(!response.ok) throw new Error(data.error||"Não foi possível consultar o Google Agenda.");
+      setGoogleCalendarStatus(data);
+      const query=new URLSearchParams(window.location.search).get("googleCalendar");
+      if(query==="connected") setSaved("✓ Google Agenda conectado com sucesso.");
+      else if(query==="denied") setSaved("A conexão com o Google Agenda foi cancelada.");
+      else if(query==="error"||query==="invalid") setSaved("Não foi possível concluir a conexão com o Google Agenda.");
+    }).catch(error=>setSaved(error instanceof Error?error.message:"Não foi possível consultar o Google Agenda.")).finally(()=>setGoogleCalendarBusy(false));
+  },[activeCompany.id,tab]);
+  const connectGoogleCalendar = async () => {
+    setGoogleCalendarBusy(true);
+    try{const response=await fetch("/api/integrations/google-calendar/connect",{cache:"no-store"});const data=await response.json();if(!response.ok)throw new Error(data.error||"Não foi possível iniciar a conexão.");window.location.assign(String(data.authorizationUrl));}
+    catch(error){setSaved(error instanceof Error?error.message:"Não foi possível conectar o Google Agenda.");setGoogleCalendarBusy(false);}
+  };
+  const disconnectGoogleCalendar = async () => {
+    if(!window.confirm("Desconectar o Google Agenda deste usuário? Os eventos existentes no Google não serão excluídos."))return;
+    setGoogleCalendarBusy(true);
+    try{const response=await fetch("/api/integrations/google-calendar/status",{method:"DELETE"});const data=await response.json();if(!response.ok)throw new Error(data.error);setGoogleCalendarStatus(data);setSaved("Google Agenda desconectado deste usuário.");}
+    catch(error){setSaved(error instanceof Error?error.message:"Não foi possível desconectar o Google Agenda.");}
+    finally{setGoogleCalendarBusy(false);}
+  };
+
+  useEffect(() => {
+    if (!isAdministrator || tab !== "Inteligência Artificial") return;
+    setAiBusy(true);
+    fetch(`/api/ai-credential?company=${encodeURIComponent(activeCompany.id)}`, {cache:"no-store"}).then(async response => {
+      const data=await response.json(); if(!response.ok) throw new Error(data.error); setAiStatus(data);
+    }).catch(error=>setSaved(error instanceof Error?error.message:"Não foi possível consultar a integração.")).finally(()=>setAiBusy(false));
+  }, [activeCompany.id, isAdministrator, tab]);
+  const saveAiCredential = async () => {
+    if (!aiKey.trim()) { setSaved("Informe a nova chave da OpenAI."); return; }
+    setAiBusy(true); setSaved("Salvando credencial protegida...");
+    try { const response=await fetch(`/api/ai-credential?company=${encodeURIComponent(activeCompany.id)}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({apiKey:aiKey})}); const data=await response.json(); if(!response.ok)throw new Error(data.error); setAiStatus({configured:true,last4:data.last4,source:"company"}); setAiKey(""); setSaved("✓ Credencial salva de forma criptografada."); } catch(error){setSaved(error instanceof Error?error.message:"Não foi possível salvar a credencial.");} finally{setAiBusy(false);}
+  };
+  const testAiCredential = async () => { setAiBusy(true); setSaved("Testando conexão..."); try { const response=await fetch(`/api/ai-credential?company=${encodeURIComponent(activeCompany.id)}`,{method:"POST"}); const data=await response.json(); if(!response.ok)throw new Error(data.error); setSaved(data.message); } catch(error){setSaved(error instanceof Error?error.message:"Falha no teste da conexão.");} finally{setAiBusy(false);} };
+  const removeAiCredential = async () => { if(!window.confirm("Remover a credencial de IA desta empresa?"))return; setAiBusy(true); try { const response=await fetch(`/api/ai-credential?company=${encodeURIComponent(activeCompany.id)}`,{method:"DELETE"}); const data=await response.json(); if(!response.ok)throw new Error(data.error); setAiStatus({configured:false,last4:null,source:"none"}); setSaved("Credencial da empresa removida."); } catch(error){setSaved(error instanceof Error?error.message:"Não foi possível remover a credencial.");} finally{setAiBusy(false);} };
+
+  const saveFiscalConfiguration = async () => {
+    if (fiscalEnvironment === "Produção" && !window.confirm("Confirmar alteração/salvamento da configuração fiscal em PRODUÇÃO? Emissões reais poderão ser transmitidas quando os adaptadores estiverem habilitados.")) return;
+    setFiscalBusy(true); setSaved("Salvando configuração fiscal protegida...");
+    try {
+      const response=await fetch("/api/fiscal-config",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+        company:{environment:fiscalEnvironment,taxRegime:fiscalTaxRegime,stateRegistration:fiscalIe,municipalRegistration:fiscalIm},
+        nfse:{serviceCode:fiscalServiceCode,issRate:fiscalIssRate,rpsSeries:fiscalRpsSeries},
+        nfce:{series:fiscalNfceSeries,cscId:fiscalCscId,...(fiscalCsc.trim()?{csc:fiscalCsc.trim()}:{})},
+      })});
+      const data=await response.json(); if(!response.ok)throw new Error(data.error || "Não foi possível salvar a configuração fiscal.");
+      if (fiscalCsc.trim()) setFiscalCscConfigured(true); setFiscalCsc(""); setFiscalCertificateInfo(data.certificate || fiscalCertificateInfo); setFiscalStorageProvider(String(data.storage?.provider || fiscalStorageProvider)); setSaved("✓ Configuração fiscal salva no cofre da empresa.");
+    } catch(error){setSaved(error instanceof Error?error.message:"Não foi possível salvar a configuração fiscal.");} finally{setFiscalBusy(false);}
+  };
+  const uploadFiscalCertificate = async () => {
+    if(!fiscalCertificate || !fiscalCertificatePassword){setSaved("Selecione o certificado A1 e informe a senha.");return;}
+    setFiscalBusy(true); setSaved("Validando e armazenando certificado...");
+    try {
+      const form=new FormData(); form.set("certificate",fiscalCertificate); form.set("password",fiscalCertificatePassword);
+      const response=await fetch("/api/fiscal-config",{method:"POST",body:form}); const data=await response.json(); if(!response.ok)throw new Error(data.error || "Não foi possível importar o certificado.");
+      setFiscalCertificateInfo(data.certificate || null); setFiscalStorageProvider(String(data.storage?.provider || fiscalStorageProvider)); setFiscalCertificate(null); setFiscalCertificatePassword(""); setSaved("✓ Certificado A1 validado e armazenado no cofre fiscal.");
+    } catch(error){setSaved(error instanceof Error?error.message:"Falha ao importar certificado.");} finally{setFiscalBusy(false);}
+  };
+  const updateCompany = () => {
+    const normalizedDocument = normalizeCnpj(companyDoc);
+    const updatedId = !normalizeCnpj(activeCompany.cnpj) && normalizedDocument.length === 14 ? normalizedDocument : activeCompany.id;
+    const updated: TenantCompany = { ...activeCompany, id: updatedId, legalName: companyName.trim(), tradeName: tradeName.trim() || companyName.trim(), cnpj: formatCnpj(companyDoc), city: city.trim(), state, email: email.trim(), address: address.trim(), phone: businessPhone, logo };
+    if (updatedId !== activeCompany.id) ["settings", "customers", "service-orders", "module-records"].forEach(resource => {
+      const previous = localStorage.getItem(companyStorageKey(activeCompany.id, resource));
+      if (previous) localStorage.setItem(companyStorageKey(updatedId, resource), previous);
+    });
+    const next = companies.map(company => company.id === activeCompany.id ? updated : company);
+    onCompaniesChange(next);
+    onSelectCompany(updated);
+    return updated;
+  };
+  const save = () => {
+    const updated = updateCompany();
+    localStorage.setItem(companyStorageKey(updated.id, "settings"), JSON.stringify({ companyName, companyDoc, city, state, logo, phoneNumberId, wabaId, businessPhone, tokenConfigured: Boolean(token) }));
+    setToken("");
+    setSaved(tab === "WhatsApp" ? "Identificadores salvos. O token foi mascarado e não será exibido novamente." : "Configurações salvas com sucesso.");
+    window.setTimeout(() => setSaved(""), 3500);
+  };
+  const readLogo = (file?: File) => {
+    if (!file) return;
+    if (file.size > 2_000_000) { setSaved("A logomarca deve ter no máximo 2 MB."); return; }
+    const reader = new FileReader();
+    reader.onload = () => setLogo(String(reader.result || ""));
+    reader.readAsDataURL(file);
+  };
+  const createCompany = () => {
+    const cnpj = normalizeCnpj(companyDoc);
+    if (cnpj.length !== 14) { setSaved("Informe um CNPJ válido com 14 números."); return; }
+    if (companies.some(company => normalizeCnpj(company.cnpj) === cnpj && company.id !== activeCompany.id)) { setSaved("Este CNPJ já possui uma empresa cadastrada."); return; }
+    const company: TenantCompany = { id: companyIdFromCnpj(cnpj), legalName: companyName.trim() || "Nova empresa", tradeName: tradeName.trim() || companyName.trim() || "Nova empresa", cnpj: formatCnpj(cnpj), city: city.trim(), state, phone: businessPhone, email: email.trim(), address: address.trim(), logo, status: "Ativa", createdAt: new Date().toISOString() };
+    onCompaniesChange([...companies, company]);
+    onSelectCompany(company);
+    setTab("Empresa");
+    setSaved("Empresa criada com uma base de dados independente.");
+  };
+  const toggleCompany = (company: TenantCompany) => {
+    const nextStatus = company.status === "Ativa" ? "Bloqueada" : "Ativa";
+    const next = companies.map(item => item.id === company.id ? { ...item, status: nextStatus } as TenantCompany : item);
+    onCompaniesChange(next);
+    if (company.id === activeCompany.id && nextStatus === "Bloqueada") setSaved("Empresa bloqueada. Os utilizadores deste CNPJ não poderão acessar os dados.");
+  };
+  const cities = ["Mirassol", "São José do Rio Preto", "Olímpia", "Monte Aprazível", "Bálsamo", "Jaci", "Bady Bassitt", "Neves Paulista", "Barretos"];
+  const healthChecks = [
+    {label:"Cadastro empresarial",ok:Boolean(activeCompany.legalName&&normalizeCnpj(activeCompany.cnpj).length===14&&activeCompany.phone&&activeCompany.email),detail:"Razão social, CNPJ, telefone e e-mail",tab:"Empresa" as const},
+    {label:"Endereço operacional",ok:Boolean(activeCompany.address&&activeCompany.city&&activeCompany.state),detail:"Endereço, município e UF",tab:"Empresa" as const},
+    {label:"Identidade visual",ok:Boolean(activeCompany.logo),detail:"Logomarca da empresa para documentos",tab:"Empresa" as const},
+    {label:"Dados fiscais",ok:Boolean(healthFiscal?.taxRegime&&healthFiscal.storageProvider),detail:healthFiscal?.storageProvider?`Regime ${healthFiscal.taxRegime} • cofre fiscal disponível`:"Regime e cofre fiscal",tab:"Fiscal" as const},
+    {label:"Emissão NFS-e",ok:Boolean(healthFiscal?.serviceCode&&healthFiscal.serviceSeries&&healthFiscal.certificateStatus==="Válido"),detail:"Código de serviço, série DPS/RPS e certificado A1 válido",tab:"Fiscal" as const},
+    {label:"Emissão NFC-e",ok:Boolean(healthFiscal?.nfceSeries&&healthFiscal.cscId&&healthFiscal.cscConfigured),detail:"Série e CSC configurados",tab:"Fiscal" as const},
+    {label:"Conexão NexoCloud",ok:healthWhatsApp?.state==="open",detail:healthWhatsApp?.configured?healthWhatsApp.state==="open"?"Número pareado para esta empresa":"Servidor pronto; falta parear o número desta empresa":"Endpoint seguro ainda não configurado pela gestão",tab:"WhatsApp" as const},
+    {label:"Envios automáticos",ok:Boolean(healthWhatsApp?.automationEnabled&&healthWhatsApp.automationAvailable),detail:healthWhatsApp?.automationAvailable?"Automação geral liberada; ativação vinculada a esta empresa":"Desativados até liberação geral e ativação nesta empresa",tab:"WhatsApp" as const},
+  ];
+  const healthReady=healthChecks.filter(item=>item.ok).length;
+  return <section className="settings-page">
+    <div className="management-hero settings-hero"><div><span className="section-kicker"><Settings size={12}/> CENTRAL DE CONFIGURAÇÕES</span><h2>Configurações do ProAR</h2><p>Dados empresariais, integrações, emissão fiscal e segurança em uma área centralizada.</p></div><div className="settings-health"><ShieldCheck size={19}/><span><b>Ambiente protegido</b><small>Credenciais sensíveis permanecem mascaradas</small></span></div></div>
+    <div className="settings-layout"><nav className="settings-nav">{[{name:"Empresa",icon:Building2,text:"Dados e logomarca"},{name:"Diagnóstico",icon:Stethoscope,text:"Saúde da configuração"},{name:"WhatsApp",icon:MessageCircle,text:"API oficial e NexoCloud"},{name:"Google Agenda",icon:CalendarDays,text:"Sincronização de OS e agenda"},{name:"Fiscal",icon:FileText,text:"NF-e, NFC-e e NFS-e"},...(isAdministrator?[{name:"Inteligência Artificial",icon:Sparkles,text:"Credencial OpenAI protegida"}]:[]),{name:"Segurança",icon:ShieldCheck,text:"Acessos e proteção"}].map(item => <button key={item.name} className={tab === item.name ? "active" : ""} onClick={() => setTab(item.name as typeof tab)}><item.icon size={17}/><span><b>{item.name}</b><small>{item.text}</small></span></button>)}</nav>
+      <div className="settings-card"><header><div><small>CONFIGURAÇÃO • {tab.toUpperCase()}</small><h3>{tab === "WhatsApp" ? "WhatsApp Business Platform" : tab === "Google Agenda" ? "Integração com Google Agenda" : tab === "Empresa" ? "Cadastro da empresa" : tab === "Fiscal" ? "Configuração fiscal" : tab === "Diagnóstico" ? "Saúde da configuração" : tab === "Inteligência Artificial" ? "Credencial segura da OpenAI" : "Segurança do sistema"}</h3></div><span className="settings-status"><i/> {tab === "Google Agenda" ? googleCalendarStatus.connected ? `Conectado${googleCalendarStatus.email ? ` • ${googleCalendarStatus.email}` : ""}` : "Não conectado" : tab === "Inteligência Artificial" ? aiStatus.configured ? `Configurada • final ${aiStatus.last4}` : aiStatus.source === "environment" ? "Fallback do servidor" : "Não configurada" : "Configuração disponível"}</span></header>
+        {tab === "Empresa" && <div className="settings-form company-settings-form"><label>Razão social / Nome empresarial<input value={companyName} onChange={event => setCompanyName(event.target.value)}/></label><label>Nome fantasia<input value={tradeName} onChange={event => setTradeName(event.target.value)}/></label><label>CNPJ<input value={companyDoc} onChange={event => setCompanyDoc(formatCnpj(event.target.value))} placeholder="00.000.000/0000-00"/></label><label>Telefone<input value={businessPhone} onChange={event => setBusinessPhone(event.target.value)}/></label><label>E-mail<input type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="contato@empresa.com.br"/></label><label>Cidade<input list="proar-cities" value={city} onChange={event => setCity(event.target.value)} placeholder="Selecione ou digite a cidade"/><datalist id="proar-cities">{cities.map(item => <option key={item}>{item}</option>)}</datalist></label><label>Estado<select value={state} onChange={event => setState(event.target.value)}>{["SP","MG","PR","RJ","MS","GO","SC","RS"].map(item => <option key={item}>{item}</option>)}</select></label><label className="wide">Endereço completo<input value={address} onChange={event => setAddress(event.target.value)} placeholder="Rua, número e bairro"/></label><div className="wide company-logo-field"><div className="company-logo-preview">{logo ? <img src={logo} alt="Logomarca da empresa"/> : <Building2 size={30}/>}</div><div><b>Logomarca dos relatórios</b><p>Será utilizada nos cabeçalhos de PDF, impressão, orçamentos e ordens de serviço.</p><label className="logo-upload"><ImagePlus size={15}/> Selecionar logomarca<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={event => readLogo(event.target.files?.[0])}/></label>{logo && <button className="logo-remove" type="button" onClick={() => setLogo("")}><Trash2 size={13}/> Remover</button>}</div></div></div>}
+        {tab === "WhatsApp" && <div className="settings-form whatsapp-settings-form"><div className="wide whatsapp-account-status"><MessageCircle size={20}/><div><small>WHATSAPP BUSINESS PLATFORM</small><b>{whatsAppStatus.connected?(whatsAppStatus.verifiedName||"Conta conectada"):whatsAppStatus.configured?"Credencial salva • conexão ainda não testada":"Integração não configurada"}</b><span>{whatsAppStatus.connected?(whatsAppStatus.displayPhone||businessPhone):whatsAppStatus.tokenPreview?`Token ${whatsAppStatus.tokenPreview}`:"Configure os IDs e o token permanente."}</span></div>{whatsAppStatus.connected?<CheckCircle2 size={19}/>:<AlertTriangle size={19}/>}</div><label>Phone Number ID<input value={phoneNumberId} onChange={event => setPhoneNumberId(event.target.value)} inputMode="numeric"/><small>ID do número, diferente do telefone.</small></label><label>WABA ID<input value={wabaId} onChange={event => setWabaId(event.target.value)} inputMode="numeric"/><small>ID da conta WhatsApp Business.</small></label><label className="wide">Token permanente<input type="password" value={token} onChange={event => setToken(event.target.value)} autoComplete="new-password" placeholder="Cole o token gerado pelo Utilizador do Sistema"/><small>Por segurança, o token nunca será mostrado depois de salvo.</small></label><div className="wide settings-security-note"><ShieldCheck size={17}/><span><b>Permissões necessárias</b><small>whatsapp_business_management e whatsapp_business_messaging</small></span></div><div className="wide settings-footer-actions"><button className="primary-btn" disabled={whatsAppBusy||!phoneNumberId.trim()||!wabaId.trim()||(!token.trim()&&!whatsAppStatus.configured)} onClick={()=>void saveWhatsAppConfiguration()}><Save size={14}/>{whatsAppBusy?"Salvando...":"Salvar API WhatsApp"}</button><button className="outline-btn" disabled={whatsAppBusy||!whatsAppStatus.configured} onClick={()=>void testWhatsAppConfiguration()}><Zap size={14}/> Testar conexão</button></div></div>}
+        {tab === "WhatsApp" && <><p><a href="/atendimento">Abrir central de atendimento, CRM e assistente local</a></p><WhatsAppWebConnection key={activeCompany.id} companyId={activeCompany.id}/></>}
+        {tab === "Diagnóstico" && <div className="settings-form configuration-health-panel"><div className="wide configuration-health-summary"><div><span className="section-kicker"><Stethoscope size={13}/> REVISÃO DA EMPRESA ATIVA</span><h4>{healthBusy?"Verificando configurações…":`${healthReady} de ${healthChecks.length} itens prontos`}</h4><p>Empresa: <b>{activeCompany.tradeName}</b> • identificador {activeCompany.id}</p></div><strong>{healthBusy?"…":`${Math.round(healthReady/healthChecks.length*100)}%`}</strong></div>{healthError&&<p className="wide configuration-health-error" role="alert">{healthError}</p>}{healthChecks.map(item=><article className={`wide configuration-health-item ${item.ok?"ready":"pending"}`} key={item.label}><span>{item.ok?<CheckCircle2 size={18}/>:<AlertTriangle size={18}/>}</span><div><b>{item.label}</b><small>{item.detail}</small></div><button type="button" onClick={()=>setTab(item.tab)}>Revisar <ArrowRight size={13}/></button></article>)}<p className="wide configuration-health-note">Este diagnóstico consulta os dados disponíveis para a empresa ativa. Itens fiscais e conexões externas precisam de conferência no ambiente de homologação antes de emissão ou envio real.</p></div>}
+        {tab === "Google Agenda" && <div className="settings-form google-calendar-settings">
+          <div className="wide google-calendar-connection-card"><CalendarDays size={24}/><div><small>GOOGLE CALENDAR</small><b>{googleCalendarStatus.connected ? "Agenda conectada" : "Agenda ainda não conectada"}</b><span>{googleCalendarStatus.connected ? (googleCalendarStatus.email || "Conta Google autorizada") : "Conecte sua conta Google para sincronizar os agendamentos das Ordens de Serviço."}</span></div><span className={`integration-state ${googleCalendarStatus.connected?"connected":"disconnected"}`}>{googleCalendarStatus.connected?"Conectado":"Desconectado"}</span></div>
+          <div className="wide settings-security-note"><ShieldCheck size={17}/><span><b>Conexão por usuário e empresa</b><small>Os tokens OAuth ficam criptografados no servidor. O ProAR solicita acesso ao Google Calendar e nunca armazena sua senha do Google.</small></span></div>
+          <div className="wide google-calendar-capabilities"><article><CheckCircle2 size={16}/><span><b>OS → Google Agenda</b><small>Cria ou atualiza um único evento usando o eventId salvo na OS.</small></span></article><article><RefreshCw size={16}/><span><b>Reagendamento sem duplicidade</b><small>Alterações atualizam o mesmo evento.</small></span></article><article><Bell size={16}/><span><b>Lembretes</b><small>Alertas de 2 horas e 30 minutos antes.</small></span></article></div>
+          {googleCalendarStatus.connected && <div className="wide google-calendar-account"><span><b>Conta conectada</b><small>{googleCalendarStatus.email || "Conta Google"} • calendário {googleCalendarStatus.calendarId || "primary"}</small></span>{googleCalendarStatus.connectedAt&&<small>Conectado em {new Date(googleCalendarStatus.connectedAt).toLocaleString("pt-BR")}</small>}</div>}
+          {googleCalendarStatus.configured === false && <p className="wide" role="status">A conexão aguarda a configuração das credenciais OAuth do Google no servidor do ProAR.</p>}
+          <div className="wide settings-footer-actions">{googleCalendarStatus.connected?<button className="outline-btn" disabled={googleCalendarBusy} onClick={()=>void disconnectGoogleCalendar()}><LogOut size={14}/> Desconectar Google Agenda</button>:<button className="primary-btn" disabled={googleCalendarBusy || googleCalendarStatus.configured !== true} onClick={()=>void connectGoogleCalendar()}><CalendarDays size={14}/>{googleCalendarBusy?"Conectando...":"Conectar Google Agenda"}</button>}</div>
+        </div>}
+        {tab === "Fiscal" && <div className="settings-form fiscal-settings-form">
+          <div className={`wide settings-security-note fiscal-environment-note ${fiscalEnvironment === "Produção" ? "production" : "homologation"}`}><ShieldCheck size={17}/><span><b>{fiscalEnvironment === "Produção" ? "AMBIENTE DE PRODUÇÃO" : "AMBIENTE DE HOMOLOGAÇÃO"}</b><small>{fiscalEnvironment === "Produção" ? "Configuração destinada a documentos fiscais reais. Alterações exigem confirmação." : "Use este ambiente para testes antes de habilitar emissões reais."}</small></span></div>
+          <label>Ambiente<select value={fiscalEnvironment} onChange={event=>setFiscalEnvironment(event.target.value)}><option>Homologação</option><option>Produção</option></select></label>
+          <label>Regime tributário<select value={fiscalTaxRegime} onChange={event=>setFiscalTaxRegime(event.target.value)}><option>Simples Nacional</option><option>Lucro Presumido</option><option>Lucro Real</option></select></label>
+          <label>Inscrição Estadual<input value={fiscalIe} onChange={event=>setFiscalIe(event.target.value)} placeholder="IE da empresa"/></label>
+          <label>Inscrição Municipal<input value={fiscalIm} onChange={event=>setFiscalIm(event.target.value)} placeholder="IM da empresa"/></label>
+          <label>Código de serviço NFS-e<input value={fiscalServiceCode} onChange={event=>setFiscalServiceCode(event.target.value)} placeholder="Código municipal/nacional"/></label>
+          <label>ISS padrão (%)<input type="number" min="0" step="0.01" value={fiscalIssRate} onChange={event=>setFiscalIssRate(event.target.value)} placeholder="0,00"/></label>
+          <label>Série RPS / DPS<input value={fiscalRpsSeries} onChange={event=>setFiscalRpsSeries(event.target.value)} placeholder="Série configurada"/></label>
+          <label>Série NFC-e<input value={fiscalNfceSeries} onChange={event=>setFiscalNfceSeries(event.target.value)} placeholder="1"/></label>
+          <label>ID CSC<input value={fiscalCscId} onChange={event=>setFiscalCscId(event.target.value)} placeholder="Identificador do CSC"/></label>
+          <label>CSC<input type="password" autoComplete="new-password" value={fiscalCsc} onChange={event=>setFiscalCsc(event.target.value)} placeholder="Preencha somente para cadastrar/trocar"/><small>O valor não é exibido novamente.</small></label>
+          <div className="wide fiscal-certificate-card"><div><LockKeyhole size={18}/><span><b>Certificado digital A1</b><small>{fiscalCertificateInfo ? `${fiscalCertificateInfo.fileName || "Certificado"} • ${fiscalCertificateInfo.status || "Status indisponível"}${typeof fiscalCertificateInfo.daysToExpiry === "number" ? ` • ${fiscalCertificateInfo.daysToExpiry} dia(s)` : ""}` : "Nenhum certificado disponível para esta empresa."}</small></span></div><div className="fiscal-certificate-inputs"><label>Arquivo<input type="file" accept=".pfx,.p12" onChange={event=>setFiscalCertificate(event.target.files?.[0] || null)}/></label><label>Senha<input type="password" autoComplete="new-password" value={fiscalCertificatePassword} onChange={event=>setFiscalCertificatePassword(event.target.value)} placeholder="Senha do A1"/></label><button type="button" className="outline-btn" disabled={fiscalBusy||!fiscalCertificate||!fiscalCertificatePassword} onClick={()=>void uploadFiscalCertificate()}><LockKeyhole size={14}/> Importar certificado</button></div></div>
+          <div className="wide fiscal-diagnostics"><span><CheckCircle2 size={14}/> Empresa identificada</span><span className={fiscalStorageProvider?"ok":"pending"}>{fiscalStorageProvider?"✓":"!"} Cofre fiscal {fiscalStorageProvider==="database"?"• banco principal":fiscalStorageProvider?"• redundante":"• indisponível"}</span><span className={fiscalCertificateInfo?.status === "Válido" ? "ok" : "pending"}>{fiscalCertificateInfo?.status === "Válido" ? "✓" : "!"} Certificado A1</span><span className={fiscalServiceCode ? "ok" : "pending"}>{fiscalServiceCode ? "✓" : "!"} NFS-e</span><span className={fiscalCscId && fiscalCscConfigured ? "ok" : "pending"}>{fiscalCscId && fiscalCscConfigured ? "✓" : "!"} CSC NFC-e</span><span className={fiscalEnvironment === "Produção" ? "production" : "homologation"}>{fiscalEnvironment}</span></div>
+        </div>}
+        {tab === "Inteligência Artificial" && isAdministrator && <div className="settings-form"><div className="wide settings-security-note"><ShieldCheck size={17}/><span><b>A chave nunca volta ao navegador</b><small>O servidor armazena a credencial criptografada e informa apenas os quatro últimos caracteres.</small></span></div><label className="wide">{aiStatus.configured ? "Trocar chave da OpenAI" : "Chave da OpenAI"}<input type="password" autoComplete="new-password" value={aiKey} onChange={event=>setAiKey(event.target.value)} placeholder={aiStatus.configured?`Configurada • final ${aiStatus.last4}`:"sk-proj-..."}/></label><div className="wide settings-footer-actions"><button className="primary-btn" disabled={aiBusy||!aiKey.trim()} onClick={()=>void saveAiCredential()}><LockKeyhole size={14}/>{aiStatus.configured?"Trocar chave":"Salvar chave"}</button><button className="outline-btn" disabled={aiBusy||(!aiStatus.configured&&aiStatus.source==="none")} onClick={()=>void testAiCredential()}><Zap size={14}/> Testar conexão</button>{aiStatus.configured&&<button className="outline-btn" disabled={aiBusy} onClick={()=>void removeAiCredential()}><Trash2 size={14}/> Remover chave</button>}</div></div>}
+        {tab === "Segurança" && <div className="settings-form"><label className="wide settings-switch"><span><b>Exigir autenticação individual</b><small>Somente funcionários ativos podem entrar.</small></span><input type="checkbox" defaultChecked/></label><label className="wide settings-switch"><span><b>Encerrar sessão por inatividade</b><small>Protege o sistema em computadores compartilhados.</small></span><input type="checkbox" defaultChecked/></label></div>}
+        <footer><small>Empresa ativa: {activeCompany.tradeName} • base {activeCompany.id}</small>{tab !== "Inteligência Artificial" && tab !== "Google Agenda" && tab !== "WhatsApp" && tab !== "Diagnóstico" && <div className="settings-footer-actions">{tab === "Empresa" && normalizeCnpj(companyDoc) !== normalizeCnpj(activeCompany.cnpj) && <button className="outline-btn" onClick={createCompany}><Plus size={15}/> Criar como nova empresa</button>}<button className="primary-btn" disabled={tab === "Fiscal" && fiscalBusy} onClick={tab === "Fiscal" ? ()=>void saveFiscalConfiguration() : save}><CheckCircle2 size={15}/> {tab === "Fiscal" ? "Salvar configuração fiscal" : "Salvar configurações"}</button></div>}</footer>
+      </div></div>
+  </section>;
+}
+
+function HousesWorkModule({ companyId, company, responsibleUser = "Utilizador do ProAR" }: { companyId: string; company: TenantCompany; responsibleUser?: string }) {
+  const projectsKey = companyStorageKey(companyId, "obras-cadastradas");
+  const selectedProjectKey = companyStorageKey(companyId, "obra-selecionada");
+  const [projects, setProjects] = useState<WorkProject[]>([RESERVA_IMPERIAL]);
+  const [activeProjectId, setActiveProjectId] = useState(RESERVA_IMPERIAL.id);
+  const [projectsReady, setProjectsReady] = useState(false);
+  const activeProject = projects.find(project => project.id === activeProjectId) ?? projects[0] ?? RESERVA_IMPERIAL;
+  const storageKey = activeProject.id === RESERVA_IMPERIAL.id ? companyStorageKey(companyId, "obra-142-casas") : companyStorageKey(companyId, `obra-${activeProject.id}-itens`);
+  const shareKey = activeProject.id === RESERVA_IMPERIAL.id ? companyStorageKey(companyId, "obra-142-public-token") : companyStorageKey(companyId, `obra-${activeProject.id}-public-token`);
+  const createHouses = (project = activeProject) => [...project.blocks.flatMap(({ block, houses }) => Array.from({ length: houses }, (_, index): HouseWorkItem => ({ id: `${block}-${String(index + 1).padStart(2, "0")}`, block, lot: index + 1, kind: "house", status: "INÍCIO DE OBRA", history: [] }))), ...project.commonAreas.map((name,index): HouseWorkItem => ({ id:`common-${String(index + 1).padStart(2,"0")}`, block:"Áreas Comuns", lot:index + 1, kind:"common", name, status:"INÍCIO DE OBRA", history:[] }))];
+  const [houses, setHouses] = useState<HouseWorkItem[]>([]);
+  const [mapLoading, setMapLoading] = useState(true);
+  const [blockFilter, setBlockFilter] = useState("Todas");
+  const [statusFilter, setStatusFilter] = useState("Todos");
+  const [query, setQuery] = useState("");
+  const [editing, setEditing] = useState<HouseWorkItem | null>(null);
+  const [nextStatus, setNextStatus] = useState<HouseWorkStatus>("INÍCIO DE OBRA");
+  const [note, setNote] = useState("");
+  const [photos, setPhotos] = useState<Record<string, string>>({});
+  const [houseModalTab, setHouseModalTab] = useState<"Etapa" | "Perdas e Roubos">("Etapa");
+  const [incidentType, setIncidentType] = useState<"Perda" | "Roubo">("Perda");
+  const [incidentNote, setIncidentNote] = useState("");
+  const [incidentPhoto, setIncidentPhoto] = useState("");
+  const [historyHouse, setHistoryHouse] = useState<HouseWorkItem | null>(null);
+  const [historyUpdate, setHistoryUpdate] = useState<HouseWorkUpdate | null>(null);
+  const [reportNotice, setReportNotice] = useState("");
+  useEffect(() => {
+    if (!reportNotice) return;
+    notifyFeedback({ message: reportNotice, tone: inferFeedbackTone(reportNotice), title: "Obras" });
+  }, [reportNotice]);
+  const [shareToken, setShareToken] = useState("");
+  const [serverRevision, setServerRevision] = useState(0);
+  const [mapOnline, setMapOnline] = useState(true);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveError, setSaveError] = useState("");
+  const [workManagerOpen, setWorkManagerOpen] = useState(false);
+  const [newWorkName, setNewWorkName] = useState("");
+  const [newBlocks, setNewBlocks] = useState<WorkBlock[]>([{block:"A",houses:1}]);
+  const [newCommonAreas, setNewCommonAreas] = useState<string[]>([]);
+  const [projectsRevision, setProjectsRevision] = useState(0);
+  const [accessManagerOpen, setAccessManagerOpen] = useState(false);
+  const [newAccessName, setNewAccessName] = useState("");
+  const [newAccessRole, setNewAccessRole] = useState<WorkExternalAccess["role"]>("Engenheiro");
+  const [newAccessUsername, setNewAccessUsername] = useState("");
+  const [newAccessPassword, setNewAccessPassword] = useState("");
+  const [accessSaving, setAccessSaving] = useState(false);
+  const [accessNotice, setAccessNotice] = useState<{ tone: "success" | "error" | "info"; text: string } | null>(null);
+  useEffect(() => {
+    const normalizeProjects = (items: WorkProject[]) => {
+      const normalized = items.length ? items.map(project => project.id === RESERVA_IMPERIAL.id ? {...project,name:"Reserva Imperial",commonAreas:Array.from(new Set([...(project.commonAreas ?? []),...RESERVA_IMPERIAL.commonAreas])),materialPlanning:project.materialPlanning ?? RESERVA_IMPERIAL.materialPlanning} : project) : [RESERVA_IMPERIAL];
+      if (!normalized.some(project => project.id === RESERVA_IMPERIAL.id)) normalized.unshift(RESERVA_IMPERIAL);
+      return normalized;
+    };
+    const loadProjects = async () => {
+      let local: WorkProject[] = [RESERVA_IMPERIAL];
+      try { local = normalizeProjects(JSON.parse(localStorage.getItem(projectsKey) || "[]") as WorkProject[]); } catch {}
+      if (!navigator.onLine) { setProjects(local); setProjectsReady(true); return; }
+      try {
+        const response = await fetch(`/api/work-projects?company=${encodeURIComponent(companyId)}&refresh=${Date.now()}`, {cache:"no-store"});
+        const result = await response.json();
+        if (!response.ok) throw new Error();
+        if (result.state?.projects?.length) {
+          const authoritative = normalizeProjects(result.state.projects as WorkProject[]);
+          setProjects(authoritative); setProjectsRevision(Number(result.state.revision||0)); localStorage.setItem(projectsKey,JSON.stringify(authoritative));
+          const selected=localStorage.getItem(selectedProjectKey); if(selected&&authoritative.some(project=>project.id===selected))setActiveProjectId(selected);
+        } else {
+          const seed = normalizeProjects(local);
+          const save = await fetch('/api/work-projects',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({companyId,projects:seed,baseRevision:0})});
+          const saved = await save.json(); if(save.ok)setProjectsRevision(Number(saved.state?.revision||1)); setProjects(seed); localStorage.setItem(projectsKey,JSON.stringify(seed));
+        }
+      } catch { setProjects(local); setReportNotice("Obras online indisponíveis. Exibindo a cópia local deste aparelho somente para consulta."); }
+      finally { setProjectsReady(true); }
+    };
+    void loadProjects();
+  },[projectsKey,selectedProjectKey,companyId]);
+
+  useEffect(() => {
+    if (!projectsReady || !activeProject.id || typeof navigator === "undefined" || !navigator.onLine) return;
+    let cancelled = false;
+    const loadExternalAccess = async () => {
+      try {
+        const response = await fetch(
+          `/api/work-external-access?company=${encodeURIComponent(companyId)}&workId=${encodeURIComponent(activeProject.id)}&refresh=${Date.now()}`,
+          { cache:"no-store" },
+        );
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || `Falha ao consultar acessos (HTTP ${response.status}).`);
+        if (cancelled) return;
+        const externalAccess = Array.isArray(result.externalAccess) ? result.externalAccess as WorkExternalAccess[] : [];
+        setProjects(current => {
+          const next = current.map(project => project.id === activeProject.id ? { ...project, externalAccess } : project);
+          localStorage.setItem(projectsKey, JSON.stringify(next));
+          return next;
+        });
+      } catch (error) {
+        if (!cancelled) {
+          setAccessNotice({
+            tone:"error",
+            text:error instanceof Error ? error.message : "Não foi possível carregar os acessos externos desta obra.",
+          });
+        }
+      }
+    };
+    void loadExternalAccess();
+    return () => { cancelled = true; };
+  },[projectsReady,activeProject.id,companyId,projectsKey]);
+
+  const mergeWorkRows = (rows: HouseWorkItem[]) => { const byId=new Map(rows.map(item=>[item.id,item])); return createHouses().map(item=>byId.get(item.id)??item); };
+  const applyServerMap = (map: { houses?: HouseWorkItem[]; token?: string; revision?: number }) => { const authoritative=mergeWorkRows(map.houses??[]); setHouses(authoritative); localStorage.setItem(storageKey,JSON.stringify(authoritative)); setServerRevision(Number(map.revision||0)); setMapOnline(true); setMapLoading(false); if(map.token){setShareToken(map.token);localStorage.setItem(shareKey,map.token);} return authoritative; };
+  const fetchServerMap = async () => { if(!navigator.onLine) throw new Error("offline"); const response=await fetch(`/api/public-work-map?company=${encodeURIComponent(companyId)}&work=${encodeURIComponent(activeProject.id)}&refresh=${Date.now()}`,{cache:"no-store"}); const result=await response.json(); if(!response.ok) throw new Error(result.error||"Falha no banco online"); if(result.map?.houses?.length) applyServerMap(result.map); return result.map as {houses?:HouseWorkItem[];token?:string;revision?:number}|null; };
+  const publishPublicMap = async (next: HouseWorkItem[], revision = serverRevision, accessList = activeProject.externalAccess ?? []) => {
+    if(!navigator.onLine){localStorage.setItem(`${shareKey}:pending`,"1");setMapOnline(false);throw new Error("Dispositivo sem internet.");}
+    const response=await fetch("/api/public-work-map",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({companyId,workId:activeProject.id,workName:activeProject.name,title:`Acompanhamento da obra — ${activeProject.name}`,houses:next,externalAccess:accessList,baseRevision:revision})});
+    const result=await response.json();
+    if(response.status===409&&result.map){applyServerMap(result.map);localStorage.removeItem(`${shareKey}:pending`);throw new Error("O banco online tinha uma versão mais recente e foi mantido como principal.");}
+    if(!response.ok){localStorage.setItem(`${shareKey}:pending`,"1");throw new Error(result.error||"Não foi possível atualizar o banco online.");}
+    const confirmed=result.map as {houses?:HouseWorkItem[];revision?:number;token?:string};
+    if(!confirmed?.houses?.length) throw new Error("O banco não confirmou a atualização da etapa.");
+    setServerRevision(Number(confirmed.revision||serverRevision+1));setMapOnline(true);setMapLoading(false);setShareToken(result.token);localStorage.setItem(shareKey,result.token);localStorage.removeItem(`${shareKey}:pending`);return confirmed;
+  };
+  useEffect(() => {
+    if(!projectsReady)return;
+    setShareToken(localStorage.getItem(shareKey)||"");setServerRevision(0);
+    const stored=localStorage.getItem(storageKey);const localHouses=(()=>{if(!stored)return createHouses();try{return mergeWorkRows(JSON.parse(stored) as HouseWorkItem[]);}catch{return createHouses();}})();
+    if(!navigator.onLine){setHouses(localHouses);setMapOnline(false);setMapLoading(false);setReportNotice("Modo offline: mostrando a cópia deste aparelho.");return;}
+    setHouses([]);setMapOnline(true);setMapLoading(true);
+    void fetchServerMap().then(map=>{if(!map) return publishPublicMap(localHouses);}).catch(()=>{setMapOnline(false);setMapLoading(false);setReportNotice("Obras online indisponíveis. Exibindo a cópia local deste aparelho somente para consulta.");});
+  },[storageKey,companyId,projectsReady,activeProject.id]);
+  const persist = async (next: HouseWorkItem[]) => {
+    if (!navigator.onLine) { const message="Não foi possível salvar a alteração. Tente novamente."; setSaveState("error"); setSaveError(message); setMapOnline(false); setReportNotice(message); return false; }
+    setSaveError(""); setSaveState("saving");
+    try {
+      const confirmed=await publishPublicMap(next);
+      const authoritative=mergeWorkRows(confirmed.houses??[]);
+      const requested=next.find(item=>item.id===editing?.id); const returned=authoritative.find(item=>item.id===editing?.id);
+      if(requested && normalizeHouseStatus(requested.status)==="AG. EXAUSTOR" && normalizeHouseStatus(returned?.status||"")!=="AG. EXAUSTOR") throw new Error("O banco não confirmou AG. EXAUSTOR.");
+      setHouses(authoritative); localStorage.setItem(storageKey,JSON.stringify(authoritative));
+      setSaveState("saved"); setReportNotice("✓ ALTERAÇÃO EFETUADA");
+      window.setTimeout(()=>setSaveState("idle"),1800); return true;
+    } catch (error) {
+      const message = error instanceof Error && /versão mais recente|conflito/i.test(error.message)
+        ? "Este registro foi alterado por outro usuário. Atualize os dados antes de continuar."
+        : "Não foi possível salvar a alteração. Verifique os dados e tente novamente.";
+      setSaveState("error"); setSaveError(message); setReportNotice(message);
+      window.setTimeout(()=>setSaveState("idle"),3000);
+      return false;
+    }
+  };
+  useEffect(() => {
+    const synchronize=()=>{if(!navigator.onLine){setMapOnline(false);return;}if(localStorage.getItem(`${shareKey}:pending`))void publishPublicMap(houses).catch(error=>setReportNotice(error.message));else void fetchServerMap().catch(()=>setMapOnline(false));};
+    const timer=window.setInterval(()=>{if(navigator.onLine&&!localStorage.getItem(`${shareKey}:pending`))void fetchServerMap().catch(()=>setMapOnline(false));},20000);
+    window.addEventListener("online",synchronize);window.addEventListener("offline",synchronize);return()=>{window.clearInterval(timer);window.removeEventListener("online",synchronize);window.removeEventListener("offline",synchronize);};
+  },[shareKey,houses,serverRevision,activeProject.id]);
+  const sharePublicMap = async () => {
+    setReportNotice("A publicar o mapa da obra...");
+    try {
+      const savedMap = shareToken ? null : await publishPublicMap(houses); const token = shareToken || savedMap?.token || ""; if (!token) throw new Error("O banco não confirmou o link da obra."); const url = `${window.location.origin}/obra/${token}`;
+      if (navigator.share) await navigator.share({ title: "Acompanhamento da obra — PolarTech", text: "Acompanhe em tempo real o andamento de cada casa da obra.", url });
+      else { await navigator.clipboard.writeText(url); setReportNotice("Link copiado. Pode enviá-lo ao cliente pelo WhatsApp."); window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`Acompanhe em tempo real o andamento da obra: ${url}`)}`, "_blank", "noopener,noreferrer"); }
+    } catch (error) { if ((error as Error)?.name !== "AbortError") setReportNotice((error as Error)?.message || "Não foi possível compartilhar o mapa."); }
+    window.setTimeout(() => setReportNotice(""), 5000);
+  };
+  const refreshWorkMap = async () => {
+    setReportNotice("A atualizar o mapa pelo banco principal...");
+    try { await fetchServerMap();localStorage.removeItem(`${shareKey}:pending`);setReportNotice("Banco online carregado. Esta é a versão principal."); }
+    catch { setReportNotice(navigator.onLine?"Obras online indisponíveis. Nenhuma alteração local foi enviada.":"Dispositivo sem internet. A cópia offline foi mantida."); }
+    window.setTimeout(()=>setReportNotice(""),4500);
+  };
+  const sendWorkMap = async () => { setReportNotice("A sincronizar com o banco principal..."); try { await fetchServerMap();setReportNotice("Sincronização concluída. O banco online permaneceu como fonte principal."); } catch(error){setReportNotice((error as Error).message);} window.setTimeout(()=>setReportNotice(""),4500); };
+  const createWorkProject = () => {
+    const name = newWorkName.trim(); const blocks = newBlocks.filter(item => item.block.trim() && item.houses > 0).map(item => ({block:item.block.trim().toUpperCase(),houses:Math.max(1,Math.floor(item.houses))}));
+    if (!name || !blocks.length) { setReportNotice("Informe o nome da obra e pelo menos uma quadra."); return; }
+    const id = `${name.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")}-${Date.now().toString(36)}`;
+    const project: WorkProject = {id,name,blocks,commonAreas:newCommonAreas.map(item=>item.trim()).filter(Boolean),createdAt:new Date().toISOString()};
+    const next = [...projects,project];
+    if (!navigator.onLine) { setReportNotice("Cadastros de novas obras exigem internet para evitar divergência entre aparelhos."); return; }
+    void fetch('/api/work-projects',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({companyId,projects:next,baseRevision:projectsRevision})}).then(async response=>{const result=await response.json();if(response.status===409&&result.state){const authoritative=result.state.projects as WorkProject[];setProjects(authoritative);setProjectsRevision(Number(result.state.revision||0));localStorage.setItem(projectsKey,JSON.stringify(authoritative));throw new Error("Outro aparelho atualizou a lista de obras. A versão online foi mantida; tente cadastrar novamente.");}if(!response.ok)throw new Error(result.error||"Falha ao salvar obra");setProjects(next);setProjectsRevision(Number(result.state?.revision||projectsRevision+1));localStorage.setItem(projectsKey,JSON.stringify(next));localStorage.setItem(selectedProjectKey,id);setActiveProjectId(id);setBlockFilter("Todas");setWorkManagerOpen(false);setNewWorkName("");setNewBlocks([{block:"A",houses:1}]);setNewCommonAreas([]);setReportNotice(`Obra ${name} cadastrada com sucesso e disponível em todos os aparelhos.`);}).catch(error=>setReportNotice(error.message));
+  };
+  const selectWorkProject = (id:string) => { setActiveProjectId(id); localStorage.setItem(selectedProjectKey,id); setBlockFilter("Todas"); setStatusFilter("Todos"); setQuery(""); };
+  const saveProjectsList=async(next:WorkProject[],message:string,nextActiveId?:string)=>{
+    if(!navigator.onLine){setReportNotice("Alterações no cadastro da obra exigem conexão com a base principal.");return false;}
+    try{
+      const response=await fetch("/api/work-projects",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({companyId,projects:next,baseRevision:projectsRevision})});
+      const result=await response.json().catch(()=>({}));
+      if(response.status===409&&result.state?.projects){
+        const authoritative=result.state.projects as WorkProject[];
+        setProjects(authoritative);setProjectsRevision(Number(result.state.revision||projectsRevision));localStorage.setItem(projectsKey,JSON.stringify(authoritative));
+        throw new Error("Outro aparelho atualizou a lista de obras. A versão mais recente foi carregada.");
+      }
+      if(!response.ok)throw new Error(result.error||"Não foi possível salvar a alteração da obra.");
+      setProjects(next);setProjectsRevision(Number(result.state?.revision||projectsRevision+1));localStorage.setItem(projectsKey,JSON.stringify(next));
+      if(nextActiveId){setActiveProjectId(nextActiveId);localStorage.setItem(selectedProjectKey,nextActiveId);}
+      setReportNotice(message);return true;
+    }catch(error){setReportNotice(error instanceof Error?error.message:"Não foi possível salvar a alteração da obra.");return false;}
+  };
+  const renameActiveProject=async()=>{
+    const name=window.prompt("Novo nome da obra:",activeProject.name)?.trim();
+    if(!name||name===activeProject.name)return;
+    const next=projects.map(project=>project.id===activeProject.id?{...project,name}:project);
+    await saveProjectsList(next,`Obra alterada para “${name}”.`);
+  };
+  const deleteActiveProject=async()=>{
+    if(activeProject.id===RESERVA_IMPERIAL.id){setReportNotice("A obra-base Reserva Imperial está protegida e não pode ser excluída por esta ação.");return;}
+    if(!window.confirm(`Excluir a obra “${activeProject.name}” da lista de obras? Os históricos já registrados não serão reutilizados automaticamente.`))return;
+    const next=projects.filter(project=>project.id!==activeProject.id);
+    const fallback=next[0]?.id||RESERVA_IMPERIAL.id;
+    await saveProjectsList(next,`Obra “${activeProject.name}” removida da lista.`,fallback);
+  };
+
+  const syncExternalAccessMap = async (externalAccess: WorkExternalAccess[]) => {
+    // Alterações de login externo não devem reenviar as 142 casas, fotos e históricos.
+    // O mapa público já persistido permanece intacto; atualizamos apenas a lista de acessos.
+    const response = await fetch("/api/public-work-map", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        companyId,
+        workId: activeProject.id,
+        workName: activeProject.name,
+        title: `Acompanhamento da obra — ${activeProject.name}`,
+        externalAccess,
+        externalAccessOnly: true,
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || `Não foi possível sincronizar o acesso externo (HTTP ${response.status}).`);
+    if (result.map?.revision !== undefined) setServerRevision(Number(result.map.revision));
+    if (result.token) {
+      setShareToken(String(result.token));
+      localStorage.setItem(shareKey, String(result.token));
+    }
+  };
+  const loadLatestProjectsForExternalAccess = async () => {
+    const response = await fetch(`/api/work-projects?company=${encodeURIComponent(companyId)}`, { cache:"no-store" });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = result.error || `Não foi possível recarregar as obras (HTTP ${response.status}).`;
+      throw new Error(result.code ? `${message} (${result.code})` : message);
+    }
+    const authoritative = Array.isArray(result.state?.projects) ? result.state.projects as WorkProject[] : [];
+    const revision = Number(result.state?.revision || 0);
+    if (!authoritative.some(project => project.id === activeProject.id)) {
+      throw new Error("A obra ativa não foi localizada na versão mais recente da base.");
+    }
+    setProjects(authoritative);
+    setProjectsRevision(revision);
+    localStorage.setItem(projectsKey, JSON.stringify(authoritative));
+    return { projects: authoritative, revision };
+  };
+
+  const applyExternalAccessState = (baseProjects: WorkProject[], externalAccess: WorkExternalAccess[], revision: number) => {
+    const next = baseProjects.map(project => project.id === activeProject.id ? { ...project, externalAccess } : project);
+    setProjects(next);
+    setProjectsRevision(revision);
+    localStorage.setItem(projectsKey, JSON.stringify(next));
+    return next;
+  };
+
+  const persistExternalAccessChange = async (
+    payload:
+      | { action:"external_access_add"; workId:string; access:WorkExternalAccess }
+      | { action:"external_access_toggle"; workId:string; accessId:string; active:boolean },
+  ) => {
+    const response = await fetch("/api/work-external-access", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ companyId, ...payload }),
+    });
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const message = result.error || `Não foi possível salvar o acesso externo (HTTP ${response.status}).`;
+      throw new Error(result.code ? `${message} • ${result.code}` : message);
+    }
+
+    const externalAccess = Array.isArray(result.externalAccess)
+      ? result.externalAccess as WorkExternalAccess[]
+      : [];
+
+    const next = projects.map(project =>
+      project.id === activeProject.id ? { ...project, externalAccess } : project,
+    );
+    setProjects(next);
+    localStorage.setItem(projectsKey, JSON.stringify(next));
+    return { externalAccess, revision:Number(result.revision || 0) };
+  };
+
+  const saveExternalAccess = async () => {
+    if (accessSaving) return;
+    const name = newAccessName.trim();
+    const username = newAccessUsername.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").replace(/\s+/g, ".");
+    if (!name || !username || newAccessPassword.length < 6) {
+      setAccessNotice({ tone:"error", text:"Informe nome, usuário e senha com pelo menos 6 caracteres." });
+      return;
+    }
+    if (!/^[a-z0-9._-]{3,60}$/i.test(username)) {
+      setAccessNotice({ tone:"error", text:"Use um usuário com 3 a 60 caracteres, contendo apenas letras, números, ponto, hífen ou sublinhado." });
+      return;
+    }
+    if ((activeProject.externalAccess ?? []).some(item => item.username.toLocaleLowerCase("pt-BR") === username)) {
+      setAccessNotice({ tone:"error", text:"Este usuário já possui acesso cadastrado nesta obra." });
+      return;
+    }
+    if (!navigator.onLine) {
+      setAccessNotice({ tone:"error", text:"A gestão de acessos externos exige conexão com a base principal." });
+      return;
+    }
+
+    setAccessSaving(true);
+    setAccessNotice({ tone:"info", text:"Criando acesso na obra..." });
+    try {
+      const access: WorkExternalAccess = {
+        id: `obra-access-${Date.now()}-${crypto.randomUUID().slice(0,8)}`,
+        name,
+        role: newAccessRole,
+        username,
+        passwordHash: await passwordHash(newAccessPassword),
+        active: true,
+        createdAt: new Date().toISOString(),
+      };
+
+      const persisted = await persistExternalAccessChange({
+        action:"external_access_add",
+        workId:activeProject.id,
+        access,
+      });
+
+      setAccessNotice({ tone:"info", text:"Acesso salvo. Ativando no portal externo..." });
+      try {
+        if (shareToken) await syncExternalAccessMap(persisted.externalAccess);
+        else await publishPublicMap(houses, serverRevision, persisted.externalAccess);
+      } catch (syncError) {
+        setNewAccessName("");
+        setNewAccessUsername("");
+        setNewAccessPassword("");
+        setAccessNotice({
+          tone:"error",
+          text:`O acesso foi salvo na obra, mas o portal externo ainda não foi sincronizado: ${syncError instanceof Error ? syncError.message : "falha de sincronização"}`,
+        });
+        setReportNotice("Cadastro salvo; falta sincronizar o portal externo.");
+        return;
+      }
+
+      setNewAccessName("");
+      setNewAccessUsername("");
+      setNewAccessPassword("");
+      setAccessNotice({ tone:"success", text:`Acesso de ${name} criado e ativado com sucesso.` });
+      setReportNotice("Acesso externo criado e sincronizado com a obra.");
+    } catch (error) {
+      setAccessNotice({
+        tone:"error",
+        text:error instanceof Error ? error.message : "Não foi possível salvar o acesso. Tente novamente.",
+      });
+    } finally {
+      setAccessSaving(false);
+    }
+  };
+
+  const toggleExternalAccess = async (accessId: string) => {
+    if (accessSaving) return;
+    const target = (activeProject.externalAccess ?? []).find(access => access.id === accessId);
+    if (!target) {
+      setAccessNotice({ tone:"error", text:"Acesso externo não localizado na obra." });
+      return;
+    }
+    if (!navigator.onLine) {
+      setAccessNotice({ tone:"error", text:"A gestão de acessos externos exige conexão com a base principal." });
+      return;
+    }
+
+    setAccessSaving(true);
+    setAccessNotice({ tone:"info", text:target.active ? "Inativando acesso..." : "Ativando acesso..." });
+    try {
+      const persisted = await persistExternalAccessChange({
+        action:"external_access_toggle",
+        workId:activeProject.id,
+        accessId,
+        active:!target.active,
+      });
+      await syncExternalAccessMap(persisted.externalAccess);
+      setAccessNotice({ tone:"success", text:`Acesso ${target.active ? "inativado" : "ativado"} com sucesso.` });
+      setReportNotice(`Acesso externo ${target.active ? "inativado" : "ativado"} e sincronizado.`);
+    } catch (error) {
+      setAccessNotice({
+        tone:"error",
+        text:error instanceof Error ? error.message : "Não foi possível atualizar o acesso.",
+      });
+    } finally {
+      setAccessSaving(false);
+    }
+  };
+  const openUpdate = (house: HouseWorkItem) => { const normalized=normalizeHouseStatus(house.status); setEditing(house); setNextStatus(normalized === "STATUS NÃO IDENTIFICADO" ? "INÍCIO DE OBRA" : normalized); setNote(house.note ?? ""); setPhotos({}); setSaveError(""); setHouseModalTab("Etapa"); setIncidentType("Perda"); setIncidentNote(""); setIncidentPhoto(""); };
+  const readStagePhoto = async (label: string, file?: File) => {
+    if (!file) return;
+    const encoded = await imageFileToDataUrl(file);
+    setPhotos(current => ({ ...current, [label]: encoded }));
+  };
+  const readIncidentPhoto = async (file?: File) => { if (file) setIncidentPhoto(await imageFileToDataUrl(file)); };
+  const replaceHistoryPhoto = async (label: string, file?: File) => {
+    if (!file || !historyHouse || !historyUpdate) return;
+    const url = await imageFileToDataUrl(file);
+    const nextUpdate: HouseWorkUpdate = {...historyUpdate,photos:normalizeStagePhotos(historyUpdate.photos,historyUpdate.photo,historyUpdate.status).map(photo=>photo.label===label?{...photo,url}:photo)};
+    const nextHouse: HouseWorkItem = {...historyHouse,updatedAt:new Date().toISOString(),history:(historyHouse.history??[]).map(update=>update.id===historyUpdate.id?nextUpdate:update)};
+    const next=houses.map(item=>item.id===nextHouse.id?nextHouse:item);
+    if (await persist(next)) { setHistoryHouse(nextHouse); setHistoryUpdate(nextUpdate); }
+  };
+  const replaceIncidentPhoto = async (incidentId: string, file?: File) => {
+    if (!file || !editing) return;
+    const photo=await imageFileToDataUrl(file);const updatedAt=new Date().toISOString();
+    const nextHouse: HouseWorkItem={...editing,updatedAt,incidents:(editing.incidents??[]).map(incident=>incident.id===incidentId?{...incident,photo}:incident)};
+    const next=houses.map(item=>item.id===editing.id?nextHouse:item);
+    if (await persist(next)) setEditing(nextHouse);
+  };
+  const saveIncident = async () => {
+    if (saveState === "saving") return;
+    if (!editing) return;
+    if (!incidentPhoto) { setReportNotice("Anexe uma foto da perda ou do roubo."); return; }
+    const createdAt = new Date().toISOString();
+    const incident: HouseIncident = {id:`incident-${editing.id}-${Date.now()}`,type:incidentType,note:incidentNote.trim(),photo:incidentPhoto,responsible:responsibleUser,createdAt};
+    const next=houses.map(item=>item.id===editing.id?{...item,updatedAt:createdAt,incidents:[incident,...(item.incidents??[])]}:item);
+    if (await persist(next)) { setEditing(next.find(item=>item.id===editing.id)??null); setIncidentNote(""); setIncidentPhoto(""); }
+  };
+  const saveUpdate = async () => {
+    if (saveState === "saving") return;
+    if (!editing) return;
+    const photoLabels = HOUSE_STAGE_PHOTOS[nextStatus];
+    if (nextStatus === "SERVIÇO CONCLUÍDO" && !window.confirm("Confirma a conclusão desta casa? A data, o horário e o responsável serão registrados.")) return;
+    const createdAt = new Date().toISOString();
+    const observationChanged = note.trim() !== (editing.note ?? "").trim();
+    const statusChanged = nextStatus !== normalizeHouseStatus(editing.status);
+    const stagePhotos = photoLabels.filter(label => photos[label]).map(label => ({ label, url: photos[label] }));
+    const previousStatus = normalizeHouseStatus(editing.status);
+    const storedStatus: HouseWorkItem["status"] = nextStatus === "AG. EXAUSTOR" ? "ag_exaustor" : nextStatus;
+    const update: HouseWorkUpdate = { id: `${editing.id}-${Date.now()}`, status: storedStatus, previousStatus, note: note.trim(), responsible: responsibleUser, photos: stagePhotos.length ? stagePhotos : undefined, createdAt, completedAt: nextStatus === "SERVIÇO CONCLUÍDO" ? createdAt : undefined, origin: typeof navigator === "undefined" ? "web" : navigator.userAgent };
+    const next = houses.map(item => item.id === editing.id ? { ...item, status: storedStatus, note: note.trim() || item.note, photo: stagePhotos[0]?.url || item.photo, photos: stagePhotos.length ? stagePhotos : item.photos, updatedAt: createdAt, history: [update, ...(item.history ?? [])] } : item);
+    if (!observationChanged && !statusChanged && !stagePhotos.length) { setSaveError("Nenhuma alteração realizada."); return; }
+    if (await persist(next)) setEditing(null);
+  };
+  const stageDirty = !!editing && (
+    nextStatus !== normalizeHouseStatus(editing.status)
+    || note.trim() !== (editing.note ?? "").trim()
+    || Object.keys(photos).length > 0
+  );
+  if (mapLoading) return <section className="houses-app"><div className="work-online-loading"><RefreshCw size={24}/><div><b>A carregar {activeProject.name}</b><span>A consultar a base principal online. Nenhum valor local provisório será exibido.</span></div></div></section>;
+  const visible = houses.filter(house => (blockFilter === "Todas" || house.block === blockFilter) && (statusFilter === "Todos" || normalizeHouseStatus(house.status) === statusFilter) && `${house.block} ${house.lot} ${house.id} ${house.name ?? ""}`.toLowerCase().includes(query.toLowerCase()));
+  const completed = houses.filter(house => normalizeHouseStatus(house.status) === "SERVIÇO CONCLUÍDO").length;
+  const completion = houses.length ? Math.round(houses.reduce((sum, house) => sum + getWorkProgress(house.status), 0) / houses.length) : 0;
+  const blockProgress = (block: string) => {
+    const entries = houses.filter(house => house.block === block);
+    const progress = entries.length ? Math.round(entries.reduce((sum, house) => sum + getWorkProgress(house.status), 0) / entries.length) : 0;
+    return { entries, progress, done: entries.filter(house => normalizeHouseStatus(house.status) === "SERVIÇO CONCLUÍDO").length, working: entries.filter(house => !["INÍCIO DE OBRA", "SERVIÇO CONCLUÍDO"].includes(normalizeHouseStatus(house.status))).length };
+  };
+  const grouped = [...activeProject.blocks.map(({ block }) => ({ block, houses: visible.filter(house => house.block === block) })),{block:"Áreas Comuns",houses:visible.filter(house=>house.kind === "common")}].filter(group => group.houses.length);
+  const todaySummary=buildWorkTodaySummary(houses, status => getWorkProgress(status));
+  const todayLog=workDailyLog(houses);
+  const statusColor = (status: HouseWorkStatus | LegacyHouseWorkStatus) => getWorkStatusColor(status);
+  const houseProgress = (status: HouseWorkStatus | LegacyHouseWorkStatus) => getWorkProgress(status);
+  const createWorkReport = async (selectedHouses: HouseWorkItem[], reportTitle: string) => {
+    const { jsPDF } = await import("jspdf");
+    const pdf = new jsPDF({ unit: "mm", format: "a4" });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    let y = 0;
+    const header = () => {
+      pdf.setFillColor(14, 62, 128); pdf.rect(0, 0, pageWidth, 27, "F");
+      pdf.setTextColor(255, 255, 255); pdf.setFont("helvetica", "bold"); pdf.setFontSize(14); pdf.text(`${company.tradeName || company.legalName} — RELATÓRIO DE OBRA`, 14, 9);
+      pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5); pdf.text(company.cnpj ? `CNPJ/CPF: ${company.cnpj}` : company.legalName, 14, 14);
+      pdf.text([company.phone, company.email].filter(Boolean).join(" • ") || `${company.city}/${company.state}`, 14, 19);
+      pdf.text(reportTitle, pageWidth - 14, 11, { align: "right" });
+      pdf.text(`Gerado em ${new Date().toLocaleString("pt-BR")}`, pageWidth - 14, 19, { align: "right" });
+      pdf.setTextColor(35, 55, 78); y = 35;
+    };
+    const ensureSpace = (height: number) => { if (y + height > pageHeight - 18) { pdf.addPage(); header(); } };
+    header();
+    for (const house of selectedHouses) {
+      ensureSpace(24);
+      pdf.setFillColor(238, 246, 255); pdf.roundedRect(12, y, pageWidth - 24, 16, 2, 2, "F");
+      pdf.setFont("helvetica", "bold"); pdf.setFontSize(11); pdf.setTextColor(16, 91, 178); pdf.text(`QUADRA ${house.block} • CASA / LOTE ${String(house.lot).padStart(2, "0")}`, 16, y + 7);
+      pdf.setFontSize(8); pdf.setTextColor(50, 70, 92); pdf.text(`Situação atual: ${normalizeHouseStatus(house.status)}`, 16, y + 12); y += 21;
+      const history = [...(house.history ?? [])].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      if (!history.length) { pdf.setFont("helvetica", "italic"); pdf.setFontSize(8); pdf.setTextColor(115, 130, 145); pdf.text("Nenhuma alteração registrada para esta casa.", 16, y); y += 9; }
+      for (const [index, update] of history.entries()) {
+        const photos = normalizeStagePhotos(update.photos, update.photo, update.status);
+        ensureSpace(photos.length ? 67 : 27);
+        pdf.setDrawColor(216, 228, 239); pdf.line(16, y, pageWidth - 16, y); y += 6;
+        pdf.setFont("helvetica", "bold"); pdf.setFontSize(9); pdf.setTextColor(37, 61, 86); pdf.text(`${String(index + 1).padStart(2, "0")} • ${normalizeHouseStatus(update.status)}`, 16, y);
+        pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5); pdf.setTextColor(105, 122, 140); pdf.text(new Date(update.createdAt).toLocaleString("pt-BR"), pageWidth - 16, y, { align: "right" }); y += 6;
+        if (update.responsible) { pdf.setTextColor(55, 73, 93); pdf.text(`Responsável: ${update.responsible}`, 16, y); y += 5; }
+        if (update.note) { pdf.setTextColor(55, 73, 93); const lines = pdf.splitTextToSize(`Observações: ${update.note}`, pageWidth - 32) as string[]; pdf.text(lines, 16, y); y += lines.length * 4 + 3; }
+        else { pdf.setTextColor(125, 139, 153); pdf.text("Sem observações.", 16, y); y += 6; }
+        for (let photoIndex = 0; photoIndex < photos.length; photoIndex += 2) {
+          ensureSpace(45);
+          photos.slice(photoIndex, photoIndex + 2).forEach((photo, column) => { try { pdf.setFontSize(7); pdf.setTextColor(65, 83, 103); pdf.text(photo.label, 16 + column * 89, y); pdf.addImage(photo.url, photo.url.startsWith("data:image/png") ? "PNG" : "JPEG", 16 + column * 89, y + 3, 84, 40, undefined, "FAST"); } catch {} });
+          y += 44;
+        }
+        y += 3;
+      }
+      if (house.incidents?.length) {
+        ensureSpace(18); pdf.setFillColor(255,244,244); pdf.roundedRect(14,y,pageWidth-28,10,2,2,"F"); pdf.setFont("helvetica","bold"); pdf.setFontSize(9); pdf.setTextColor(180,55,55); pdf.text("PERDAS E ROUBOS",18,y+6.5); y+=15;
+        for (const incident of [...house.incidents].reverse()) { ensureSpace(55); pdf.setFont("helvetica","bold"); pdf.setFontSize(8.5); pdf.setTextColor(130,45,45); pdf.text(`${incident.type} • ${new Date(incident.createdAt).toLocaleString("pt-BR")}`,16,y); y+=5; pdf.setFont("helvetica","normal"); pdf.setFontSize(7.5); pdf.setTextColor(65,78,92); pdf.text(`Responsável: ${incident.responsible}`,16,y); y+=5; if(incident.note){const lines=pdf.splitTextToSize(incident.note,pageWidth-32) as string[];pdf.text(lines,16,y);y+=lines.length*4+2;} try{pdf.addImage(incident.photo,incident.photo.startsWith("data:image/png")?"PNG":"JPEG",16,y,84,40,undefined,"FAST");y+=44;}catch{} }
+      }
+      y += 3;
+    }
+    const pages = pdf.getNumberOfPages();
+    for (let page = 1; page <= pages; page += 1) { pdf.setPage(page); pdf.setDrawColor(220, 229, 238); pdf.line(12, pageHeight - 12, pageWidth - 12, pageHeight - 12); pdf.setFontSize(7); pdf.setTextColor(110, 126, 143); pdf.text(`ProAR Gestão de Serviços — BY TAV's • ${company.tradeName || company.legalName}`, 14, pageHeight - 7); pdf.text(`Página ${page} de ${pages}`, pageWidth - 14, pageHeight - 7, { align: "right" }); }
+    const safeTitle = reportTitle.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
+    return { pdf, filename: `relatorio-${safeTitle}.pdf` };
+  };
+  const issueWorkReport = async (selectedHouses: HouseWorkItem[], reportTitle: string, share = false) => {
+    setReportNotice("A gerar relatório com fotos e histórico...");
+    try {
+      const { pdf, filename } = await createWorkReport(selectedHouses, reportTitle);
+      if (share) {
+        const file = new File([pdf.output("blob")], filename, { type: "application/pdf" });
+        if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) { await navigator.share({ title: reportTitle, text: `Segue o ${reportTitle} da ${company.tradeName}.`, files: [file] }); setReportNotice("Relatório compartilhado com sucesso."); }
+        else { pdf.save(filename); window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`Segue o ${reportTitle} da ${company.tradeName}. O PDF foi baixado e deve ser anexado a esta conversa.`)}`, "_blank", "noopener,noreferrer"); setReportNotice("PDF baixado. Anexe o arquivo na conversa aberta do WhatsApp."); }
+      } else { pdf.save(filename); setReportNotice("Relatório PDF gerado com sucesso."); }
+    } catch (error) { if ((error as Error)?.name !== "AbortError") setReportNotice("Não foi possível gerar o relatório. Tente novamente."); }
+    window.setTimeout(() => setReportNotice(""), 5000);
+  };
+  return <section className="houses-app">
+    {saveState !== "idle" && <div className={`work-save-bar ${saveState}`} role="status"><i/><span>{saveState === "saving" ? "Salvando..." : saveState === "saved" ? "✓ ALTERAÇÃO EFETUADA" : "Não foi possível salvar a alteração"}</span></div>}
+    <div className="work-manager-bar"><div><span><Building2 size={17}/></span><label>Obra ativa<select value={activeProject.id} onChange={event=>selectWorkProject(event.target.value)}>{projects.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}</select></label><small>{activeProject.blocks.length} quadra(s) • {activeProject.blocks.reduce((total,item)=>total+item.houses,0)} casas • {activeProject.commonAreas.length} áreas comuns</small></div><div className="work-manager-actions"><button className="outline-btn" onClick={()=>void renameActiveProject()}><Edit3 size={15}/> Alterar obra</button>{activeProject.id!==RESERVA_IMPERIAL.id&&<button className="outline-btn danger" onClick={()=>void deleteActiveProject()}><Trash2 size={15}/> Excluir obra</button>}<button className="outline-btn" onClick={()=>setAccessManagerOpen(true)}><ShieldCheck size={15}/> Engenheiros e Fiscais / Acesso Externo</button><button className="primary-btn" onClick={()=>setWorkManagerOpen(true)}><Plus size={15}/> Cadastrar obra</button></div></div>
+    <div className="work-external-access-card"><div><span><ShieldCheck size={19}/></span><div><b>Acessos externos da obra</b><small>{(activeProject.externalAccess ?? []).length ? `${(activeProject.externalAccess ?? []).length} acesso(s) cadastrado(s)` : "Nenhum engenheiro ou fiscal cadastrado"} • permissões restritas a apontamentos</small></div></div><button className="primary-btn" onClick={()=>setAccessManagerOpen(true)}><Plus size={14}/> Adicionar engenheiro ou fiscal</button></div>
+    <WorkMaterialPlanningPanel planning={activeProject.materialPlanning} totalHouses={activeProject.blocks.reduce((total,item)=>total+item.houses,0)} onSave={async materialPlanning=>{const next=projects.map(project=>project.id===activeProject.id?{...project,materialPlanning}:project);return await saveProjectsList(next,"Planejamento de materiais salvo na obra.");}}/>
+    <section className="work-today-panel"><header><div><span>PAINEL HOJE</span><h3>Operação da obra</h3></div><b>{todaySummary.completed}/{todaySummary.total} concluídas</b></header><div className="work-today-kpis"><button onClick={()=>setStatusFilter("Todos")}><small>EM ANDAMENTO</small><strong>{todaySummary.inProgress}</strong></button><button onClick={()=>setStatusFilter("INÍCIO DE OBRA")}><small>NÃO INICIADAS</small><strong>{todaySummary.notStarted}</strong></button><button className={todaySummary.incidents?"warning":""}><small>OCORRÊNCIAS</small><strong>{todaySummary.incidents}</strong></button><button className={todaySummary.stale?"warning":""}><small>SEM ATUALIZAÇÃO +7 DIAS</small><strong>{todaySummary.stale}</strong></button></div><div className="work-next-actions"><b>Próximas ações</b>{todaySummary.nextActions.slice(0,4).map(item=><button key={item.status} onClick={()=>setStatusFilter(normalizeHouseStatus(item.status))}><span>{normalizeHouseStatus(item.status)}</span><strong>{item.count}</strong><ChevronRight size={14}/></button>)}</div><footer><span><History size={13}/> {todayLog.length} atualização(ões) registrada(s) hoje</span><button onClick={()=>issueWorkReport(houses, `Diário de obra — ${activeProject.name}`)}><FileText size={13}/> Diário da obra</button></footer></section>
+    <div className="houses-hero"><div><span className="section-kicker"><House size={12}/> CONTROLE DE EXECUÇÃO</span><h2>{activeProject.name}</h2><p>Acompanhamento individual das casas e áreas comuns, com evidências e histórico de execução.</p></div><div className="houses-public-share"><span><MapPin size={18}/></span><div><small>ACESSO DO CLIENTE</small><b>{shareToken ? "Mapa público ativo" : "Criar link de acompanhamento"}</b><em>{shareToken ? "Atualização automática em tempo real" : "O cliente verá somente o andamento da obra"}</em></div><button onClick={refreshWorkMap}><ArrowDownRight size={14}/> Atualizar</button><button onClick={sendWorkMap}><ArrowUpRight size={14}/> Enviar</button><button onClick={sharePublicMap}><MessageCircle size={14}/>{shareToken ? "Link" : "Criar link"}</button>{shareToken && <a href={`/obra/${shareToken}`} target="_blank" rel="noreferrer"><Eye size={14}/> Visualizar</a>}</div><div className="houses-progress"><div><small>PROGRESSO GERAL</small><strong>{completion}%</strong></div><i><b style={{ width: `${completion}%` }}/></i><span>{completed} finalizadas de {houses.length} unidades cadastradas</span></div></div>
+    <div className="work-block-overview"><div className="work-block-overview-head"><div><span>PROGRESSO POR QUADRA</span><h3>Visão rápida da execução</h3></div><small>Clique em uma quadra para filtrar as unidades abaixo.</small></div><div className="work-block-summary">{activeProject.blocks.map(({block})=>{const stat=blockProgress(block);return <button key={block} style={{"--block-progress":`${stat.progress}%`} as React.CSSProperties} className={blockFilter===block?"active":""} onClick={()=>setBlockFilter(block)}><div><b>Quadra {block}</b><span>{stat.progress}%</span></div><i><em style={{width:`${stat.progress}%`}}/></i><small>{stat.entries.length} casas • {stat.done} concluídas • {stat.working} em andamento</small></button>})}</div></div>
+    <div className="houses-kpis"><article><span><House size={18}/></span><div><small>TOTAL CADASTRADO</small><strong>{houses.length}</strong><em>{activeProject.blocks.length} quadras • {activeProject.commonAreas.length} áreas comuns</em></div></article>{HOUSE_STATUSES.map(status => { const total = houses.filter(house => normalizeHouseStatus(house.status) === status.name).length; return <article key={status.name}><i style={{background:status.color}}/><div><small>{status.name}</small><strong>{total}</strong><em>{Math.round(total / houses.length * 100)}% da obra</em></div></article>; })}</div>
+    <div className="houses-toolbar"><label><Search size={15}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar quadra, casa ou área comum..."/></label><select value={blockFilter} onChange={event => setBlockFilter(event.target.value)}><option>Todas</option>{activeProject.blocks.map(item => <option key={item.block}>{item.block}</option>)}{activeProject.commonAreas.length > 0 && <option>Áreas Comuns</option>}</select><select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option>Todos</option>{HOUSE_STATUSES.map(item => <option key={item.name}>{item.name}</option>)}</select><span>{visible.length} unidade(s) exibida(s)</span></div>
+    <div className="houses-legend">{HOUSE_STATUSES.map(status => <span key={status.name}><i style={{background:status.color}}/>{status.name}</span>)}</div>
+    {reportNotice && <div className="work-report-notice"><FileText size={15}/>{reportNotice}</div>}
+    <div className="block-list">{grouped.map(group => { const completeBlock = houses.filter(house => house.block === group.block); return <section className="block-section" key={group.block}><header><div><span>{group.block === "Áreas Comuns" ? "ÁREA" : "QUADRA"}</span><strong>{group.block}</strong></div><p>{group.houses.length} unidade(s) exibida(s)</p><b>{completeBlock.filter(house => normalizeHouseStatus(house.status) === "SERVIÇO CONCLUÍDO").length}/{completeBlock.length} concluídas</b><div className="block-report-actions"><button onClick={() => issueWorkReport(completeBlock, `Relatório completo da Quadra ${group.block}`)}><FileText size={13}/> PDF da quadra</button><button onClick={() => issueWorkReport(completeBlock, `Relatório completo da Quadra ${group.block}`, true)}><MessageCircle size={13}/> WhatsApp</button></div></header><div className="house-grid">{group.houses.map(house => <article key={house.id} style={{"--house-color":statusColor(house.status)} as React.CSSProperties} onDoubleClick={() => openUpdate(house)}><div className="house-card-top"><span><House size={15}/></span><div><small>{house.kind === "common" ? "ÁREA COMUM" : `QUADRA ${house.block}`}</small><h3>{house.kind === "common" ? house.name : `Lote ${String(house.lot).padStart(2,"0")}`}</h3></div>{house.photo && <img src={house.photo} alt={`Casa ${house.id}`}/>}</div>
+<div className="house-status"><i/><span>{normalizeHouseStatus(house.status)}</span></div><div className="house-mini-progress"><i><b style={{width:`${houseProgress(house.status)}%`}}/></i><small>{houseProgress(house.status)}%</small></div>
+{house.note && <p>{house.note}</p>}<small className="house-date">{house.updatedAt ? `Atualizado em ${new Date(house.updatedAt).toLocaleString("pt-BR")}` : "Sem alterações registradas"}</small><footer><button onClick={() => openUpdate(house)} title="Alterar status"><Edit3 size={13}/></button><button disabled={!house.history?.length} onClick={() => setHistoryHouse(house)} title="Histórico"><History size={13}/></button><button onClick={() => issueWorkReport([house], `Relatório da Quadra ${house.block} — Casa ${String(house.lot).padStart(2, "0")}`)} title="Gerar PDF"><FileText size={13}/></button><button onClick={() => issueWorkReport([house], `Relatório da Quadra ${house.block} — Casa ${String(house.lot).padStart(2, "0")}`, true)} title="Enviar pelo WhatsApp"><MessageCircle size={13}/></button></footer></article>)}</div></section>; })}</div>
+    {!visible.length && <div className="linked-empty"><Search size={22}/><h4>Nenhuma casa encontrada</h4><p>Altere os filtros para visualizar outros lotes.</p></div>}
+    {accessManagerOpen && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={()=>setAccessManagerOpen(false)} aria-label="Fechar"/><div className="modal work-register-modal external-access-modal"><div className="modal-head"><div><span>ACESSO EXTERNO DA OBRA</span><h2>Engenheiros e Fiscais</h2><p>O acesso externo permite somente registrar apontamentos com descrição e fotos. Status, progresso, etapas, custos e histórico interno permanecem protegidos.</p></div><button onClick={()=>setAccessManagerOpen(false)}><X size={18}/></button></div><div className="work-register-body"><section className="work-config-section"><header><div><b>Adicionar acesso</b><small>Crie quantos acessos forem necessários para esta obra.</small></div></header><form className="work-config-row external-access-form" onSubmit={event=>{event.preventDefault();void saveExternalAccess();}}><label>Nome<input required value={newAccessName} onChange={event=>setNewAccessName(event.target.value)} placeholder="Nome do engenheiro ou fiscal"/></label><label>Função<select value={newAccessRole} onChange={event=>setNewAccessRole(event.target.value as WorkExternalAccess["role"])}><option>Engenheiro</option><option>Fiscal</option></select></label><label>Usuário de acesso<input required value={newAccessUsername} onChange={event=>setNewAccessUsername(event.target.value)} placeholder="usuario.externo" autoComplete="username"/></label><label>Senha de acesso<input required minLength={6} type="password" value={newAccessPassword} onChange={event=>setNewAccessPassword(event.target.value)} placeholder="mínimo 6 caracteres" autoComplete="new-password"/></label><button type="submit" className="primary-btn external-access-submit" disabled={accessSaving}><Plus size={14}/> {accessSaving?"Salvando...":"Adicionar acesso"}</button>{accessNotice&&<div className={`external-access-notice ${accessNotice.tone}`} role="status">{accessNotice.text}</div>}</form></section><section className="work-config-section"><header><div><b>Acessos cadastrados</b><small>{(activeProject.externalAccess ?? []).length} pessoa(s) • somente apontamentos externos</small></div></header>{activeProject.externalAccess?.length ? <div className="external-access-list">{activeProject.externalAccess.map(access=><article key={access.id}><div><b>{access.name}</b><small>{access.role} • <code>{access.username}</code></small></div><span className={access.active ? "active" : "inactive"}>{access.active ? "Ativo" : "Inativo"}</span><button type="button" className="outline-btn" disabled={accessSaving} onClick={()=>void toggleExternalAccess(access.id)}>{access.active ? "Inativar" : "Ativar"}</button></article>)}</div> : <p className="work-config-empty">Nenhum acesso externo cadastrado nesta obra.</p>}</section></div><div className="modal-actions"><button className="primary-btn" onClick={()=>setAccessManagerOpen(false)}>Concluir</button></div></div></div>}
+    {workManagerOpen && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={()=>setWorkManagerOpen(false)} aria-label="Fechar"/><div className="modal work-register-modal"><div className="modal-head"><div><span>GERENCIADOR DE OBRAS</span><h2>Cadastrar nova obra</h2><p>Defina as quadras, a quantidade de casas e as áreas comuns.</p></div><button onClick={()=>setWorkManagerOpen(false)}><X size={18}/></button></div><div className="work-register-body"><label className="wide">Nome da obra<input value={newWorkName} onChange={event=>setNewWorkName(event.target.value)} placeholder="Ex.: Residencial Primavera"/></label><section className="work-config-section"><header><div><b>Quadras e casas</b><small>Informe a identificação e a quantidade de casas de cada quadra.</small></div><button type="button" onClick={()=>setNewBlocks(current=>[...current,{block:String.fromCharCode(65+current.length),houses:1}])}><Plus size={13}/> Quadra</button></header>{newBlocks.map((item,index)=><div className="work-config-row" key={index}><label>Quadra<input value={item.block} onChange={event=>setNewBlocks(current=>current.map((block,i)=>i===index?{...block,block:event.target.value}:block))}/></label><label>Quantidade de casas<input type="number" min="1" value={item.houses} onChange={event=>setNewBlocks(current=>current.map((block,i)=>i===index?{...block,houses:Math.max(1,Number(event.target.value)||1)}:block))}/></label><button type="button" disabled={newBlocks.length===1} onClick={()=>setNewBlocks(current=>current.filter((_,i)=>i!==index))}><Trash2 size={14}/></button></div>)}</section><section className="work-config-section"><header><div><b>Áreas comuns</b><small>Adicione a quantidade necessária e dê um nome para cada área.</small></div><button type="button" onClick={()=>setNewCommonAreas(current=>[...current,""])}><Plus size={13}/> Área comum</button></header>{newCommonAreas.length===0?<p className="work-config-empty">Nenhuma área comum adicionada.</p>:newCommonAreas.map((name,index)=><div className="work-config-row common" key={index}><label>Nome da área comum<input value={name} onChange={event=>setNewCommonAreas(current=>current.map((area,i)=>i===index?event.target.value:area))} placeholder="Ex.: Academia, salão de festas..."/></label><button type="button" onClick={()=>setNewCommonAreas(current=>current.filter((_,i)=>i!==index))}><Trash2 size={14}/></button></div>)}</section></div><div className="modal-actions"><button className="outline-btn" onClick={()=>setWorkManagerOpen(false)}>Cancelar</button><button className="primary-btn" onClick={createWorkProject}><CheckCircle2 size={15}/> Cadastrar obra</button></div></div></div>}
+    {editing && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={() => setEditing(null)} aria-label="Fechar"/><div className="modal house-update-modal"><div className="modal-head"><div><span>ATUALIZAÇÃO DA OBRA</span><h2>Quadra {editing.block} • Casa {String(editing.lot).padStart(2,"0")}</h2><p>Status atual: {normalizeHouseStatus(editing.status)} • Responsável: {responsibleUser}</p></div><button onClick={() => setEditing(null)}><X size={18}/></button></div><div className="house-modal-tabs"><button className={houseModalTab === "Etapa" ? "active" : ""} onClick={()=>setHouseModalTab("Etapa")}><CheckCircle2 size={14}/> Etapa da obra</button><button className={houseModalTab === "Perdas e Roubos" ? "active warning" : ""} onClick={()=>setHouseModalTab("Perdas e Roubos")}><AlertTriangle size={14}/> Perdas e Roubos {editing.incidents?.length ? <span>{editing.incidents.length}</span> : null}</button></div>{houseModalTab === "Etapa" ? <><div className="house-stage-progress">{HOUSE_STATUSES.map((stage,index) => { const activeIndex = HOUSE_STATUSES.findIndex(item => item.name === nextStatus); return <div key={stage.name} className={index <= activeIndex ? "active" : ""}><i>{index < activeIndex ? <CheckCircle2 size={12}/> : index + 1}</i><span>{stage.name}</span></div>; })}</div><div className="house-update-body"><label>Novo status<select value={nextStatus} onChange={event => { setNextStatus(event.target.value as HouseWorkStatus); setPhotos({}); setSaveError(""); }}>{HOUSE_STATUSES.map(status => <option key={status.name}>{status.name}</option>)}</select></label><div className="status-preview" style={{"--preview-color":statusColor(nextStatus)} as React.CSSProperties}><i/><span>{nextStatus}</span></div>{HOUSE_STAGE_PHOTOS[nextStatus].length > 0 && <div className="stage-photo-slots wide">{HOUSE_STAGE_PHOTOS[nextStatus].map(label => <label className={photos[label] ? "filled" : ""} key={label}>{photos[label] ? <img src={photos[label]} alt={label}/> : <ImageIcon size={22}/>}<b>{label}</b><small>{photos[label] ? "Foto pronta • toque para substituir" : HOUSE_STAGE_OPTIONAL_PHOTOS.includes(nextStatus) ? "Foto opcional" : "Foto obrigatória"}</small><input type="file" accept="image/*" capture="environment" onChange={event => void readStagePhoto(label,event.target.files?.[0])}/>{photos[label] && <button type="button" onClick={event => { event.preventDefault(); setPhotos(current => { const next = {...current}; delete next[label]; return next; }); }}><X size={12}/> Remover</button>}</label>)}</div>}<label className="wide">Observação da etapa<textarea value={note} onChange={event => { setNote(event.target.value); setSaveError(""); }} placeholder={nextStatus === "AG. TUBULAÇÃO FORÇADA" ? "Informe os detalhes da tubulação forçada..." : "Descreva o serviço executado, pendências ou materiais utilizados..."}/><small>A observação poderá ser consultada no histórico permanente da casa.</small></label>{nextStatus === "SERVIÇO CONCLUÍDO" && <div className="completion-warning wide"><CheckCircle2 size={19}/><span><b>Finalização da casa</b><small>Ao confirmar, o sistema registrará automaticamente data, horário e {responsibleUser} como responsável.</small></span></div>}</div><div className="modal-actions"><button className="outline-btn" onClick={() => setEditing(null)}>Cancelar</button><button className="primary-btn" disabled={!stageDirty || saveState === "saving"} onClick={() => void saveUpdate()}>{saveState === "saving" ? <RefreshCw size={15}/> : <CheckCircle2 size={15}/>} {saveState === "saving" ? "Salvando..." : "Salvar alterações"}</button></div></> : <><div className="incident-register-body"><div className="incident-form"><label>Tipo da ocorrência<select value={incidentType} onChange={event=>setIncidentType(event.target.value as "Perda" | "Roubo")}><option>Perda</option><option>Roubo</option></select></label><label className="incident-photo-upload">{incidentPhoto ? <img src={incidentPhoto} alt="Foto da ocorrência"/> : <><Camera size={25}/><b>Anexar foto da ocorrência</b><small>Câmera ou galeria • foto obrigatória</small></>}<input type="file" accept="image/*" capture="environment" onChange={event=>void readIncidentPhoto(event.target.files?.[0])}/></label><label className="wide">Observação<textarea value={incidentNote} onChange={event=>setIncidentNote(event.target.value)} placeholder="Descreva o item perdido ou roubado e os detalhes da ocorrência..."/></label></div><section className="incident-history"><header><b>Registros desta unidade</b><small>{editing.incidents?.length ?? 0} ocorrência(s)</small></header>{editing.incidents?.length ? editing.incidents.map(incident=>
+<article key={incident.id}><label className="replaceable-photo"><img src={incident.photo} alt={incident.type}/><span>Alterar foto</span><input type="file" accept="image/*" capture="environment" onChange={event=>void replaceIncidentPhoto(incident.id,event.target.files?.[0])}/></label>
+<div><strong>{incident.type}</strong><time>{new Date(incident.createdAt).toLocaleString("pt-BR")}</time><p>{incident.note || "Sem observação."}</p><small>Responsável: {incident.responsible}</small></div></article>) : <div className="incident-empty"><AlertTriangle size={20}/><span>Nenhuma perda ou roubo registrado nesta unidade.</span></div>}</section></div><div className="modal-actions"><button className="outline-btn" onClick={() => setEditing(null)}>Fechar</button><button className="danger-primary-btn" onClick={saveIncident}><Camera size={15}/> Registrar {incidentType.toLowerCase()}</button></div></>}</div></div>}
+    {editing && saveError && <div role="alert" style={{position:"fixed",right:20,bottom:20,zIndex:1000,maxWidth:360,padding:"12px 15px",borderRadius:10,background:"#fff1f2",border:"1px solid #fda4af",color:"#9f1239",boxShadow:"0 12px 30px rgba(15,23,42,.22)",fontWeight:700}}>{saveError}</div>}
+    {editing && !saveError && houseModalTab === "Etapa" && <div style={{position:"fixed",right:20,bottom:20,zIndex:999,maxWidth:360,padding:"10px 14px",borderRadius:10,background:"#0f172a",color:"#e2e8f0",boxShadow:"0 12px 30px rgba(15,23,42,.28)",fontSize:13}}>{saveState === "saving" ? "Salvando..." : stageDirty ? "Alterações não salvas" : "Nenhuma alteração realizada."}</div>}
+    {historyHouse && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={() => setHistoryHouse(null)} aria-label="Fechar"/><div className="modal house-history-modal"><div className="modal-head"><div><span>HISTÓRICO DA CASA</span><h2>Quadra {historyHouse.block} • Casa {String(historyHouse.lot).padStart(2,"0")}</h2><p>{historyHouse.history.length} alteração(ões) permanente(s) • clique numa etapa para ver os detalhes</p></div><button onClick={() => setHistoryHouse(null)}><X size={18}/></button></div><div className="house-timeline">{historyHouse.history.map(item => { const itemPhotos = normalizeStagePhotos(item.photos,item.photo,item.status); return <article key={item.id} onClick={() => setHistoryUpdate(item)} tabIndex={0}><i style={{background:statusColor(item.status)}}/><div><header><strong>{normalizeHouseStatus(item.status)} — Concluído</strong><time>{new Date(item.createdAt).toLocaleString("pt-BR")}</time></header><p>Responsável: {item.responsible || "Não informado no registro antigo"}</p><small>{itemPhotos.length} foto(s) anexada(s){item.note ? " • com observação" : ""}</small></div></article>; })}</div><div className="modal-actions"><button className="outline-btn" onClick={() => issueWorkReport([historyHouse], `Relatório da Quadra ${historyHouse.block} — Casa ${String(historyHouse.lot).padStart(2,"0")}`)}><FileText size={14}/> Relatório completo</button><button className="primary-btn" onClick={() => setHistoryHouse(null)}>Fechar histórico</button></div></div></div>}
+    {historyUpdate && <div className="modal-layer house-history-detail-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={() => setHistoryUpdate(null)} aria-label="Fechar"/><div className="modal house-history-detail"><div className="modal-head"><div><span>DETALHES DA ETAPA</span><h2>{normalizeHouseStatus(historyUpdate.status)}</h2><p>{new Date(historyUpdate.createdAt).toLocaleString("pt-BR")} • {historyUpdate.responsible || "Responsável não informado"}</p></div><button onClick={() => setHistoryUpdate(null)}><X size={18}/></button></div><div className="history-detail-body">{normalizeStagePhotos(historyUpdate.photos,historyUpdate.photo,historyUpdate.status).map(photo =>
+<figure key={photo.label}><img src={photo.url} alt={photo.label}/><figcaption>{photo.label}</figcaption><label className="replace-history-photo"><Edit3 size={12}/> Alterar foto<input type="file" accept="image/*" capture="environment" onChange={event=>void replaceHistoryPhoto(photo.label,event.target.files?.[0])}/></label></figure>
+)}{!normalizeStagePhotos(historyUpdate.photos,historyUpdate.photo,historyUpdate.status).length && <div className="no-stage-photos"><ImageIcon size={22}/><span>Nenhuma foto exigida ou anexada nesta etapa.</span></div>}<div className="history-detail-note"><b>Observações da etapa</b><p>{historyUpdate.note || "Nenhuma observação registrada."}</p></div></div><div className="modal-actions"><button className="primary-btn" onClick={() => setHistoryUpdate(null)}>Fechar detalhes</button></div></div></div>}
+  </section>;
+}
+
+function EmployeesWorkspace({ records, serviceOrders, onOpen, onUpdate, onDelete, canEdit, canManageLogin }: { records: ModuleRecord[]; serviceOrders: ServiceOrder[]; onOpen: (name:string)=>void; onUpdate:(moduleName:string,record:ModuleRecord)=>Promise<boolean>; onDelete:(moduleName:string,record:ModuleRecord)=>void; canEdit:boolean; canManageLogin:boolean }) {
+  const [query,setQuery]=useState(""); const [selected,setSelected]=useState<ModuleRecord|null>(null); const [draft,setDraft]=useState<ModuleRecord|null>(null); const [tab,setTab]=useState("Dados Gerais");
+  const filtered=records.filter(r=>`${r.id} ${r.name} ${r.employeeRole||r.category||""} ${r.phone||""} ${r.email||""}`.toLowerCase().includes(query.toLowerCase()));
+  const employeeOrders=(employee:ModuleRecord)=>serviceOrders.filter(o=>o.tech===employee.name);
+  const [saving,setSaving]=useState(false),[signatureBusy,setSignatureBusy]=useState(false),[saveNotice,setSaveNotice]=useState("");
+  const [loginPassword,setLoginPassword]=useState(""),[loginConfirmation,setLoginConfirmation]=useState("");
+  const [saveError,setSaveError]=useState(false);
+  const passwordInput=useRef<HTMLInputElement>(null),confirmationInput=useRef<HTMLInputElement>(null);
+  const passwordIssue=employeePasswordIssue(loginPassword,loginConfirmation);
+  const passwordErrorId="employee-password-error-"+(selected?.id||"");
+  const showSaveError=(message:string)=>{setSaveError(true);setSaveNotice("Não foi salvo. "+message);};
+  const save=async()=>{
+    if(!draft||saving||signatureBusy||!canEdit)return;
+    const username=String(draft.employeeUsername||"").trim().toLocaleLowerCase("pt-BR");
+    const loginChanged=username!==String(selected?.employeeUsername||"").trim().toLocaleLowerCase("pt-BR")||Boolean(loginPassword);
+    if(loginChanged&&!canManageLogin){showSaveError("Somente administradores podem alterar o login.");return;}
+    if(loginChanged&&!/^[a-z0-9._@+-]{3,120}$/.test(username)){showSaveError("Informe um usuário de 3 a 120 caracteres, sem espaços.");return;}
+    if(loginChanged&&records.some(r=>r.id!==draft.id&&String(r.employeeUsername||"").trim().toLocaleLowerCase("pt-BR")===username)){showSaveError("Este usuário já pertence a outro funcionário.");return;}
+    if(passwordIssue){
+      showSaveError(passwordIssue.message);setTab("Permissões de Acesso");
+      requestAnimationFrame(()=>{const input=passwordIssue.field==="password"?passwordInput.current:confirmationInput.current;input?.focus();input?.scrollIntoView({block:"center",behavior:"smooth"});});
+      return;
+    }
+    setSaving(true);setSaveError(false);setSaveNotice("");
+    try{
+      const updated=loginChanged?{...draft,employeeUsername:username,...(loginPassword?{employeePasswordHash:await passwordHash(loginPassword)}:{})}:draft;
+      if(await onUpdate("Funcionários",updated)){setSelected(updated);setDraft({...updated});setLoginPassword("");setLoginConfirmation("");setSaveNotice("Cadastro confirmado no banco. Alterações de login serão usadas no próximo acesso.");}
+      else showSaveError("Gravação não confirmada. Revise o aviso do sistema e tente novamente.");
+    }catch{showSaveError("Falha ao salvar. O cadastro permanece em edição.");}
+    finally{setSaving(false);}
+  };
+  const field=(key:keyof ModuleRecord,label:string,type="text")=><label>{label}<input type={type} value={String(draft?.[key]??"")} onChange={e=>setDraft(d=>d?{...d,[key]:type==="number"?Number(e.target.value):e.target.value}:d)}/></label>;
+  const open=(r:ModuleRecord)=>{setSelected(r);setDraft({...r});setLoginPassword("");setLoginConfirmation("");setSaveNotice("");setTab("Dados Gerais");};
+  const permissionModules=EMPLOYEE_ACCESS_MODULES;
+  const permissionActions=["Visualizar","Criar","Editar","Excluir"] as const;
+  const applyAccessProfile=(profile:string)=>{
+    if(!canManageLogin||saving)return;
+    setDraft(d=>d?{...d,accessProfile:profile,employeeRole:employeeAccessRole(profile),employeePermissions:employeeAccessPreset(profile)}:d);
+    setSaveError(false);setSaveNotice("Perfil aplicado à matriz. Clique em Salvar para confirmar. O funcionário deve entrar novamente para atualizar os acessos.");
+  };
+  const togglePermission=(module:string,action:typeof permissionActions[number])=>setDraft(d=>{if(!d)return d;const current=d.employeePermissions?.[module]??[];const next=current.includes(action)?current.filter(a=>a!==action):[...current,action];return {...d,accessProfile:"Personalizado",employeePermissions:{...(d.employeePermissions??{}),[module]:next}};});
+  return <section className="employees-workspace">
+    {!selected ? <><div className="management-hero employee-list-hero"><div><span className="section-kicker"><BriefcaseBusiness size={12}/> EQUIPE PROAR</span><h2>Funcionários</h2><p>Equipe, acessos, atividade de campo e histórico operacional.</p></div><button className="primary-btn" onClick={()=>onOpen("Novo registro • Funcionários")}><Plus size={15}/> Novo funcionário</button></div>
+    <div className="employee-list-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar por nome, código, cargo, telefone ou e-mail"/></label><span>{filtered.length} funcionário(s)</span></div>
+    <div className="panel employee-table"><div className="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>NOME & CARGO</th><th>TELEFONE / E-MAIL</th><th>PERFIL DE ACESSO</th><th>STATUS GPS</th><th>SITUAÇÃO</th><th>AÇÕES</th></tr></thead><tbody>{filtered.map(r=><tr key={r.id}><td><b className="order-id">{r.id}</b></td><td><strong>{r.name}</strong><small>{r.employeeRole||r.category||"Função não informada"}</small></td><td><strong>{r.phone||"—"}</strong><small>{r.email||"—"}</small></td><td><span className="employee-access-profile">{r.accessProfile || (r.employeePermissions && Object.keys(r.employeePermissions).length ? "Personalizado" : "Não configurado")}</span></td><td><span className="gps-state offline"><i/>Consultar ficha</span></td><td><span className={`workflow-status ${/ativo/i.test(r.status||"Ativo")?"done":/inativo/i.test(r.status||"")?"blocked":""}`}>{r.status||"Ativo"}</span></td><td><div className="record-actions"><button title="Editar ficha" onClick={()=>open(r)}><Edit3 size={14}/></button><button title="Acompanhamento da jornada" onClick={()=>{open(r);setTab("Acompanhamento");}}><MapPin size={14}/></button><button className="danger" title="Desativar / excluir" onClick={()=>onDelete("Funcionários",r)}><Trash2 size={14}/></button></div></td></tr>)}</tbody></table></div></div></>:
+    <div className="employee-profile">
+      <header className="employee-sticky-header"><button className="employee-back" disabled={saving} onClick={()=>{setSelected(null);setLoginPassword("");setLoginConfirmation("");}}><ArrowLeft size={15}/> Equipe</button><div className="employee-avatar">{selected.name.split(" ").map(x=>x[0]).slice(0,2).join("").toUpperCase()}</div><div className="employee-identity"><h2>{selected.name}</h2><p>{selected.id} <span>{selected.employeeRole||selected.category||"Funcionário"}</span> <b>{selected.status||"Ativo"}</b></p></div><div className="employee-gps-live"><i/><span>JORNADA</span><small>Consulte Acompanhamento</small></div><div className="employee-header-actions"><button className="outline-btn" disabled={saving} onClick={()=>{setDraft({...selected});setLoginPassword("");setLoginConfirmation("");setSaveNotice("");}}>Descartar</button><button className="primary-btn" disabled={!canEdit||saving||signatureBusy} onClick={()=>void save()}><Save size={14}/> {saving?"Salvando…":"Salvar"}</button><button className="outline-btn" title="Mais ações"><MoreHorizontal size={16}/></button></div></header>
+      {saveNotice&&<p role={saveError?"alert":"status"} className="permission-profile-note" style={saveError?{color:"#991b1b",background:"#fef2f2",border:"1px solid #f87171",padding:12,fontWeight:600}:undefined}>{saveNotice}</p>}
+      <nav className="employee-tabs"><button className={tab==="Assinatura"?"active":""} onClick={()=>setTab("Assinatura")}><PenTool size={14}/>Assinatura padrão</button><button className={tab==="Dados Gerais"?"active":""} onClick={()=>setTab("Dados Gerais")}><UserRound size={14}/>Dados Gerais</button><button className={tab==="Permissões de Acesso"?"active":""} onClick={()=>setTab("Permissões de Acesso")}><LockKeyhole size={14}/>Permissões de Acesso</button><button className={tab==="Acompanhamento"?"active":""} onClick={()=>setTab("Acompanhamento")}><MapPin size={14}/>Acompanhamento</button><button className={tab==="Ponto Digital"?"active":""} onClick={()=>setTab("Ponto Digital")}><Clock3 size={14}/>Ponto Digital</button><button className={tab==="Comissões & Histórico"?"active":""} onClick={()=>setTab("Comissões & Histórico")}><BriefcaseBusiness size={14}/>Comissões & Histórico</button><button className={tab==="Regras da Jornada"?"active":""} onClick={()=>setTab("Regras da Jornada")}><ShieldCheck size={14}/>Regras da Jornada</button><button className={tab==="Documentos & EPI"?"active":""} onClick={()=>setTab("Documentos & EPI")}><FileText size={14}/>Documentos & EPI</button></nav>
+      {tab==="Assinatura"&&<div className="employee-pane"><EmployeeSignatureEditor value={draft?.employeeSignature} onChange={value=>setDraft(current=>current?{...current,employeeSignature:value}:current)} onProcessing={setSignatureBusy} disabled={!canEdit||saving}/><p className="permission-profile-note">A assinatura acompanha o técnico atribuído à OS, sem substituir a assinatura do cliente. Salve o cadastro para aplicar aos próximos fechamentos.</p></div>}
+      {tab==="Dados Gerais"&&<div className="employee-pane"><article className="employee-card"><h3>Identificação Pessoal</h3><div className="employee-grid personal">{field("name","Nome Completo")}{field("doc","CPF")}{field("stateRegistration","RG")}{field("email","E-mail Corporativo","email")}{field("phone","Telefone / WhatsApp")}{field("date","Data de Nascimento","date")}</div></article><article className="employee-card"><h3>Dados Profissionais & Vínculo</h3><div className="employee-grid professional"><label>Cargo / Função<select value={draft?.employeeRole||""} onChange={e=>setDraft(d=>d?{...d,employeeRole:e.target.value}:d)}><option>Técnico de Campo</option><option>Supervisor</option><option>Orçamentista</option><option>Operador</option><option>Administrador</option></select></label><label>Tipo de Contrato<select value={draft?.category||""} onChange={e=>setDraft(d=>d?{...d,category:e.target.value}:d)}><option>CLT</option><option>PJ</option><option>Prestador</option></select></label>{field("createdAt","Data de Admissão")}{field("cost","Custo / Base","number")}</div></article><article className="employee-card"><h3>Endereço Residencial</h3><div className="employee-address-grid">{field("zipCode","CEP")}{field("street","Rua")}{field("addressNumber","Número")}{field("neighborhood","Bairro")}{field("city","Cidade")}{field("state","UF")}</div></article></div>}
+      {tab==="Permissões de Acesso"&&<div className="employee-pane"><article className="employee-card"><h3>Usuário e senha de login</h3><p className="permission-profile-note">O mesmo acesso é utilizado no sistema completo e no ProAR Mobile. Deixe a nova senha em branco para manter a atual. A senha existente nunca é exibida.</p><div className="employee-grid professional"><label>Usuário de login<input autoComplete="off" autoCapitalize="none" spellCheck={false} disabled={!canManageLogin||saving} value={draft?.employeeUsername||""} onChange={e=>setDraft(d=>d?{...d,employeeUsername:e.target.value}:d)}/></label><label>Nova senha<input ref={passwordInput} type="password" autoComplete="new-password" aria-invalid={passwordIssue?.field==="password"} aria-describedby={passwordIssue?.field==="password"?passwordErrorId:undefined} disabled={!canManageLogin||saving} value={loginPassword} onChange={e=>{setLoginPassword(e.target.value);setSaveNotice("");}}/><small>Mínimo de 10 caracteres, maiúscula, minúscula e número.</small></label><label>Confirmar nova senha<input ref={confirmationInput} type="password" autoComplete="new-password" aria-invalid={passwordIssue?.field==="confirmation"} aria-describedby={passwordIssue?.field==="confirmation"?passwordErrorId:undefined} disabled={!canManageLogin||saving} value={loginConfirmation} onChange={e=>{setLoginConfirmation(e.target.value);setSaveNotice("");}}/></label>{passwordIssue&&<p id={passwordErrorId} role="alert" style={{color:"#991b1b",background:"#fef2f2",border:"1px solid #f87171",padding:12}}>{passwordIssue.message} Nenhuma alteração será salva enquanto este erro existir.</p>}</div>{!canManageLogin&&<p>Somente administradores podem alterar o usuário e a senha.</p>}</article><article className="employee-card"><h3>Perfil de Acesso</h3><div className="role-pills">{[...EMPLOYEE_ACCESS_PROFILES,"Personalizado"].map(profile=><button disabled={!canManageLogin||saving} key={profile} className={draft?.accessProfile===profile?"active":""} onClick={()=>profile==="Personalizado"?setDraft(d=>d?{...d,accessProfile:profile}:d):applyAccessProfile(profile)}>{profile}</button>)}</div><p className="permission-profile-note">Selecione um perfil pronto e ajuste apenas as exceções necessárias. O perfil define o nível de acesso de login. Ajustes manuais identificam a matriz como Personalizado; administradores mantêm acesso total.</p></article><article className="employee-card permission-card"><h3>Matriz de Permissões</h3><div className="permission-table"><table><thead><tr><th>MÓDULO</th>{permissionActions.map(a=><th key={a}>{a}</th>)}</tr></thead><tbody>{permissionModules.map(m=><tr key={m}><td><b>{m}</b></td>{permissionActions.map(a=><td key={a}><button disabled={!canManageLogin||saving} className={draft?.employeePermissions?.[m]?.includes(a)?"permission-toggle on":"permission-toggle"} onClick={()=>togglePermission(m,a)} aria-label={`${a} em ${m}`}><i/></button></td>)}</tr>)}</tbody></table></div></article><article className="employee-card security-rules"><h3>Segurança do Acesso</h3><div className="security-rule-list"><label><span><b>Acesso ao App Mobile</b><small>Autoriza este funcionário a usar os recursos de campo e rotas.</small></span><input type="checkbox" checked={draft?.mobileAccessEnabled!==false} onChange={e=>setDraft(d=>d?{...d,mobileAccessEnabled:e.target.checked}:d)}/></label><label><span><b>Login somente no horário de expediente</b><small>O servidor bloqueia novas autenticações fora da janela configurada.</small></span><input type="checkbox" checked={draft?.restrictLoginToWorkHours===true} onChange={e=>setDraft(d=>d?{...d,restrictLoginToWorkHours:e.target.checked}:d)}/></label>{draft?.restrictLoginToWorkHours&&<div className="work-hours"><label>Início<input type="time" value={draft.workdayStart||"07:00"} onChange={e=>setDraft(d=>d?{...d,workdayStart:e.target.value}:d)}/></label><label>Fim<input type="time" value={draft.workdayEnd||"18:00"} onChange={e=>setDraft(d=>d?{...d,workdayEnd:e.target.value}:d)}/></label></div>}<label><span><b>Exigir GPS ativo para abrir/fechar OS</b><small>Check-in e saída exigem posição recente com precisão validada pelo backend.</small></span><input type="checkbox" checked={draft?.requireGpsForOs===true} onChange={e=>setDraft(d=>d?{...d,requireGpsForOs:e.target.checked}:d)}/></label></div></article></div>}
+      {tab==="Acompanhamento"&&<div className="employee-pane gps-pane"><EmployeeRoutesTab employeeId={selected.id} employeeName={selected.name} plannedOrders={employeeOrders(selected).map(o=>({id:o.id,client:o.client,date:o.date,time:o.time}))}/></div>}{tab==="Ponto Digital"&&<div className="employee-pane gps-pane"><EmployeeRoutesTab employeeId={selected.id} employeeName={selected.name} plannedOrders={employeeOrders(selected).map(o=>({id:o.id,client:o.client,date:o.date,time:o.time}))}/></div>}{tab==="Regras da Jornada"&&<div className="employee-pane"><article className="employee-card"><h3>Regras de jornada e conferência</h3><div className="employee-grid professional"><label>Início previsto<input type="time" value={draft?.workdayStart||"07:00"} onChange={e=>setDraft(d=>d?{...d,workdayStart:e.target.value}:d)}/></label><label>Fim previsto<input type="time" value={draft?.workdayEnd||"18:00"} onChange={e=>setDraft(d=>d?{...d,workdayEnd:e.target.value}:d)}/></label><label>Tolerância de atraso (min)<input type="number" min="0" max="120" value={draft?.workdayToleranceMinutes??10} onChange={e=>setDraft(d=>d?{...d,workdayToleranceMinutes:Number(e.target.value)||0}:d)}/></label><label>Meta mensal (horas)<input type="number" min="0" max="300" value={draft?.monthlyHourTarget??220} onChange={e=>setDraft(d=>d?{...d,monthlyHourTarget:Number(e.target.value)||0}:d)}/></label></div><div className="security-rule-list"><label><span><b>Hora extra exige aprovação</b><small>Marcações continuam registradas, mas a classificação como hora extra fica pendente de validação do gestor.</small></span><input type="checkbox" checked={draft?.overtimeRequiresApproval!==false} onChange={e=>setDraft(d=>d?{...d,overtimeRequiresApproval:e.target.checked}:d)}/></label></div><label>Justificativa de ajuste<textarea value={draft?.attendanceAdjustmentReason||""} onChange={e=>setDraft(d=>d?{...d,attendanceAdjustmentReason:e.target.value}:d)} placeholder="Informe o motivo somente quando houver correção manual de jornada."/></label><p className="permission-profile-note">Correções devem preservar a marcação original e gerar auditoria; o ajuste não deve apagar evidências anteriores.</p></article></div>}
+      {tab==="Documentos & EPI"&&<div className="employee-pane"><article className="employee-card"><h3>Documentos, NRs e saúde ocupacional</h3><p className="permission-profile-note">Controle NR10, NR35, ASO, CNH e certificados com vencimento. Documentos vencidos ou próximos do vencimento devem gerar pendência gerencial.</p><div className="employee-kpis"><article><small>DOCUMENTOS</small><strong>{draft?.employeeDocuments?.length||0}</strong></article><article><small>PRÓXIMOS DO VENCIMENTO</small><strong>{(draft?.employeeDocuments||[]).filter(d=>d.expiresAt&&Date.parse(d.expiresAt)<=Date.now()+30*86400000).length}</strong></article><article><small>ITENS SOB RESPONSABILIDADE</small><strong>{(draft?.employeeAssets||[]).filter(a=>!a.returnedAt).length}</strong></article></div></article><article className="employee-card"><h3>EPI, ferramentas, veículo e equipamentos</h3><p className="permission-profile-note">Cada entrega permanece vinculada ao funcionário até a devolução, preservando série, condição e datas para auditoria.</p><div className="entity-history-list">{(draft?.employeeAssets||[]).map(a=><article key={a.id}><span><b>{a.kind} • {a.name}</b><small>{a.serial||"Sem série"} • {a.condition||"Condição não informada"}</small></span><time>{a.returnedAt?"Devolvido":"Em posse"}</time></article>)}{!(draft?.employeeAssets||[]).length&&<div className="entity-empty">Nenhum item entregue ao funcionário.</div>}</div></article></div>}{tab==="Comissões & Histórico"&&<div className="employee-pane"><div className="employee-kpis"><article><small>OS EXECUTADAS</small><strong>{employeeOrders(selected).length}</strong></article><article><small>CONCLUÍDAS</small><strong>{employeeOrders(selected).filter(o=>/conclu/i.test(o.status)).length}</strong></article><article><small>COMISSÃO CADASTRADA</small><strong>{selected.commission?selected.commission.toLocaleString("pt-BR",{style:"currency",currency:"BRL"}):"—"}</strong></article></div><div className="panel employee-history-table"><div className="table-wrap"><table><thead><tr><th>OS</th><th>CLIENTE</th><th>SERVIÇO</th><th>DATA</th><th>STATUS</th></tr></thead><tbody>{employeeOrders(selected).map(o=><tr key={o.id}><td><b>{o.id}</b></td><td>{o.client}</td><td>{o.service}</td><td>{o.date}</td><td>{o.status}</td></tr>)}</tbody></table></div></div></div>}
+    </div>}
+  </section>;
+}
+
+function GenericModule({ name, onOpen, onDelete, onUpdate, onConvert, companyCnpj, canEdit, records, allModules, serviceOrders }: { name: string; onOpen: (name: string) => void; onDelete: (moduleName: string, record: ModuleRecord) => void; onUpdate: (moduleName: string, record: ModuleRecord) => void; onConvert?: (record: ModuleRecord, target: "Pedido" | "Ordem de serviço") => void; companyCnpj?: string; canEdit: boolean; records: ModuleRecord[]; allModules?: Record<string, ModuleRecord[]>; serviceOrders?: ServiceOrder[] }) {
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("Todas");
+  const [activeView, setActiveView] = useState("Visão geral");
+  const [editingCatalogRecord, setEditingCatalogRecord] = useState<ModuleRecord | null>(null);
+  const [editingCatalogInitial, setEditingCatalogInitial] = useState<ModuleRecord | null>(null);
+  const [historyCatalogRecord, setHistoryCatalogRecord] = useState<ModuleRecord | null>(null);
+  const [detailRecord, setDetailRecord] = useState<ModuleRecord | null>(null);
+  const [detailTab, setDetailTab] = useState("Dados gerais");
+  const [employeePasswordReset, setEmployeePasswordReset] = useState("");
+  const [nfeStatus, setNfeStatus] = useState("");
+  const [catalogImageBusy,setCatalogImageBusy]=useState(false);
+  const [catalogImageError,setCatalogImageError]=useState("");
+  const uploadEditingCatalogImage=async(file?:File)=>{
+    if(!file||!editingCatalogRecord)return;
+    setCatalogImageBusy(true);setCatalogImageError("");
+    try{
+      const prepared=await prepareCatalogImage(file);
+      setEditingCatalogRecord(record=>record?{...record,catalogImage:prepared.dataUrl,catalogImageName:prepared.name,catalogImageUpdatedAt:new Date().toISOString()}:record);
+    }catch(error){setCatalogImageError(error instanceof Error?error.message:"Não foi possível carregar a foto.");}
+    finally{setCatalogImageBusy(false);}
+  };
+  const catalogDirty=Boolean(editingCatalogRecord&&editingCatalogInitial&&JSON.stringify(editingCatalogRecord)!==JSON.stringify(editingCatalogInitial));
+  const openCatalogEditor=(record:ModuleRecord)=>{setEditingCatalogRecord({...record});setEditingCatalogInitial({...record});};
+  const closeCatalogEditor=()=>{if(catalogDirty&&!window.confirm("Existem alterações não salvas neste registro. Deseja sair e descartar as alterações?"))return;setEditingCatalogRecord(null);setEditingCatalogInitial(null);setEmployeePasswordReset("");};
+  useEffect(()=>{const beforeUnload=(event:BeforeUnloadEvent)=>{if(!catalogDirty)return;event.preventDefault();event.returnValue=""};window.addEventListener("beforeunload",beforeUnload);return()=>window.removeEventListener("beforeunload",beforeUnload)},[catalogDirty]);
+  useEffect(() => {
+    const handler=(event:Event)=>{
+      const detail=(event as CustomEvent<{module?:string;recordId?:string}>).detail;
+      if(detail?.module!==name || !detail.recordId) return;
+      const record=records.find(item=>item.id===detail.recordId);
+      if(record){setDetailRecord(record);setDetailTab("Dados gerais");}
+    };
+    window.addEventListener("proar:focus-record",handler);
+    return()=>window.removeEventListener("proar:focus-record",handler);
+  },[name,records]);
+  const catalogEditable = canEdit;
+  const descriptions: Record<string,string> = {
+    "Equipamentos": "Acompanhe o parque de equipamentos, histórico técnico, garantias e próximas manutenções.",
+    "Ordens de serviço": "Planeje atendimentos, distribua equipes e acompanhe cada serviço até a assinatura.",
+    "Estoque": "Controle entradas, saídas, reservas, inventários, perdas e alertas de reposição.",
+    "Compras": "Solicitações, aprovações, recebimentos, estoque e contas a pagar integrados.",
+    "Fornecedores": "Cadastro, produtos fornecidos, compras, financeiro, documentos e avaliação.",
+    "Financeiro": "Contas a pagar e receber, caixa, bancos, conciliação e centros de custo.",
+    "Obras": "Planeje e acompanhe obras, responsáveis, prazos, execução, perdas, materiais e resultado financeiro.",
+  };
+  const statuses = moduleStatuses[name] ?? ["Ativo", "Pendente", "Concluído", "Inativo"];
+  const tabs = managementTabs[name] ?? ["Visão geral", "Cadastros", "Histórico"];
+  const viewMatches = (record: ModuleRecord) => {
+    if (activeView === "Visão geral" || activeView === "Histórico" || activeView === "Cadastro" || activeView === "Equipe") return true;
+    if (activeView === "Planejamento") return /Planejamento/i.test(record.status || "");
+    if (activeView === "Execução") return /Em andamento|Pausada|Aguardando material/i.test(record.status || "");
+    if (activeView === "Perdas") return /perda|avaria|ocorrência/i.test(`${record.category} ${record.description}`);
+    if (activeView === "Pedidos") return !/Recebida|Cancelada|Devolvida/i.test(record.status || "");
+    if (activeView === "Aprovação") return /Aguardando aprovação|Aprovada/i.test(record.status || "");
+    if (activeView === "Recebimento") return /Aguardando entrega|Recebida/i.test(record.status || "");
+    if (activeView === "Contas a pagar") return /pagar|compra|fornecedor/i.test(`${record.name} ${record.category} ${record.description}`);
+    if (activeView === "Contas a receber") return /receber|venda|cliente|serviço/i.test(`${record.name} ${record.category} ${record.description}`);
+    if (activeView === "Fluxo de caixa") return /Paga|Recebida/i.test(record.status || "");
+    if (activeView === "Produtos fornecidos") return Boolean(record.description || record.category);
+    if (activeView === "Funções e permissões") return Boolean(record.category || record.description);
+    if (activeView === "Comissões") return /comissão/i.test(`${record.category} ${record.description}`);
+    return true;
+  };
+  const filtered = records.filter(record => `${record.id} ${record.name} ${record.client} ${record.description}`.toLowerCase().includes(query.toLowerCase()) && (statusFilter === "Todas" || (record.status || statuses[0]) === statusFilter) && viewMatches(record));
+  const totalValue = records.reduce((total, record) => total + (record.value ?? 0), 0);
+  const openValue = records.filter(record => /Rascunho|Aguardando|aberto|Vencida|Pendente/i.test(record.status || "")).reduce((total, record) => total + (record.value ?? 0), 0);
+  const exportRecords = () => downloadCsv(`${name.toLowerCase()}-proar.csv`, [["Código", "Nome", "Responsável", "Situação", "Valor", "Data"], ...filtered.map(record => [record.id, record.name, record.client, record.status || statuses[0], String(record.value ?? 0), record.date || record.createdAt])]);
+  const advance = (record: ModuleRecord) => {
+    const currentIndex = statuses.indexOf(record.status || statuses[0]);
+    onUpdate(name, { ...record, status: statuses[Math.min(currentIndex + 1, statuses.length - 1)] });
+  };
+  const duplicate = (record: ModuleRecord) => onUpdate(name, { ...record, receiptHistory: undefined, settlementHistory: undefined, purchaseId: undefined, invoiceNumber: undefined, id: `${name.slice(0,3).toUpperCase()}-${Date.now().toString().slice(-6)}`, name: `${record.name} (cópia)`, status: statuses[0], createdAt: new Date().toLocaleString("pt-BR") });
+  const searchDestinedNfe = async () => {
+    setNfeStatus("Consultando o Ambiente Nacional da NF-e...");
+    try { const response = await fetch("/api/nfe/distribution",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({cnpj:companyCnpj})}); const result = await response.json(); setNfeStatus(response.ok ? `${result.count ?? 0} nota(s) nova(s) localizada(s).` : result.error || "Não foi possível consultar as notas."); }
+    catch { setNfeStatus("Consulta indisponível. Verifique o certificado A1 nas Configurações Fiscais."); }
+  };
+  const openDetail = (record: ModuleRecord) => { setDetailRecord(record); setDetailTab("Dados gerais"); };
+  const detailTabsFor = (moduleName: string) => moduleName === "Funcionários" ? ["Dados gerais", "Rotas & Localização", "Histórico"] : moduleName === "Fornecedores"
+    ? ["Dados gerais", "Compras", "Produtos fornecidos", "Financeiro", "Documentos", "Histórico"]
+    : moduleName === "Equipamentos"
+      ? ["Dados gerais", "Dados técnicos", "Ordens de serviço", "Manutenções", "Garantias", "Histórico"]
+      : moduleName === "Compras"
+        ? ["Dados gerais", "Itens", "Pagamento", "Financeiro", "Documentos", "Histórico"]
+        : moduleName === "Produtos"
+          ? ["Dados gerais", "Estoque", "Fiscal", "Compras", "Clientes", "Histórico"]
+          : moduleName === "Serviços"
+            ? ["Dados gerais", "Execução", "Fiscal", "Clientes", "Ordens de serviço", "Orçamentos", "Histórico"]
+            : ["Dados gerais", "Histórico"];
+  const supplierMatches = (candidate: ModuleRecord, supplier: ModuleRecord) => {
+    const values = [supplier.name, supplier.tradeName, supplier.legalName].filter(Boolean).map(value => String(value).trim().toLowerCase());
+    return values.some(value => String(candidate.client || candidate.supplier || "").trim().toLowerCase() === value);
+  };
+  return <section className="module-page management-module">
+    <div className="management-hero"><div><span className="section-kicker"><Grid2X2 size={12}/> MÓDULO PROAR</span><h2>{name}</h2><p>{descriptions[name] || `Consulte, cadastre e acompanhe todas as informações de ${name.toLowerCase()} em um só lugar.`}</p>{name === "Compras" && nfeStatus && <small className="nfe-search-status">{nfeStatus}</small>}</div><div className="management-actions">{name === "Compras" && <button className="outline-btn" onClick={searchDestinedNfe}><Search size={14}/> Buscar NF-e destinadas</button>}<ContextReports title={name} rows={filtered.map(record=>[record.id,record.name,record.status || "",String(record.value ?? "")])} options={name === "Equipamentos" ? ["Ficha técnica","Histórico de manutenção","Histórico de OS","Higienizações","Pendências","QR Code"] : name === "Estoque" ? ["Posição atual","Movimentações","Perdas","Reservas","Inventário"] : name === "Compras" ? ["Solicitação","Aprovação","Pedido","Recebimento","Divergências"] : name === "Financeiro" ? ["Conta específica","Contas a pagar","Contas a receber","Fluxo de caixa","Extrato","Resultado"] : name === "Orçamentos" ? ["Proposta comercial","Versão atual","Versões anteriores","Relatório sem valores internos"] : name === "Vendas" ? ["Comprovante da venda","Pedido","Relação de itens","Relatório financeiro da venda","Impressão sem valores"] : ["Relatório do módulo","Histórico","Documentos"]}/><button className="outline-btn" onClick={() => window.print()}><FileText size={14}/> Imprimir</button><button className="outline-btn" onClick={exportRecords}><ArrowDownRight size={14}/> Exportar</button><button className="primary-btn" onClick={() => onOpen(`Novo registro • ${name}`)}><Plus size={16}/> {name === "Compras" ? "Nova compra" : name === "Fornecedores" ? "Novo fornecedor" : name === "Financeiro" ? "Novo lançamento" : name === "Obras" ? "Nova obra" : "Novo registro"}</button></div></div>
+    <div className="management-stats"><article><span><ClipboardList size={18}/></span><div><small>TOTAL DE REGISTROS</small><strong>{records.length}</strong></div></article><article><span><Clock3 size={18}/></span><div><small>PENDENTES / EM ABERTO</small><strong>{records.filter(record => /Rascunho|Aguardando|aberto|Vencida|Pendente/i.test(record.status || "")).length}</strong></div></article><article><span><CircleDollarSign size={18}/></span><div><small>VALOR REGISTRADO</small><strong>R$ {totalValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></div></article></div>
+    {managementFlows[name] && <div className="management-flow">{managementFlows[name].map((step, index) => <article key={step.title}><span>{String(index + 1).padStart(2, "0")}</span><div><b>{step.title}</b><small>{step.text}</small></div>{index < managementFlows[name].length - 1 && <ChevronRight size={14}/>}</article>)}</div>}
+    <nav className="management-tabs" aria-label={`Áreas de ${name}`}>{tabs.map(tab => <button key={tab} className={activeView === tab ? "active" : ""} onClick={() => setActiveView(tab)}>{tab}</button>)}</nav>
+    {name === "Financeiro" && <div className="finance-control-strip"><article><span className="money-icon red"><ArrowDownRight size={17}/></span><div><small>COMPROMISSOS EM ABERTO</small><strong>R$ {openValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></div></article><article><span className="money-icon green"><ArrowUpRight size={17}/></span><div><small>MOVIMENTAÇÃO REALIZADA</small><strong>R$ {records.filter(record => /Paga|Recebida/i.test(record.status || "")).reduce((sum, record) => sum + (record.value ?? 0), 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></div></article><article><span><Landmark size={17}/></span><div><small>CONCILIAÇÃO</small><strong>{records.filter(record => /Paga|Recebida/i.test(record.status || "")).length} movimento(s)</strong></div></article></div>}
+    <div className="management-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder={`Pesquisar em ${name.toLowerCase()}...`}/></label><label className="status-filter"><Filter size={14}/><select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option>Todas</option>{statuses.map(status => <option key={status}>{status}</option>)}</select></label></div>
+    {name === "Orçamentos" && filtered.length > 0 && <div className="budget-conversion-strip"><div><FileText size={17}/><span><b>Conversão rápida de orçamento</b><small>Transforme um orçamento sem digitar novamente os dados.</small></span></div>{filtered.map(record => <article key={`convert-${record.id}`}><span><b>{record.name}</b><small>{record.client} • R$ {(record.value ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</small></span><button disabled={!canEdit} onClick={() => onConvert?.(record,"Pedido")}><ShoppingBag size={13}/> Transformar em pedido</button><button disabled={!canEdit} onClick={() => onConvert?.(record,"Ordem de serviço")}><ClipboardList size={13}/> Transformar em OS</button></article>)}</div>}
+    {records.length ? <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><ClipboardList size={12}/> {activeView.toUpperCase()}</span><h2>{activeView} de {name.toLowerCase()}</h2><p>{filtered.length} de {records.length} registro(s){catalogEditable ? " • Clique duas vezes para editar" : ""}</p></div></div>{name === "Obras" && <div className="works-grid">{filtered.map(record => <article key={record.id}><header><span><Building2 size={18}/></span><div><small>{record.id}</small><h3>{record.name}</h3></div><em className={`workflow-status ${record.status === "Concluída" ? "done" : record.status === "Cancelada" ? "blocked" : ""}`}>{record.status}</em></header><p><MapPin size={13}/>{record.address || "Endereço não informado"}</p><div className="work-meta"><span><small>CLIENTE</small><b>{record.client || "—"}</b></span><span><small>RESPONSÁVEL</small><b>{record.engineer || "—"}</b></span><span><small>QUADRA / LOTE</small><b>{record.blockLot || "—"}</b></span><span><small>ORÇAMENTO</small><b>R$ {(record.value ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></span></div><div className="work-progress"><span><b>Progresso da obra</b><strong>{record.progress ?? 0}%</strong></span><i><b style={{width:`${Math.min(100, Math.max(0, record.progress ?? 0))}%`}}/></i></div><footer><button onClick={() => advance(record)}><CheckCircle2 size={14}/> Avançar etapa</button><button onClick={() => window.print()}><FileText size={14}/> Relatório</button><button className="danger" onClick={() => onDelete(name, record)}><Trash2 size={14}/></button></footer></article>)}</div>} {name !== "Obras" && <div className="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>NOME / IDENTIFICAÇÃO</th><th>FORNECEDOR / RESPONSÁVEL</th><th>SITUAÇÃO</th><th>VALOR</th><th>DATA</th><th>AÇÕES</th></tr></thead><tbody>{filtered.map(record => <tr key={record.id} className={catalogEditable ? "editable-row" : ""} title={catalogEditable ? "Clique duas vezes para editar" : undefined} onDoubleClick={() => (["Fornecedores","Equipamentos","Compras","Produtos","Serviços"].includes(name) ? openDetail(record) : catalogEditable && openCatalogEditor(record))}><td><b className="order-id">{record.id}</b></td><td><strong>{record.name}</strong><small className="table-description">{name === "Compras" ? `${record.purchaseItems?.length ?? 0} item(ns) • ${record.paymentType ?? "Pagamento não informado"}${record.installments && record.installments > 1 ? ` • ${record.installments}x` : ""}` : catalogEditable ? `${record.category || record.kind || "Cadastro"} • Custo R$ ${(record.cost ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : record.description || "Sem observações"}</small></td><td>{record.client || "—"}</td><td><span className={`workflow-status ${/Recebida|Paga|Ativo|Concluído/i.test(record.status || "") ? "done" : /Cancelada|Inativo|Bloqueado|Devolvida/i.test(record.status || "") ? "blocked" : ""}`}>{record.status || statuses[0]}</span></td><td><b>R$ {(record.value ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></td><td>{record.date ? new Date(`${record.date}T12:00:00`).toLocaleDateString("pt-BR") : record.createdAt}</td><td><div className="record-actions">{["Fornecedores","Equipamentos","Compras","Produtos","Serviços"].includes(name) && <button title="Abrir ficha completa" onClick={() => openDetail(record)}><Eye size={14}/></button>}{catalogEditable && <button title="Editar cadastro" onClick={() => openCatalogEditor(record)}><Edit3 size={14}/></button>}{(name === "Produtos" || name === "Serviços") && <button title="Histórico do cadastro" onClick={() => setHistoryCatalogRecord(record)}><History size={14}/></button>}<button title="Avançar situação" onClick={() => advance(record)}><CheckCircle2 size={14}/></button>{name === "Compras" && <button title="Duplicar compra" onClick={() => duplicate(record)}><FileText size={14}/></button>}<button title="Imprimir" onClick={() => window.print()}><ReceiptText size={14}/></button><button className="danger" title="Excluir" onClick={() => onDelete(name, record)}><Trash2 size={14}/></button></div></td></tr>)}</tbody></table></div>}{!filtered.length && <div className="linked-empty"><Search size={22}/><h4>Nenhum registro encontrado</h4><p>Ajuste a pesquisa ou o filtro de situação.</p></div>}</div> :
+    <div className="empty-grid">{[{t:"Visão geral",i:LayoutDashboard},{t:"Registros recentes",i:Clock3},{t:"Indicadores",i:TrendingUp}].map(({t,i:Icon})=><article className="panel" key={t}><span><Icon size={19}/></span><h3>{t}</h3><p>Use “Novo registro” para adicionar o primeiro cadastro deste módulo.</p><button onClick={() => onOpen(`Novo registro • ${name}`)}>Cadastrar agora <ArrowRight size={12}/></button></article>)}</div>}
+    {detailRecord && (() => {
+      const tabs = detailTabsFor(name);
+      const relatedPurchases = name === "Fornecedores" ? (allModules?.Compras ?? []).filter(item => supplierMatches(item, detailRecord)) : name === "Produtos" ? (allModules?.Compras ?? []).filter(item => item.purchaseItems?.some(p => p.productId === detailRecord.id || p.description.trim().toLowerCase() === detailRecord.name.trim().toLowerCase())) : [];
+      const relatedSales = (allModules?.Vendas ?? []).filter(item => item.purchaseItems?.some(p => p.productId === detailRecord.id || p.description.trim().toLowerCase() === detailRecord.name.trim().toLowerCase()));
+      const relatedBudgets = (allModules?.Orçamentos ?? []).filter(item => item.purchaseItems?.some(p => p.productId === detailRecord.id || p.description.trim().toLowerCase() === detailRecord.name.trim().toLowerCase()));
+      const relatedOrders = (serviceOrders ?? []).filter(order => name === "Equipamentos" ? order.client === detailRecord.client && (!detailRecord.equipmentUnit || order.unit === detailRecord.equipmentUnit) : order.catalogItems?.some(item => item.id === detailRecord.id || item.name.trim().toLowerCase() === detailRecord.name.trim().toLowerCase()));
+      const supplierProducts = name === "Fornecedores" ? (allModules?.Produtos ?? []).filter(item => String(item.supplier || "").trim().toLowerCase() === detailRecord.name.trim().toLowerCase()) : [];
+      const supplierFinance = name === "Fornecedores" ? (allModules?.Financeiro ?? []).filter(item => supplierMatches(item, detailRecord)) : name === "Compras" ? (allModules?.Financeiro ?? []).filter(item => item.purchaseId === detailRecord.id) : [];
+      const clients = Array.from(new Set([...relatedSales.map(item=>item.client), ...relatedBudgets.map(item=>item.client), ...relatedOrders.map(item=>item.client)].filter(Boolean)));
+      const auditTrail=(allModules?.Auditoria??[]).filter(item=>auditMatches(item as unknown as Record<string,unknown>,name,detailRecord.id,detailRecord.name));
+      const field = (label: string, value: unknown) => <div className="entity-field"><small>{label}</small><strong>{value === undefined || value === null || value === "" ? "—" : String(value)}</strong></div>;
+      const money = (value?: number) => `R$ ${(value ?? 0).toLocaleString("pt-BR", {minimumFractionDigits:2})}`;
+      const list = (items: {id:string; name?:string; client?:string; date?:string; createdAt?:string; status?:string; value?:number}[], empty: string) => items.length ? <div className="entity-history-list">{items.map(item => <article key={item.id}><span><b>{item.id} • {item.name || item.client || "Registro"}</b><small>{item.client || item.status || "—"}</small></span><time>{item.date || item.createdAt || "—"}</time>{item.value !== undefined && <strong>{money(item.value)}</strong>}</article>)}</div> : <div className="entity-empty"><History size={20}/><span>{empty}</span></div>;
+      let content: any = null;
+      if (detailTab === "Dados gerais") content = <div className="entity-fields-grid">{field("Código", detailRecord.id)}{field("Nome / fantasia", detailRecord.name)}{field("Razão social", detailRecord.legalName)}{field("CPF / CNPJ", detailRecord.doc)}{field("Responsável", detailRecord.contact || detailRecord.client)}{field("Telefone", detailRecord.phone)}{field("E-mail", detailRecord.email)}{field("Categoria", detailRecord.category)}{field("Situação", detailRecord.status || "Ativo")}{field("Endereço", detailRecord.address || [detailRecord.street,detailRecord.addressNumber,detailRecord.neighborhood,detailRecord.city,detailRecord.state].filter(Boolean).join(", "))}<div className="entity-field wide"><small>Observações</small><strong>{detailRecord.description || "Sem observações cadastradas."}</strong></div></div>;
+      else if (detailTab === "Rotas & Localização") content = <EmployeeRoutesTab employeeId={detailRecord.id} employeeName={detailRecord.name} />;
+      else if (detailTab === "Compras") content = name === "Fornecedores" ? <><div className="entity-fields-grid">{field("Compras registradas", relatedPurchases.length)}{field("Valor comprado", money(relatedPurchases.reduce((sum,item)=>sum+Number(item.value||0),0)))}{field("Última compra", relatedPurchases.slice().sort((a,b)=>String(b.date||b.createdAt).localeCompare(String(a.date||a.createdAt)))[0]?.date || "—")}{field("Pedidos pendentes", relatedPurchases.filter(item=>!/Recebida|Cancelada/i.test(item.status||"")).length)}</div>{list(relatedPurchases, "Nenhuma compra vinculada a este cadastro.")}</> : list(relatedPurchases, "Nenhuma compra vinculada a este cadastro.");
+      else if (detailTab === "Produtos fornecidos") content = list(supplierProducts, "Nenhum produto vinculado a este fornecedor.");
+      else if (detailTab === "Financeiro") content = list(supplierFinance, "Nenhum lançamento financeiro vinculado.");
+      else if (detailTab === "Itens") content = detailRecord.purchaseItems?.length ? <div className="entity-items-table"><table><thead><tr><th>ITEM</th><th>QTD.</th><th>UNITÁRIO</th><th>TOTAL</th></tr></thead><tbody>{detailRecord.purchaseItems.map((item,index)=><tr key={`${item.description}-${index}`}><td><b>{item.description}</b></td><td>{item.quantity}</td><td>{money(item.unitValue)}</td><td>{money(item.quantity*item.unitValue)}</td></tr>)}</tbody></table></div> : <div className="entity-empty">Nenhum item informado.</div>;
+      else if (detailTab === "Pagamento") content = <div className="entity-fields-grid">{field("Tipo", detailRecord.paymentType)}{field("Forma", detailRecord.paymentMethod)}{field("Parcelas", detailRecord.installments)}{field("Primeiro vencimento", detailRecord.firstDueDate)}{field("Valor total", money(detailRecord.value))}</div>;
+      else if (detailTab === "Dados técnicos") content = <><div className="entity-fields-grid">{field("Tipo de equipamento", detailRecord.equipmentType)}{field("Marca", detailRecord.brand)}{field("Modelo", detailRecord.model)}{field("Capacidade", detailRecord.capacityBtus ? `${detailRecord.capacityBtus.toLocaleString("pt-BR")} BTUs` : "—")}{field("Número de série", detailRecord.serialNumber)}{field("Tensão", detailRecord.voltage)}{field("Frequência", detailRecord.frequency)}{field("Corrente", detailRecord.current)}{field("Potência", detailRecord.power)}{field("Fluido refrigerante", detailRecord.refrigerant)}{field("Carga de refrigerante", detailRecord.refrigerantCharge)}{field("Fabricação", detailRecord.manufactureDate)}{field("Referência fabricante", detailRecord.manufacturerCode)}{field("Local de instalação", detailRecord.installationLocation)}{field("Unidade / setor", detailRecord.equipmentUnit)}</div>{detailRecord.equipmentLabelImage && <section className="equipment-label-history"><header><div><span>ETIQUETA VINCULADA</span><h3>Foto técnica original</h3></div><button className="outline-btn" onClick={() => onOpen("Novo • Equipamentos")}><Sparkles size={14}/> Ler nova etiqueta com IA</button></header><img src={detailRecord.equipmentLabelImage} alt={detailRecord.equipmentLabelImageName || "Etiqueta técnica"}/><small>{detailRecord.equipmentLabelHistory?.[0] || "Etiqueta cadastrada"}</small></section>}</>;
+      else if (detailTab === "Ordens de serviço" || detailTab === "Manutenções") content = relatedOrders.length ? <div className="entity-history-list">{relatedOrders.map(order=><article key={order.id}><span><b>{order.id} • {order.service}</b><small>{order.client} • {order.unit}</small></span><time>{order.date}</time><strong>{order.status}</strong></article>)}</div> : <div className="entity-empty">Nenhuma ordem de serviço vinculada.</div>;
+      else if (detailTab === "Garantias") content = <div className="entity-fields-grid">{field("Garantia", detailRecord.warrantyMonths ? `${detailRecord.warrantyMonths} meses` : "—")}{field("Data de instalação", detailRecord.installationDate)}{field("Próxima preventiva", detailRecord.nextMaintenanceDate)}</div>;
+      else if (detailTab === "Estoque") content = <div className="entity-fields-grid">{field("Estoque atual", detailRecord.stockCurrent)}{field("Estoque mínimo", detailRecord.stockMin)}{field("Estoque máximo", detailRecord.stockMax)}{field("Localização", detailRecord.stockLocation)}{field("Custo", money(detailRecord.cost))}{field("Preço de venda", money(detailRecord.value))}</div>;
+      else if (detailTab === "Execução") content = <div className="entity-fields-grid">{field("Tempo estimado", detailRecord.estimatedMinutes ? `${detailRecord.estimatedMinutes} min` : "—")}{field("Garantia", detailRecord.warrantyMonths ? `${detailRecord.warrantyMonths} meses` : "—")}{field("Unidade de medida", detailRecord.unitOfMeasure)}{field("Custo previsto", money(detailRecord.cost))}{field("Preço de venda", money(detailRecord.value))}<div className="entity-field wide"><small>Descrição técnica</small><strong>{detailRecord.description || "Sem descrição técnica."}</strong></div></div>;
+      else if (detailTab === "Fiscal") content = name === "Produtos" ? <div className="entity-fields-grid">{field("NCM", detailRecord.ncm)}{field("CEST", detailRecord.cest)}{field("CFOP padrão", detailRecord.cfop)}{field("CST", detailRecord.cst)}{field("CSOSN", detailRecord.csosn)}{field("Origem", detailRecord.taxOrigin)}</div> : <div className="entity-fields-grid">{field("Código do serviço", detailRecord.serviceCode)}{field("ISS padrão", detailRecord.issRate !== undefined ? `${detailRecord.issRate}%` : "—")}</div>;
+      else if (detailTab === "Clientes") content = clients.length ? <div className="history-chip-list">{clients.map(client=><span key={client}><UserRound size={13}/>{client}</span>)}</div> : <div className="entity-empty">Nenhum cliente vinculado.</div>;
+      else if (detailTab === "Orçamentos") content = list(relatedBudgets, "Nenhum orçamento vinculado.");
+      else if (detailTab === "Documentos") content = <div className="entity-document-grid"><article><FileText size={20}/><b>Documentos do cadastro</b><small>Área preparada para contratos, notas, certificados e anexos.</small><button onClick={()=>window.print()}>Imprimir ficha</button></article></div>;
+      else if (detailTab === "Histórico") content = auditTrail.length ? <div className="record-audit-list">{auditTrail.map(item=><article key={item.id}><span><History size={14}/></span><div><header><b>{item.name}</b><time>{item.createdAt}</time></header><p>{item.auditDetail||item.description}</p><small>{item.auditUser||item.client||"Sistema"}</small>{item.auditChanges?.length?<div className="record-audit-changes">{item.auditChanges.map((change,index)=><em key={index}><b>{change.field}</b> {change.before} → <strong>{change.after}</strong></em>)}</div>:null}</div></article>)}</div> : <div className="entity-empty"><History size={20}/><span>Nenhuma alteração auditada para este registro ainda.</span></div>;
+      else content = list([...(relatedPurchases as ModuleRecord[]), ...(relatedSales as ModuleRecord[]), ...(relatedBudgets as ModuleRecord[])].sort((a,b)=>String(b.date||b.createdAt).localeCompare(String(a.date||a.createdAt))), "Nenhum histórico registrado ainda.");
+      return <div className="modal-layer entity-detail-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" aria-label="Fechar ficha" onClick={()=>setDetailRecord(null)}/><div className="modal entity-detail-modal"><div className="entity-detail-head"><div className="entity-avatar">{detailRecord.name.split(" ").map(x=>x[0]).slice(0,2).join("").toUpperCase()}</div><div><span>FICHA COMPLETA • {name.toUpperCase()}</span><h2>{detailRecord.name}</h2><p>{detailRecord.id} • {detailRecord.status || "Ativo"}</p></div><div className="entity-detail-actions"><button className="outline-btn" onClick={()=>openCatalogEditor(detailRecord)}><Edit3 size={14}/> Editar</button><button onClick={()=>setDetailRecord(null)}><X size={18}/></button></div></div><nav className="entity-detail-tabs">{tabs.map(tab=><button key={tab} className={detailTab===tab?"active":""} onClick={()=>setDetailTab(tab)}>{tab}</button>)}</nav><div className="entity-detail-body">{content}</div><div className="modal-actions"><button className="outline-btn" onClick={()=>window.print()}><FileText size={14}/> Imprimir ficha</button><button className="primary-btn" onClick={()=>setDetailRecord(null)}>Fechar</button></div></div></div>;
+    })()}
+    {editingCatalogRecord && <div className="modal-layer catalog-edit-layer" role="dialog" aria-modal="true" aria-label={`Editar ${editingCatalogRecord.name}`}><button className="modal-backdrop" aria-label="Fechar edição" onClick={closeCatalogEditor}/><div className="modal catalog-edit-modal"><div className="modal-head"><div><span>EDIÇÃO RÁPIDA • {name.toUpperCase()}</span><h2>{editingCatalogRecord.name}</h2><p>{name === "Funcionários" ? "Altere o acesso, perfil e dados do funcionário." : "Altere nome, preço e custo do cadastro."}</p></div><button onClick={closeCatalogEditor} aria-label="Fechar"><X size={18}/></button></div><div className="catalog-edit-form">{(name === "Produtos" || name === "Serviços") && <><CatalogBidSimulator key={`bid-${editingCatalogRecord.id}`} baseCost={editingCatalogRecord.cost ?? 0}/><CatalogAdvancedSimulators key={`sim-${editingCatalogRecord.id}`} baseCost={editingCatalogRecord.cost ?? 0}/><CatalogCostComposer key={editingCatalogRecord.id} initialLines={editingCatalogRecord.costLines} initialTax={editingCatalogRecord.costTaxPercent} initialMargin={editingCatalogRecord.costMarginPercent} initialFee={editingCatalogRecord.costCardFeePercent} onCompositionChange={(lines,tax,margin,fee)=>setEditingCatalogRecord(record=>record?{...record,costLines:lines,costTaxPercent:tax,costMarginPercent:margin,costCardFeePercent:fee}:record)} onApply={(cost,price)=>setEditingCatalogRecord(record=>record?{...record,cost,value:price}:record)}/></>}<label className="wide">Nome / identificação<input autoFocus value={editingCatalogRecord.name} onChange={event => setEditingCatalogRecord(record => record ? { ...record, name: event.target.value } : record)}/></label>{name === "Funcionários" ? <><label>Nome de utilizador<input value={editingCatalogRecord.employeeUsername ?? ""} onChange={event => setEditingCatalogRecord(record => record ? { ...record, employeeUsername: event.target.value.toLocaleLowerCase("pt-BR").replace(/\s+/g, "."), client: event.target.value.toLocaleLowerCase("pt-BR").replace(/\s+/g, ".") } : record)} placeholder="nome.sobrenome"/></label><label>Nova senha<input type="password" autoComplete="new-password" value={employeePasswordReset} onChange={event => setEmployeePasswordReset(event.target.value)} placeholder="Deixe vazio para manter a atual"/><small>Mínimo de 4 caracteres para redefinir.</small></label><label>Perfil<select value={editingCatalogRecord.employeeRole ?? "Atendimento"} onChange={event => setEditingCatalogRecord(record => record ? { ...record, employeeRole: event.target.value } : record)}><option>Administrador</option><option>Financeiro</option><option>Técnico de Campo</option><option>Atendimento</option></select></label></> : <><label>Preço de venda<input type="number" min="0" step="0.01" value={editingCatalogRecord.value ?? ""} onChange={event => setEditingCatalogRecord(record => record ? { ...record, value: Number(event.target.value) || 0 } : record)}/></label><label>Preço de custo<input type="number" min="0" step="0.01" value={editingCatalogRecord.cost ?? ""} onChange={event => setEditingCatalogRecord(record => record ? { ...record, cost: Number(event.target.value) || 0 } : record)}/></label>{(name === "Produtos" || name === "Serviços") && <><label>Código interno / SKU<input value={editingCatalogRecord.sku ?? ""} onChange={event=>setEditingCatalogRecord(record=>record?{...record,sku:event.target.value}:record)}/></label><label>Código de barras<input value={editingCatalogRecord.barcode ?? ""} onChange={event=>setEditingCatalogRecord(record=>record?{...record,barcode:event.target.value}:record)}/></label><label>Marca<input value={editingCatalogRecord.brand ?? ""} onChange={event=>setEditingCatalogRecord(record=>record?{...record,brand:event.target.value}:record)}/></label><label>Modelo<input value={editingCatalogRecord.model ?? ""} onChange={event=>setEditingCatalogRecord(record=>record?{...record,model:event.target.value}:record)}/></label><label>Fornecedor principal<input value={editingCatalogRecord.supplier ?? ""} onChange={event=>setEditingCatalogRecord(record=>record?{...record,supplier:event.target.value}:record)}/></label>{name === "Produtos" ? <><label>Estoque atual<input type="number" min="0" step="0.001" value={editingCatalogRecord.stockCurrent ?? ""} onChange={event=>setEditingCatalogRecord(record=>record?{...record,stockCurrent:Number(event.target.value)||0}:record)}/></label><label>Estoque mínimo<input type="number" min="0" step="0.001" value={editingCatalogRecord.stockMin ?? ""} onChange={event=>setEditingCatalogRecord(record=>record?{...record,stockMin:Number(event.target.value)||0}:record)}/></label><label>Estoque máximo<input type="number" min="0" step="0.001" value={editingCatalogRecord.stockMax ?? ""} onChange={event=>setEditingCatalogRecord(record=>record?{...record,stockMax:Number(event.target.value)||0}:record)}/></label><label>Localização<input value={editingCatalogRecord.stockLocation ?? ""} onChange={event=>setEditingCatalogRecord(record=>record?{...record,stockLocation:event.target.value}:record)}/></label></> : <label>Tempo estimado (min)<input type="number" min="0" value={editingCatalogRecord.estimatedMinutes ?? ""} onChange={event=>setEditingCatalogRecord(record=>record?{...record,estimatedMinutes:Number(event.target.value)||0}:record)}/></label>}{name === "Produtos" ? <><label>NCM<input value={editingCatalogRecord.ncm ?? ""} onChange={event=>setEditingCatalogRecord(record=>record?{...record,ncm:event.target.value.replace(/\D/g,"").slice(0,8)}:record)}/></label><label>CEST<input value={editingCatalogRecord.cest ?? ""} onChange={event=>setEditingCatalogRecord(record=>record?{...record,cest:event.target.value.replace(/\D/g,"").slice(0,7)}:record)}/></label><label>CFOP padrão<input value={editingCatalogRecord.cfop ?? ""} onChange={event=>setEditingCatalogRecord(record=>record?{...record,cfop:event.target.value.replace(/\D/g,"").slice(0,4)}:record)}/></label><label>CST / CSOSN<input value={editingCatalogRecord.csosn || editingCatalogRecord.cst || ""} onChange={event=>setEditingCatalogRecord(record=>record?{...record,csosn:event.target.value}:record)}/></label></> : name === "Serviços" ? <><label>Código do serviço<input value={editingCatalogRecord.serviceCode ?? ""} onChange={event=>setEditingCatalogRecord(record=>record?{...record,serviceCode:event.target.value}:record)}/></label><label>ISS padrão (%)<input type="number" min="0" step="0.01" value={editingCatalogRecord.issRate ?? ""} onChange={event=>setEditingCatalogRecord(record=>record?{...record,issRate:Number(event.target.value)||0}:record)}/></label></> : null}<label>Garantia (meses)<input type="number" min="0" value={editingCatalogRecord.warrantyMonths ?? ""} onChange={event=>setEditingCatalogRecord(record=>record?{...record,warrantyMonths:Number(event.target.value)||0}:record)}/></label><label>Unidade de medida<select value={editingCatalogRecord.unitOfMeasure ?? (name === "Serviços" ? "serviço" : "un")} onChange={event=>setEditingCatalogRecord(record=>record?{...record,unitOfMeasure:event.target.value}:record)}><option>un</option><option>serviço</option><option>m</option><option>m²</option><option>kg</option><option>l</option><option>h</option><option>kit</option></select></label></>}</>}{(name==="Produtos"||name==="Serviços")&&<div className="wide catalog-image-editor">
+  <div className={`catalog-image-preview ${editingCatalogRecord.catalogImage?"has-image":""}`}>{editingCatalogRecord.catalogImage?<img src={editingCatalogRecord.catalogImage} alt={`Foto de ${editingCatalogRecord.name}`}/>:<ImageIcon size={26}/>}</div>
+  <div><b>Foto do {name==="Produtos"?"produto":"serviço"}</b><small>Usada no catálogo de Orçamentos e Vendas. A imagem é otimizada automaticamente.</small>
+  <div className="catalog-image-actions"><label className="outline-btn"><ImagePlus size={14}/>{catalogImageBusy?"Processando...":editingCatalogRecord.catalogImage?"Trocar foto":"Adicionar foto"}<input type="file" accept="image/*" disabled={catalogImageBusy} onChange={event=>void uploadEditingCatalogImage(event.target.files?.[0])}/></label>{editingCatalogRecord.catalogImage&&<button type="button" className="outline-btn danger" onClick={()=>setEditingCatalogRecord(record=>record?{...record,catalogImage:undefined,catalogImageName:undefined,catalogImageUpdatedAt:new Date().toISOString()}:record)}><Trash2 size={14}/> Remover</button>}</div>{catalogImageError&&<em>{catalogImageError}</em>}</div>
+</div>}
+<label>Categoria<input value={editingCatalogRecord.category ?? ""} onChange={event => setEditingCatalogRecord(record => record ? { ...record, category: event.target.value } : record)}/></label><label>Situação<select value={editingCatalogRecord.status ?? "Ativo"} onChange={event => setEditingCatalogRecord(record => record ? { ...record, status: event.target.value } : record)}><option>Ativo</option><option>Inativo</option><option>Pendente</option></select></label><label className="wide">Descrição / observações<textarea value={editingCatalogRecord.description ?? ""} onChange={event => setEditingCatalogRecord(record => record ? { ...record, description: event.target.value } : record)}/></label>{name !== "Funcionários" && <div className="wide catalog-margin-preview"><span><CircleDollarSign size={18}/><div><small>MARGEM BRUTA ESTIMADA</small><b>R$ {Math.max(0, (editingCatalogRecord.value ?? 0) - (editingCatalogRecord.cost ?? 0)).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></div></span><strong>{editingCatalogRecord.value ? `${Math.max(0, (((editingCatalogRecord.value ?? 0) - (editingCatalogRecord.cost ?? 0)) / editingCatalogRecord.value) * 100).toFixed(1)}%` : "0%"}</strong></div>}</div><div className="modal-actions">{catalogDirty&&<span className="unsaved-indicator"><AlertTriangle size={13}/> Alterações não salvas</span>}<button className="outline-btn" onClick={closeCatalogEditor}>Cancelar</button><button className="primary-btn" disabled={!editingCatalogRecord.name.trim() || (name === "Funcionários" && (!editingCatalogRecord.employeeUsername?.trim() || (employeePasswordReset.length > 0 && employeePasswordReset.length < 4)))} onClick={async () => { const updated = name === "Funcionários" && employeePasswordReset ? { ...editingCatalogRecord, employeePasswordHash: await passwordHash(employeePasswordReset) } : editingCatalogRecord; onUpdate(name, updated); setEditingCatalogRecord(null); setEditingCatalogInitial(null); setEmployeePasswordReset(""); }}><CheckCircle2 size={15}/> Salvar alterações</button></div></div></div>}
+    {historyCatalogRecord && (()=>{const key=historyCatalogRecord.id;const norm=historyCatalogRecord.name.trim().toLowerCase();const matches=(item:PurchaseItem)=>item.productId===key||item.description.trim().toLowerCase()===norm;const sales=(allModules?.Vendas??[]).filter(record=>record.purchaseItems?.some(matches));const budgets=(allModules?.Orçamentos??[]).filter(record=>record.purchaseItems?.some(matches));const purchases=(allModules?.Compras??[]).filter(record=>record.purchaseItems?.some(matches)).sort((a,b)=>String(b.date||b.createdAt).localeCompare(String(a.date||a.createdAt)));const orders=(serviceOrders??[]).filter(order=>order.catalogItems?.some(item=>item.id===key||item.name.trim().toLowerCase()===norm));const clients=Array.from(new Set([...sales.map(item=>item.client),...budgets.map(item=>item.client),...orders.map(item=>item.client)].filter(Boolean)));const lastPurchase=purchases[0];const lastItem=lastPurchase?.purchaseItems?.find(matches);return <div className="modal-layer catalog-history-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" aria-label="Fechar histórico" onClick={()=>setHistoryCatalogRecord(null)}/><div className="modal catalog-history-modal"><div className="modal-head"><div><span>HISTÓRICO • {name.toUpperCase()}</span><h2>{historyCatalogRecord.name}</h2><p>Consumo por cliente, compras e utilização operacional deste cadastro.</p></div><button onClick={()=>setHistoryCatalogRecord(null)}><X size={18}/></button></div><div className="catalog-history-summary"><article><small>CLIENTES QUE CONSUMIRAM</small><b>{clients.length}</b></article><article><small>VENDAS</small><b>{sales.length}</b></article><article><small>ORÇAMENTOS</small><b>{budgets.length}</b></article><article><small>OS / UTILIZAÇÕES</small><b>{orders.length}</b></article>{name==="Produtos"&&<article><small>ÚLTIMA COMPRA</small><b>{lastPurchase?.date?new Date(`${lastPurchase.date}T12:00:00`).toLocaleDateString("pt-BR"):lastPurchase?.createdAt||"—"}</b><em>{lastItem?`R$ ${lastItem.unitValue.toLocaleString("pt-BR",{minimumFractionDigits:2})} • ${lastPurchase?.client||"Fornecedor"}`:"Sem compra registrada"}</em></article>}</div><div className="catalog-history-tabs"><section><h3>Clientes que consumiram</h3>{clients.length?<div className="history-chip-list">{clients.map(client=><span key={client}><UserRound size={13}/>{client}</span>)}</div>:<p>Nenhum consumo vinculado a cliente até o momento.</p>}</section><section><h3>Movimentações</h3><div className="catalog-movement-list">{[...sales.map(item=>({type:"Venda",id:item.id,client:item.client,date:item.date||item.createdAt,value:item.value})),...purchases.map(item=>({type:"Compra",id:item.id,client:item.client,date:item.date||item.createdAt,value:item.value})),...orders.map(item=>({type:"OS",id:item.id,client:item.client,date:item.date,value:0}))].sort((a,b)=>String(b.date).localeCompare(String(a.date))).map((item,index)=><article key={`${item.type}-${item.id}-${index}`}><span><b>{item.type} • {item.id}</b><small>{item.client||"—"}</small></span><time>{item.date||"—"}</time>{item.value? <strong>R$ {item.value.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong>:null}</article>)}</div></section></div><div className="modal-actions"><button className="primary-btn" onClick={()=>setHistoryCatalogRecord(null)}>Fechar histórico</button></div></div></div>})()}
+  </section>;
+}
+
+type ModalSave = {
+  structureId?: string; unitId?: string; sectorId?: string; roomId?: string;
+  title: string;
+  customerId?: string;
+  name: string;
+  client: string;
+  doc: string;
+  contact: string;
+  phone: string;
+  personType?: "PF" | "PJ";
+  organizationType?: Customer["organizationType"];
+  legalName?: string;
+  tradeName?: string;
+  email?: string;
+  zipCode?: string;
+  street?: string;
+  addressNumber?: string;
+  complement?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  stateRegistration?: string;
+  municipalRegistration?: string;
+  cnaeMain?: string;
+  taxStatus?: string;
+  creditLimit?: number;
+  balancePosted?: number;
+  financialStatus?: Customer["financialStatus"];
+  address: string;
+  unit: string;
+  tech: string;
+  date: string;
+  time: string;
+  description: string;
+  status: string;
+  value: number;
+  category: string;
+  kind: "Serviço" | "Produto";
+  catalogItems: { id: string; name: string; kind: "Serviço" | "Produto"; quantity?: number }[];
+  purchaseItems: PurchaseItem[];
+  paymentType: "À vista" | "A prazo";
+  paymentMethod: string;
+  installments: number;
+  firstDueDate: string;
+  paymentInstallments: PurchaseInstallment[];
+  xmlImported: boolean;
+  supplierDoc: string;
+  supplierId: string;
+  registerSupplier: boolean;
+  engineer: string;
+  workAddress: string;
+  blockLot: string;
+  endDate: string;
+  progress: number;
+  commission: number;
+  cost: number;
+  sku: string;
+  barcode: string;
+  brand: string;
+  model: string;
+  supplier: string;
+  stockCurrent: number;
+  stockMin: number;
+  stockMax: number;
+  stockLocation: string;
+  warrantyMonths: number;
+  estimatedMinutes: number;
+  unitOfMeasure: string;
+  ncm?: string;
+  cest?: string;
+  cfop?: string;
+  cst?: string;
+  csosn?: string;
+  taxOrigin?: string;
+  serviceCode?: string;
+  issRate?: number;
+  employeeRole: string;
+  employeePermissions: Record<string, ("Visualizar" | "Criar" | "Editar" | "Excluir")[]>;
+  employeeSignature?:string;
+  employeeSignatureUpdatedAt?:string;
+  employeeSignatureUpdatedBy?:string;
+  employeeUsername?: string;
+  employeePassword?: string;
+  equipmentType?: string;
+  capacityBtus?: number;
+  serialNumber?: string;
+  voltage?: string;
+  refrigerant?: string;
+  installationLocation?: string;
+  installationDate?: string;
+  nextMaintenanceDate?: string;
+  equipmentUnit?: string;
+  parentId?: string;
+  parentUnit?: string;
+  hierarchyLevel?: "Cliente" | "Secretaria" | "Unidade" | "Filial" | "Setor" | "Sala" | "Ambiente";
+  environmentType?: string;
+  roomNumber?: string;
+  floor?: string;
+  block?: string;
+  localResponsible?: string;
+  extension?: string;
+  criticality?: string;
+  priorityAttendance?: boolean;
+  sector?: string;
+  room?: string;
+  frequency?: string;
+  current?: string;
+  power?: string;
+  refrigerantCharge?: string;
+  manufactureDate?: string;
+  manufacturerCode?: string;
+  equipmentLabelImage?: string;
+  equipmentLabelImageName?: string;
+  equipmentLabelHistory?: string[];
+  catalogImage?: string;
+  catalogImageName?: string;
+  catalogImageUpdatedAt?: string;
+  priority?: ServiceOrder["priority"];
+  serviceType?: string;
+  checklist?: string;
+  tag?: string;
+  externalCode?: string;
+  checkInRequirement?: string;
+  estimatedDurationMinutes?: number;
+  pmocRepeatEnabled?: boolean;
+  npsEnabled?: boolean;
+  whatsappUpdatesEnabled?: boolean;
+  whatsappAppointmentReminderEnabled?: boolean;
+  whatsappStatusUpdatesEnabled?: boolean;
+  appointmentReminderHours?: number;
+  equipmentIds?: string[];
+  discount?: number;
+  servicesTotal?: number;
+  productsTotal?: number;
+};
+
+type AuthenticatedUser = { username: string; displayName: string; role?: string; permissions?: string[]; companyId?: string; companySlug?: string; trialExpiresAt?: string; entitledModules?: string[] };
+
+const navigationModuleNames = () => navGroups.flatMap(group => group.items.map(item => item.name));
+function isPrimaryPolartechClient(user?: AuthenticatedUser | null) {
+  const host = typeof window !== "undefined" ? window.location.hostname.trim().toLowerCase() : "";
+  return user?.companyId === "polartech-principal" || String(user?.companySlug || "").trim().toLowerCase() === "polartech" || host === "polartech.proar.online";
+}
+
+async function passwordHash(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }) {
+  const tenant = typeof window !== "undefined" ? (() => { const host=window.location.hostname.toLowerCase(); const root=(process.env.NEXT_PUBLIC_PROAR_ROOT_DOMAIN || "proar.online").toLowerCase(); if(host.endsWith(`.${root}`)){ const sub=host.slice(0,-(`.${root}`.length)); if(sub && !["www","manager","teste","api","admin","docs","status"].includes(sub)) return sub; } return new URLSearchParams(window.location.search).get("tenant") || ""; })() : "";
+  const [tenantCompany, setTenantCompany] = useState<{trade_name?: string; legal_name?: string; logo_path?: string; status?: string; brand_config?: {logo?: string; systemName?: string; tagline?: string; primaryColor?: string}; daysRemaining?: number; expired?: boolean} | null>(null);
+  const [blockedMessage, setBlockedMessage] = useState("");
+  useEffect(() => { if (!tenant) return; fetch(`/api/trial/company?slug=${encodeURIComponent(tenant)}`, {cache:"no-store"}).then(async r => r.ok ? (await r.json()).company : null).then(company => { setTenantCompany(company); setBlockedMessage(company && company.status !== "active" ? "Sistema bloqueado. Entre em contato com a equipe da ProAR." : ""); if (company?.trade_name) document.title = `${company.trade_name} | ProAR Gestão de Serviços`; }).catch(()=>{}); }, [tenant]);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password, tenant }),
+      });
+      const raw = await response.text();
+      let result: Record<string, unknown> = {};
+      if (raw) {
+        try { result = JSON.parse(raw) as Record<string, unknown>; }
+        catch {
+          throw new Error(response.ok
+            ? "A autenticação retornou uma resposta inválida."
+            : `O servidor de autenticação respondeu com erro HTTP ${response.status}.`);
+        }
+      }
+      if (!response.ok) {
+        if (result.code === "SYSTEM_BLOCKED" || result.blocked === true) setBlockedMessage("Sistema bloqueado. Entre em contato com a equipe da ProAR.");
+        throw new Error(typeof result.error === "string" ? result.error : `Não foi possível entrar (HTTP ${response.status}).`);
+      }
+      if (result.authenticated !== true) throw new Error("A autenticação não foi confirmada pelo servidor.");
+      if (result.mustChangePassword && tenant) { window.location.href = `/trocar-senha`; return; }
+      onLogin({
+        username:String(result.username || ""),
+        displayName:String(result.displayName || result.username || ""),
+        role:typeof result.role === "string" ? result.role : undefined,
+        permissions:Array.isArray(result.permissions) ? result.permissions as string[] : undefined,
+        companyId:typeof result.companyId === "string" ? result.companyId : undefined,
+        companySlug:typeof result.companySlug === "string" ? result.companySlug : undefined,
+        trialExpiresAt:typeof result.trialExpiresAt === "string" ? result.trialExpiresAt : undefined,
+        entitledModules:Array.isArray(result.entitledModules) ? result.entitledModules as string[] : undefined,
+      });
+    } catch (loginError) {
+      setError(friendlyErrorMessage(loginError, { fallback:"Não foi possível entrar. Verifique os dados e tente novamente." }));
+    } finally {
+      setLoading(false);
+    }
+  };
+  if (blockedMessage) return <main className="login-page login-blocked-page">
+    <section className="login-panel login-blocked-panel">
+      <div className="login-blocked-icon"><LockKeyhole size={34}/></div>
+      <span className="login-blocked-kicker">PROAR MANAGER</span>
+      <h2>Sistema bloqueado</h2>
+      <p>{blockedMessage}</p>
+      <div className="login-blocked-company">{tenantCompany?.trade_name || tenantCompany?.legal_name || tenant || "Empresa"}</div>
+      <small>Entre em contato com a equipe da ProAR para regularizar o acesso ao sistema.</small>
+    </section>
+    <span className="login-copyright">ProAR © {new Date().getFullYear()}</span>
+  </main>;
+  return <main className="login-page">
+    <section className="login-panel">
+      <form onSubmit={submit}>
+        <header className="login-form-heading"><h2>Acessar o ProAR</h2><p>Entre com suas credenciais</p></header>
+        <i className="login-heading-line"/>
+        <label>E-mail ou Usuário<div className="login-input"><UserRound size={19}/><input autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} placeholder="Digite seu e-mail ou usuário" required aria-required="true"/></div></label>
+        <label>Senha<div className="password-field login-input"><LockKeyhole size={19}/><input type={showPassword ? "text" : "password"} autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} placeholder="Digite sua senha" required aria-required="true"/><button type="button" aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"} onClick={() => setShowPassword(value => !value)}>{showPassword ? <EyeOff size={19}/> : <Eye size={19}/>}</button></div></label>
+        <div className="login-options"><label><input type="checkbox" defaultChecked/> <span>Lembrar de mim</span></label><a href="/recuperar-senha">Esqueci minha senha</a></div>
+        {error && <div className="login-error" role="alert"><AlertTriangle size={15}/>{error}</div>}
+        <button className="login-submit" disabled={loading || !username || !password}>{loading ? "Verificando..." : <><LogIn size={20}/> Entrar no sistema</>}</button>
+        {tenantCompany?.daysRemaining != null && <div className="login-trial"><Clock3 size={16}/>{tenantCompany.expired ? "Período de teste encerrado" : `${tenantCompany.daysRemaining} dia(s) restantes no período de teste`}</div>}
+        <footer className="login-form-security"><ShieldCheck size={18}/> Seus dados estão protegidos com segurança</footer>
+      </form>
+    </section>
+    <span className="login-copyright">ProAR © {new Date().getFullYear()}</span>
+  </main>;
+}
+
+function Modal({ title, initialOrderSeed, customers, structures, catalogRecords, supplierRecords, employeeRecords, equipmentRecords, close, onSave, onCreateCustomer, canCreateCustomer, onCreateStructure }: { title: string; initialOrderSeed?:OrderScheduleSeed; customers: Customer[]; structures: ModuleRecord[]; catalogRecords: ModuleRecord[]; supplierRecords: ModuleRecord[]; employeeRecords: ModuleRecord[]; equipmentRecords: ModuleRecord[]; close: () => void; onSave: (data: ModalSave) => void | Promise<void>; canCreateCustomer:boolean; onCreateCustomer:(draft:CustomerDraft & {address:string;organizationType:Customer["organizationType"]})=>Promise<Customer|null>; onCreateStructure: (draft: StructureDraft & { client: string }) => ModuleRecord | null | Promise<ModuleRecord | null> }) {
+  const isLinkedStructure = title.startsWith("Nova unidade, filial ou setor") || title.startsWith("Novo setor") || title.startsWith("Nova sala") || title.startsWith("Nova sala ou ambiente");
+  const isNewOrder = title === "Nova ordem de serviço";
+  const isNewCustomer = title === "Novo cliente";
+  const isCatalogRegistration = title.includes("Serviços") || title.includes("Produtos");
+  const isEquipmentRegistration = title.includes("Equipamentos");
+  const [formDirty,setFormDirty]=useState(false);
+  const [formSaving,setFormSaving]=useState(false);
+  const [selectedClient, setSelectedClient] = useState("");
+  const [quickCustomerOpen,setQuickCustomerOpen]=useState(false);
+  const [quickCustomerBusy,setQuickCustomerBusy]=useState(false);
+  const [quickCustomerError,setQuickCustomerError]=useState("");
+  const quickCustomerLock=useRef(false);
+  const [quickCustomerDraft,setQuickCustomerDraft]=useState<CustomerDraft & {address:string;organizationType:Customer["organizationType"]}>({name:"",legalName:"",tradeName:"",doc:"",phone:"",email:"",city:"",state:"SP",address:"",organizationType:"Empresa"});
+
+  const [unit, setUnit] = useState("");
+  const [sector, setSector] = useState("");
+  const [tech, setTech] = useState(isNewOrder&&employeeRecords.some(item=>item.name===initialOrderSeed?.tech&&!/inativ/i.test(item.status||""))?initialOrderSeed?.tech||"":"");
+  const [time, setTime] = useState(isNewOrder?initialOrderSeed?.time||"":"");
+  const [recordName, setRecordName] = useState("");
+  const [recordClient, setRecordClient] = useState("");
+  const [hierarchyLocation,setHierarchyLocation]=useState<HierarchySelection | null>(null);
+  const [doc, setDoc] = useState("");
+  const [contact, setContact] = useState("");
+  const [phone, setPhone] = useState("");
+  const [personType, setPersonType] = useState<"PF" | "PJ">("PF");
+  const [organizationType, setOrganizationType] = useState<Customer["organizationType"]>("Pessoa Física");
+  useEffect(() => setOrganizationType(current => personType === "PJ" && current === "Pessoa Física" ? "Empresa" : personType === "PF" && current === "Empresa" ? "Pessoa Física" : current), [personType]);
+  const [legalName, setLegalName] = useState("");
+  const [tradeName, setTradeName] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [zipCode, setZipCode] = useState("");
+  const [street, setStreet] = useState("");
+  const [addressNumber, setAddressNumber] = useState("");
+  const [complement, setComplement] = useState("");
+  const [neighborhood, setNeighborhood] = useState("");
+  const [customerCity, setCustomerCity] = useState("");
+  const [customerState, setCustomerState] = useState("");
+  const [stateRegistration, setStateRegistration] = useState("");
+  const [municipalRegistration, setMunicipalRegistration] = useState("");
+  const [cnaeMain, setCnaeMain] = useState("");
+  const [taxStatus, setTaxStatus] = useState("");
+  const [documentLookup, setDocumentLookup] = useState<{loading:boolean;message:string;kind:""|"ok"|"error"}>({loading:false,message:"",kind:""});
+  const [creditLimit, setCreditLimit] = useState(0);
+  const [balancePosted, setBalancePosted] = useState(0);
+  const [financialStatus, setFinancialStatus] = useState<Customer["financialStatus"]>("Liberado");
+  const [address, setAddress] = useState("");
+  const [addressValidated, setAddressValidated] = useState(false);
+  const [showAddressMap, setShowAddressMap] = useState(false);
+  const [date, setDate] = useState(isNewOrder?initialOrderSeed?.date||"":"");
+  const [description, setDescription] = useState("");
+  const requestedModule = title.includes("•") ? title.split("•").pop()!.trim() : title.replace(/^Novo(a)?\s+/i, "");
+  const [recordStatus, setRecordStatus] = useState(moduleStatuses[requestedModule]?.[0] ?? "Ativo");
+  const [recordValue, setRecordValue] = useState("");
+  const [recordCost, setRecordCost] = useState("");
+  const [catalogSku, setCatalogSku] = useState("");
+  const [catalogBarcode, setCatalogBarcode] = useState("");
+  const [catalogBrand, setCatalogBrand] = useState("");
+  const [catalogModel, setCatalogModel] = useState("");
+  const [catalogSupplier, setCatalogSupplier] = useState("");
+  const [catalogStockCurrent, setCatalogStockCurrent] = useState("");
+  const [catalogStockMin, setCatalogStockMin] = useState("");
+  const [catalogStockMax, setCatalogStockMax] = useState("");
+  const [catalogStockLocation, setCatalogStockLocation] = useState("");
+  const [catalogWarranty, setCatalogWarranty] = useState("");
+  const [catalogEstimatedMinutes, setCatalogEstimatedMinutes] = useState("");
+  const [catalogUnit, setCatalogUnit] = useState(title.includes("Serviços") ? "serviço" : "un");
+  const [catalogNcm, setCatalogNcm] = useState("");
+  const [catalogCest, setCatalogCest] = useState("");
+  const [catalogCfop, setCatalogCfop] = useState("");
+  const [catalogCst, setCatalogCst] = useState("");
+  const [catalogCsosn, setCatalogCsosn] = useState("");
+  const [catalogTaxOrigin, setCatalogTaxOrigin] = useState("0 - Nacional");
+  const [catalogServiceCode, setCatalogServiceCode] = useState("");
+  const [catalogIssRate, setCatalogIssRate] = useState("");
+  const [catalogImage,setCatalogImage]=useState<{dataUrl:string;name:string}|null>(null);
+  const [catalogImageBusy,setCatalogImageBusy]=useState(false);
+  const [catalogImageError,setCatalogImageError]=useState("");
+  const uploadNewCatalogImage=async(file?:File)=>{
+    if(!file)return;
+    setCatalogImageBusy(true);setCatalogImageError("");
+    try{setCatalogImage(await prepareCatalogImage(file));}
+    catch(error){setCatalogImageError(error instanceof Error?error.message:"Não foi possível carregar a foto.");}
+    finally{setCatalogImageBusy(false);}
+  };
+  const [equipmentType, setEquipmentType] = useState("Split Hi Wall");
+  const [capacityBtus, setCapacityBtus] = useState("");
+  const [serialNumber, setSerialNumber] = useState("");
+  const [voltage, setVoltage] = useState("220V");
+  const [refrigerant, setRefrigerant] = useState("R32");
+  const [installationLocation, setInstallationLocation] = useState("");
+  const [installationDate, setInstallationDate] = useState("");
+  const [nextMaintenanceDate, setNextMaintenanceDate] = useState("");
+  const [equipmentUnit, setEquipmentUnit] = useState("");
+  const [frequency, setFrequency] = useState("");
+  const [currentDraw, setCurrentDraw] = useState("");
+  const [power, setPower] = useState("");
+  const [refrigerantCharge, setRefrigerantCharge] = useState("");
+  const [manufactureDate, setManufactureDate] = useState("");
+  const [manufacturerCode, setManufacturerCode] = useState("");
+  const [equipmentLabel, setEquipmentLabel] = useState<{ name: string; dataUrl: string } | null>(null);
+  const [labelReading, setLabelReading] = useState(false);
+  const [labelError, setLabelError] = useState("");
+  const [labelReview, setLabelReview] = useState<Record<string, string> | null>(null);
+  const labelFileRef = useRef<HTMLInputElement>(null);
+  const cameraFileRef = useRef<HTMLInputElement>(null);
+  const [recordCategory, setRecordCategory] = useState(title.toLocaleLowerCase("pt-BR").includes("sala") ? "Sala" : title.toLocaleLowerCase("pt-BR").includes("setor") ? "Setor" : "");
+  const [parentStructureId, setParentStructureId] = useState("");
+  const [room, setRoom] = useState("");
+  const [environmentType, setEnvironmentType] = useState("Sala");
+  const [roomNumber, setRoomNumber] = useState("");
+  const [floor, setFloor] = useState("");
+  const [block, setBlock] = useState("");
+  const [localResponsible, setLocalResponsible] = useState("");
+  const [extension, setExtension] = useState("");
+  const [criticality, setCriticality] = useState("Normal");
+  const [priorityAttendance, setPriorityAttendance] = useState(false);
+  const [quickSectorOpen, setQuickSectorOpen] = useState(false);
+  const [quickSectorName, setQuickSectorName] = useState("");
+  const [quickStructureKind,setQuickStructureKind]=useState<"Setor"|"Unidade">("Setor");
+  const [quickSectorFeedback, setQuickSectorFeedback] = useState("");
+  const [orderTab, setOrderTab] = useState<"Geral" | "Equipamentos" | "Valores" | "Anexos" | "Configurações">("Geral");
+  const [orderPriority, setOrderPriority] = useState<ServiceOrder["priority"]>("Normal");
+  const [orderServiceType, setOrderServiceType] = useState("Manutenção corretiva");
+  const [orderChecklist, setOrderChecklist] = useState("Diagnóstico corretivo");
+  const [orderTag, setOrderTag] = useState("");
+  const [orderExternalCode, setOrderExternalCode] = useState("");
+  const [orderCheckInRequirement, setOrderCheckInRequirement] = useState("Obrigatório por GPS no local");
+  const [orderEstimatedDuration, setOrderEstimatedDuration] = useState("02:00");
+  const [orderPmocRepeat, setOrderPmocRepeat] = useState(false);
+  const [orderNpsEnabled, setOrderNpsEnabled] = useState(true);
+  const [orderWhatsappEnabled, setOrderWhatsappEnabled] = useState(true);
+  const [orderWhatsappReminderEnabled, setOrderWhatsappReminderEnabled] = useState(true);
+  const [orderWhatsappStatusEnabled, setOrderWhatsappStatusEnabled] = useState(true);
+  const [orderReminderHours, setOrderReminderHours] = useState(24);
+  const [selectedEquipmentIds, setSelectedEquipmentIds] = useState<string[]>([]);
+  const [catalogQuantities, setCatalogQuantities] = useState<Record<string, number>>({});
+  const [orderDiscount, setOrderDiscount] = useState(0);
+  const [recordKind, setRecordKind] = useState<"Serviço" | "Produto">(title.includes("Produtos") ? "Produto" : "Serviço");
+  const [selectedCatalogIds, setSelectedCatalogIds] = useState<string[]>([]);
+  const [servicePickerOpen, setServicePickerOpen] = useState(false);
+  const [serviceSearch, setServiceSearch] = useState("");
+  const [servicePickerIds, setServicePickerIds] = useState<string[]>([]);
+  const [purchaseItems, setPurchaseItems] = useState<PurchaseItem[]>([{ id: `ITEM-${Date.now()}`, description: "", quantity: 1, unitValue: 0 }]);
+  const [paymentType, setPaymentType] = useState<"À vista" | "A prazo">("À vista");
+  const [paymentMethod, setPaymentMethod] = useState("PIX");
+  const [installments, setInstallments] = useState(1);
+  const [firstDueDate, setFirstDueDate] = useState("");
+  const [paymentInstallments, setPaymentInstallments] = useState<PurchaseInstallment[]>([]);
+  const [xmlImportStatus, setXmlImportStatus] = useState("");
+  const [xmlImported, setXmlImported] = useState(false);
+  const [supplierId, setSupplierId] = useState("");
+  const [supplierDoc, setSupplierDoc] = useState("");
+  const [engineer, setEngineer] = useState("");
+  const [workAddress, setWorkAddress] = useState("");
+  const [blockLot, setBlockLot] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [progress, setProgress] = useState(0);
+  const [commission, setCommission] = useState(0);
+  const [employeeRole, setEmployeeRole] = useState("Atendimento");
+  const [employeeSignature,setEmployeeSignature]=useState(""),[employeeSignatureBusy,setEmployeeSignatureBusy]=useState(false);
+  const [employeeUsername, setEmployeeUsername] = useState("");
+  const [employeePassword, setEmployeePassword] = useState("");
+  const permissionModules = [...navGroups.flatMap(group => group.items.map(item => item.name)), "Rotas"];
+  const permissionActions = ["Visualizar", "Criar", "Editar", "Excluir"] as const;
+  const [employeePermissions, setEmployeePermissions] = useState<Record<string, (typeof permissionActions)[number][]>>(()=>employeeAccessPreset("Atendimento"));
+  const applyEmployeeRole = (role: string) => { setEmployeeRole(role); setEmployeePermissions(employeeAccessPreset(role)); setRecordCategory(role); };
+  const togglePermission = (module: string, action: (typeof permissionActions)[number]) => setEmployeePermissions(current => ({ ...current, [module]: current[module]?.includes(action) ? current[module].filter(item => item !== action) : [...(current[module] ?? []), action] }));
+  const purchaseTotal = purchaseItems.reduce((total, item) => total + item.quantity * item.unitValue, 0);
+  const updatePurchaseItem = (id: string, changes: Partial<PurchaseItem>) => setPurchaseItems(items => items.map(item => item.id === id ? { ...item, ...changes } : item));
+  const addPurchaseItem = () => setPurchaseItems(items => [...items, { id: `ITEM-${Date.now()}-${items.length}`, description: "", quantity: 1, unitValue: 0 }]);
+  const removePurchaseItem = (id: string) => setPurchaseItems(items => items.length === 1 ? items : items.filter(item => item.id !== id));
+  const readEquipmentLabel = (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { setLabelError("Selecione uma imagem da etiqueta do equipamento."); return; }
+    if (file.size > 8 * 1024 * 1024) { setLabelError("A imagem deve ter no máximo 8 MB."); return; }
+    const reader = new FileReader();
+    reader.onload = () => { setEquipmentLabel({ name: file.name, dataUrl: String(reader.result) }); setLabelError(""); setLabelReview(null); };
+    reader.readAsDataURL(file);
+  };
+  const analyseEquipmentLabel = async () => {
+    if (!equipmentLabel) { setLabelError("Tire uma foto ou anexe a etiqueta antes de usar a IA."); return; }
+    setLabelReading(true); setLabelError("");
+    try {
+      const response = await fetch("/api/equipment-label", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image: equipmentLabel.dataUrl }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Não foi possível analisar a etiqueta.");
+      setLabelReview(result.fields || {});
+    } catch (error) { setLabelError(error instanceof Error ? error.message : "Não foi possível analisar a etiqueta."); }
+    finally { setLabelReading(false); }
+  };
+  const applyLabelReading = () => {
+    if (!labelReview) return;
+    const value = (key: string) => labelReview[key] || "";
+    if (value("brand")) setCatalogBrand(value("brand")); if (value("model")) setCatalogModel(value("model"));
+    if (value("equipmentType")) setEquipmentType(value("equipmentType")); if (value("capacityBtus")) setCapacityBtus(value("capacityBtus").replace(/\D/g, ""));
+    if (value("serialNumber")) setSerialNumber(value("serialNumber")); if (value("voltage")) setVoltage(value("voltage"));
+    if (value("refrigerant")) setRefrigerant(value("refrigerant")); if (value("frequency")) setFrequency(value("frequency"));
+    if (value("current")) setCurrentDraw(value("current")); if (value("power")) setPower(value("power"));
+    if (value("refrigerantCharge")) setRefrigerantCharge(value("refrigerantCharge")); if (value("manufactureDate")) setManufactureDate(value("manufactureDate"));
+    if (value("manufacturerCode")) setManufacturerCode(value("manufacturerCode"));
+    if (!recordName && (value("model") || value("brand"))) setRecordName([value("brand"), value("model")].filter(Boolean).join(" "));
+    setLabelReview(null);
+  };
+  const normalizeKey = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  const importPurchaseXml = async (file?: File) => {
+    if (!file) return;
+    setXmlImportStatus("A processar o XML...");
+    try {
+      const xml = new DOMParser().parseFromString(await file.text(), "application/xml");
+      if (xml.querySelector("parsererror")) throw new Error("XML inválido");
+      const byTag = (root: ParentNode, tag: string) => {
+        const scoped = root as XMLDocument | Element;
+        return scoped.getElementsByTagNameNS?.("*", tag)?.[0]?.textContent?.trim() || scoped.getElementsByTagName?.(tag)?.[0]?.textContent?.trim() || "";
+      };
+      const elements = (tag: string) => Array.from(xml.getElementsByTagNameNS("*", tag).length ? xml.getElementsByTagNameNS("*", tag) : xml.getElementsByTagName(tag));
+      const emit = elements("emit")[0];
+      const ide = elements("ide")[0];
+      const supplier = emit ? byTag(emit, "xNome") : "";
+      const supplierDoc = emit ? byTag(emit, "CNPJ") || byTag(emit, "CPF") : "";
+      const invoiceNumber = ide ? byTag(ide, "nNF") : "";
+      const issueDate = ide ? byTag(ide, "dhEmi") || byTag(ide, "dEmi") : "";
+      const importedItems = elements("det").map((det, index) => {
+        const product = Array.from(det.getElementsByTagNameNS("*", "prod"))[0] || det.getElementsByTagName("prod")[0];
+        const description = byTag(product || det, "xProd") || `Item ${index + 1}`;
+        const existingProduct = catalogRecords.find(item => (item.kind || "Serviço") === "Produto" && normalizeKey(item.name) === normalizeKey(description));
+        return { id: `XML-${Date.now()}-${index}`, description, quantity: Number(byTag(product || det, "qCom")) || 1, unitValue: Number(byTag(product || det, "vUnCom")) || Number(byTag(product || det, "vProd")) || 0, productId: existingProduct?.id || "", registerProduct: !existingProduct };
+      }).filter(item => item.description && item.quantity > 0);
+      if (!importedItems.length) throw new Error("Nenhum item de compra encontrado");
+      const importedInstallments = elements("dup").map((dup, index) => ({ number: byTag(dup, "nDup") || String(index + 1), dueDate: byTag(dup, "dVenc"), value: Number(byTag(dup, "vDup")) || 0 })).filter(item => item.dueDate || item.value > 0);
+      const paymentCode = elements("detPag")[0] ? byTag(elements("detPag")[0], "tPag") : "";
+      const paymentNames: Record<string, string> = { "01": "Dinheiro", "03": "Cartão de crédito", "04": "Cartão de débito", "15": "Boleto", "16": "Depósito bancário", "17": "PIX", "18": "Transferência bancária", "90": "Sem pagamento", "99": "Outros" };
+      setPurchaseItems(importedItems);
+      setRecordName(`NF-e ${invoiceNumber || file.name.replace(/\.xml$/i, "")}`);
+      setRecordClient(supplier || "Fornecedor do XML");
+      setDoc(supplierDoc);
+      setSupplierDoc(supplierDoc);
+      const existingSupplier = supplierRecords.find(item => normalizeKey(item.name) === normalizeKey(supplier));
+      setSupplierId(existingSupplier?.id || "");
+      if (existingSupplier) setRecordClient(existingSupplier.name);
+      setDate(issueDate ? issueDate.slice(0, 10) : "");
+      setRecordCategory("Compra importada por XML");
+      setDescription(`NF-e ${invoiceNumber || "sem número"}${supplierDoc ? ` • CNPJ/CPF ${supplierDoc}` : ""} • Arquivo ${file.name}`);
+      setPaymentMethod(paymentNames[paymentCode] || (importedInstallments.length ? "Boleto" : "Outros"));
+      setPaymentInstallments(importedInstallments);
+      setXmlImported(true);
+      setPaymentType(importedInstallments.length ? "A prazo" : "À vista");
+      setInstallments(Math.max(1, importedInstallments.length));
+      setFirstDueDate(importedInstallments[0]?.dueDate || "");
+      setXmlImportStatus(`XML importado: ${importedItems.length} item(ns)${importedInstallments.length ? ` e ${importedInstallments.length} parcela(s)` : ""}. Revise os dados antes de salvar.`);
+    } catch (error) {
+      setXmlImportStatus(error instanceof Error ? `Não foi possível importar: ${error.message}.` : "Não foi possível importar este XML.");
+    }
+  };
+  const formatCpfCnpj = (value: string) => {
+    const digits = value.replace(/\D/g, "").slice(0, 14);
+    if (digits.length <= 11) return digits.replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+    return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2}).*/, "$1.$2.$3/$4-$5");
+  };
+  const composeCustomerAddress = (parts?: Partial<{street:string;addressNumber:string;complement:string;neighborhood:string;city:string;state:string;zipCode:string}>) => {
+    const p = {street,addressNumber,complement,neighborhood,city:customerCity,state:customerState,zipCode,...parts};
+    return [p.street, p.addressNumber, p.complement, p.neighborhood, p.city && p.state ? `${p.city}/${p.state}` : p.city || p.state, p.zipCode ? `CEP ${p.zipCode}` : ""].filter(Boolean).join(", ");
+  };
+  const lookupCustomerDocument = async (raw: string) => {
+    const digits = raw.replace(/\D/g, "");
+    setPersonType(digits.length > 11 ? "PJ" : "PF");
+    setDoc(formatCpfCnpj(raw));
+    if (digits.length !== 14) { setDocumentLookup({loading:false,message:digits.length===11?"CPF reconhecido. Preencha os dados do cliente.":"",kind:""}); return; }
+    setDocumentLookup({loading:true,message:"Consultando CNPJ...",kind:""});
+    try {
+      const response = await fetch(`/api/cnpj/${digits}`, {cache:"no-store"});
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "CNPJ não encontrado");
+      setPersonType("PJ");
+      setLegalName(result.legalName || "");
+      setTradeName(result.tradeName || result.legalName || "");
+      setRecordName(result.tradeName || result.legalName || recordName);
+      setCustomerEmail(result.email || "");
+      setPhone(result.phone || phone);
+      setZipCode(result.zipCode || ""); setStreet(result.street || ""); setComplement(result.complement || "");
+      setNeighborhood(result.neighborhood || ""); setCustomerCity(result.city || ""); setCustomerState(result.state || "");
+      setStateRegistration(result.stateRegistration || ""); setCnaeMain(result.cnaeMain || ""); setTaxStatus(result.taxStatus || "");
+      const fullAddress=composeCustomerAddress({street:result.street||"",addressNumber:"",complement:result.complement||"",neighborhood:result.neighborhood||"",city:result.city||"",state:result.state||"",zipCode:result.zipCode||""});
+      setAddress(fullAddress); setAddressValidated(false); setShowAddressMap(false);
+      setDocumentLookup({loading:false,message:"CNPJ localizado. Confira e altere qualquer dado antes de salvar.",kind:"ok"});
+    } catch (error) { setDocumentLookup({loading:false,message:error instanceof Error ? error.message : "Não foi possível consultar o CNPJ.",kind:"error"}); }
+  };
+  const parentCustomer = isLinkedStructure ? title.split("•")[1]?.trim() : "";
+  const parentStructures = isLinkedStructure ? customerStructures(parentCustomer, customers, structures) : [];
+  const parentCandidates = parentStructures.filter(item => item.id !== parentStructureId);
+  const selectedClientData = customers.find(customer => customer.name === selectedClient);
+  const orderLocations=selectedClientData?orderSectorLocationOptions(selectedClientData,structures,customers,hierarchyLocation?.sectorId||"",hierarchyLocation?.unitId||""):null;
+  const availableRooms = isNewOrder?(orderLocations?.rooms.map(node=>node.record as ModuleRecord)||[]):selectedClient ? customerStructures(selectedClient, customers, structures).filter(item => /sala|ambiente|consult|labor|farm|uti|recep|almox|audit|cozinha|cpd|quarto/i.test(`${item.name} ${item.category ?? ""} ${item.environmentType ?? ""}`)) : [];
+  const serviceRecords = catalogRecords.filter(item => (item.kind || "Serviço") === "Serviço");
+  const productRecords = catalogRecords.filter(item => item.kind === "Produto");
+  const selectedServices = serviceRecords.filter(item => selectedCatalogIds.includes(item.id));
+  const selectedProducts = productRecords.filter(item => selectedCatalogIds.includes(item.id));
+  const selectedOrderItems = catalogRecords.filter(item => selectedCatalogIds.includes(item.id));
+  const orderServicesTotal = selectedServices.reduce((sum, item) => sum + (Number(item.value) || 0) * (catalogQuantities[item.id] || 1), 0);
+  const orderProductsTotal = selectedProducts.reduce((sum, item) => sum + (Number(item.value) || 0) * (catalogQuantities[item.id] || 1), 0);
+  const orderTotal = Math.max(0, orderServicesTotal + orderProductsTotal - orderDiscount);
+  const visibleServiceOptions = serviceRecords.filter(item => `${item.name} ${item.description || ""} ${item.category || ""}`.toLocaleLowerCase("pt-BR").includes(serviceSearch.trim().toLocaleLowerCase("pt-BR")));
+  const locations = isNewOrder?{units:orderLocations?.units.map(node=>node.record as ModuleRecord)||[],sectors:orderLocations?.sectors.map(node=>node.record as ModuleRecord)||[],unlinkedSectors:orderLocations?.sectors.map(node=>node.record as ModuleRecord)||[]}:selectedClient ? customerLocations(selectedClient, customers, structures, unit) : { units: [], sectors: [], unlinkedSectors: [] };
+  const availableUnits = locations.units.map(item => ({ id:item.id, icon: Building2, name:item.name, type:item.category || "Unidade", doc:item.doc || "", responsible:item.contact || "", phone:item.phone || "", address:item.address || "", orders:0 }));
+  const availableSectors = unit ? locations.sectors : locations.unlinkedSectors;
+  const orderEquipmentOptions = selectedClient ? equipmentRecords.filter(item => {
+    const sameCustomer = item.customerId && selectedClientData?.id ? item.customerId === selectedClientData.id : normalizeRelation(item.client) === normalizeRelation(selectedClient);
+    if (!sameCustomer) return false;
+    if (!unit) return true;
+    return !item.equipmentUnit || normalizeRelation(item.equipmentUnit) === normalizeRelation(unit) || normalizeRelation(item.installationLocation).includes(normalizeRelation(unit));
+  }) : [];
+  const durationMinutes = (() => {
+    const [hours, minutes] = orderEstimatedDuration.split(":").map(Number);
+    return Math.max(0, (Number.isFinite(hours) ? hours : 0) * 60 + (Number.isFinite(minutes) ? minutes : 0));
+  })();
+  const orderAddress = hierarchyLocation?.address || (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "");
+  const toggleOrderCatalogItem = (id: string) => {
+    setSelectedCatalogIds(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
+    setCatalogQuantities(current => ({ ...current, [id]: current[id] || 1 }));
+  };
+  const setOrderItemQuantity = (id: string, value: number) => setCatalogQuantities(current => ({ ...current, [id]: Math.max(0.001, value || 1) }));
+  const chooseModalLocation = (selection:HierarchySelection) => {
+    setHierarchyLocation(selection);setUnit(selection.unit);setSector(selection.sector);setRoom(selection.room);
+    setSelectedEquipmentIds([]);
+  };
+  const [orderSaveBusy,setOrderSaveBusy]=useState(false),[orderSaveError,setOrderSaveError]=useState("");
+  const orderSaveLock=useRef(false);
+  const saveNewOrder = async (status: "Agendada" | "Rascunho") => {
+    if(orderSaveLock.current||quickSectorBusy||quickCustomerLock.current)return;
+    const issue=orderCreationIssue({client:selectedClient,date,financialStatus:selectedClientData?.financialStatus,draft:status==="Rascunho"});
+    if(issue){setOrderSaveError(issue);setOrderTab("Geral");return;}
+    const scheduleIssue=status==="Agendada"?newOrderSchedulingIssue({time,tech,description,catalogCount:selectedOrderItems.length}):null;
+    if(scheduleIssue){setOrderSaveError(scheduleIssue);setOrderTab("Geral");return;}
+    orderSaveLock.current=true;setOrderSaveBusy(true);setOrderSaveError("");
+    try{await onSave({
+      title, name: "", client: selectedClient, doc: "", contact: selectedClientData?.contact ?? "", phone: selectedClientData?.phone ?? "",
+      address: orderAddress, unit, tech, date, time, description, status, value: orderTotal, category: orderServiceType, kind: "Serviço",
+      catalogItems: selectedOrderItems.map(item => ({ id:item.id, name:item.name, kind:item.kind || "Serviço", quantity:catalogQuantities[item.id] || 1 })),
+      purchaseItems: [], paymentType:"À vista", paymentMethod:"PIX", installments:1, firstDueDate:"", paymentInstallments:[], xmlImported:false, supplierDoc:"", supplierId:"", registerSupplier:false,
+      engineer:"", workAddress:"", blockLot:"", endDate:"", progress:0, commission:0, cost:0, sku:"", barcode:"", brand:"", model:"", supplier:"", stockCurrent:0, stockMin:0, stockMax:0, stockLocation:"", warrantyMonths:0, estimatedMinutes:0, unitOfMeasure:"serviço",
+      employeeRole:"", employeePermissions:{}, equipmentType:"", capacityBtus:0, serialNumber:"", voltage:"", refrigerant:"", installationLocation:"", installationDate:"", nextMaintenanceDate:"", equipmentUnit:"",
+      parentId:undefined, parentUnit:undefined, hierarchyLevel:undefined, environmentType:"", roomNumber:"", floor:"", block:"", localResponsible:"", extension:"", criticality:"Normal", priorityAttendance:orderPriority === "Urgente",
+      sector, room,
+      structureId: room ? availableRooms.find(item => item.name === room)?.id : sector ? availableSectors.find(item => item.name === sector)?.id : unit ? availableUnits.find(item => item.name === unit)?.id : undefined,
+      unitId: unit ? availableUnits.find(item => item.name === unit)?.id : undefined,
+      sectorId: sector ? availableSectors.find(item => item.name === sector)?.id : undefined,
+      roomId: room ? availableRooms.find(item => item.name === room)?.id : undefined,
+      priority:orderPriority, serviceType:orderServiceType, checklist:orderChecklist, tag:orderTag, externalCode:orderExternalCode, checkInRequirement:orderCheckInRequirement,
+      estimatedDurationMinutes:durationMinutes, pmocRepeatEnabled:orderPmocRepeat, npsEnabled:orderNpsEnabled,
+      whatsappUpdatesEnabled:orderWhatsappEnabled, whatsappAppointmentReminderEnabled:orderWhatsappReminderEnabled, whatsappStatusUpdatesEnabled:orderWhatsappStatusEnabled,
+      appointmentReminderHours:orderReminderHours, equipmentIds:selectedEquipmentIds, discount:orderDiscount, servicesTotal:orderServicesTotal, productsTotal:orderProductsTotal,
+      ...(hierarchyLocation || {}),
+    });}catch(error){setOrderSaveError(error instanceof Error?error.message:"Não foi possível salvar. Os campos preenchidos foram mantidos.");}
+    finally{orderSaveLock.current=false;setOrderSaveBusy(false);}
+  };
+  const [quickSectorBusy,setQuickSectorBusy]=useState(false);
+  const quickStructureLock=useRef(false);
+  const createSectorFromOrder = async () => {
+    if(quickStructureLock.current||orderSaveLock.current||quickCustomerLock.current)return;
+    const name=quickSectorName.trim(),kind=isNewOrder?quickStructureKind:"Setor";
+    if(!selectedClient){setQuickSectorFeedback("Selecione o cliente principal.");return;}
+    if(kind==="Unidade"&&!hierarchyLocation?.sectorId){setQuickSectorFeedback("Selecione o setor antes de cadastrar a unidade.");return;}
+    if(!name){setQuickSectorFeedback(`Informe o nome ${kind==="Unidade"?"da unidade":"do setor"}.`);return;}
+    const options=kind==="Unidade"?availableUnits:availableSectors;
+    const duplicate=options.find(item=>normalizeRelation(item.name)===normalizeRelation(name));
+    if(duplicate&&selectedClientData&&orderLocations){
+      chooseModalLocation(kind==="Unidade"?orderSectorUnitSelection(selectedClientData,orderLocations.nodes,hierarchyLocation?.sectorId||"",duplicate.id):hierarchySelection(selectedClientData,orderLocations.nodes,duplicate.id));
+      setQuickSectorFeedback("Registro já cadastrado e selecionado.");setQuickSectorName("");setQuickSectorOpen(false);return;
+    }
+    quickStructureLock.current=true;setQuickSectorBusy(true);setQuickSectorFeedback("Salvando no cadastro do cliente…");
+    try{
+      const created=await onCreateStructure({kind,name,parentId:kind==="Unidade"?hierarchyLocation?.sectorId||"":isNewOrder?"":hierarchyLocation?.unitId||"",environmentType:"",roomNumber:"",description:"Cadastrado diretamente pela Ordem de Serviço",client:selectedClient});
+      if(!created)throw new Error("O servidor não confirmou o cadastro. Tente novamente.");
+      if(selectedClientData){const nodes=customerHierarchy(selectedClientData,[created,...structures],customers);chooseModalLocation(hierarchySelection(selectedClientData,nodes,created.id));}
+      setQuickSectorName("");setQuickSectorFeedback(`${kind} cadastrada(o) e selecionada(o).`);setQuickSectorOpen(false);
+    }catch(error){setQuickSectorFeedback(error instanceof Error?error.message:"Falha ao cadastrar. Os campos foram mantidos.");}
+    finally{quickStructureLock.current=false;setQuickSectorBusy(false);}
+  };
+  useEffect(() => {
+    if (!isNewOrder && selectedClient && !availableUnits.some(item => item.name === unit)) setUnit(availableUnits[0]?.name ?? "");
+  }, [selectedClient, availableUnits, unit]);
+  useEffect(() => { if (!isNewOrder && sector && !availableSectors.some(item => item.name === sector)) setSector(""); }, [unit, selectedClient, structures]);
+
+  const createCustomerFromOrder=async()=>{
+    if(quickCustomerLock.current||orderSaveLock.current||quickStructureLock.current)return;
+    quickCustomerLock.current=true;setQuickCustomerBusy(true);setQuickCustomerError("");
+    try{
+      const created=await onCreateCustomer(quickCustomerDraft);
+      if(!created)throw new Error("O servidor não confirmou o cadastro.");
+      setSelectedClient(created.name);chooseModalLocation(hierarchySelection(created,[]));
+      setQuickSectorOpen(false);setQuickSectorName("");setQuickSectorFeedback("");
+      setQuickCustomerOpen(false);
+      setQuickCustomerDraft({name:"",legalName:"",tradeName:"",doc:"",phone:"",email:"",city:"",state:"SP",address:"",organizationType:"Empresa"});
+    }catch(error){setQuickCustomerError(error instanceof Error?error.message:"Não foi possível cadastrar. Os campos foram mantidos.");}
+    finally{quickCustomerLock.current=false;setQuickCustomerBusy(false);}
+  };
+  const requestClose = () => {
+    if(formSaving)return;
+    if(formDirty&&!window.confirm("Você tem dados não salvos. Deseja realmente sair sem salvar?"))return;
+    setFormDirty(false);
+    close();
+  };
+  const submitModalRecord = async (payload:ModalSave) => {
+    if(formSaving)return;
+    setFormSaving(true);
+    try{await onSave(payload);}finally{setFormSaving(false);}
+  };
+  useEffect(()=>{
+    if(!formDirty)return;
+    const beforeUnload=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue="";};
+    window.addEventListener("beforeunload",beforeUnload);
+    return()=>window.removeEventListener("beforeunload",beforeUnload);
+  },[formDirty]);
+  if (isNewOrder) return typeof document === "undefined" ? null : createPortal(<>
+    <div className="modal-layer os-create-layer" role="dialog" aria-modal="true" aria-label="Cadastrar nova ordem de serviço" onInputCapture={()=>setFormDirty(true)} onChangeCapture={()=>setFormDirty(true)}>
+      <button className="modal-backdrop" onClick={requestClose} aria-label="Fechar janela"/>
+      <section className="modal os-create-modal">
+        <header className="os-create-header">
+          <div className="os-create-title"><span className="os-create-icon"><Wrench size={17}/></span><div><div><h2>Cadastrar Nova Ordem de Serviço</h2><em>OS • NOVA</em></div><p>Cliente, local, serviço, equipamentos, valores e equipe de campo em um único fluxo.</p></div></div>
+          <div className="os-create-head-actions"><button type="button" onClick={() => setDescription(improveTechnicalText(description))}><Sparkles size={14}/> Sugerir com IA</button><button type="button" className="icon-only" onClick={requestClose} aria-label="Fechar"><X size={17}/></button></div>
+        </header>
+
+        <section className="os-create-card os-create-schedule" aria-label="Data e horário do atendimento" >
+          <div className="os-create-card-head"><span><CalendarDays size={15}/> Data e horário do atendimento</span></div>
+          <div className="os-create-location-grid">
+            <label>Data do atendimento • para agendar<input id="os-create-date" type="date" value={date} disabled={orderSaveBusy} onInput={event=>{setDate(event.currentTarget.value);setOrderSaveError("");}} onChange={event=>{setDate(event.target.value);setOrderSaveError("");}}/></label>
+            <label>Horário de início<input id="os-create-time" type="time" value={time} disabled={orderSaveBusy} onInput={event=>setTime(event.currentTarget.value)} onChange={event=>setTime(event.target.value)}/></label>
+          </div>
+        </section>
+        <nav className="os-create-tabs" aria-label="Etapas da nova ordem">
+          <button type="button" className={orderTab === "Geral" ? "active" : ""} onClick={() => setOrderTab("Geral")}><FileText size={14}/><span>1. Geral & Agendamento</span></button>
+          <button type="button" className={orderTab === "Equipamentos" ? "active" : ""} onClick={() => setOrderTab("Equipamentos")}><Boxes size={14}/><span>2. Equipamentos ({selectedEquipmentIds.length})</span></button>
+          <button type="button" className={orderTab === "Valores" ? "active" : ""} onClick={() => setOrderTab("Valores")}><CircleDollarSign size={14}/><span>3. Peças & Valores</span></button>
+          <button type="button" className={orderTab === "Anexos" ? "active" : ""} onClick={() => setOrderTab("Anexos")}><ImagePlus size={14}/><span>4. Anexos & Fotos</span></button>
+        <button type="button" className={orderTab === "Configurações" ? "active" : ""} onClick={()=>setOrderTab("Configurações")}>5. Preferências</button></nav>
+
+        <div className="os-create-body">
+          {orderTab === "Geral" && <div className="os-create-general">
+            <div className="os-create-left">
+              <article className="os-create-card">
+                <div className="os-create-card-head"><span><UserRound size={15}/> Cliente & Local do Serviço</span><em>* Obrigatório</em></div>
+                <label>Cliente principal<CustomerSearchSelect showHierarchy={false} disabled={orderSaveBusy||quickSectorBusy||quickCustomerBusy} customers={customers} value={selectedClient} locationId={hierarchyLocation?.structureId} onLocationChange={chooseModalLocation} onChange={(value,selected) => { setSelectedClient(value); setHierarchyLocation(selected?hierarchySelection(customers.find(item=>item.id===selected.id)!,[]):null); setUnit(""); setSector(""); setRoom(""); setSelectedEquipmentIds([]); setQuickSectorOpen(false); setQuickSectorFeedback(""); }} /></label>
+                <button type="button" className="inline-create-link" disabled={!canCreateCustomer||orderSaveBusy||quickSectorBusy||quickCustomerBusy} title={canCreateCustomer?"Cadastrar sem sair da OS":"Seu perfil não permite cadastrar clientes"} onClick={()=>{setQuickCustomerError("");setQuickCustomerOpen(value=>!value);}}><Plus size={13}/> Cadastrar cliente</button>
+                {quickCustomerOpen&&<section className="os-inline-customer" aria-label="Cadastrar cliente diretamente na OS" aria-busy={quickCustomerBusy}>
+                  <div><b>Novo cliente principal</b><p>Os dados da OS serão mantidos. Salve o cliente para selecioná-lo.</p></div>
+                  <fieldset disabled={quickCustomerBusy}><div className="os-create-location-grid">
+                    <label>Nome / Razão social • obrigatório<input autoFocus value={quickCustomerDraft.name} onChange={event=>setQuickCustomerDraft(current=>({...current,name:event.target.value}))}/></label>
+                    <label>Tipo de cliente<select value={quickCustomerDraft.organizationType} onChange={event=>setQuickCustomerDraft(current=>({...current,organizationType:event.target.value as Customer["organizationType"]}))}><option>Empresa</option><option>Pessoa Física</option><option>Prefeitura</option><option>Órgão Público</option><option>Outro</option></select></label>
+                    <label>CPF / CNPJ • opcional<input inputMode="numeric" value={quickCustomerDraft.doc} onChange={event=>setQuickCustomerDraft(current=>({...current,doc:event.target.value}))} placeholder="Somente números"/></label>
+                    <label>Telefone<input type="tel" value={quickCustomerDraft.phone} onChange={event=>setQuickCustomerDraft(current=>({...current,phone:event.target.value}))}/></label>
+                    <label>E-mail<input type="email" value={quickCustomerDraft.email} onChange={event=>setQuickCustomerDraft(current=>({...current,email:event.target.value}))}/></label>
+                    <label>Cidade<input value={quickCustomerDraft.city} onChange={event=>setQuickCustomerDraft(current=>({...current,city:event.target.value}))}/></label>
+                    <label>UF<input maxLength={2} value={quickCustomerDraft.state} onChange={event=>setQuickCustomerDraft(current=>({...current,state:event.target.value.toUpperCase()}))}/></label>
+                    <label>Endereço do cliente<input value={quickCustomerDraft.address} onChange={event=>setQuickCustomerDraft(current=>({...current,address:event.target.value}))}/></label>
+                  </div></fieldset>
+                  {quickCustomerError&&<p role="alert" className="os-inline-customer-error">{quickCustomerError}</p>}
+                  <div className="os-inline-customer-actions"><button type="button" className="outline-btn" disabled={quickCustomerBusy} onClick={()=>setQuickCustomerOpen(false)}>Cancelar cadastro</button><button type="button" className="primary-btn" disabled={quickCustomerBusy||orderSaveBusy||quickSectorBusy} onClick={()=>void createCustomerFromOrder()}>{quickCustomerBusy?"Salvando cliente…":"Salvar cliente e selecionar"}</button></div>
+                </section>}
+
+                {selectedClientData && <div className="os-client-confirm"><div><span>{selectedClientData.doc || "Documento não informado"}</span><strong className={selectedClientData.financialStatus === "Bloqueado" ? "blocked" : ""}>{selectedClientData.financialStatus || "Liberado"}</strong></div><b>{orderAddress || "Endereço principal não informado"}</b><small>{selectedClientData.contact || "Responsável não informado"} • {selectedClientData.phone || "Telefone não informado"}</small></div>}
+                <div className="os-create-location-grid">
+                  <label>Setor<select value={hierarchyLocation?.sectorId||""} onChange={event=>{if(selectedClientData&&orderLocations){chooseModalLocation(hierarchySelection(selectedClientData,orderLocations.nodes,event.target.value));setQuickSectorOpen(false);setQuickSectorName("");setQuickSectorFeedback("");}}} disabled={!selectedClient||orderSaveBusy||quickSectorBusy}><option value="">{selectedClient?"Selecione o setor":"Selecione primeiro o cliente"}</option>{availableSectors.map(item=><option key={item.id} value={item.id}>{item.name}{orderLocations?.nodes.find(node=>node.id===item.id)?.depth? ` • ${orderLocations.nodes.find(node=>node.id===item.id)?.path.slice(0,-1).map(id=>orderLocations.nodes.find(node=>node.id===id)?.name).join(" / ")}`:""}</option>)}</select>{selectedClient&&<button type="button" className="inline-create-link" disabled={orderSaveBusy||quickSectorBusy||quickCustomerBusy} onClick={()=>{setQuickStructureKind("Setor");setQuickSectorName("");setQuickSectorFeedback("");setQuickSectorOpen(true);}}><Plus size={12}/> Cadastrar setor</button>}</label>
+                  <label>Unidade<select value={hierarchyLocation?.unitId||""} onChange={event=>{if(selectedClientData&&orderLocations)chooseModalLocation(orderSectorUnitSelection(selectedClientData,orderLocations.nodes,hierarchyLocation?.sectorId||"",event.target.value));}} disabled={!hierarchyLocation?.sectorId||orderSaveBusy||quickSectorBusy}><option value="">{hierarchyLocation?.sectorId?"Selecione a unidade (opcional)":"Selecione primeiro o setor"}</option>{availableUnits.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>{selectedClient&&<button type="button" className="inline-create-link" disabled={!hierarchyLocation?.sectorId||orderSaveBusy||quickSectorBusy} onClick={()=>{setQuickStructureKind("Unidade");setQuickSectorName("");setQuickSectorFeedback("");setQuickSectorOpen(true);}}><Plus size={12}/> Cadastrar unidade</button>}</label>
+                  <label >Sala / Ambiente<select value={hierarchyLocation?.roomId||""} onChange={event=>{if(selectedClientData&&orderLocations)chooseModalLocation(event.target.value?hierarchySelection(selectedClientData,orderLocations.nodes,event.target.value):orderSectorUnitSelection(selectedClientData,orderLocations.nodes,hierarchyLocation?.sectorId||"",hierarchyLocation?.unitId||""));}} disabled={!selectedClient||quickSectorBusy}><option value="">{selectedClient ? availableRooms.length ? "Selecione a sala (opcional)" : "Nenhuma sala cadastrada" : "Selecione o cliente"}</option>{availableRooms.map(item => <option key={item.id} value={item.id}>{item.name} • {item.category || item.environmentType || "Ambiente"}</option>)}</select></label>
+                  <label>Endereço do atendimento<input value={orderAddress} readOnly placeholder="Carregado pelo cadastro"/></label>
+                </div>
+                {quickSectorOpen&&<div className="order-sector-quick-create os-inline-sector"><div><span>CADASTRO DIRETO</span><b>{quickStructureKind==="Unidade"?"Nova unidade":"Novo setor"}</b><small>{quickStructureKind==="Unidade"?`Cliente: ${selectedClient} • Setor: ${sector}`:`Vinculado ao cliente principal: ${selectedClient}`}</small></div><label>Nome {quickStructureKind==="Unidade"?"da unidade":"do setor"}<input autoFocus disabled={quickSectorBusy} value={quickSectorName} onChange={event=>setQuickSectorName(event.target.value)} onKeyDown={event=>{if(event.key==="Enter"){event.preventDefault();void createSectorFromOrder();}}} placeholder={quickStructureKind==="Unidade"?"Ex.: UBS Central":"Ex.: Saúde"}/></label><div className="order-sector-quick-actions"><button type="button" className="outline-btn" disabled={quickSectorBusy} onClick={()=>setQuickSectorOpen(false)}>Cancelar</button><button type="button" className="primary-btn" disabled={quickSectorBusy} onClick={()=>void createSectorFromOrder()}>{quickSectorBusy?"Salvando…":"Cadastrar e selecionar"}</button></div></div>}
+                {quickSectorFeedback && <div className="field-hint order-sector-feedback"><CheckCircle2 size={13}/>{quickSectorFeedback}</div>}
+                {selectedClientData && <div className={`os-credit-strip ${selectedClientData.financialStatus === "Bloqueado" ? "blocked" : ""}`}><CircleDollarSign size={16}/><span><b>Crédito</b><small>Limite R$ {(selectedClientData.creditLimit ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})} • Lançado R$ {(selectedClientData.balancePosted ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</small></span><strong>{selectedClientData.financialStatus ?? "Liberado"}</strong></div>}
+              </article>
+
+              <article className="os-create-card">
+                <div className="os-create-card-head"><span><UsersRound size={15}/> Técnico / Equipe Responsável</span></div>
+                <div className="os-assignment-toggle"><button type="button" className="active">Colaborador</button><button type="button" disabled title="Cadastre equipes no módulo de funcionários para habilitar">Equipe de Campo</button></div>
+                <label>Técnico empenhado<select value={tech} onChange={event => setTech(event.target.value)}><option value="">Sem técnico atribuído • definir depois</option>{employeeRecords.filter(employee => !/inativ|desligad/i.test(employee.status || "") && Boolean(employee.name?.trim())).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR")).map(employee => <option key={employee.id} value={employee.name}>{employee.name}{employee.employeeRole ? ` • ${employee.employeeRole}` : ""}</option>)}</select></label>
+              </article>
+
+              <article className="os-create-card">
+                <div className="os-create-card-head"><span><CalendarDays size={15}/> Duração e lembretes</span></div>
+                <div className="os-create-location-grid">
+
+
+                  <label>Duração estimada<input type="time" value={orderEstimatedDuration} onChange={event => setOrderEstimatedDuration(event.target.value)}/></label>
+                  <label>Lembrete WhatsApp<select value={orderReminderHours} onChange={event => setOrderReminderHours(Number(event.target.value))}><option value={2}>2 horas antes</option><option value={6}>6 horas antes</option><option value={12}>12 horas antes</option><option value={24}>24 horas antes</option><option value={48}>48 horas antes</option></select></label>
+                </div>
+                <label className="os-switch-row"><input type="checkbox" checked={orderPmocRepeat} onChange={event => setOrderPmocRepeat(event.target.checked)}/><span><b>Repetir tarefa / revisão PMOC</b><small>Mantém o vínculo com a rotina periódica já existente na OS.</small></span></label>
+              </article>
+            </div>
+
+            <div className="os-create-right">
+              <article className="os-create-card">
+                <div className="os-create-card-head"><span><ClipboardList size={15}/> Descrição do Serviço a Ser Realizado</span><button type="button" className="os-create-ai" onClick={() => setDescription(improveTechnicalText(description))}><Sparkles size={13}/> Melhorar com IA</button></div>
+                <textarea className="os-create-description" value={description} onChange={event => setDescription(event.target.value)} placeholder="Descreva o escopo técnico, sintomas relatados, orientações e observações do atendimento..."/>
+              </article>
+
+
+
+              <article className="os-create-card">
+                <div className="os-create-card-head"><span><Wrench size={15}/> Serviços da Ordem</span><button type="button" className="os-create-ai" onClick={() => { setServicePickerIds(selectedCatalogIds.filter(id => serviceRecords.some(item => item.id === id))); setServiceSearch(""); setServicePickerOpen(true); }}><Plus size={13}/> Selecionar serviços</button></div>
+                {selectedServices.length ? <div className="os-selected-chips">{selectedServices.map(item => <span key={item.id}><Wrench size={12}/>{item.name}<button type="button" onClick={() => setSelectedCatalogIds(current => current.filter(id => id !== item.id))}><X size={11}/></button></span>)}</div> : <div className="os-create-empty">Nenhum serviço selecionado. A descrição da solicitação será mantida mesmo sem item de catálogo.</div>}
+              </article>
+
+
+            </div>
+          </div>}
+
+          {orderTab === "Configurações" && <div className="os-create-tab-panel"><article className="os-create-card">
+                <div className="os-create-card-head"><span><Tag size={15}/> Classificação do Atendimento</span></div>
+                <div className="os-classification-grid">
+                  <label>Tipo de serviço<select value={orderServiceType} onChange={event => setOrderServiceType(event.target.value)}><option>Manutenção preventiva (PMOC)</option><option>Manutenção corretiva</option><option>Instalação / infraestrutura</option><option>Higienização</option><option>Vistoria / orçamento</option><option>Atendimento técnico</option></select></label>
+                  <label>Prioridade<select value={orderPriority} onChange={event => setOrderPriority(event.target.value as ServiceOrder["priority"])}><option>Baixa</option><option>Normal</option><option>Alta</option><option>Urgente</option></select></label>
+                  <label>Checklist aplicado<select value={orderChecklist} onChange={event => setOrderChecklist(event.target.value)}><option>Diagnóstico corretivo</option><option>PMOC mensal climatização</option><option>Checklist de instalação</option><option>Higienização completa</option><option>Sem checklist inicial</option></select></label>
+                  <label>Palavra-chave / Tag<input value={orderTag} onChange={event => setOrderTag(event.target.value)} placeholder="Ex.: PMOC-MUNICIPAL"/></label>
+                  <label>Código externo / Nº empenho<input value={orderExternalCode} onChange={event => setOrderExternalCode(event.target.value)} placeholder="Pedido, contrato ou empenho"/></label>
+                  <label>Exigência de check-in<select value={orderCheckInRequirement} onChange={event => setOrderCheckInRequirement(event.target.value)}><option>Obrigatório por GPS no local</option><option>Check-in por QR Code</option><option>Padrão do colaborador</option><option>Sem exigência adicional</option></select></label>
+                </div>
+              </article><article className="os-create-card">
+                <div className="os-create-card-head"><span><Bell size={15}/> Automações & Notificações</span></div>
+                <div className="os-automation-grid">
+                  <label className="os-switch-row"><input type="checkbox" checked={orderWhatsappEnabled} onChange={event => setOrderWhatsappEnabled(event.target.checked)}/><span><b>Envio automático por WhatsApp</b><small>Ativa comunicação vinculada à OS.</small></span></label>
+                  <label className="os-switch-row"><input type="checkbox" checked={orderWhatsappReminderEnabled} onChange={event => setOrderWhatsappReminderEnabled(event.target.checked)}/><span><b>Lembrete do agendamento</b><small>Usa a antecedência selecionada.</small></span></label>
+                  <label className="os-switch-row"><input type="checkbox" checked={orderWhatsappStatusEnabled} onChange={event => setOrderWhatsappStatusEnabled(event.target.checked)}/><span><b>Atualizações de status</b><small>Início, andamento e conclusão.</small></span></label>
+                  <label className="os-switch-row"><input type="checkbox" checked={orderNpsEnabled} onChange={event => setOrderNpsEnabled(event.target.checked)}/><span><b>Pesquisa de satisfação NPS</b><small>Disponível após conclusão e assinatura.</small></span></label>
+                </div>
+              </article></div>}
+          {orderTab === "Equipamentos" && <div className="os-create-tab-panel">
+            <article className="os-create-card">
+              <div className="os-create-card-head"><span><Boxes size={15}/> Equipamentos do Atendimento</span><em>{selectedEquipmentIds.length} selecionado(s)</em></div>
+              <p className="os-create-helper">São exibidos os equipamentos cadastrados para o cliente e, quando possível, filtrados pela unidade selecionada.</p>
+              {orderEquipmentOptions.length ? <div className="os-equipment-picker">{orderEquipmentOptions.map(item => { const checked=selectedEquipmentIds.includes(item.id); return <label key={item.id} className={checked ? "selected" : ""}><input type="checkbox" checked={checked} onChange={() => setSelectedEquipmentIds(current => checked ? current.filter(id => id !== item.id) : [...current,item.id])}/><span className="os-equipment-picker-icon"><Wrench size={17}/></span><div><b>{item.name || item.model || "Equipamento"}</b><small>{[item.brand,item.model,item.capacityBtus ? `${item.capacityBtus} BTUs` : "",item.serialNumber ? `Série ${item.serialNumber}` : ""].filter(Boolean).join(" • ") || "Dados técnicos não informados"}</small><em>{item.installationLocation || item.equipmentUnit || unit || "Local não informado"}</em></div><CheckCircle2 size={17}/></label>})}</div> : <div className="os-create-empty"><Boxes size={22}/><b>Nenhum equipamento cadastrado para este cliente.</b><span>A OS pode ser criada normalmente e o equipamento pode ser vinculado depois na área de trabalho da ordem.</span></div>}
+            </article>
+          </div>}
+
+          {orderTab === "Valores" && <div className="os-create-tab-panel os-values-layout"><div><article className="os-create-card"><div className="os-create-card-head"><span><Wrench size={15}/> Serviços da OS</span><button type="button" className="os-create-ai" onClick={()=>{setServicePickerIds(selectedCatalogIds.filter(id=>serviceRecords.some(item=>item.id===id)));setServiceSearch("");setServicePickerOpen(true);}}><Plus size={13}/> Selecionar serviços</button></div>{selectedServices.length?<div className="os-catalog-value-list">{selectedServices.map(item=><div key={item.id} className="selected"><label><span><b>{item.name}</b><small>Serviço cadastrado</small></span></label><input aria-label={`Quantidade de ${item.name}`} type="number" min="0.001" step="0.001" value={catalogQuantities[item.id]||1} onChange={event=>setOrderItemQuantity(item.id,Number(event.target.value))}/><strong>R$ {(Number(item.value)||0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong><button type="button" aria-label={`Remover ${item.name}`} onClick={()=>toggleOrderCatalogItem(item.id)}><X size={14}/></button></div>)}</div>:<div className="os-create-empty">Use Selecionar serviços para carregar os itens cadastrados. Itens do catálogo e equipamentos são opcionais.</div>}</article>
+            <article className="os-create-card">
+              <div className="os-create-card-head"><span><Package size={15}/> Peças / Produtos</span><em>{selectedProducts.length} selecionado(s)</em></div>
+              {productRecords.length ? <div className="os-catalog-value-list">{productRecords.map(item => { const checked=selectedCatalogIds.includes(item.id); return <div key={item.id} className={checked ? "selected" : ""}><label><input type="checkbox" checked={checked} onChange={() => toggleOrderCatalogItem(item.id)}/><span><b>{item.name}</b><small>{item.sku || item.category || "Produto cadastrado"}</small></span></label><input type="number" min="0.001" step="0.001" disabled={!checked} value={catalogQuantities[item.id] || 1} onChange={event => setOrderItemQuantity(item.id, Number(event.target.value))}/><strong>R$ {(Number(item.value)||0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div>})}</div> : <div className="os-create-empty">Nenhum produto cadastrado no catálogo.</div>}
+            </article></div>
+            <article className="os-create-card">
+              <div className="os-create-card-head"><span><CircleDollarSign size={15}/> Resumo de Valores</span></div>
+              <div className="os-value-summary"><span>Serviços <b>R$ {orderServicesTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></span><span>Produtos / materiais <b>R$ {orderProductsTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></span><label>Desconto<input type="number" min="0" step="0.01" value={orderDiscount || ""} onChange={event => setOrderDiscount(Math.max(0,Number(event.target.value)||0))}/></label><strong>Total da OS <b>R$ {orderTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></strong></div>
+              <div className="os-selected-items">{selectedOrderItems.map(item => <div key={item.id}><span><b>{item.name}</b><small>{item.kind || "Serviço"} • Qtd. {catalogQuantities[item.id] || 1}</small></span><strong>R$ {((Number(item.value)||0)*(catalogQuantities[item.id]||1)).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div>)}</div>
+            </article>
+          </div>}
+
+          {orderTab === "Anexos" && <div className="os-create-tab-panel">
+            <article className="os-create-card">
+              <div className="os-create-card-head"><span><ImagePlus size={15}/> Anexos, Fotos & Evidências</span></div>
+              <div className="os-execution-features"><div><Camera size={19}/><span><b>Fotos antes, durante e depois</b><small>Disponíveis na área de trabalho da OS após a criação, vinculadas ao atendimento.</small></span></div><div><MapPin size={19}/><span><b>Check-in / Check-out</b><small>{orderCheckInRequirement}. Os registros ficam associados à execução.</small></span></div><div><PenTool size={19}/><span><b>Assinaturas do cliente e técnico</b><small>Coleta disponível durante a execução da ordem.</small></span></div><div><FileText size={19}/><span><b>Documentos e relatório técnico</b><small>Após salvar, a OS poderá gerar o documento operacional e receber os registros complementares.</small></span></div></div>
+              <div className="execution-notice"><ShieldCheck size={18}/><div><b>Sem perda dos campos existentes</b><small>Check-in, check-out, fotos, assinaturas, NFS-e, histórico, assistência e PMOC continuam disponíveis na área de trabalho da OS depois de salvar.</small></div></div>
+            </article>
+          </div>}
+        </div>
+
+        {orderSaveError&&<p role="alert" style={{color:"#991b1b",background:"#fef2f2",border:"1px solid #f87171",padding:12,margin:"0 20px"}}><strong>Não foi salvo.</strong> {orderSaveError}</p>}
+        <footer className="os-create-footer">
+          <div><button type="button" className="outline-btn" onClick={requestClose}>Cancelar</button><button type="button" className="outline-btn" disabled={orderSaveBusy||quickSectorBusy||quickCustomerBusy} onClick={() => void saveNewOrder("Rascunho")}>Salvar como rascunho</button></div>
+          <div className="os-create-footer-summary"><span>{selectedOrderItems.length} item(ns) • {selectedEquipmentIds.length} equipamento(s)</span><strong>R$ {orderTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong><button type="button" className="primary-btn" disabled={orderSaveBusy||quickSectorBusy||quickCustomerBusy} onClick={() => void saveNewOrder("Agendada")}>{orderSaveBusy ? <><svg className="h-4 w-4 animate-spin shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Salvando...</> : <><CheckCircle2 size={15}/>Salvar e agendar OS</>}</button></div>
+        </footer>
+      </section>
+    </div>
+    {servicePickerOpen && <div className="service-picker-layer" role="dialog" aria-modal="true" aria-label="Selecionar serviços"><button type="button" className="service-picker-backdrop" aria-label="Fechar seleção de serviços" onClick={() => setServicePickerOpen(false)}/><section className="service-picker"><header><div><span>CATÁLOGO DE SERVIÇOS</span><h3>Selecionar vários serviços</h3><p>Pesquise e marque todos os itens necessários para esta ordem.</p></div><button type="button" aria-label="Fechar" onClick={() => setServicePickerOpen(false)}><X size={17}/></button></header><label className="service-picker-search"><Search size={17}/><input autoFocus value={serviceSearch} onChange={event => setServiceSearch(event.target.value)} placeholder="Pesquisar por nome ou categoria..."/><small>{visibleServiceOptions.length} resultado(s)</small></label><div className="service-picker-grid">{visibleServiceOptions.map(item => <label key={item.id} className={servicePickerIds.includes(item.id) ? "selected" : ""}><input type="checkbox" checked={servicePickerIds.includes(item.id)} onChange={() => setServicePickerIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])}/><span><Wrench size={17}/></span><div><b>{item.name}</b><small>{item.category || item.description || "Serviço cadastrado"}</small></div><CheckCircle2 size={16}/></label>)}</div>{!visibleServiceOptions.length && <div className="catalog-empty"><Search size={18}/><span>Nenhum serviço encontrado para esta pesquisa.</span></div>}<footer><span><b>{servicePickerIds.length}</b> serviço(s) marcado(s)</span><div><button type="button" className="outline-btn" onClick={() => setServicePickerOpen(false)}>Cancelar</button><button type="button" className="primary-btn" onClick={() => { setSelectedCatalogIds(current => [...current.filter(id => !serviceRecords.some(item => item.id === id)), ...servicePickerIds]); setServicePickerIds([]); setServicePickerOpen(false); }}><CheckCircle2 size={15}/> Aplicar seleção</button></div></footer></section></div>}
+  </>, document.body);
+
+  return <div className="modal-layer" role="dialog" aria-modal="true" aria-label={title} onInputCapture={()=>setFormDirty(true)} onChangeCapture={()=>setFormDirty(true)}><button className="modal-backdrop" onClick={requestClose} aria-label="Fechar janela"/><div className={`modal ${isNewCustomer ? "customer-create-modal" : ""}`}><div className="modal-head"><div><span>{isLinkedStructure ? "ESTRUTURA DO CLIENTE • LIMITE DE 20" : "CADASTRO PROAR"}</span><h2>{isLinkedStructure ? "Nova unidade, filial ou setor" : title}</h2>{isLinkedStructure && <p>Este registro será vinculado a <strong>{parentCustomer}</strong>.</p>}</div><button onClick={requestClose} aria-label="Fechar"><X size={18}/></button></div><div className="form-grid">
+    {isLinkedStructure ? <>
+      <label>Cliente principal<input value={parentCustomer} readOnly/></label>
+      <label>Tipo de vínculo<select value={recordCategory} onChange={event => setRecordCategory(event.target.value)}><option>Unidade</option><option>Filial</option><option>Secretaria</option><option>Setor</option><option>Sala</option><option>Ambiente</option><option>Departamento</option><option>Empresa vinculada</option></select></label>
+      <label className="wide">Vincular dentro de<select value={parentStructureId} onChange={event => setParentStructureId(event.target.value)}><option value="">Cliente principal (nível raiz)</option>{parentCandidates.map(item => <option key={item.id} value={item.id}>{item.name} • {item.category || "estrutura"}</option>)}</select><small>Use a estrutura imediatamente superior: Matriz → Filial/Unidade → Setor → Ambiente.</small></label>
+      <div className="wide customer-auto-document"><div><span>IDENTIFICAÇÃO AUTOMÁTICA DA FILIAL</span><h3>Consultar CNPJ</h3><p>Digite o CNPJ da filial/unidade. O ProAR busca os dados cadastrais e mantém todos os campos liberados para alteração antes de salvar.</p></div></div>
+      <label>CNPJ<input value={doc} onChange={event => void lookupCustomerDocument(event.target.value)} placeholder="00.000.000/0000-00" inputMode="numeric"/></label>
+      {documentLookup.message && <div className={`wide document-lookup-status ${documentLookup.kind}`} role={documentLookup.kind === "error" ? "alert" : "status"} aria-live="polite" aria-busy={documentLookup.loading}>{documentLookup.loading ? "Consultando CNPJ..." : documentLookup.message}</div>}
+      <label>Nome da unidade ou setor<input value={recordName} onChange={event => setRecordName(event.target.value)} placeholder="Ex.: Filial Olímpia ou Secretaria de Saúde"/></label>
+      <label>Razão social<input value={legalName} onChange={event => setLegalName(event.target.value)} placeholder="Razão social vinculada"/></label>
+      <label>Nome fantasia<input value={tradeName} onChange={event => {setTradeName(event.target.value); if(event.target.value.trim()) setRecordName(event.target.value);}} placeholder="Nome fantasia"/></label>
+      <label>Responsável<input value={contact} onChange={event => setContact(event.target.value)} placeholder="Nome do responsável local"/></label>
+      <label>Telefone / WhatsApp<input value={phone} onChange={event => setPhone(event.target.value)} placeholder="(00) 00000-0000"/></label>
+      <label>E-mail<input type="email" value={customerEmail} onChange={event => setCustomerEmail(event.target.value)} placeholder="filial@empresa.com.br"/></label>
+      <label>CEP<input value={zipCode} onChange={event => {setZipCode(event.target.value); setAddress(composeCustomerAddress({zipCode:event.target.value}));}} placeholder="00000-000"/></label>
+      <label>Logradouro<input value={street} onChange={event => {setStreet(event.target.value); setAddress(composeCustomerAddress({street:event.target.value}));}} placeholder="Rua / Avenida"/></label>
+      <label>Número<input value={addressNumber} onChange={event => {setAddressNumber(event.target.value); setAddress(composeCustomerAddress({addressNumber:event.target.value}));}}/></label>
+      <label>Complemento<input value={complement} onChange={event => {setComplement(event.target.value); setAddress(composeCustomerAddress({complement:event.target.value}));}}/></label>
+      <label>Bairro<input value={neighborhood} onChange={event => {setNeighborhood(event.target.value); setAddress(composeCustomerAddress({neighborhood:event.target.value}));}}/></label>
+      <label>Cidade<input value={customerCity} onChange={event => {setCustomerCity(event.target.value); setAddress(composeCustomerAddress({city:event.target.value}));}}/></label>
+      <label>UF<input maxLength={2} value={customerState} onChange={event => {const value=event.target.value.toUpperCase(); setCustomerState(value); setAddress(composeCustomerAddress({state:value}));}}/></label>
+      <label>Inscrição Estadual<input value={stateRegistration} onChange={event => setStateRegistration(event.target.value)}/></label>
+      <label>Inscrição Municipal<input value={municipalRegistration} onChange={event => setMunicipalRegistration(event.target.value)}/></label>
+      <label>CNAE principal<input value={cnaeMain} onChange={event => setCnaeMain(event.target.value)}/></label>
+      <label>Situação cadastral<input value={taxStatus} onChange={event => setTaxStatus(event.target.value)}/></label>
+      <label className="wide">Endereço completo<input value={address} onChange={event => setAddress(event.target.value)} placeholder="CEP, rua, número, bairro, cidade e estado"/></label>
+      <label>Tipo de ambiente<select value={environmentType} onChange={event => setEnvironmentType(event.target.value)}><option>Sala</option><option>Consultório</option><option>Recepção</option><option>Sala técnica</option><option>CPD</option><option>Laboratório</option><option>Farmácia</option><option>UTI</option><option>Outro</option></select></label>
+      <label>Número da sala<input value={roomNumber} onChange={event => setRoomNumber(event.target.value)}/></label>
+      <label>Andar<input value={floor} onChange={event => setFloor(event.target.value)}/></label>
+      <label>Bloco<input value={block} onChange={event => setBlock(event.target.value)}/></label>
+      <label>Responsável local<input value={localResponsible} onChange={event => setLocalResponsible(event.target.value)}/></label>
+      <label>Ramal<input value={extension} onChange={event => setExtension(event.target.value)}/></label>
+      <label>Criticidade<select value={criticality} onChange={event => setCriticality(event.target.value)}><option>Normal</option><option>Alta</option><option>Crítica</option></select></label>
+      <label className="checkbox-field"><input type="checkbox" checked={priorityAttendance} onChange={event => setPriorityAttendance(event.target.checked)}/> Atendimento prioritário</label>
+      <label className="wide">Observações<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="Informações específicas desta unidade, empresa ou setor..."/></label>
+    </> : <>
+      {isNewOrder ? <>
+        <label>Pesquisar cliente<CustomerSearchSelect customers={customers} value={selectedClient} locationId={hierarchyLocation?.structureId} onLocationChange={chooseModalLocation} onChange={(value,selected) => { setSelectedClient(value); setHierarchyLocation(selected?hierarchySelection(customers.find(item=>item.id===selected.id)!,[]):null); setUnit(""); setSector(""); setRoom(""); setQuickSectorOpen(false); setQuickSectorFeedback(""); }} /></label>
+        <label className={isMunicipalCustomer(selectedClientData)?"municipal-legacy-location":""}>Unidade / Filial<select value={unit} onChange={event => { setUnit(event.target.value); setSector(""); setRoom(""); }} disabled={!selectedClient}><option value="">{selectedClient ? "Cliente principal / Endereço principal" : "Selecione primeiro o cliente"}</option>{availableUnits.map(item => <option key={item.id} value={item.name}>{item.name} • {item.type}</option>)}</select>{selectedClient && !availableUnits.length && <small>Nenhuma unidade cadastrada. Você pode cadastrar o setor diretamente no cliente principal.</small>}</label>
+        <label className={isMunicipalCustomer(selectedClientData)?"municipal-legacy-location":""}>Setor / Local de atendimento<select value={sector} onChange={event => setSector(event.target.value)} disabled={!selectedClient || !availableSectors.length}><option value="">{selectedClient ? availableSectors.length ? "Selecione o setor" : unit ? "Nenhum setor cadastrado nesta unidade" : "Nenhum setor cadastrado no cliente principal" : "Selecione primeiro o cliente"}</option>{availableSectors.map(item => <option key={item.id} value={item.name}>{item.name}</option>)}</select>{selectedClient && <button type="button" className="inline-create-link" onClick={() => { setQuickSectorOpen(value => !value); setQuickSectorFeedback(""); }}><Plus size={12}/>{availableSectors.length ? "Cadastrar novo setor" : "Cadastrar setor agora"}</button>}</label>
+        {quickSectorOpen && selectedClient && <div className="wide order-sector-quick-create"><div><span>CADASTRO RÁPIDO</span><b>Novo setor / local de atendimento</b><small>{unit ? `Será vinculado à unidade ${unit}.` : "Será vinculado diretamente ao cliente principal."}</small></div><label>Nome do setor<input autoFocus value={quickSectorName} onChange={event => setQuickSectorName(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); createSectorFromOrder(); } }} placeholder="Ex.: Secretaria de Saúde, Recepção, Administrativo..."/></label><div className="order-sector-quick-actions"><button type="button" className="outline-btn" onClick={() => { setQuickSectorOpen(false); setQuickSectorName(""); }}>Cancelar</button><button type="button" className="primary-btn" disabled={!quickSectorName.trim()} onClick={createSectorFromOrder}><Plus size={13}/> Cadastrar e selecionar</button></div></div>}
+        {quickSectorFeedback && <div className="wide field-hint order-sector-feedback"><CheckCircle2 size={13}/>{quickSectorFeedback}</div>}
+        <label className={isMunicipalCustomer(selectedClientData)?"municipal-legacy-location":""}>Sala / Ambiente<select value={room} onChange={event => setRoom(event.target.value)} disabled={!unit}><option value="">{unit ? availableRooms.length ? "Selecione a sala (opcional)" : "Nenhuma sala cadastrada" : "Selecione uma unidade"}</option>{availableRooms.map(item => <option key={item.id} value={item.name}>{item.name} • {item.category || item.environmentType || "Ambiente"}</option>)}</select></label>
+        <label>Responsável do cliente<input value={selectedClientData?.contact ?? ""} readOnly placeholder="Carregado pelo cadastro"/></label>
+        <label>Telefone<input value={selectedClientData?.phone ?? ""} readOnly placeholder="Carregado pelo cadastro"/></label>{selectedClientData && <div className={`wide credit-check ${selectedClientData.financialStatus === "Bloqueado" ? "blocked" : ""}`}><CircleDollarSign size={17}/><div><b>Crédito do cliente</b><small>Limite R$ {(selectedClientData.creditLimit ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})} • Saldo lançado R$ {(selectedClientData.balancePosted ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})} • Disponível R$ {Math.max(0,(selectedClientData.creditLimit ?? 0)-(selectedClientData.balancePosted ?? 0)).toLocaleString("pt-BR",{minimumFractionDigits:2})}</small></div><strong>{selectedClientData.financialStatus ?? "Liberado"}</strong></div>}
+        <label className="wide">Endereço do atendimento<input value={unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? ""} readOnly placeholder="Carregado pelo cadastro do cliente"/></label>
+        <label>Data do atendimento<input type="date" value={date} onInput={event => setDate(event.currentTarget.value)} onChange={event => setDate(event.target.value)}/></label>
+        <label>Horário<input type="time" value={time} onChange={event => setTime(event.target.value)}/></label>
+        <label>Técnico empenhado<select value={tech} onChange={event => setTech(event.target.value)}><option value="">Sem técnico atribuído • definir depois</option>{employeeRecords.filter(employee => employee.status !== "Inativo" && /técnico|tecnico/i.test(`${employee.employeeRole} ${employee.category}`)).map(employee => <option key={employee.id} value={employee.name}>{employee.name}</option>)}</select></label>
+        <label>Prioridade<select><option>Normal</option><option>Alta</option><option>Urgente</option></select></label>
+        <div className="wide order-catalog">
+          <div className="execution-head"><div><span>SERVIÇOS DA ORDEM</span><h3>Itens selecionados</h3></div><div className="catalog-head-actions"><small>{selectedCatalogIds.length} selecionado(s)</small><button type="button" onClick={() => { setServicePickerIds(selectedCatalogIds); setServiceSearch(""); setServicePickerOpen(true); }}><Plus size={14}/> Adicionar serviços</button></div></div>
+          {selectedServices.length ? <div className="selected-service-grid">{selectedServices.map(item => <article key={item.id}><span><Wrench size={16}/></span><div><b>{item.name}</b><small>{item.category || "Serviço cadastrado"}</small></div><button type="button" aria-label={`Remover ${item.name}`} onClick={() => setSelectedCatalogIds(current => current.filter(id => id !== item.id))}><X size={14}/></button></article>)}</div> : <div className="catalog-empty"><Wrench size={19}/><span>Nenhum serviço selecionado. Use “Adicionar serviços” para escolher vários itens.</span></div>}
+          {!serviceRecords.length && <div className="catalog-empty"><Wrench size={19}/><span>Nenhum serviço cadastrado. Cadastre no menu Serviços para selecionar aqui.</span></div>}
+        </div>
+        <label className="wide">Descrição / solicitação<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="Descreva o atendimento, problema informado ou observações..."/></label>
+        <div className="wide execution-notice"><ShieldCheck size={18}/><div><b>Execução disponível após salvar</b><small>Abra a ordem para fazer check-in, check-out, incluir fotos e recolher as duas assinaturas.</small></div></div>
+      </> : isNewCustomer ? <>
+        <section className="wide customer-create-section customer-create-identification">
+          <header><span>01</span><div><b>Identificação do cliente</b><small>Documento e dados principais</small></div></header>
+          <div className="customer-create-grid identity">
+            <label className="text-slate-200 font-semibold text-xs doc-field">CPF ou CNPJ<input value={doc} onChange={event => void lookupCustomerDocument(event.target.value)} placeholder="CPF ou CNPJ" inputMode="numeric"/></label>
+            <label className="text-slate-200 font-semibold text-xs">Tipo de pessoa<input value={personType === "PJ" ? "Pessoa Jurídica" : "Pessoa Física"} readOnly/></label>
+            <label className="text-slate-200 font-semibold text-xs">Tipo de organização<select value={organizationType} onChange={event=>setOrganizationType(event.target.value as Customer["organizationType"])}><option>Empresa</option><option>Pessoa Física</option><option>Prefeitura</option><option>Órgão Público</option><option>Autarquia</option><option>Fundação</option><option>Entidade Pública</option><option>Outro</option></select></label>
+            {documentLookup.message && <div className={`full document-lookup-status ${documentLookup.kind}`} role={documentLookup.kind === "error" ? "alert" : "status"} aria-live="polite" aria-busy={documentLookup.loading}>{documentLookup.loading ? "Consultando..." : documentLookup.message}</div>}
+            <label className="text-slate-200 font-semibold text-xs legal-name">Razão social / Nome completo<input value={legalName || recordName} onChange={event => {setLegalName(event.target.value); if(personType==="PF") setRecordName(event.target.value);}} placeholder="Razão social ou nome completo"/></label>
+            <label className="text-slate-200 font-semibold text-xs trade-name">Nome fantasia<input value={tradeName} onChange={event => {setTradeName(event.target.value); if(personType==="PJ") setRecordName(event.target.value);}} placeholder="Nome fantasia"/></label>
+            <label className="text-slate-200 font-semibold text-xs">Responsável<input value={contact} onChange={event => setContact(event.target.value)} placeholder="Nome do responsável"/></label>
+            <label className="text-slate-200 font-semibold text-xs">Telefone / WhatsApp<input value={phone} onChange={event => setPhone(event.target.value)} placeholder="(00) 00000-0000"/></label>
+            <label className="text-slate-200 font-semibold text-xs email-field">E-mail<input type="email" value={customerEmail} onChange={event => setCustomerEmail(event.target.value)} placeholder="cliente@empresa.com.br"/></label>
+          </div>
+        </section>
+        <section className="wide customer-create-section">
+          <header><span>02</span><div><b>Endereço</b><small>Localização principal do cadastro</small></div></header>
+          <div className="customer-create-grid address">
+            <label className="text-slate-200 font-semibold text-xs cep">CEP<input value={zipCode} onChange={event => {setZipCode(event.target.value); setAddress(composeCustomerAddress({zipCode:event.target.value}));}} placeholder="00000-000"/></label>
+            <label className="text-slate-200 font-semibold text-xs street">Logradouro<input value={street} onChange={event => {setStreet(event.target.value); setAddress(composeCustomerAddress({street:event.target.value}));}}/></label>
+            <label className="text-slate-200 font-semibold text-xs number">Número<input value={addressNumber} onChange={event => {setAddressNumber(event.target.value); setAddress(composeCustomerAddress({addressNumber:event.target.value}));}}/></label>
+            <label className="text-slate-200 font-semibold text-xs neighborhood">Bairro<input value={neighborhood} onChange={event => {setNeighborhood(event.target.value); setAddress(composeCustomerAddress({neighborhood:event.target.value}));}}/></label>
+            <label className="text-slate-200 font-semibold text-xs complement">Complemento<input value={complement} onChange={event => {setComplement(event.target.value); setAddress(composeCustomerAddress({complement:event.target.value}));}}/></label>
+            <label className="text-slate-200 font-semibold text-xs city">Cidade<input value={customerCity} onChange={event => {setCustomerCity(event.target.value); setAddress(composeCustomerAddress({city:event.target.value}));}}/></label>
+            <label className="text-slate-200 font-semibold text-xs state">UF<input maxLength={2} value={customerState} onChange={event => {const value=event.target.value.toUpperCase(); setCustomerState(value); setAddress(composeCustomerAddress({state:value}));}}/></label>
+            <label className="text-slate-200 font-semibold text-xs full">Endereço completo<input value={address} onChange={event => { setAddress(event.target.value); setAddressValidated(false); setShowAddressMap(false); }} placeholder="Endereço consolidado para atendimento"/></label>
+            <div className="full address-validation compact">
+              <div><span className="map-validation-icon"><MapPin size={17}/></span><div><b>Validar localização</b><small>Confira o endereço antes de salvar.</small></div></div>
+              <button type="button" disabled={!address.trim()} onClick={() => { setShowAddressMap(true); setAddressValidated(true); }}>{addressValidated ? <CheckCircle2 size={15}/> : <Search size={15}/>} {addressValidated ? "Validado" : "Validar no mapa"}</button>
+              {showAddressMap && address.trim() && <div className="address-map-preview"><iframe title={`Validação de ${address}`} src={`https://www.google.com/maps?q=${encodeURIComponent(address)}&output=embed`} loading="lazy" referrerPolicy="no-referrer-when-downgrade"/><a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`} target="_blank" rel="noreferrer">Ver resultado completo no Google Maps <ArrowRight size={12}/></a></div>}
+            </div>
+          </div>
+        </section>
+        {personType === "PJ" && <section className="wide customer-create-section"><header><span>03</span><div><b>Dados fiscais</b><small>Informações complementares da pessoa jurídica</small></div></header><div className="customer-create-grid fiscal">
+          <label className="text-slate-200 font-semibold text-xs">Inscrição Estadual<input value={stateRegistration} onChange={event => setStateRegistration(event.target.value)}/></label><label className="text-slate-200 font-semibold text-xs">Inscrição Municipal<input value={municipalRegistration} onChange={event => setMunicipalRegistration(event.target.value)}/></label><label className="text-slate-200 font-semibold text-xs">CNAE principal<input value={cnaeMain} onChange={event => setCnaeMain(event.target.value)}/></label><label className="text-slate-200 font-semibold text-xs">Situação cadastral<input value={taxStatus} onChange={event => setTaxStatus(event.target.value)}/></label>
+        </div></section>}
+        <section className="wide customer-create-section"><header><span>{personType === "PJ" ? "04" : "03"}</span><div><b>Financeiro</b><small>Crédito e situação comercial</small></div></header><div className="customer-create-grid financial">
+          <label className="text-slate-200 font-semibold text-xs">Limite de crédito<input type="number" min="0" step="0.01" value={creditLimit || ""} onChange={event => setCreditLimit(Math.max(0,Number(event.target.value)||0))} placeholder="R$ 0,00"/></label>
+          <label className="text-slate-200 font-semibold text-xs">Saldo lançado<input type="number" min="0" step="0.01" value={balancePosted || ""} onChange={event => setBalancePosted(Math.max(0,Number(event.target.value)||0))} placeholder="R$ 0,00"/></label>
+          <label className="text-slate-200 font-semibold text-xs">Situação financeira<select value={financialStatus} onChange={event => setFinancialStatus(event.target.value as Customer["financialStatus"])}><option>Liberado</option><option>Alerta</option><option>Somente à vista</option><option>Bloqueado</option></select></label>
+        </div></section>
+        <section className="wide customer-create-section customer-create-notes"><header><span>+</span><div><b>Observações</b><small>Informações adicionais do cliente</small></div></header><label className="text-slate-200 font-semibold text-xs">Observações<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="Informações adicionais do cliente..."/><button type="button" className="outline-btn" onClick={()=>setDescription(improveTechnicalText(description))}>✦ Melhorar com IA</button></label></section>
+      </> : <>
+        {isCatalogRegistration && <div className="wide kind-selector"><span>TIPO DO CADASTRO</span><label className={recordKind === "Serviço" ? "active" : ""}><input type="radio" name="record-kind" checked={recordKind === "Serviço"} onChange={() => setRecordKind("Serviço")}/><Wrench size={17}/><div><b>Serviço</b><small>Será disponibilizado nas ordens de serviço</small></div></label><label className={recordKind === "Produto" ? "active" : ""}><input type="radio" name="record-kind" checked={recordKind === "Produto"} onChange={() => setRecordKind("Produto")}/><Package size={17}/><div><b>Produto</b><small>Item físico, peça ou material de estoque</small></div></label></div>}
+        {managementFlows[requestedModule] && <div className="wide module-form-guidance"><span><Grid2X2 size={18}/></span><div><b>Cadastro integrado de ${requestedModule.toLowerCase()}</b><small>Ao salvar, o registro ficará disponível nas abas, filtros e relatórios deste fluxo.</small></div></div>}
+        {requestedModule === "Compras" && <div className="wide purchase-xml-import">
+          <span className="purchase-xml-icon"><FileText size={21}/></span><div><b>Importar XML da NF-e</b><small>Preenche automaticamente fornecedor, nota fiscal, itens, valores e parcelas do Contas a Pagar.</small>{xmlImportStatus && <em className={xmlImportStatus.startsWith("Não") ? "error" : "success"}>{xmlImportStatus}</em>}</div>
+          <label className="xml-upload-button"><FileText size={15}/> Selecionar XML<input type="file" accept=".xml,text/xml,application/xml" onChange={event => { void importPurchaseXml(event.target.files?.[0]); event.currentTarget.value = ""; }}/></label>
+        </div>}
+        {requestedModule === "Compras" && xmlImported && <div className="wide xml-registration-review">
+          <div className="xml-review-head"><div><span>VINCULAÇÃO DOS CADASTROS</span><h3>Fornecedor e produtos encontrados no XML</h3></div><small>Escolha um cadastro existente ou autorize a criação automática.</small></div>
+          <div className="xml-supplier-link"><div><Store size={17}/><span><b>{recordClient}</b><small>{supplierDoc || "Documento não informado no XML"}</small></span></div><label>Fornecedor<select value={supplierId || "__new__"} onChange={event => { const value = event.target.value; setSupplierId(value === "__new__" ? "" : value); const existing = supplierRecords.find(item => item.id === value); if (existing) setRecordClient(existing.name); }}><option value="__new__">Cadastrar novo fornecedor</option>{supplierRecords.map(item => <option key={item.id} value={item.id}>Usar cadastro: {item.name}</option>)}</select></label></div>
+          <div className="xml-product-links">{purchaseItems.map(item => <div key={item.id}><span><Package size={15}/><b>{item.description}</b></span><select value={item.productId || "__new__"} onChange={event => updatePurchaseItem(item.id, { productId: event.target.value === "__new__" ? "" : event.target.value, registerProduct: event.target.value === "__new__" })}><option value="__new__">Cadastrar novo produto</option>{catalogRecords.filter(product => (product.kind || "Serviço") === "Produto").map(product => <option key={product.id} value={product.id}>Usar: {product.name}</option>)}</select></div>)}</div>
+        </div>}
+        {requestedModule === "Compras" && <div className="wide purchase-editor">
+          <div className="purchase-editor-head"><div><span>ITENS DA COMPRA</span><h3>Produtos e materiais</h3></div><button type="button" onClick={addPurchaseItem}><Plus size={14}/> Adicionar item</button></div>
+          <div className="purchase-item-labels"><span>DESCRIÇÃO DO ITEM</span><span>QUANTIDADE</span><span>VALOR UNITÁRIO</span><span>SUBTOTAL</span><span/></div>
+          <div className="purchase-items">{purchaseItems.map(item => <div className="purchase-item-row" key={item.id}>
+            <input value={item.description} onChange={event => updatePurchaseItem(item.id, { description: event.target.value })} placeholder="Produto, peça ou material"/>
+            <input type="number" min="0.01" step="0.01" value={item.quantity} onChange={event => updatePurchaseItem(item.id, { quantity: Math.max(0, Number(event.target.value)) })}/>
+            <input type="number" min="0" step="0.01" value={item.unitValue || ""} onChange={event => updatePurchaseItem(item.id, { unitValue: Math.max(0, Number(event.target.value)) })} placeholder="R$ 0,00"/>
+            <b>R$ {(item.quantity * item.unitValue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b>
+            <button type="button" className="danger" disabled={purchaseItems.length === 1} onClick={() => removePurchaseItem(item.id)} aria-label="Excluir item"><Trash2 size={14}/></button>
+          </div>)}</div>
+          <div className="purchase-total"><span>{purchaseItems.filter(item => item.description.trim()).length} item(ns)</span><div><small>TOTAL DA COMPRA</small><strong>R$ {purchaseTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></div></div>
+        </div>}
+        {requestedModule === "Compras" && <div className="wide purchase-payment">
+          <div className="purchase-payment-title"><span><CreditCard size={18}/></span><div><b>Condição de pagamento</b><small>Compras a prazo serão lançadas automaticamente em Contas a Pagar.</small></div></div>
+          <div className="payment-type-options"><label className={paymentType === "À vista" ? "active" : ""}><input type="radio" name="purchase-payment-type" checked={paymentType === "À vista"} onChange={() => { setPaymentType("À vista"); setInstallments(1); setPaymentInstallments([]); }}/><b>À vista</b><small>Um único pagamento</small></label><label className={paymentType === "A prazo" ? "active" : ""}><input type="radio" name="purchase-payment-type" checked={paymentType === "A prazo"} onChange={() => { setPaymentType("A prazo"); setPaymentInstallments([]); }}/><b>A prazo</b><small>Gerar parcelas no financeiro</small></label></div>
+          <div className="purchase-payment-fields"><label>Forma de pagamento<select value={paymentMethod} onChange={event => setPaymentMethod(event.target.value)}><option>PIX</option><option>Boleto</option><option>Transferência bancária</option><option>Cartão de crédito</option><option>Cheque</option><option>Dinheiro</option><option>Outros</option></select></label>{paymentType === "A prazo" && <><label>Número de parcelas<input type="number" min="1" max="48" value={installments} onChange={event => { setInstallments(Math.max(1, Math.min(48, Number(event.target.value)))); setPaymentInstallments([]); }}/></label><label>Primeiro vencimento<input type="date" value={firstDueDate} onChange={event => { setFirstDueDate(event.target.value); setPaymentInstallments([]); }}/></label><div className="installment-preview"><small>{paymentInstallments.length ? "PARCELAS IMPORTADAS DO XML" : "VALOR ESTIMADO POR PARCELA"}</small><b>{paymentInstallments.length ? `${paymentInstallments.length} vencimento(s)` : `R$ ${(purchaseTotal / Math.max(installments, 1)).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}</b></div></>}</div>
+        </div>}
+        {isEquipmentRegistration && <div className="wide module-form-guidance"><span><Boxes size={18}/></span><div><b>Cadastro técnico do equipamento</b><small>Vincule o equipamento ao cliente e registre os dados usados nas ordens de serviço e no histórico de manutenção.</small></div></div>}
+        {isEquipmentRegistration && <>
+          <section className="wide equipment-label-reader">
+            <div className="equipment-label-reader-head"><div><span>FOTO / ETIQUETA DO EQUIPAMENTO</span><h3>Leitura técnica assistida por IA</h3><p>A foto original fica vinculada ao cadastro. Revise os dados antes de aplicar.</p></div><Sparkles size={20}/></div>
+            <div className="equipment-label-reader-content">
+              <div className={`equipment-label-preview ${equipmentLabel ? "has-image" : ""}`}>{equipmentLabel ? <img src={equipmentLabel.dataUrl} alt="Etiqueta técnica anexada"/> : <><ImageIcon size={28}/><span>Pré-visualização da etiqueta</span></>} </div>
+              <div className="equipment-label-actions"><input ref={cameraFileRef} className="visually-hidden" type="file" accept="image/*" capture="environment" onChange={event => { readEquipmentLabel(event.target.files?.[0]); event.currentTarget.value = ""; }}/><input ref={labelFileRef} className="visually-hidden" type="file" accept="image/*" onChange={event => { readEquipmentLabel(event.target.files?.[0]); event.currentTarget.value = ""; }}/><button type="button" className="outline-btn" onClick={() => cameraFileRef.current?.click()}><Camera size={15}/> Tirar foto</button><button type="button" className="outline-btn" onClick={() => labelFileRef.current?.click()}><ImagePlus size={15}/> Anexar imagem</button><button type="button" className="primary-btn" disabled={!equipmentLabel || labelReading} onClick={() => void analyseEquipmentLabel()}><Sparkles size={15}/> {labelReading ? "Analisando etiqueta..." : "Preencher com IA"}</button>{equipmentLabel && <small>{equipmentLabel.name} • imagem será salva no cadastro</small>}{labelError && <em>{labelError}</em>}</div>
+            </div>
+          </section>
+          <label>Cliente<CustomerSearchSelect customers={customers} value={recordClient} locationId={hierarchyLocation?.structureId} onLocationChange={chooseModalLocation} onChange={(value,selected) => {setRecordClient(value);setHierarchyLocation(selected?hierarchySelection(customers.find(item=>item.id===selected.id)!,[]):null);}} /></label>
+          <label>Unidade / filial / setor<input value={equipmentUnit} onChange={event => setEquipmentUnit(event.target.value)} placeholder="Ex.: Matriz, Filial Olímpia, Sala administrativa"/></label>
+          <label>Nome / identificação<input value={recordName} onChange={event => setRecordName(event.target.value)} placeholder="Ex.: Ar-condicionado Recepção"/></label>
+          <label>Tipo de equipamento<select value={equipmentType} onChange={event => setEquipmentType(event.target.value)}><option>Split Hi Wall</option><option>Split Inverter</option><option>Cassete</option><option>Piso Teto</option><option>Multi Split</option><option>VRF</option><option>Janela</option><option>Self Contained</option><option>Chiller</option><option>Fan Coil</option><option>Exaustor</option><option>Outro</option></select></label>
+          <label>Marca<input value={catalogBrand} onChange={event=>setCatalogBrand(event.target.value)} placeholder="Ex.: Carrier, Midea, TCL"/></label>
+          <label>Modelo<input value={catalogModel} onChange={event=>setCatalogModel(event.target.value)} placeholder="Modelo / referência"/></label>
+          <label>Capacidade (BTUs)<input type="number" min="0" step="1000" value={capacityBtus} onChange={event=>setCapacityBtus(event.target.value)} placeholder="Ex.: 12000"/></label>
+          <label>Número de série<input value={serialNumber} onChange={event=>setSerialNumber(event.target.value)} placeholder="Número de série do equipamento"/></label>
+          <label>Tensão<select value={voltage} onChange={event=>setVoltage(event.target.value)}><option>127V</option><option>220V</option><option>220V Trifásico</option><option>380V Trifásico</option></select></label>
+          <label>Fluido refrigerante<select value={refrigerant} onChange={event=>setRefrigerant(event.target.value)}><option>R22</option><option>R410A</option><option>R32</option><option>R454B</option><option>Outro</option></select></label>
+          <label>Frequência<input value={frequency} onChange={event=>setFrequency(event.target.value)} placeholder="Ex.: 60 Hz"/></label>
+          <label>Corrente<input value={currentDraw} onChange={event=>setCurrentDraw(event.target.value)} placeholder="Ex.: 5,2 A"/></label>
+          <label>Potência<input value={power} onChange={event=>setPower(event.target.value)} placeholder="Ex.: 1.150 W"/></label>
+          <label>Carga de refrigerante<input value={refrigerantCharge} onChange={event=>setRefrigerantCharge(event.target.value)} placeholder="Ex.: 0,62 kg"/></label>
+          <label>Data de fabricação<input value={manufactureDate} onChange={event=>setManufactureDate(event.target.value)} placeholder="Conforme etiqueta"/></label>
+          <label>Código / referência fabricante<input value={manufacturerCode} onChange={event=>setManufacturerCode(event.target.value)} placeholder="Código da etiqueta"/></label>
+          <label>Local de instalação<input value={installationLocation} onChange={event=>setInstallationLocation(event.target.value)} placeholder="Ex.: Recepção / Sala Financeiro"/></label>
+          <label>Data de instalação<input type="date" value={installationDate} onChange={event=>setInstallationDate(event.target.value)}/></label>
+          <label>Próxima preventiva<input type="date" value={nextMaintenanceDate} onChange={event=>setNextMaintenanceDate(event.target.value)}/></label>
+          <label>Garantia (meses)<input type="number" min="0" value={catalogWarranty} onChange={event=>setCatalogWarranty(event.target.value)} placeholder="Ex.: 12"/></label>
+        </>}
+        {requestedModule === "Obras" ? <>
+          <div className="wide work-form-intro"><span><Building2 size={20}/></span><div><b>Cadastro e planejamento da obra</b><small>Centralize cliente, localização, responsável técnico, orçamento, prazo e evolução da execução.</small></div></div>
+          <label>Nome da obra<input value={recordName} onChange={event => setRecordName(event.target.value)} placeholder="Ex.: Residencial Jardim Imperial"/></label>
+          <label>Cliente<CustomerSearchSelect customers={customers} value={recordClient} locationId={hierarchyLocation?.structureId} onLocationChange={chooseModalLocation} onChange={(value,selected) => {setRecordClient(value);setHierarchyLocation(selected?hierarchySelection(customers.find(item=>item.id===selected.id)!,[]):null);}} /></label>
+          <label className="wide">Endereço da obra<input value={workAddress} onChange={event => setWorkAddress(event.target.value)} placeholder="Rua, número, bairro, cidade e estado"/></label>
+          <label>Quadra / casa / lote<input value={blockLot} onChange={event => setBlockLot(event.target.value)} placeholder="Ex.: Quadra B • Lote 18"/></label>
+          <label>Engenheiro / responsável<input value={engineer} onChange={event => setEngineer(event.target.value)} placeholder="Nome do responsável técnico"/></label>
+          <label>Situação<select value={recordStatus} onChange={event => setRecordStatus(event.target.value)}>{moduleStatuses.Obras.map(status => <option key={status}>{status}</option>)}</select></label>
+          <label>Orçamento previsto<input type="number" min="0" step="0.01" value={recordValue} onChange={event => setRecordValue(event.target.value)} placeholder="R$ 0,00"/></label>
+          <label>Data de início<input type="date" value={date} onChange={event => setDate(event.target.value)}/></label>
+          <label>Previsão de conclusão<input type="date" value={endDate} onChange={event => setEndDate(event.target.value)}/></label>
+          <label>Progresso inicial (%)<input type="number" min="0" max="100" value={progress} onChange={event => setProgress(Math.min(100, Math.max(0, Number(event.target.value))))}/></label>
+          <label>Comissão do responsável (%)<input type="number" min="0" max="100" step="0.1" value={commission || ""} onChange={event => setCommission(Math.min(100, Math.max(0, Number(event.target.value))))} placeholder="Opcional"/></label>
+          <label>Centro de custo / tipo<input value={recordCategory} onChange={event => setRecordCategory(event.target.value)} placeholder="Ex.: Infraestrutura frigorígena"/></label>
+          <label className="wide">Escopo e observações<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="Descreva o escopo, etapas, materiais, equipe e observações da obra..."/></label>
+        </> : <>
+        <label>{requestedModule === "Compras" ? "Produto, material ou pedido" : requestedModule === "Financeiro" ? "Descrição do lançamento" : requestedModule === "Fornecedores" ? "Razão social / Nome fantasia" : requestedModule === "Funcionários" ? "Nome completo do funcionário" : "Nome / identificação"}<input value={recordName} onChange={event => setRecordName(event.target.value)} placeholder={requestedModule === "Funcionários" ? "Nome completo" : "Digite o nome do registro"}/></label>
+        {requestedModule === "Orçamentos" ? <label>Cliente cadastrado<CustomerSearchSelect customers={customers} value={recordClient} locationId={hierarchyLocation?.structureId} onLocationChange={chooseModalLocation} onChange={(value,selected) => {setRecordClient(value);setHierarchyLocation(selected?hierarchySelection(customers.find(item=>item.id===selected.id)!,[]):null);}} /></label> : requestedModule === "Funcionários" ? <label>Função / cargo<input value={recordCategory} onChange={event => setRecordCategory(event.target.value)} placeholder="Ex.: Técnico de climatização"/></label> : <label>{requestedModule === "Compras" ? "Fornecedor" : requestedModule === "Financeiro" ? "Cliente ou fornecedor" : requestedModule === "Fornecedores" ? "Responsável comercial" : "Cliente / responsável"}<input value={recordClient} onChange={event => setRecordClient(event.target.value)} placeholder="Nome relacionado ao cadastro"/></label>}
+        <label>{requestedModule === "Fornecedores" ? "CNPJ / CPF" : requestedModule === "Funcionários" ? "CPF / documento" : "Código / documento"}<input placeholder="Código, CPF, CNPJ ou número interno"/></label>
+        <label>Situação<select value={recordStatus} onChange={event => setRecordStatus(event.target.value)}>{(moduleStatuses[requestedModule] ?? ["Ativo", "Pendente", "Concluído", "Inativo"]).map(status => <option key={status}>{status}</option>)}</select></label>
+        {requestedModule === "Funcionários" ? <><div className="wide"><EmployeeSignatureEditor value={employeeSignature} onChange={setEmployeeSignature} onProcessing={setEmployeeSignatureBusy}/></div><label>Perfil de acesso<select value={employeeRole} onChange={event => applyEmployeeRole(event.target.value)}>{EMPLOYEE_ACCESS_PROFILES.map(profile=><option key={profile} value={employeeAccessRole(profile)}>{profile}</option>)}</select></label><label>Nome de utilizador<input autoComplete="off" value={employeeUsername} onChange={event => { const value = event.target.value.toLocaleLowerCase("pt-BR").replace(/\s+/g, "."); setEmployeeUsername(value); setRecordClient(value); }} placeholder="Ex.: tiago.viana"/></label><label>Senha de acesso<input type="password" autoComplete="new-password" value={employeePassword} onChange={event => setEmployeePassword(event.target.value)} placeholder="Mínimo de 4 caracteres"/><small>A senha será guardada de forma criptografada.</small></label></> : <label>{requestedModule === "Financeiro" ? "Categoria / centro de custo" : requestedModule === "Compras" ? "Categoria da compra" : "Categoria / centro de custo"}<input value={recordCategory} onChange={event => setRecordCategory(event.target.value)} placeholder="Ex.: Materiais de serviço"/></label>}
+        <label>{requestedModule === "Funcionários" ? "Comissão / valor de referência" : requestedModule === "Compras" ? "Valor total calculado" : isCatalogRegistration ? "Preço de venda" : "Valor total"}<input type="number" min="0" step="0.01" readOnly={requestedModule === "Compras"} value={requestedModule === "Compras" ? purchaseTotal : recordValue} onChange={event => setRecordValue(event.target.value)} placeholder="R$ 0,00"/></label>
+        {isCatalogRegistration && <><label>Preço de custo<input type="number" min="0" step="0.01" value={recordCost} onChange={event => setRecordCost(event.target.value)} placeholder="R$ 0,00"/></label><label>Código interno / SKU<input value={catalogSku} onChange={event=>setCatalogSku(event.target.value)} placeholder="Ex.: PRO-12000-TCL"/></label><label>Código de barras<input value={catalogBarcode} onChange={event=>setCatalogBarcode(event.target.value)} placeholder="EAN / GTIN"/></label><label>Marca<input value={catalogBrand} onChange={event=>setCatalogBrand(event.target.value)} placeholder="Ex.: Carrier, Midea, TCL"/></label><label>Modelo<input value={catalogModel} onChange={event=>setCatalogModel(event.target.value)} placeholder="Modelo / referência"/></label><label>Fornecedor principal<input value={catalogSupplier} onChange={event=>setCatalogSupplier(event.target.value)} placeholder="Fornecedor preferencial"/></label>{recordKind === "Produto" ? <><label>Estoque atual<input type="number" min="0" step="0.001" value={catalogStockCurrent} onChange={event=>setCatalogStockCurrent(event.target.value)} placeholder="0"/></label><label>Estoque mínimo<input type="number" min="0" step="0.001" value={catalogStockMin} onChange={event=>setCatalogStockMin(event.target.value)} placeholder="0"/></label><label>Estoque máximo<input type="number" min="0" step="0.001" value={catalogStockMax} onChange={event=>setCatalogStockMax(event.target.value)} placeholder="0"/></label><label>Localização no estoque<input value={catalogStockLocation} onChange={event=>setCatalogStockLocation(event.target.value)} placeholder="Ex.: Prateleira A-03"/></label></> : <label>Tempo estimado (minutos)<input type="number" min="0" value={catalogEstimatedMinutes} onChange={event=>setCatalogEstimatedMinutes(event.target.value)} placeholder="Ex.: 120"/></label>}{recordKind === "Produto" ? <><label>NCM<input value={catalogNcm} onChange={event=>setCatalogNcm(event.target.value.replace(/\D/g,"").slice(0,8))} placeholder="8 dígitos"/></label><label>CEST<input value={catalogCest} onChange={event=>setCatalogCest(event.target.value.replace(/\D/g,"").slice(0,7))} placeholder="Quando aplicável"/></label><label>CFOP padrão<input value={catalogCfop} onChange={event=>setCatalogCfop(event.target.value.replace(/\D/g,"").slice(0,4))} placeholder="Ex.: 5102"/></label><label>CST<input value={catalogCst} onChange={event=>setCatalogCst(event.target.value)} placeholder="Conforme regime"/></label><label>CSOSN<input value={catalogCsosn} onChange={event=>setCatalogCsosn(event.target.value)} placeholder="Simples Nacional"/></label><label>Origem da mercadoria<select value={catalogTaxOrigin} onChange={event=>setCatalogTaxOrigin(event.target.value)}>{["0 - Nacional","1 - Estrangeira importação direta","2 - Estrangeira mercado interno","3 - Nacional >40% importação","4 - Nacional processos básicos","5 - Nacional <=40% importação","6 - Estrangeira sem similar","7 - Estrangeira mercado interno sem similar","8 - Nacional >70% importação"].map(value=><option key={value}>{value}</option>)}</select></label></> : <><label>Código do serviço<input value={catalogServiceCode} onChange={event=>setCatalogServiceCode(event.target.value)} placeholder="Código municipal/nacional"/></label><label>ISS padrão (%)<input type="number" min="0" max="100" step="0.01" value={catalogIssRate} onChange={event=>setCatalogIssRate(event.target.value)} placeholder="Ex.: 3,00"/></label></>}
+<label>Garantia (meses)<input type="number" min="0" value={catalogWarranty} onChange={event=>setCatalogWarranty(event.target.value)} placeholder="Ex.: 3"/></label><label>Unidade de medida<select value={catalogUnit} onChange={event=>setCatalogUnit(event.target.value)}><option>un</option><option>serviço</option><option>m</option><option>m²</option><option>kg</option><option>l</option><option>h</option><option>kit</option></select></label></>}
+
+        <label>{requestedModule === "Funcionários" ? "Telefone / WhatsApp" : "Telefone / contato"}<input placeholder="(00) 00000-0000"/></label><label>{requestedModule === "Funcionários" ? "Data de admissão" : requestedModule === "Compras" ? "Previsão de entrega" : requestedModule === "Financeiro" ? "Data de vencimento" : "Data"}<input type="date" value={date} onChange={event => setDate(event.target.value)}/></label>
+        {requestedModule === "Funcionários" && <div className="wide permission-matrix"><div className="permission-head"><div><span>MATRIZ DE PERMISSÕES</span><h3>Acesso por módulo</h3></div><small>O menu e as ações respeitam o perfil selecionado.</small></div><div className="permission-table"><div className="permission-row permission-labels"><b>MÓDULO</b>{permissionActions.map(action => <b key={action}>{action}</b>)}</div>{permissionModules.map(module => <div className="permission-row" key={module}><strong>{module}</strong>{permissionActions.map(action => <label key={action}><input type="checkbox" checked={employeePermissions[module]?.includes(action) ?? false} onChange={() => togglePermission(module, action)}/><span/></label>)}</div>)}</div></div>}
+        {isCatalogRegistration&&<div className="wide catalog-image-editor">
+  <div className={`catalog-image-preview ${catalogImage?"has-image":""}`}>{catalogImage?<img src={catalogImage.dataUrl} alt="Pré-visualização do catálogo"/>:<ImageIcon size={26}/>}</div>
+  <div><b>Foto própria do {recordKind==="Produto"?"produto":"serviço"}</b><small>JPG, PNG ou WEBP. A imagem é redimensionada e otimizada automaticamente.</small><div className="catalog-image-actions"><label className="outline-btn"><ImagePlus size={14}/>{catalogImageBusy?"Processando...":catalogImage?"Trocar foto":"Selecionar foto"}<input type="file" accept="image/*" disabled={catalogImageBusy} onChange={event=>void uploadNewCatalogImage(event.target.files?.[0])}/></label>{catalogImage&&<button type="button" className="outline-btn danger" onClick={()=>setCatalogImage(null)}><Trash2 size={14}/> Remover</button>}</div>{catalogImageError&&<em>{catalogImageError}</em>}</div>
+</div>}
+<label className="wide">Descrição / observações<textarea value={description} onChange={event => setDescription(event.target.value)} placeholder={requestedModule === "Funcionários" ? "Observações internas sobre o funcionário..." : "Inclua os detalhes deste cadastro..."}/>{isCatalogRegistration && <button type="button" className="outline-btn" onClick={()=>setDescription(improveTechnicalText(description))}>✦ Melhorar com IA</button>}</label>
+        </>}
+      </>}
+    </>}
+  </div><div className="modal-actions"><button className="outline-btn" onClick={requestClose}>Cancelar</button><button className="primary-btn" disabled={formSaving || employeeSignatureBusy || (isNewOrder ? !selectedClient || !tech || !date || selectedClientData?.financialStatus === "Bloqueado" : isNewCustomer ? !recordName || !address.trim() || !addressValidated : requestedModule === "Compras" ? !recordName || !recordClient || !purchaseItems.some(item => item.description.trim() && item.quantity > 0) || purchaseTotal <= 0 || (paymentType === "A prazo" && !firstDueDate) : requestedModule === "Obras" ? !recordName || !recordClient || !workAddress : requestedModule === "Equipamentos" ? !recordName || !recordClient || !equipmentType : requestedModule === "Funcionários" ? !recordName || !employeeUsername.trim() || employeePassword.length < 4 : (!isLinkedStructure && !recordName))} onClick={() => void submitModalRecord({ title, name: recordName, client: isNewOrder ? selectedClient : recordClient, doc, contact, phone, personType, organizationType, legalName: legalName || (personType === "PF" ? recordName : ""), tradeName: tradeName || (personType === "PJ" ? recordName : ""), email: customerEmail, zipCode, street, addressNumber, complement, neighborhood, city: customerCity, state: customerState, stateRegistration, municipalRegistration, cnaeMain, taxStatus, creditLimit, balancePosted, financialStatus, address: isNewOrder ? (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "") : address, unit, tech, date, time, description, status: recordStatus, value: requestedModule === "Compras" ? purchaseTotal : Number(recordValue) || 0, category: recordCategory, kind: recordKind, catalogItems: catalogRecords.filter(item => selectedCatalogIds.includes(item.id)).map(item => ({ id: item.id, name: item.name, kind: item.kind || "Serviço" })), purchaseItems: purchaseItems.filter(item => item.description.trim() && item.quantity > 0), paymentType, paymentMethod, installments: paymentType === "A prazo" ? Math.max(1, installments) : 1, firstDueDate, paymentInstallments, xmlImported, supplierDoc, supplierId, registerSupplier: xmlImported && !supplierId, engineer, workAddress, blockLot, endDate, progress, commission, cost: Number(recordCost) || 0, sku: catalogSku, barcode: catalogBarcode, brand: catalogBrand, model: catalogModel, supplier: catalogSupplier, stockCurrent: Number(catalogStockCurrent)||0, stockMin: Number(catalogStockMin)||0, stockMax: Number(catalogStockMax)||0, stockLocation: catalogStockLocation, warrantyMonths: Number(catalogWarranty)||0, estimatedMinutes: Number(catalogEstimatedMinutes)||0, unitOfMeasure: catalogUnit, ncm:catalogNcm, cest:catalogCest, cfop:catalogCfop, cst:catalogCst, csosn:catalogCsosn, taxOrigin:catalogTaxOrigin, serviceCode:catalogServiceCode, issRate:Number(catalogIssRate)||0, employeeRole, employeePermissions, employeeUsername, employeePassword, employeeSignature, equipmentType, capacityBtus: Number(capacityBtus)||0, serialNumber, voltage, refrigerant, frequency, current: currentDraw, power, refrigerantCharge, manufactureDate, manufacturerCode, equipmentLabelImage: equipmentLabel?.dataUrl, equipmentLabelImageName: equipmentLabel?.name, equipmentLabelHistory: equipmentLabel ? [`Etiqueta cadastrada em ${new Date().toLocaleDateString("pt-BR")} por Usuário atual`] : [], catalogImage:catalogImage?.dataUrl, catalogImageName:catalogImage?.name, catalogImageUpdatedAt:catalogImage?new Date().toISOString():undefined, installationLocation, installationDate, nextMaintenanceDate, equipmentUnit, parentId: parentStructureId || undefined, parentUnit: parentStructures.find(item => item.id === parentStructureId)?.name, hierarchyLevel: isLinkedStructure ? (recordCategory as ModalSave["hierarchyLevel"]) : undefined, environmentType, roomNumber, floor, block, localResponsible, extension, criticality, priorityAttendance, sector, room, structureId: room ? availableRooms.find(item => item.name === room)?.id : sector ? availableSectors.find(item => item.name === sector)?.id : unit ? availableUnits.find(item => item.name === unit)?.id : undefined, unitId: unit ? availableUnits.find(item => item.name === unit)?.id : undefined, sectorId: sector ? availableSectors.find(item => item.name === sector)?.id : undefined, roomId: room ? availableRooms.find(item => item.name === room)?.id : undefined, ...(hierarchyLocation || {}) })}>{formSaving ? <><svg className="h-4 w-4 animate-spin shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Salvando...</> : <><CheckCircle2 size={15}/>Salvar registro</>}</button></div></div>
+    {labelReview && <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Dados identificados pela IA"><button className="modal-backdrop" aria-label="Cancelar leitura" onClick={() => setLabelReview(null)}/><section className="modal label-review-modal"><div className="modal-head"><div><span><Sparkles size={14}/> DADOS IDENTIFICADOS PELA IA</span><h2>Confira antes de aplicar</h2><p>Somente informações legíveis são sugeridas. Campos não identificados permanecem em branco.</p></div><button onClick={() => setLabelReview(null)} aria-label="Fechar"><X size={18}/></button></div><div className="label-review-grid">{[["brand","Marca"],["model","Modelo"],["equipmentType","Tipo"],["capacityBtus","Capacidade"],["serialNumber","Número de série"],["voltage","Tensão"],["frequency","Frequência"],["current","Corrente"],["power","Potência"],["refrigerant","Fluido"],["refrigerantCharge","Carga de refrigerante"],["manufactureDate","Fabricação"],["manufacturerCode","Referência fabricante"]].map(([key,label]) => <label key={key}>{label}<input value={labelReview[key] || ""} placeholder="Não identificado" onChange={event => setLabelReview(current => current ? { ...current, [key]: event.target.value } : current)}/></label>)}</div><div className="modal-actions"><button className="outline-btn" onClick={() => setLabelReview(null)}>Cancelar</button><button className="outline-btn" onClick={() => {}}>Revisar</button><button className="primary-btn" onClick={applyLabelReading}><CheckCircle2 size={15}/> Aplicar dados</button></div></section></div>}
+    {servicePickerOpen && <div className="service-picker-layer" role="dialog" aria-modal="true" aria-label="Selecionar serviços"><button type="button" className="service-picker-backdrop" aria-label="Fechar seleção de serviços" onClick={() => setServicePickerOpen(false)}/><section className="service-picker"><header><div><span>CATÁLOGO DE SERVIÇOS</span><h3>Selecionar vários serviços</h3><p>Pesquise e marque todos os itens necessários para esta ordem.</p></div><button type="button" aria-label="Fechar" onClick={() => setServicePickerOpen(false)}><X size={17}/></button></header><label className="service-picker-search"><Search size={17}/><input autoFocus value={serviceSearch} onChange={event => setServiceSearch(event.target.value)} placeholder="Pesquisar por nome ou categoria..."/><small>{visibleServiceOptions.length} resultado(s)</small></label><div className="service-picker-grid">{visibleServiceOptions.map(item => <label key={item.id} className={servicePickerIds.includes(item.id) ? "selected" : ""}><input type="checkbox" checked={servicePickerIds.includes(item.id)} onChange={() => setServicePickerIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])}/><span><Wrench size={17}/></span><div><b>{item.name}</b><small>{item.category || item.description || "Serviço cadastrado"}</small></div><CheckCircle2 size={16}/></label>)}</div>{!visibleServiceOptions.length && <div className="catalog-empty"><Search size={18}/><span>Nenhum serviço encontrado para esta pesquisa.</span></div>}<footer><span><b>{servicePickerIds.length}</b> serviço(s) marcado(s)</span><div><button type="button" className="outline-btn" onClick={() => setServicePickerOpen(false)}>Cancelar</button><button type="button" className="primary-btn" onClick={() => { setSelectedCatalogIds(servicePickerIds); setServicePickerOpen(false); }}><CheckCircle2 size={15}/> Aplicar seleção</button></div></footer></section></div>}
+  </div>;
+}
+
+export default function Home() {
+  useEffect(() => {
+    if (!isMobileInterfacePath(window.location.pathname)) {
+      document.documentElement.dataset.proarExperience = "system";
+      document.body.classList.remove("proar-mobile-route");
+    }
+  }, []);
+  useEffect(() => {
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const dialogs = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]'));
+      const topmost = dialogs.at(-1);
+      if (!topmost) return;
+      event.preventDefault();
+      const backdrop = topmost.querySelector<HTMLElement>(".modal-backdrop, .service-picker-backdrop, .version-modal-backdrop");
+      backdrop?.click();
+      requestAnimationFrame(() => {
+        if (!document.querySelector('[role="dialog"][aria-modal="true"]')) {
+          document.body.classList.remove("overflow-hidden");
+          document.documentElement.classList.remove("overflow-hidden");
+          document.body.style.removeProperty("overflow");
+          document.documentElement.style.removeProperty("overflow");
+        }
+      });
+    };
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, []);
+
+  const [authenticatedUser, setAuthenticatedUser] = useState<AuthenticatedUser | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [bootError, setBootError] = useState("");
+  const [bootRunId, setBootRunId] = useState("");
+  const [bootAttempt, setBootAttempt] = useState(0);
+  const [current, setCurrentState] = useState("Painel inicial");
+  const setCurrent = useCallback((moduleName:string) => {
+    if (!navigationModuleNames().includes(moduleName)) return;
+    setCurrentState(moduleName);
+    const next=moduleNavigationUrl(window.location.href,moduleName);
+    if(next && next!==window.location.pathname+window.location.search+window.location.hash) window.history.pushState(null,"",next);
+  }, []);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [modal, setModal] = useState("");
+  const [orderSeed,setOrderSeed]=useState<OrderScheduleSeed|undefined>(undefined);
+  const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null);
+  const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>(orders);
+  const [customerRecords, setCustomerRecords] = useState<Customer[]>(customers);
+  const [moduleRecords, setModuleRecords] = useState<Record<string, ModuleRecord[]>>({});
+  const [savedMessage, setSavedMessage] = useState("");
+  const [companies, setCompanies] = useState<TenantCompany[]>([DEFAULT_COMPANY]);
+  const [activeCompany, setActiveCompany] = useState<TenantCompany>(DEFAULT_COMPANY);
+  const [online, setOnline] = useState(true);
+  const [stateRevision, setStateRevision] = useState(0);
+  const [syncing, setSyncing] = useState(false);
+  const [syncPhase, setSyncPhase] = useState<"idle" | "syncing" | "complete">("idle");
+  const [databaseMode, setDatabaseMode] = useState<"online" | "degraded" | "offline">("online");
+  const [lastSuccessfulSyncAt, setLastSuccessfulSyncAt] = useState("");
+  const primaryTenantAccess = isPrimaryPolartechClient(authenticatedUser);
+  const effectiveEntitledModules = useMemo(() => primaryTenantAccess ? navigationModuleNames() : authenticatedUser?.entitledModules, [primaryTenantAccess, authenticatedUser?.entitledModules]);
+  useEffect(() => {
+    if(!authenticatedUser || checkingSession) return;
+    const syncFromUrl=()=>{
+      const requested=moduleFromSearch(window.location.search);
+      const allowed=navigationModuleNames().filter(name=>canNavigateModule(name,authenticatedUser,effectiveEntitledModules));
+      const target=canNavigateModule(requested,authenticatedUser,effectiveEntitledModules)?requested:allowed[0]||"Painel inicial";
+      setCurrentState(target);
+    };
+    syncFromUrl();window.addEventListener("popstate",syncFromUrl);
+    return ()=>window.removeEventListener("popstate",syncFromUrl);
+  },[authenticatedUser,checkingSession,effectiveEntitledModules]);
+
+  useEffect(() => {
+    const navigate = (event: Event) => setCurrent((event as CustomEvent<string>).detail);
+    window.addEventListener("proar:navigate", navigate);
+    return () => window.removeEventListener("proar:navigate", navigate);
+  }, []);
+  const handleLogin = (user: AuthenticatedUser) => {
+    const primaryTenant = isPrimaryPolartechClient(user);
+    const normalizedUser = primaryTenant
+      ? { ...user, companyId:"polartech-principal", companySlug:"polartech", entitledModules:navigationModuleNames() }
+      : user;
+    setAuthenticatedUser(normalizedUser);
+    localStorage.setItem("proar-offline-session", JSON.stringify({ user:normalizedUser, expiresAt: Date.now() + 12 * 60 * 60 * 1000 }));
+  };
+  useEffect(() => {
+    const storedCompanies = JSON.parse(localStorage.getItem("proar-v4-companies") || "[]") as TenantCompany[];
+    const available = storedCompanies.length ? storedCompanies : [DEFAULT_COMPANY];
+    const storedActiveId = localStorage.getItem("proar-v4-active-company");
+    const selected = available.find(company => company.id === storedActiveId && company.status === "Ativa") || available.find(company => company.status === "Ativa") || available[0];
+    setCompanies(available);
+    setActiveCompany(selected);
+    localStorage.setItem("proar-v4-companies", JSON.stringify(available));
+    localStorage.setItem("proar-v4-active-company", selected.id);
+  }, []);
+  const updateCompanies = (next: TenantCompany[]) => {
+    setCompanies(next);
+    localStorage.setItem("proar-v4-companies", JSON.stringify(next));
+    next.filter(company => normalizeCnpj(company.cnpj).length === 14).forEach(company => {
+      void fetch("/api/companies", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(company) });
+    });
+  };
+  useEffect(() => {
+    if (!authenticatedUser?.companySlug || !authenticatedUser.companyId) return;
+    fetch(`/api/trial/company?slug=${encodeURIComponent(authenticatedUser.companySlug)}`, {cache:"no-store"}).then(async response => {
+      if (!response.ok) return null; const result = await response.json(); return result.company;
     }).then(company => {
       if (!company) return;
       const tenantCompany: TenantCompany = { id: company.id, legalName: company.legal_name, tradeName: company.trade_name, cnpj: company.cnpj || company.cpf || "", city: company.city || "", state: company.state || "SP", phone: company.phone || "", whatsapp: company.whatsapp || "", email: company.email || "", address: company.address || "", zipCode: company.zip_code || "", stateRegistration: company.state_registration || "", municipalRegistration: company.municipal_registration || "", companyType: company.company_type || "", taxRegime: company.tax_regime || "", logo: company.logo_path || company.brand_config?.logo || "", status: company.status === "active" ? "Ativa" : "Bloqueada", createdAt: company.trial_started_at || new Date().toISOString() };
