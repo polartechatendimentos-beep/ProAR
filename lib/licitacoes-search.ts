@@ -212,7 +212,7 @@ export async function searchAutomaticTenders(options?: { start?: Date; end?: Dat
   const diagnostics: SourceDiagnostic[] = [
     ...pncpSettled.map((result, index) => result.status === "fulfilled" ? result.value.diagnostic : { source: `PNCP-${UFS[index]}`, status: "error" as const, attempts: MAX_RETRIES + 1, durationMs: Date.now() - (startedAt.get(`PNCP-${UFS[index]}`) ?? Date.now()), count: 0, error: result.reason instanceof Error ? result.reason.message : String(result.reason) }),
     ...comprasSettled.map((result, index) => result.status === "fulfilled" ? result.value.diagnostic : { source: `Compras.gov.br-${comprasTasks[index].uf}-${comprasTasks[index].code}`, status: "error" as const, attempts: MAX_RETRIES + 1, durationMs: Date.now() - (startedAt.get(`Compras.gov.br-${comprasTasks[index].uf}-${comprasTasks[index].code}`) ?? Date.now()), count: 0, error: result.reason instanceof Error ? result.reason.message : String(result.reason) }),
-    ...(bllResult.diagnostic?[{source:bllResult.diagnostic.source,status:bllResult.diagnostic.status,attempts:bllResult.diagnostic.attempts,durationMs:bllResult.diagnostic.durationMs,count:bllResult.diagnostic.count,error:bllResult.diagnostic.error}]:[{source:"BLL Compras · acesso direto não configurado",status:"error" as const,attempts:0,durationMs:0,count:0,error:"Busca do PNCP continua ativa; o acesso direto BLL requer feed/autorização do portal."}]),
+    ...(bllResult.diagnostic?[{source:bllResult.diagnostic.source,status:bllResult.diagnostic.status,attempts:bllResult.diagnostic.attempts,durationMs:bllResult.diagnostic.durationMs,count:bllResult.diagnostic.count,error:bllResult.diagnostic.error}]:[]),
     ...fiorilliResult.diagnostics,
     ...(olimpiaResult?[olimpiaResult.diagnostic]:[]),
   ];
