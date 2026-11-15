@@ -2053,6 +2053,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
   const [fiscalIssRate, setFiscalIssRate] = useState("");
   const [fiscalRpsSeries, setFiscalRpsSeries] = useState("");
   const [fiscalNfceSeries, setFiscalNfceSeries] = useState("1");
+  const [fiscalNfeSeries,setFiscalNfeSeries]=useState("1");
   const [fiscalCscId, setFiscalCscId] = useState("");
   const [fiscalCsc, setFiscalCsc] = useState("");
   const [fiscalCscConfigured, setFiscalCscConfigured] = useState(false);
@@ -2091,6 +2092,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
       setFiscalIssRate(String(data.nfse?.issRate || ""));
       setFiscalRpsSeries(String(data.nfse?.rpsSeries || ""));
       setFiscalNfceSeries(String(data.nfce?.series || "1"));
+      setFiscalNfeSeries(String(data.nfe?.series || "1"));
       setFiscalCscId(String(data.nfce?.cscId || ""));
       setFiscalCscConfigured(Boolean(data.nfce?.cscConfigured));
       setFiscalCsc("");
@@ -2179,6 +2181,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
     try {
       const response=await fetch("/api/fiscal-config",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({
         company:{environment:fiscalEnvironment,taxRegime:fiscalTaxRegime,stateRegistration:fiscalIe,municipalRegistration:fiscalIm,municipalityCode:fiscalMunicipalityCode},
+        nfe:{series:fiscalNfeSeries},
         nfse:{serviceCode:fiscalServiceCode,nationalServiceCode:fiscalNationalServiceCode,nbsCode:fiscalNbsCode,issRate:fiscalIssRate,issWithheld:fiscalIssWithheld,rpsSeries:fiscalRpsSeries},
         nfce:{series:fiscalNfceSeries,cscId:fiscalCscId,...(fiscalCsc.trim()?{csc:fiscalCsc.trim()}:{})},
       })});
@@ -2268,6 +2271,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
           <label>ISS padrão (%)<input type="number" min="0" max="5" step="0.01" value={fiscalIssRate} onChange={event=>setFiscalIssRate(event.target.value)} placeholder="0,00"/><small>Configure a alíquota confirmada para o serviço e município.</small></label>
           <label className="wide fiscal-option"><input type="checkbox" checked={fiscalIssWithheld} onChange={event=>setFiscalIssWithheld(event.target.checked)}/> ISS retido pelo tomador</label>
           <label>Série RPS / DPS<input value={fiscalRpsSeries} onChange={event=>setFiscalRpsSeries(event.target.value)} placeholder="Série configurada"/></label>
+          <label>Série NF-e<input inputMode="numeric" maxLength={3} value={fiscalNfeSeries} onChange={event=>setFiscalNfeSeries(event.target.value.replace(/\D/g,"").slice(0,3))} placeholder="1"/></label>
           <label>Série NFC-e<input value={fiscalNfceSeries} onChange={event=>setFiscalNfceSeries(event.target.value)} placeholder="1"/></label>
           <label>ID CSC<input value={fiscalCscId} onChange={event=>setFiscalCscId(event.target.value)} placeholder="Identificador do CSC"/></label>
           <label>CSC<input type="password" autoComplete="new-password" value={fiscalCsc} onChange={event=>setFiscalCsc(event.target.value)} placeholder="Preencha somente para cadastrar/trocar"/><small>O valor não é exibido novamente.</small></label>
