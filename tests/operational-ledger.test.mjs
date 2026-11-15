@@ -273,3 +273,32 @@ test("consumo do veículo não reduz novamente saldo do estoque central",()=>{
  assert.equal(transferred.moduleRecords.Produtos[0].stockCurrent,8);
  assert.throws(()=>run(transferred,command("stock-transfer",{productId:"P1",quantity:2,sourceType:"Veículo",sourceId:"V1",destinationType:"Veículo",destinationId:"V2",reason:"Sem saldo"},undefined)),/insuficiente/);
 });
+
+test("venda ajusta somente diferença e cancelamento estorna uma vez",()=>{
+ const initial=base(),draft=structuredClone(initial);
+ draft.moduleRecords.Vendas=[{id:"V-TEST",name:"Venda",status:"Concluída",purchaseItems:[{id:"I",productId:"P1",kind:"Produto",quantity:2}]}];
+ const sold=prepareOperationalState(initial,draft,admin);assert.equal(sold.moduleRecords.Produtos[0].stockCurrent,8);
+ const edit=structuredClone(sold);edit.moduleRecords.Vendas[0].purchaseItems[0].quantity=4;
+ const changed=prepareOperationalState(sold,edit,admin);assert.equal(changed.moduleRecords.Produtos[0].stockCurrent,6);
+ const cancel=structuredClone(changed);cancel.moduleRecords.Vendas[0].status="Cancelada";cancel.moduleRecords.Vendas[0].changeReason="Cliente desistiu";
+ const reversed=prepareOperationalState(changed,cancel,admin);assert.equal(reversed.moduleRecords.Produtos[0].stockCurrent,10);
+ const retry=prepareOperationalState(reversed,structuredClone(reversed),admin);assert.equal(retry.moduleRecords.Produtos[0].stockCurrent,10);
+});
+test("cancelar OS devolve material e reconcluir consome uma única vez",()=>{
+ const initial=base();initial.serviceOrders=[{id:"OS-C",status:"Agendada",catalogItems:[{id:"P1",kind:"Produto",quantity:2}]}];
+ const draft=structuredClone(initial);draft.serviceOrders[0].status="Concluída";
+ const closed=prepareOperationalState(initial,draft,admin);
+ const cancel=structuredClone(closed);cancel.serviceOrders[0].status="Cancelada";cancel.serviceOrders[0].changeReason="Devolução conferida";
+ const reversed=prepareOperationalState(closed,cancel,admin);assert.equal(reversed.moduleRecords.Produtos[0].stockCurrent,10);
+ const reopen=structuredClone(reversed);reopen.serviceOrders[0].status="Concluída";
+ const final=prepareOperationalState(reversed,reopen,admin);assert.equal(final.moduleRecords.Produtos[0].stockCurrent,8);
+});
+test("ficha técnica preserva composição anterior e rejeita alteração pelo cliente",()=>{
+ const initial=base();initial.moduleRecords.Serviços=[{id:"S1",name:"Instalação",technicalSheet:[{productId:"P1",quantityPerUnit:2}]}];
+ const draft=structuredClone(initial);draft.serviceOrders=[{id:"OS-S",status:"Agendada",catalogItems:[{id:"S1",kind:"Serviço",quantity:1}]}];
+ const saved=prepareOperationalState(initial,draft,admin);
+ const edit=structuredClone(saved);edit.moduleRecords.Serviços[0].technicalSheet[0].quantityPerUnit=5;
+ edit.serviceOrders[0].catalogItems[0].technicalSheetSnapshot=[{productId:"P1",quantityPerUnit:9}];
+ const result=prepareOperationalState(saved,edit,admin);
+ assert.equal(result.serviceOrders[0].catalogItems[0].technicalSheetSnapshot[0].quantityPerUnit,2);
+});
