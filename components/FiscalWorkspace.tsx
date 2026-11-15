@@ -5,7 +5,7 @@ import { AlertTriangle, CheckCircle2, FileCheck2, FileClock, FileText, Landmark,
 import { notifyError, notifySuccess } from "@/lib/ui-feedback";
 
 type FiscalRecord = Record<string, any>;
-type NfeLine = { id:string; productId:string; description:string; quantity:number; unitValue:number; ncm:string; cest:string; cfop:string; cst:string; csosn:string; taxOrigin:string; unit:string; };
+type NfeLine = { id:string; productId:string; description:string; quantity:number; unitValue:number; ncm:string; cest:string; cfop:string; cst:string; csosn:string; taxOrigin:string; unit:string; icmsRate:string; ipiRate:string; pisRate:string; cofinsRate:string; };
 type FiscalConfig = {
   company?: Record<string, any>;
   nfe?: Record<string, any>;
@@ -96,14 +96,14 @@ export function FiscalWorkspace({
     const customer=customers.find(row=>row.id===sale.customerId||row.name===sale.client||row.tradeName===sale.client);
     const lines=(sale.purchaseItems??[]).filter((row:FiscalRecord)=>row.kind!=="Serviço"&&row.kind!=="Custo adicional").map((row:FiscalRecord,index:number)=>{
       const product=productCatalog.find(item=>item.id===row.productId);
-      return {id:String(row.id||sale.id+"-"+index),productId:String(row.productId||""),description:String(row.description||product?.name||""),quantity:Number(row.quantity||1),unitValue:Number(row.unitValue||product?.value||0),ncm:String(product?.ncm||row.ncm||""),cest:String(product?.cest||row.cest||""),cfop:String(product?.cfop||row.cfop||""),cst:String(product?.cst||row.cst||""),csosn:String(product?.csosn||row.csosn||""),taxOrigin:String(product?.taxOrigin||row.taxOrigin||""),unit:String(product?.unitOfMeasure||row.unitOfMeasure||"UN")} as NfeLine;
+      return {id:String(row.id||sale.id+"-"+index),productId:String(row.productId||""),description:String(row.description||product?.name||""),quantity:Number(row.quantity||1),unitValue:Number(row.unitValue||product?.value||0),ncm:String(product?.ncm||row.ncm||""),cest:String(product?.cest||row.cest||""),cfop:String(product?.cfop||row.cfop||""),cst:String(product?.cst||row.cst||""),csosn:String(product?.csosn||row.csosn||""),taxOrigin:String(product?.taxOrigin||row.taxOrigin||""),unit:String(product?.unitOfMeasure||row.unitOfMeasure||"UN"),icmsRate:String(row.icmsRate??""),ipiRate:String(row.ipiRate??""),pisRate:String(row.pisRate??""),cofinsRate:String(row.cofinsRate??"")} as NfeLine;
     });
     setNfeOrigin(sale);
     setNfeCustomer({name:String(customer?.name||sale.client||""),document:String(customer?.doc||sale.doc||""),address:String(customer?.address||sale.address||""),stateRegistration:String(customer?.stateRegistration||"")});
     setNfeNature(String(sale.operationNature||""));setNfeSeries(String(config?.nfe?.series||"1"));setNfePayment(String(sale.paymentMethod||sale.paymentType||""));setNfeFreight("9");setNfeLines(lines);setNfeNotice("");
   };
   const updateNfeLine=(id:string,patch:Partial<NfeLine>)=>setNfeLines(current=>current.map(line=>line.id===id?{...line,...patch}:line));
-  const addNfeProduct=(productId:string)=>{const product=productCatalog.find(row=>row.id===productId);if(!product)return;setNfeLines(current=>[...current,{id:product.id+"-"+Date.now(),productId:product.id,description:String(product.name||""),quantity:1,unitValue:Number(product.value||0),ncm:String(product.ncm||""),cest:String(product.cest||""),cfop:String(product.cfop||""),cst:String(product.cst||""),csosn:String(product.csosn||""),taxOrigin:String(product.taxOrigin||""),unit:String(product.unitOfMeasure||"UN")}]);};
+  const addNfeProduct=(productId:string)=>{const product=productCatalog.find(row=>row.id===productId);if(!product)return;setNfeLines(current=>[...current,{id:product.id+"-"+Date.now(),productId:product.id,description:String(product.name||""),quantity:1,unitValue:Number(product.value||0),ncm:String(product.ncm||""),cest:String(product.cest||""),cfop:String(product.cfop||""),cst:String(product.cst||""),csosn:String(product.csosn||""),taxOrigin:String(product.taxOrigin||""),unit:String(product.unitOfMeasure||"UN"),icmsRate:"",ipiRate:"",pisRate:"",cofinsRate:""}]);};
   const nfeTotal=nfeLines.reduce((sum,line)=>sum+Math.max(0,line.quantity)*Math.max(0,line.unitValue),0);
   const submitNfe=async()=>{
     if(!nfeOrigin)return;
