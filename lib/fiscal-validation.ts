@@ -11,8 +11,10 @@ type FiscalValidationPayload = {
   kind: FiscalDocumentKind;
   customer?: { document?: string; address?: string; stateRegistration?: string; municipalRegistration?: string };
   service?: { description?: string; value?: number; serviceCode?: string; issRate?: number | string };
-  items?: Array<{ description?: string; quantity?: number; unitValue?: number; ncm?: string; cfop?: string; cst?: string; csosn?: string }>;
-  company?: { document?: string; stateRegistration?: string; municipalRegistration?: string; taxRegime?: string };
+  items?: Array<{ description?: string; quantity?: number; unitValue?: number; unit?: string; ncm?: string; cest?: string; cfop?: string; cst?: string; csosn?: string; taxOrigin?: string }>;
+  company?: { document?: string; state?: string; stateRegistration?: string; municipalRegistration?: string; taxRegime?: string };
+  operationNature?: string;
+  series?: string;
   config?: { csc?: string; cscId?: string; environment?: string };
 };
 
@@ -28,8 +30,8 @@ export function validateFiscalPayload(payload: FiscalValidationPayload) {
   const warning = (field:string, code:string, message:string) => issues.push({ field, code, message, severity:"warning" as const });
 
   if (!payload.kind) error("kind","DOCUMENT_TYPE_REQUIRED","Informe o tipo de documento fiscal.");
-  if (invalidDocument(payload.customer?.document)) error("customer.document","CUSTOMER_DOCUMENT_INVALID","CPF/CNPJ do destinatário está ausente ou inválido.");
-  if (!payload.customer?.address?.trim()) error("customer.address","CUSTOMER_ADDRESS_REQUIRED","Endereço do destinatário não foi informado.");
+  if ((payload.kind !== "NFCE" || Boolean(payload.customer?.document?.trim())) && invalidDocument(payload.customer?.document)) error("customer.document","CUSTOMER_DOCUMENT_INVALID","CPF/CNPJ do destinatário está ausente ou inválido.");
+  if (payload.kind !== "NFCE" && !payload.customer?.address?.trim()) error("customer.address","CUSTOMER_ADDRESS_REQUIRED","Endereço do destinatário não foi informado.");
 
   if (payload.kind === "NFSE") {
     if (!payload.service?.description?.trim()) error("service.description","SERVICE_DESCRIPTION_REQUIRED","Descrição do serviço é obrigatória.");
@@ -40,6 +42,13 @@ export function validateFiscalPayload(payload: FiscalValidationPayload) {
 
   if (payload.kind === "NFCE" || payload.kind === "NFE") {
     if (!payload.items?.length) error("items","ITEMS_REQUIRED","Inclua ao menos um item de mercadoria.");
+    if (payload.kind === "NFE" || payload.kind === "NFCE") {
+      const label=payload.kind==="NFCE"?"NFC-e":"NF-e";
+      if (invalidDocument(payload.company?.document)) error("company.document","ISSUER_DOCUMENT_INVALID",`CNPJ do emitente da ${label} está ausente ou inválido.`);
+      if (!payload.operationNature?.trim()) error("operationNature","OPERATION_NATURE_REQUIRED","Informe a natureza da operação.");
+      if (!/^[A-Z]{2}$/.test(String(payload.company?.state||""))) error("company.state","ISSUER_STATE_REQUIRED","Informe a UF do estabelecimento emitente.");
+      if (!/^\d{1,3}$/.test(String(payload.series||""))) error("series","SERIES_INVALID",`Série da ${label} deve conter de 1 a 3 dígitos.`);
+    }
     payload.items?.forEach((item,index) => {
       const prefix = `items.${index}`;
       if (!item.description?.trim()) error(`${prefix}.description`,"ITEM_DESCRIPTION_REQUIRED",`Item ${index+1}: descrição obrigatória.`);
@@ -48,6 +57,8 @@ export function validateFiscalPayload(payload: FiscalValidationPayload) {
       if (digits(item.ncm).length !== 8) error(`${prefix}.ncm`,"NCM_REQUIRED",`Item ${index+1}: NCM deve possuir 8 dígitos.`);
       if (digits(item.cfop).length !== 4) error(`${prefix}.cfop`,"CFOP_REQUIRED",`Item ${index+1}: CFOP deve possuir 4 dígitos.`);
       if (!item.cst?.trim() && !item.csosn?.trim()) error(`${prefix}.taxSituation`,"CST_CSOSN_REQUIRED",`Item ${index+1}: informe CST ou CSOSN conforme o regime tributário.`);
+      if ((payload.kind === "NFE" || payload.kind === "NFCE") && !/^\d$/.test(String(item.taxOrigin||"")) ) error(prefix+".taxOrigin","TAX_ORIGIN_REQUIRED","Item "+(index+1)+": informe a origem da mercadoria.");
+      if ((payload.kind === "NFE" || payload.kind === "NFCE") && !item.unit?.trim()) error(prefix+".unit","UNIT_REQUIRED","Item "+(index+1)+": informe a unidade comercial.");
     });
     if (!payload.company?.stateRegistration?.trim()) warning("company.stateRegistration","STATE_REGISTRATION_MISSING","Inscrição Estadual do emitente não foi informada.");
   }

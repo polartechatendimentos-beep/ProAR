@@ -46,7 +46,7 @@ const permissionFor: Record<string, string> = {
   Produtos: "estoque.editar", Estoque: "estoque.editar", Compras: "compras.editar",
   Equipamentos: "equipamentos.editar", "Unidades e setores": "clientes.editar",
   "Acompanhamento de licitações": "licitacoes.editar", "Documentação / Habilitação": "licitacoes.editar", "Composições de licitação": "licitacoes.editar", Funcionários: "configuracoes.editar", Certames: "licitacoes.editar", Empenhos: "licitacoes.editar",
-  Obras: "obras.editar", Orçamentos: "comercial.editar", Vendas: "comercial.editar", Serviços: "catalogo.editar", Fornecedores: "compras.editar", "Conciliações": "financeiro.conciliar", Lembretes: "os.editar", Aprovações: "aprovacoes.aprovar",
+  Obras: "obras.editar", Orçamentos: "comercial.editar", Vendas: "comercial.editar", Serviços: "catalogo.editar", Fornecedores: "compras.editar", "Conciliações": "financeiro.conciliar", Lembretes: "os.editar", "Veículos": "estoque.editar", Aprovações: "aprovacoes.aprovar",
 };
 export const defaultFinancialAccounts = () => [
   { id: "BANK", name: "Conta bancária", type: "Banco", openingBalance: 0, status: "Ativo" },
