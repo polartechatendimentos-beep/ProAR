@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type Connection = { configured?: boolean; needsProvisioning?: boolean; state?: "open" | "connecting" | "close"; qr?: string; error?: string; automationEnabled?: boolean; automationAvailable?: boolean };
 
@@ -21,29 +21,31 @@ export function WhatsAppWebConnection({ companyId }: { companyId: string }) {
     } catch { setConnection(previous => ({ ...previous, error: "Não foi possível carregar o histórico de envios." })); }
   }
 
-  async function refresh(pair = false) {
-    setBusy(true);
+  const refresh = useCallback(async (pair = false, quiet = false) => {
+    if (!quiet) setBusy(true);
     try {
       const response = await fetch("/api/whatsapp/web", { method: pair ? "POST" : "GET", cache: "no-store", headers: { "X-Proar-Company-ID": companyId } });
       const data: Connection = await response.json();
+      if (!response.ok) throw new Error(data.error || "Não foi possível consultar a conexão.");
       setConnection(previous => ({
         ...data,
         qr: data.qr || (!pair && data.state === "connecting" ? previous?.qr : undefined),
       }));
-    } catch {
-      setConnection({ error: "Falha ao consultar o WhatsApp Web." });
+    } catch (error) {
+      setConnection(previous => ({ ...previous, error: error instanceof Error ? error.message : "Falha ao consultar o WhatsApp Web." }));
     } finally {
-      setBusy(false);
+      if (!quiet) setBusy(false);
     }
-  }
+  }, [companyId]);
 
   async function toggleAutomation() {
     setBusy(true);
     try {
       const response = await fetch("/api/whatsapp/web", { method: "PUT", headers: { "Content-Type": "application/json", "X-Proar-Company-ID": companyId }, body: JSON.stringify({ automationEnabled: !connection?.automationEnabled }) });
       const data: Connection = await response.json();
+      if (!response.ok) throw new Error(data.error || "Não foi possível salvar os envios automáticos.");
       setConnection(previous => ({ ...previous, ...data }));
-    } catch { setConnection(previous => ({ ...previous, error: "Não foi possível salvar os envios automáticos." })); }
+    } catch (error) { setConnection(previous => ({ ...previous, error: error instanceof Error ? error.message : "Não foi possível salvar os envios automáticos." })); }
     finally { setBusy(false); }
   }
 
@@ -59,41 +61,29 @@ export function WhatsAppWebConnection({ companyId }: { companyId: string }) {
     finally { setBusy(false); }
   }
 
+  useEffect(() => { void refresh(); }, [refresh]);
+
+  useEffect(() => {
+    if (connection?.state !== "connecting") return;
+    const timer = window.setInterval(() => void refresh(false, true), 4000);
+    return () => window.clearInterval(timer);
+  }, [connection?.state, refresh]);
+
   useEffect(() => {
     if (!connection?.qr) return;
     const timeout = window.setTimeout(() => setConnection(previous => previous ? { ...previous, qr: undefined } : null), 45000);
-    let active = true;
-    const controller = new AbortController();
-    async function checkPairing() {
-      try {
-        const response = await fetch("/api/whatsapp/web", { cache: "no-store", signal: controller.signal, headers: { "X-Proar-Company-ID": companyId } });
-        if (!response.ok) return;
-        const data: Connection = await response.json();
-        if (active && data.state === "open") setConnection(data);
-      } catch {
-        // The operator can consult the connection manually after a transient failure.
-      } finally {
-        if (active) timer = window.setTimeout(checkPairing, 4000);
-      }
-    }
-    let timer = window.setTimeout(checkPairing, 4000);
-    return () => {
-      active = false;
-      controller.abort();
-      window.clearTimeout(timer);
-      window.clearTimeout(timeout);
-    };
-  }, [connection?.qr, companyId]);
+    return () => window.clearTimeout(timeout);
+  }, [connection?.qr]);
 
   return <div className="settings-form whatsapp-settings-form">
     <div className="wide">
-      <h4>WhatsApp Web por QR Code</h4>
-      <p>Conecte o WhatsApp desta empresa. Cada empresa usa seu próprio número e QR Code.</p>
+      <h4>NexoCloud • WhatsApp Web por QR Code</h4>
+      <p>O servidor Evolution API da NexoCloud mantém uma instância separada para esta empresa. Leia o QR Code com o número que ela usará; outras empresas não compartilham a conexão.</p>
       <p role="status">{connection?.error || (connection?.state === "open" ? "WhatsApp conectado" :
         connection?.state === "connecting" ? "Aguardando pareamento" :
         connection?.needsProvisioning ? "Pronto para conectar o WhatsApp da empresa." :
         connection?.state === "close" ? "WhatsApp desconectado" :
-        connection?.configured === false ? "Instância indisponível para esta conta." : "Consulte a conexão para começar.")}</p>
+        connection?.configured === false ? "A conexão aguarda a configuração segura do servidor Evolution API da NexoCloud pela gestão do ProAR." : "Consultando a conexão desta empresa…")}</p>
       {connection?.qr && <div>
         <p>No celular, abra Aparelhos conectados e escolha Conectar um aparelho.</p>
         {/* The QR comes from the paired server and expires shortly. */}
@@ -104,9 +94,9 @@ export function WhatsAppWebConnection({ companyId }: { companyId: string }) {
       {connection?.configured && connection.state !== "open" &&
         <button type="button" className="primary-btn" disabled={busy} onClick={() => void refresh(true)}>Gerar QR Code</button>}
       {connection?.configured && !connection.needsProvisioning && <div>
-        <p>Envios automáticos: {connection.automationEnabled ? "ativados para esta empresa" : "desativados"}.</p>
-        {connection.automationAvailable === false && <p>A ativação geral aguarda a conclusão dos testes de integração.</p>}
-        <button type="button" className="secondary-btn" disabled={busy || (!connection.automationEnabled && connection.state !== "open")} onClick={() => void toggleAutomation()}>{connection.automationEnabled ? "Desativar envios automáticos" : "Ativar envios automáticos"}</button>
+        <p>Envios automáticos desta empresa: {connection.automationEnabled ? "ativados" : "desativados"}.</p>
+        {connection.automationAvailable === false && <p role="note">O administrador do ProAR ainda precisa habilitar o serviço geral de automação.</p>}
+        <button type="button" className="secondary-btn" disabled={busy || (!connection.automationEnabled && (connection.state !== "open" || connection.automationAvailable !== true))} onClick={() => void toggleAutomation()}>{connection.automationEnabled ? "Desativar envios automáticos" : "Ativar envios automáticos"}</button>
       </div>}
       {connection?.configured && <div>
         {connection.state === "open" && <div>

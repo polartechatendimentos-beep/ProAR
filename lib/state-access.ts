@@ -10,7 +10,7 @@ const rules:Record<string,string[]>={
  "Clientes":["clientes.visualizar"],"Unidades e setores":["clientes.visualizar","os.visualizar"],
  "Equipamentos":["equipamentos.visualizar"],"Funcionários":["configuracoes.usuarios"],
  "Financeiro":["financeiro.visualizar"],"Contas financeiras":["financeiro.visualizar"],"Razão financeiro":["financeiro.visualizar"],"Conciliações":["financeiro.visualizar"],
- "Estoque":["estoque.visualizar"],"Livro de estoque":["estoque.visualizar"],"Reservas de estoque":["estoque.visualizar"],
+ "Estoque":["estoque.visualizar"],"Livro de estoque":["estoque.visualizar"],"Reservas de estoque":["estoque.visualizar"],"Ferramentas":["estoque.visualizar"],
  "Produtos":["estoque.visualizar"],"Compras":["compras.visualizar"],"Fornecedores":["compras.visualizar"],
  "Orçamentos":["comercial.editar"],"Vendas":["comercial.editar"],"Serviços":["catalogo.editar"],
  "Obras":["obras.visualizar"],"Licitações":["licitacoes.visualizar"],"Certames":["licitacoes.visualizar"],"Empenhos":["licitacoes.visualizar"],

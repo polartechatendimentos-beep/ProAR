@@ -416,6 +416,14 @@ export async function GET(request: NextRequest) {
     const end = endParam ? new Date(`${endParam}T23:59:59-03:00`) : new Date(Date.now() + 366 * 86400000);
     const radius = Math.min(1000, Math.max(1, Number(request.nextUrl.searchParams.get("raio_km") ?? request.nextUrl.searchParams.get("raio") ?? (filters.strictRadius||400))));
     const term = (request.nextUrl.searchParams.get("termo") ?? request.nextUrl.searchParams.get("q") ?? "").trim();
+    const municipalityModeRaw=request.nextUrl.searchParams.get("municipiosModo")||"all";
+    const municipalityMode=municipalityModeRaw==="include"||municipalityModeRaw==="exclude"?municipalityModeRaw:"all";
+    let selectedMunicipalities:string[]=[];
+    try{
+      const parsed=JSON.parse(request.nextUrl.searchParams.get("municipios")||"[]");
+      if(Array.isArray(parsed))selectedMunicipalities=parsed.filter((key):key is string=>typeof key==="string"&&Object.hasOwn(municipalityNameDistances,key)&&municipalityNameDistances[key]<=radius).slice(0,250);
+    }catch{}
+    if(municipalityMode==="include"&&!selectedMunicipalities.length)return privateJson({data:[],error:"Selecione ao menos um município ou altere o filtro para todos no raio."},{status:400});
     const requestedPortals = (request.nextUrl.searchParams.get("portais") ?? "").split(",").map(value => value.trim()).filter(Boolean);
     const orderBy = request.nextUrl.searchParams.get("ordenar_por") === "valor" ? "valor" : "distancia";
     const result = await searchAutomaticTenders({ start, end, radius, all: !term, term,city:filters.city });
@@ -425,6 +433,13 @@ export async function GET(request: NextRequest) {
       bll: "BLL Compras", "bll compras": "BLL Compras", licitacoese: "Licitações-e", "licitações-e": "Licitações-e",
     };
     result.data=applyFilters(result.data);
+    if(municipalityMode!=="all"&&selectedMunicipalities.length){
+      const selectedSet=new Set(selectedMunicipalities);
+      result.data=result.data.filter(item=>{
+        const key=`${normalize(item.unidadeOrgao?.municipioNome||"")}|${String(item.unidadeOrgao?.ufSigla||"").toUpperCase()}`;
+        return municipalityMode==="include"?selectedSet.has(key):!selectedSet.has(key);
+      });
+    }
     const normalizedPortals = requestedPortals.map(value => portalAliases[normalize(value)] ?? value);
     // Portais de origem em registros PNCP não comprovam um conector direto validado.
     const connectedPortals = new Set(["PNCP", "Compras.gov.br",...(result.diagnostics.some(d=>d.mode==="direct"&&d.status==="ok"&&/^BLL/.test(d.source))?["BLL Compras"]:[]),...(result.diagnostics.some(d=>d.status==="ok"&&/Portal Municipal|Fiorilli direto/.test(d.source))?["Portal Municipal"]:[])]);
@@ -443,8 +458,12 @@ export async function GET(request: NextRequest) {
     const portalCounts = result.data.reduce<Record<string, number>>((acc, item) => {
       const portal = item.sourcePortal ?? "PNCP"; acc[portal] = (acc[portal] ?? 0) + 1; return acc;
     }, {});
+    const citiesInRadius=Object.entries(municipalityNameDistances).filter(([,distance])=>distance<=radius);
+    const municipalitiesWithResults=new Set(result.data.map(item=>`${normalize(item.unidadeOrgao?.municipioNome||"")}|${String(item.unidadeOrgao?.ufSigla||"").toUpperCase()}`));
+    const directSourceCount=result.diagnostics.filter(item=>item.mode==="direct").length;
+    const scanCoverage={...result.coverage,origin:{city:"Mirassol",uf:"SP"},municipalitiesInRadius:citiesInRadius.length,municipalitiesWithResults:municipalitiesWithResults.size,sourceRuns:result.diagnostics.length,directSourceRuns:directSourceCount,geographyCoverage:["SP","MG","MS","PR","GO"],radiusKm:radius,method:"Busca nas fontes públicas conectadas por UF/modalidade, seguida de filtro geográfico; conectores municipais diretos aparecem individualmente no diagnóstico."};
     return privateJson({
-      data: result.data, resultados: result.data, source: "PNCP e portais de origem", radius, raio_km: radius, portalCounts, partial: result.failedSources.length > 0 || result.coverage.truncated, sourceDiagnostics: result.diagnostics, coverage: result.coverage, kpis: { total_editais: result.data.filter(item=>item.validationStatus==="active_confirmed").length, valor_total_estimado: result.data.filter(item=>item.validationStatus==="active_confirmed").reduce((sum,item)=>sum+(item.valorTotalEstimado??0),0), homologadas_historico: result.data.filter(item=>item.validationStatus==="history").length, dados_incompletos: result.data.filter(item=>item.validationStatus==="incomplete").length, portais_ativos: Object.keys(portalCounts).length },
+      data: result.data, resultados: result.data, source: "PNCP, Compras.gov.br e conectores regionais", radius, raio_km: radius, portalCounts, partial: result.failedSources.length > 0 || result.coverage.truncated, sourceDiagnostics: result.diagnostics, coverage: scanCoverage, kpis: { total_editais: result.data.filter(item=>item.validationStatus==="active_confirmed").length, valor_total_estimado: result.data.filter(item=>item.validationStatus==="active_confirmed").reduce((sum,item)=>sum+(item.valorTotalEstimado??0),0), homologadas_historico: result.data.filter(item=>item.validationStatus==="history").length, dados_incompletos: result.data.filter(item=>item.validationStatus==="incomplete").length, portais_ativos: Object.keys(portalCounts).length },
       warning: result.coverage.truncated ? "Consulta parcial: o limite de páginas/resultados foi atingido ou uma página não respondeu. Os registros já carregados foram preservados; refine os filtros ou atualize." : unavailablePortals.length ? `Fonte sem consulta direta confirmada nesta rotina: ${unavailablePortals.join(", ")}. Registros podem chegar pelo PNCP. Nenhum resultado fictício foi gerado.` : result.failedSources.length ? `Consulta parcial: ${result.failedSources.join(", ")} não respondeu. Os demais resultados foram carregados.` : "",
     });
   } catch (error) {

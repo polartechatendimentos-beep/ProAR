@@ -39,3 +39,80 @@
 .tender-integrity.incomplete{color:#fcd34d;border-color:rgba(251,191,36,.28);background:rgba(180,83,9,.12)}
 
 .bidding-integrity-summary{display:flex;gap:8px;flex-wrap:wrap}.bidding-integrity-summary span{padding:8px 10px;border:1px solid rgba(100,165,215,.18);border-radius:9px;background:#08223d;color:#91afc7;font-size:9px}.bidding-integrity-summary b{color:#e8f6ff;font-size:12px}.bidding-why{display:block;margin-top:6px;padding:6px 8px;border-radius:7px;background:rgba(45,160,210,.08);color:#86b6cf!important}.bidding-source-health{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:14px}.bidding-source-health h4{grid-column:1/-1;margin:0;color:#e7f5ff}.bidding-source-health div{display:grid;gap:3px;padding:10px;border:1px solid rgba(100,165,215,.17);border-radius:9px;background:#071d34}.bidding-source-health span{font-size:9px;color:#dcefff;font-weight:800}.bidding-source-health b{font-size:8px;color:#6ee0ad}.bidding-source-health .attention b{color:#f1c86b}.bidding-source-health small{font-size:7.5px;color:#7f9eb7;line-height:1.35}@media(max-width:900px){.bidding-source-health{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){.bidding-source-health{grid-template-columns:1fr}.bidding-integrity-summary{display:grid;grid-template-columns:1fr}}
+
+
+/* Radar de licitações: hierarquia, leitura e filtros geográficos */
+.bidding-restored{gap:18px;font-size:14px;color:#17324f}
+.bidding-hero{padding:22px 24px;border-radius:16px}
+.bidding-hero h2{font-size:25px;line-height:1.2}
+.bidding-hero p{max-width:760px;font-size:13px;line-height:1.55}
+.bidding-hero>div:last-child b{font-size:12px}
+.bidding-hero>div:last-child small{font-size:11px}
+.bidding-hero button,.bidding-filters>button{height:42px;padding:0 15px;font-size:13px}
+.bidding-query-health{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:12px 15px;border:1px solid #d9e6f2;border-radius:12px;background:#f8fbff}
+.bidding-query-health span{font-size:12px;font-weight:750}
+.bidding-query-health small{font-size:12px}
+.bidding-filters{gap:10px;padding:13px}
+.bidding-filters input,.bidding-filters select{font-size:13px}
+.bidding-filters select{height:42px}
+.bidding-filters>label:first-child{height:42px}
+.procurement-radar-panel{display:grid;gap:16px;padding:18px}
+.procurement-filter-row{display:flex;align-items:end;flex-wrap:wrap;gap:12px}
+.procurement-filter-row>label{display:grid;gap:6px;font-size:12px;font-weight:700;color:#314d6b}
+.procurement-filter-row select,.procurement-save-form input,.procurement-saved-searches>select,.procurement-city-tools input{min-height:40px;padding:8px 11px;border:1px solid #cfdeeb;border-radius:9px;background:#fff;color:#17324f;font:inherit}
+.procurement-filter-row>label:first-child select{min-width:220px}
+.procurement-checkbox{display:flex!important;align-items:center;gap:8px;min-height:40px}
+.procurement-search-button{min-height:42px;white-space:nowrap}
+.procurement-help{margin:0;color:#657a90;font-size:12px;line-height:1.5}
+.procurement-saved-searches{display:flex;flex-wrap:wrap;align-items:center;gap:9px}
+.procurement-save-form{display:flex;flex-wrap:wrap;gap:8px}
+.procurement-save-form input{min-width:210px}
+.procurement-saved-searches>select{min-width:190px}
+.procurement-saved-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 6px;border:1px solid #d5e2ed;border-radius:999px;background:#f7faff}
+.procurement-saved-chip button{border:0;background:transparent;color:#244a70;font-size:12px;cursor:pointer}
+.procurement-city-picker{border:1px solid #d8e4ef;border-radius:12px;background:#fbfdff}
+.procurement-city-picker summary{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 15px;cursor:pointer;list-style:none;font-size:13px;font-weight:750}
+.procurement-city-picker summary::-webkit-details-marker{display:none}
+.procurement-city-picker summary span{display:flex;align-items:center;gap:8px}
+.procurement-city-picker summary b{color:#1768df;font-size:12px}
+.procurement-city-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:0 12px 11px}
+.procurement-city-tools input{flex:1;min-width:210px}
+.procurement-city-tools span{color:#657a90;font-size:12px}
+.procurement-city-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;max-height:280px;overflow:auto;padding:0 12px 12px}
+.procurement-city-list label{display:flex;align-items:center;gap:8px;min-width:0;padding:8px 9px;border:1px solid #e0e9f1;border-radius:8px;background:#fff;font-size:12px}
+.procurement-city-list label span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.procurement-city-list label small{color:#6f8296;font-variant-numeric:tabular-nums}
+.procurement-city-list input,.procurement-checkbox input{accent-color:#1768df}
+.procurement-coverage{display:grid;gap:12px}
+.procurement-coverage>header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;background:#f3f7fb}
+.procurement-coverage>header>div{display:grid;gap:4px}
+.procurement-coverage>header b{font-size:13px}
+.procurement-coverage>header small{color:#647a90;font-size:12px}
+.procurement-coverage>header>span{padding:5px 9px;border-radius:999px;background:#e4f5ec;color:#167445;font-size:11px;font-weight:750}
+.procurement-coverage>header>span.attention{background:#fff1d5;color:#916000}
+.procurement-source-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.procurement-source-grid article{display:grid;gap:5px;min-width:0;padding:10px 11px;border:1px solid #e0e8f0;border-radius:9px;background:#fff}
+.procurement-source-grid article b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.procurement-source-grid article small{color:#6f8296;font-size:11px;line-height:1.4}
+.source-state{font-size:10px;font-weight:750;text-transform:uppercase;letter-spacing:.04em}
+.source-state.ok{color:#13814f}.source-state.failed{color:#a86600}
+.procurement-radar-panel table{border-collapse:collapse}
+.procurement-radar-panel th{padding:11px 9px;background:#f2f6fa;color:#48627d;font-size:11px;text-align:left}
+.procurement-radar-panel td{padding:11px 9px;border-bottom:1px solid #e8eef4;font-size:12px;vertical-align:top}
+.procurement-radar-panel td small{margin-top:4px;color:#718399;font-size:11px;line-height:1.45}
+@media(max-width:900px){.procurement-city-list{grid-template-columns:repeat(2,minmax(0,1fr))}.procurement-source-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.bidding-hero{align-items:flex-start;flex-direction:column;padding:17px}.bidding-hero>div:last-child{width:100%;justify-content:space-between}.bidding-query-health{align-items:flex-start;flex-direction:column}.procurement-radar-panel{padding:12px}.procurement-filter-row,.procurement-filter-row>label,.procurement-filter-row>label:first-child select,.procurement-search-button{width:100%}.procurement-city-list,.procurement-source-grid{grid-template-columns:1fr}.procurement-saved-searches>select{width:100%}.procurement-save-form{width:100%}.procurement-save-form input{flex:1;min-width:0}.procurement-city-picker summary{align-items:flex-start}.procurement-coverage>header{align-items:flex-start;flex-direction:column}}
+
+
+.procurement-results-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 15px;border-bottom:1px solid #e3ebf2}
+.procurement-results-head>div{display:grid;gap:4px}
+.procurement-results-head b{font-size:14px;color:#17324f}
+.procurement-results-head small{font-size:12px;color:#657a90}
+.procurement-results-head>a{padding:8px 11px;border:1px solid #cfdeeb;border-radius:8px;color:#1768df;font-size:12px;font-weight:700;text-decoration:none}
+.procurement-results-table{overflow:auto;border:1px solid #e0e8f0;border-radius:11px}
+.procurement-results-table table{width:100%;min-width:780px;border-collapse:collapse}
+.procurement-results-table th{padding:11px 10px;background:#f2f6fa;color:#48627d;font-size:11px;text-align:left;white-space:nowrap}
+.procurement-results-table td{padding:11px 10px;border-bottom:1px solid #e8eef4;font-size:12px;vertical-align:top}
+.procurement-results-table td>b{display:block;color:#17324f}
+.procurement-results-table td>small{display:block;margin-top:4px;color:#718399;font-size:11px;line-height:1.4}
+@media(max-width:600px){.procurement-results-head{align-items:flex-start;flex-direction:column}}
