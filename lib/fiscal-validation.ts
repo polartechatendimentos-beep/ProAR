@@ -45,7 +45,7 @@ export function validateFiscalPayload(payload: FiscalValidationPayload) {
     if (payload.kind === "NFE") {
       if (invalidDocument(payload.company?.document)) error("company.document","ISSUER_DOCUMENT_INVALID","CNPJ do emitente está ausente ou inválido.");
       if (!payload.operationNature?.trim()) error("operationNature","OPERATION_NATURE_REQUIRED","Informe a natureza da operação.");
-      if (!/^\\d{1,3}$/.test(String(payload.series||""))) error("series","SERIES_INVALID","Série da NF-e deve conter de 1 a 3 dígitos.");
+      if (!/^\d{1,3}$/.test(String(payload.series||""))) error("series","SERIES_INVALID","Série da NF-e deve conter de 1 a 3 dígitos.");
     }
     payload.items?.forEach((item,index) => {
       const prefix = `items.${index}`;
@@ -55,7 +55,7 @@ export function validateFiscalPayload(payload: FiscalValidationPayload) {
       if (digits(item.ncm).length !== 8) error(`${prefix}.ncm`,"NCM_REQUIRED",`Item ${index+1}: NCM deve possuir 8 dígitos.`);
       if (digits(item.cfop).length !== 4) error(`${prefix}.cfop`,"CFOP_REQUIRED",`Item ${index+1}: CFOP deve possuir 4 dígitos.`);
       if (!item.cst?.trim() && !item.csosn?.trim()) error(`${prefix}.taxSituation`,"CST_CSOSN_REQUIRED",`Item ${index+1}: informe CST ou CSOSN conforme o regime tributário.`);
-      if (payload.kind === "NFE" && !/^\\d$/.test(String(item.taxOrigin||""))) error(prefix+".taxOrigin","TAX_ORIGIN_REQUIRED","Item "+(index+1)+": informe a origem da mercadoria.");
+      if (payload.kind === "NFE" && !/^\d$/.test(String(item.taxOrigin||""))) error(prefix+".taxOrigin","TAX_ORIGIN_REQUIRED","Item "+(index+1)+": informe a origem da mercadoria.");
       if (payload.kind === "NFE" && !item.unit?.trim()) error(prefix+".unit","UNIT_REQUIRED","Item "+(index+1)+": informe a unidade comercial.");
     });
     if (!payload.company?.stateRegistration?.trim()) warning("company.stateRegistration","STATE_REGISTRATION_MISSING","Inscrição Estadual do emitente não foi informada.");
