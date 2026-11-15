@@ -56,7 +56,7 @@ export function validateFiscalPayload(payload: FiscalValidationPayload) {
       if (digits(item.cfop).length !== 4) error(`${prefix}.cfop`,"CFOP_REQUIRED",`Item ${index+1}: CFOP deve possuir 4 dígitos.`);
       if (!item.cst?.trim() && !item.csosn?.trim()) error(`${prefix}.taxSituation`,"CST_CSOSN_REQUIRED",`Item ${index+1}: informe CST ou CSOSN conforme o regime tributário.`);
       if (payload.kind === "NFE" && !/^\d$/.test(String(item.taxOrigin||""))) error(prefix+".taxOrigin","TAX_ORIGIN_REQUIRED","Item "+(index+1)+": informe a origem da mercadoria.");
-      if (payload.kind === "NFE" && !item.unit?.trim()) error(prefix+".unit","UNIT_REQUIRED","Item "+(index+1)+": informe a unidade comercial.");
+      if ((payload.kind === "NFE" || payload.kind === "NFCE") && !item.unit?.trim()) error(prefix+".unit","UNIT_REQUIRED","Item "+(index+1)+": informe a unidade comercial.");
     });
     if (!payload.company?.stateRegistration?.trim()) warning("company.stateRegistration","STATE_REGISTRATION_MISSING","Inscrição Estadual do emitente não foi informada.");
   }
