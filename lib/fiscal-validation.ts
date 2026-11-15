@@ -30,7 +30,7 @@ export function validateFiscalPayload(payload: FiscalValidationPayload) {
   const warning = (field:string, code:string, message:string) => issues.push({ field, code, message, severity:"warning" as const });
 
   if (!payload.kind) error("kind","DOCUMENT_TYPE_REQUIRED","Informe o tipo de documento fiscal.");
-  if (payload.kind !== "NFCE" && invalidDocument(payload.customer?.document)) error("customer.document","CUSTOMER_DOCUMENT_INVALID","CPF/CNPJ do destinatário está ausente ou inválido.");
+  if ((payload.kind !== "NFCE" || Boolean(payload.customer?.document?.trim())) && invalidDocument(payload.customer?.document)) error("customer.document","CUSTOMER_DOCUMENT_INVALID","CPF/CNPJ do destinatário está ausente ou inválido.");
   if (payload.kind !== "NFCE" && !payload.customer?.address?.trim()) error("customer.address","CUSTOMER_ADDRESS_REQUIRED","Endereço do destinatário não foi informado.");
 
   if (payload.kind === "NFSE") {
