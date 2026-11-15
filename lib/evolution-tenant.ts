@@ -57,12 +57,14 @@ export async function ensureEvolutionConnection(companyId: string) {
   await assertActiveWhatsAppCompany(companyId);
   let stored = await evolutionConnection(companyId);
   if (stored?.legacy) {
-    await persistConnection(companyId, stored.config, true, true);
+    // Migration must not silently turn on messages for a company. An operator
+    // explicitly enables automation after reviewing the connection.
+    await persistConnection(companyId, stored.config, false, true);
     stored = await evolutionConnection(companyId);
   } else if (!stored) {
     if (!managedEvolutionAvailable()) throw new Error("Servidor de WhatsApp ainda não configurado.");
     const tenant = identity(companyId);
-    await persistConnection(companyId, { base: baseUrl(), instance: tenant.instance, key: tenant.key }, true, true);
+    await persistConnection(companyId, { base: baseUrl(), instance: tenant.instance, key: tenant.key }, false, true);
     stored = await evolutionConnection(companyId);
   }
   if (!stored) throw new Error("Não foi possível preparar a conexão.");
@@ -85,6 +87,9 @@ export async function ensureEvolutionConnection(companyId: string) {
 }
 export async function setEvolutionAutomation(companyId: string, enabled: boolean) {
   await assertActiveWhatsAppCompany(companyId);
+  if (enabled && process.env.PROAR_EVOLUTION_AUTOMATION_ENABLED !== "true") {
+    throw new Error("Os envios automáticos ainda não foram habilitados pelo administrador do ProAR.");
+  }
   const stored = await evolutionConnection(companyId);
   if (!stored) throw new Error("Conecte o WhatsApp antes de configurar os envios.");
   if (enabled) {
