@@ -1683,6 +1683,7 @@ function BiddingModule({ onOpen, imported, onImport, qualificationDocuments, onM
   const [savedSearches,setSavedSearches]=useState<Array<{id:string;name:string;query:string;radius:number;municipalityMode:"all"|"include"|"exclude";selectedMunicipalities:string[];onlyOpen:boolean;searchHorizon:number;source:string;orderBy:"distancia"|"valor"}>>([]);
   const [saveSearchName,setSaveSearchName]=useState("");
   const [coverage,setCoverage]=useState<Record<string,any>|null>(null);
+  const [searchRevision,setSearchRevision]=useState(0);
   const [onlyOpen,setOnlyOpen]=useState(true);const [searchHorizon,setSearchHorizon]=useState(366); const [source,setSource]=useState("Todos"); const [radius,setRadius]=useState(400); const [orderBy,setOrderBy]=useState<"distancia"|"valor">("distancia"); const [loading,setLoading]=useState(true); const [warning,setWarning]=useState(""); const [lastScan,setLastScan]=useState("");
   const [sourceLabel,setSourceLabel]=useState("Aguardando consulta oficial"); const [partial,setPartial]=useState(false);
   const [selected,setSelected]=useState<Tender|null>(null); const [documents,setDocuments]=useState<TenderDocument[]>([]); const [documentLoading,setDocumentLoading]=useState(false); const [detailWarning,setDetailWarning]=useState("");
@@ -1704,6 +1705,7 @@ function BiddingModule({ onOpen, imported, onImport, qualificationDocuments, onM
   useEffect(()=>{
     if(!loading&&tenders.length)try{localStorage.setItem(`proar:licitacoes:radar:v4:${company.id}`,JSON.stringify({data:tenders,lastScan,source:sourceLabel,partial,coverage,warning,savedAt:new Date().toISOString()}));}catch{}
   },[loading,tenders,lastScan,sourceLabel,partial,coverage,warning,company.id]);
+  useEffect(()=>{if(searchRevision>0)void load(false);},[searchRevision]);
   useEffect(()=>{
     const controller=new AbortController();
     void fetch(`/api/licitacoes/cidades?raio_km=${radius}`,{cache:"no-store",signal:controller.signal}).then(response=>response.ok?response.json():null).then(result=>{
@@ -1733,7 +1735,7 @@ function BiddingModule({ onOpen, imported, onImport, qualificationDocuments, onM
   const applySavedSearch=(entry:typeof savedSearches[number])=>{
     setQuery(entry.query);setRadius(entry.radius);setMunicipalityMode(entry.municipalityMode);setSelectedMunicipalities(entry.selectedMunicipalities||[]);
     setOnlyOpen(entry.onlyOpen);setSearchHorizon(entry.searchHorizon);setSource(entry.source);setOrderBy(entry.orderBy);
-    window.setTimeout(()=>void load(false),0);
+    setSearchRevision(value=>value+1);
   };
   const deleteSavedSearch=(id:string)=>{
     const next=savedSearches.filter(item=>item.id!==id);setSavedSearches(next);
