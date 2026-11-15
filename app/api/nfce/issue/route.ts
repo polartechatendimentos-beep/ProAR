@@ -50,6 +50,7 @@ export async function POST(request: NextRequest) {
       ...body,
       kind:"NFCE",
       series:String(body.series||nfce.series||""),
+      company:{...body.company,state:String(fiscal.company?.state||"").toUpperCase()},
       config:{csc,cscId,environment:String(fiscal.company?.environment||"Homologação")},
     });
     if (!validation.valid) return NextResponse.json({ error:"Pré-validação fiscal reprovada.", validation }, { status:422 });
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
         config:{csc,cscId,environment:String(fiscal.company?.environment||"Homologação")},
         certificate:{pfxBase64:fiscal.certificate.pfxBase64,password:fiscal.certificate.password},
         model:65,
-        state:String(fiscal.company?.state||"SP"),
+        state:String(fiscal.company?.state||"").toUpperCase(),
         companyId:companyContext.companyId,
         requestedBy:access.session.username,
         idempotencyKey,
