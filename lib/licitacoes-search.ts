@@ -1,7 +1,10 @@
 import {identifyProcurementSource} from "./procurement/domain";
 import { supabaseRest } from "./supabase-rest";
 import { NextRequest, NextResponse } from "next/server";
-import { municipalityDistances } from "./municipality-distances";
+import { municipalityDistances, municipalityNameDistances } from "./municipality-distances";
+import {fetchBllTenders} from "./procurement/bll-connector";
+import {fetchFiorilliTenders} from "./procurement/fiorilli-connector";
+import {fetchOlimpiaTenders} from "./procurement/olimpia-connector";
 
 const PNCP_URL = "https://pncp.gov.br/api/consulta/v1/contratacoes/proposta";
 const PNCP_API_BASE = "https://pncp.gov.br/api/pncp";
@@ -12,7 +15,7 @@ const REQUEST_TIMEOUT_MS = 6500;
 const COMPRAS_TIMEOUT_MS = 7500;
 const MAX_RETRIES = 1;
 const PNCP_CONCURRENCY = 3;
-const COMPRAS_CONCURRENCY = 2;
+const COMPRAS_CONCURRENCY = 6;
 const climateTerms = /ar\s*-?\s*condicionado|condicionador(?:es)? de ar|climatiza|refrigera|pmoc|hvac|split|multi\s*split|cassete|piso\s*teto|evaporador|condensador|chiller|vrf|fluido refrigerante|g[aá]s refrigerante|compressor frigor[ií]fico/i;
 const excludedTerms = /purificador(?:es)? de [aá]gua|equipamento fotodocumentador|mobili[aá]rio|geladeira dom[eé]stica|bebedouro(?!.*refrigera)/i;
 
@@ -27,7 +30,7 @@ export type PncpTender = {
   dataEncerramentoProposta?: string; valorTotalEstimado?: number; linkSistemaOrigem?: string;
   dataPublicacaoPncp?: string;
   anoCompra?: number; sequencialCompra?: number; usuarioNome?: string;
-  sourcePortal?: "PNCP" | "Compras.gov.br" | "BLL Compras" | "Licitações-e";
+  sourcePortal?: "PNCP" | "Compras.gov.br" | "BLL Compras" | "Licitações-e" | "Portal Municipal";
   orgaoEntidade?: { razaoSocial?: string; cnpj?: string };
   unidadeOrgao?: { municipioNome?: string; ufSigla?: string; nomeUnidade?: string; codigoIbge?: string };
   distanciaMirassol?: number;
@@ -144,12 +147,12 @@ function mapComprasTender(item: ComprasTender): PncpTender {
   };
 }
 
-async function fetchCompras(dataInicial: string, dataFinal: string, codigoModalidade: number) {
+async function fetchCompras(dataInicial: string, dataFinal: string, codigoModalidade: number, uf:string) {
   const query = new URLSearchParams({
     dataPublicacaoPncpInicial: dataInicial,
     dataPublicacaoPncpFinal: dataFinal,
     codigoModalidade: String(codigoModalidade),
-    unidadeOrgaoUfSigla: "SP",
+    unidadeOrgaoUfSigla: uf,
     pagina: "1",
     tamanhoPagina: "500",
   });
@@ -183,25 +186,35 @@ export async function searchAutomaticTenders(options?: { start?: Date; end?: Dat
   // Cada UF/modalidade é independente: limitar concorrência evita sobrecarga
   // do PNCP e retryar somente falhas transitórias mantém resultados parciais.
   const startedAt = new Map<string, number>();
-  const [pncpSettled, comprasSettled] = await Promise.all([
+  const comprasTasks=UFS.flatMap(uf=>MODALITIES.map(code=>({uf,code})));
+  const [pncpSettled, comprasSettled, bllResult, fiorilliResult, olimpiaResult] = await Promise.all([
     runLimited(UFS, PNCP_CONCURRENCY, async uf => {
       const key = `PNCP-${uf}`; startedAt.set(key, Date.now());
       const value = await fetchPages(dataInicial, dataFinal, uf);
       return { value, diagnostic: { source: key, status: "ok" as const, attempts: value.attempts, durationMs: Date.now() - (startedAt.get(key) ?? Date.now()), count: value.items.length } };
     }),
-    runLimited(MODALITIES, COMPRAS_CONCURRENCY, async code => {
-      const key = `Compras.gov.br-${code}`; startedAt.set(key, Date.now());
-      const value = await fetchCompras(publicationStart, publicationEnd, code);
+    runLimited(comprasTasks, COMPRAS_CONCURRENCY, async task => {
+      const key = `Compras.gov.br-${task.uf}-${task.code}`; startedAt.set(key, Date.now());
+      const value = await fetchCompras(publicationStart, publicationEnd, task.code, task.uf);
       return { value, diagnostic: { source: key, status: "ok" as const, attempts: value.attempts, durationMs: Date.now() - (startedAt.get(key) ?? Date.now()), count: value.items.length } };
     }),
+    fetchBllTenders(),
+    fetchFiorilliTenders({year:today.getFullYear(),radius:options?.radius??300}),
+    (options?.radius??300)>=62?fetchOlimpiaTenders():Promise.resolve(null),
   ]);
   const raw = [
     ...pncpSettled.flatMap(result => result.status === "fulfilled" ? result.value.value.items : []),
     ...comprasSettled.flatMap(result => result.status === "fulfilled" ? result.value.value.items : []),
+    ...bllResult.items,
+    ...fiorilliResult.items,
+    ...(olimpiaResult?.items??[]),
   ];
   const diagnostics: SourceDiagnostic[] = [
     ...pncpSettled.map((result, index) => result.status === "fulfilled" ? result.value.diagnostic : { source: `PNCP-${UFS[index]}`, status: "error" as const, attempts: MAX_RETRIES + 1, durationMs: Date.now() - (startedAt.get(`PNCP-${UFS[index]}`) ?? Date.now()), count: 0, error: result.reason instanceof Error ? result.reason.message : String(result.reason) }),
-    ...comprasSettled.map((result, index) => result.status === "fulfilled" ? result.value.diagnostic : { source: `Compras.gov.br-${MODALITIES[index]}`, status: "error" as const, attempts: MAX_RETRIES + 1, durationMs: Date.now() - (startedAt.get(`Compras.gov.br-${MODALITIES[index]}`) ?? Date.now()), count: 0, error: result.reason instanceof Error ? result.reason.message : String(result.reason) }),
+    ...comprasSettled.map((result, index) => result.status === "fulfilled" ? result.value.diagnostic : { source: `Compras.gov.br-${comprasTasks[index].uf}-${comprasTasks[index].code}`, status: "error" as const, attempts: MAX_RETRIES + 1, durationMs: Date.now() - (startedAt.get(`Compras.gov.br-${comprasTasks[index].uf}-${comprasTasks[index].code}`) ?? Date.now()), count: 0, error: result.reason instanceof Error ? result.reason.message : String(result.reason) }),
+    ...(bllResult.diagnostic?[{source:bllResult.diagnostic.source,status:bllResult.diagnostic.status,attempts:bllResult.diagnostic.attempts,durationMs:bllResult.diagnostic.durationMs,count:bllResult.diagnostic.count,error:bllResult.diagnostic.error}]:[{source:"BLL Compras · acesso direto não configurado",status:"error" as const,attempts:0,durationMs:0,count:0,error:"Busca do PNCP continua ativa; o acesso direto BLL requer feed/autorização do portal."}]),
+    ...fiorilliResult.diagnostics,
+    ...(olimpiaResult?[olimpiaResult.diagnostic]:[]),
   ];
   const failedSources = diagnostics.filter(item => item.status === "error").map(item => item.source);
   for (const item of diagnostics.filter(item => item.status === "error")) console.warn("PNCP source unavailable", item);
@@ -219,7 +232,9 @@ export async function searchAutomaticTenders(options?: { start?: Date; end?: Dat
     // O conjunto do Compras.gov.br nem sempre informa o encerramento. Nesses casos,
     // mantém publicações recentes; registros com encerramento conhecido e vencido saem.
     if (closing ? (closing < startTime || closing > endTime) : (!published || published < today.getTime() - 60 * 86400000)) return false;
-    const distance = municipalityDistances[String(item.unidadeOrgao?.codigoIbge ?? "")] ?? cityDistances[normalize(item.unidadeOrgao?.municipioNome ?? "")];
+    const municipalityName=normalize(item.unidadeOrgao?.municipioNome??"");
+    const municipalityUf=String(item.unidadeOrgao?.ufSigla??"").toUpperCase();
+    const distance = municipalityDistances[String(item.unidadeOrgao?.codigoIbge ?? "")] ?? municipalityNameDistances[`${municipalityName}|${municipalityUf}`] ?? cityDistances[municipalityName];
     if (distance === undefined || distance > radius) return false;
     item.distanciaMirassol = distance;
     item.sourcePortal = item.sourcePortal ?? identifySource(item);
