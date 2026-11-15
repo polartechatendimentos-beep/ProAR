@@ -154,6 +154,38 @@ export function FiscalWorkspace({
     {(tab==="NF-e"||tab==="NFC-e"||tab==="NFS-e")&&<div className="fiscal-list-panel">
       <header><div><small>FILA DE EMISSÃO • {tab.toUpperCase()}</small><h3>{tab==="NFS-e"?"Ordens de serviço elegíveis":"Vendas elegíveis"}</h3><p>Os documentos passam obrigatoriamente pela pré-validação fiscal antes da transmissão.</p></div><span>{candidateRows.length} pendente(s)</span></header>
       {candidateRows.length?<div className="table-wrap"><table><thead><tr><th>ORIGEM</th><th>CLIENTE</th><th>DESCRIÇÃO</th><th>VALOR</th><th>SITUAÇÃO</th>{tab==="NF-e"&&<th>AÇÃO</th>}</tr></thead><tbody>{candidateRows.map(item=><tr key={item.id}><td><b>{item.id}</b></td><td>{item.client||"—"}</td><td>{item.service||item.name||item.description||"—"}</td><td>{Number(item.total??item.value??0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</td><td><span className="fiscal-state pending">Preparar emissão</span></td>{tab==="NF-e"&&<td><button className="primary-btn" onClick={()=>startNfe(item)}>Preparar NF-e</button></td>}</tr>)}</tbody></table></div>:<div className="fiscal-empty"><CheckCircle2 size={24}/><b>Nenhum documento pendente nesta fila.</b><span>Novas operações elegíveis aparecerão automaticamente aqui.</span></div>}
+      {tab==="NF-e"&&nfeOrigin&&<section className="panel fiscal-emit-form">
+        <header><div><small>NF-e MODELO 55 • ORIGEM {nfeOrigin.id}</small><h3>Revisar dados fiscais</h3><p>Confira destinatário, operação, produto e tributação. O ProAR não preenche códigos fiscais ou alíquotas por suposição.</p></div><button className="outline-btn" onClick={()=>setNfeOrigin(null)}>Fechar</button></header>
+        {nfeNotice&&<div className="pdv-notice" role="status">{nfeNotice}</div>}
+        <div className="settings-form">
+          <label>Natureza da operação<input value={nfeNature} onChange={e=>setNfeNature(e.target.value)} placeholder="Ex.: venda de mercadoria"/></label>
+          <label>Série NF-e<input inputMode="numeric" value={nfeSeries} onChange={e=>setNfeSeries(e.target.value.replace(/\D/g,"").slice(0,3))}/></label>
+          <label>Forma de pagamento<input value={nfePayment} onChange={e=>setNfePayment(e.target.value)} placeholder="PIX, cartão, boleto..."/></label>
+          <label>Frete<select value={nfeFreight} onChange={e=>setNfeFreight(e.target.value)}><option value="0">Emitente por conta</option><option value="1">Destinatário por conta</option><option value="2">Terceiros</option><option value="3">Próprio do remetente</option><option value="4">Próprio do destinatário</option><option value="9">Sem transporte</option></select></label>
+          <label>Destinatário<input value={nfeCustomer.name} onChange={e=>setNfeCustomer({...nfeCustomer,name:e.target.value})}/></label>
+          <label>CPF / CNPJ<input inputMode="numeric" value={nfeCustomer.document} onChange={e=>setNfeCustomer({...nfeCustomer,document:e.target.value})}/></label>
+          <label className="wide">Endereço completo<input value={nfeCustomer.address} onChange={e=>setNfeCustomer({...nfeCustomer,address:e.target.value})}/></label>
+          <label>Inscrição Estadual do destinatário<input value={nfeCustomer.stateRegistration} onChange={e=>setNfeCustomer({...nfeCustomer,stateRegistration:e.target.value})}/></label>
+          <div className="fiscal-config-summary"><span>Emitente: {company.tradeName||"Empresa"} • {company.cnpj||"CNPJ pendente"}</span><span>Regime: {config?.company?.taxRegime||"não informado"} • Ambiente: {config?.company?.environment||"Homologação"}</span></div>
+        </div>
+        <div className="table-wrap"><table><thead><tr><th>ITEM</th><th>QTD.</th><th>V. UNIT.</th><th>UN</th><th>NCM</th><th>CEST</th><th>CFOP</th><th>CST</th><th>CSOSN</th><th>ORIGEM</th><th>ICMS %</th><th>IPI %</th><th>PIS %</th><th>COFINS %</th><th></th></tr></thead><tbody>{nfeLines.map(line=><tr key={line.id}>
+          <td><input aria-label="Descrição do produto" value={line.description} onChange={e=>updateNfeLine(line.id,{description:e.target.value})}/></td>
+          <td><input aria-label="Quantidade" type="number" min="0.001" step="0.001" value={line.quantity} onChange={e=>updateNfeLine(line.id,{quantity:Number(e.target.value)})}/></td>
+          <td><input aria-label="Valor unitário" type="number" min="0" step="0.01" value={line.unitValue} onChange={e=>updateNfeLine(line.id,{unitValue:Number(e.target.value)})}/></td>
+          <td>{line.unit}</td>
+          <td><input aria-label="NCM" inputMode="numeric" maxLength={8} value={line.ncm} onChange={e=>updateNfeLine(line.id,{ncm:e.target.value.replace(/\D/g,"").slice(0,8)})}/></td>
+          <td><input aria-label="CEST" inputMode="numeric" maxLength={7} value={line.cest} onChange={e=>updateNfeLine(line.id,{cest:e.target.value.replace(/\D/g,"").slice(0,7)})}/></td>
+          <td><input aria-label="CFOP" inputMode="numeric" maxLength={4} value={line.cfop} onChange={e=>updateNfeLine(line.id,{cfop:e.target.value.replace(/\D/g,"").slice(0,4)})}/></td>
+          <td><input aria-label="CST" value={line.cst} onChange={e=>updateNfeLine(line.id,{cst:e.target.value})}/></td>
+          <td><input aria-label="CSOSN" value={line.csosn} onChange={e=>updateNfeLine(line.id,{csosn:e.target.value})}/></td>
+          <td><input aria-label="Origem tributária" inputMode="numeric" maxLength={1} value={line.taxOrigin} onChange={e=>updateNfeLine(line.id,{taxOrigin:e.target.value.replace(/\D/g,"").slice(0,1)})}/></td>
+          <td><input aria-label="Alíquota ICMS" type="number" min="0" step="0.01" value={line.icmsRate} onChange={e=>updateNfeLine(line.id,{icmsRate:e.target.value})}/></td>
+          <td><input aria-label="Alíquota IPI" type="number" min="0" step="0.01" value={line.ipiRate} onChange={e=>updateNfeLine(line.id,{ipiRate:e.target.value})}/></td>
+          <td><input aria-label="Alíquota PIS" type="number" min="0" step="0.01" value={line.pisRate} onChange={e=>updateNfeLine(line.id,{pisRate:e.target.value})}/></td>
+          <td><input aria-label="Alíquota COFINS" type="number" min="0" step="0.01" value={line.cofinsRate} onChange={e=>updateNfeLine(line.id,{cofinsRate:e.target.value})}/></td>
+          <td><button className="danger" onClick={()=>setNfeLines(rows=>rows.filter(row=>row.id!==line.id))}>Remover</button></td></tr>)}</tbody></table></div>
+        <div className="settings-footer-actions"><select aria-label="Adicionar produto cadastrado" defaultValue="" onChange={e=>{addNfeProduct(e.target.value);e.target.value="";}}><option value="">Adicionar produto cadastrado…</option>{productCatalog.map(product=><option key={product.id} value={product.id}>{product.name} • NCM {product.ncm||"pendente"}</option>)}</select><strong>Total dos itens: {nfeTotal.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</strong><button className="primary-btn" disabled={nfeBusy||!nfeNature.trim()||!nfeLines.length} onClick={()=>void submitNfe()}>{nfeBusy?"Transmitindo...":"Transmitir NF-e"}</button></div>
+      </section>}
       <div className="fiscal-flow-note"><ShieldCheck size={17}/><span><b>Fluxo protegido</b><small>Pré-validar → Transmitir → Processando/Autorizada/Rejeitada → armazenar XML, protocolo e representação fiscal.</small></span></div>
     </div>}
 
