@@ -103,7 +103,7 @@ export function FiscalWorkspace({
     setNfeCustomer({name:String(customer?.name||sale.client||""),document:String(customer?.doc||sale.doc||""),address:String(customer?.address||sale.address||""),stateRegistration:String(customer?.stateRegistration||"")});
     setNfeNature(String(sale.operationNature||""));setNfeSeries(String(config?.nfe?.series||"1"));setNfePayment(String(sale.paymentMethod||sale.paymentType||""));setNfeFreight("9");setNfeLines(lines);setNfeNotice("");
   };
-  const startNfce=(sale:FiscalRecord)=>{startNfe(sale);setNfeKind("NFC-e");};
+  const startNfce=(sale:FiscalRecord)=>{startNfe(sale);setNfeKind("NFC-e");setNfeSeries(String(config?.nfce?.series||"1"));};
   const updateNfeLine=(id:string,patch:Partial<NfeLine>)=>setNfeLines(current=>current.map(line=>line.id===id?{...line,...patch}:line));
   const addNfeProduct=(productId:string)=>{const product=productCatalog.find(row=>row.id===productId);if(!product)return;setNfeLines(current=>[...current,{id:product.id+"-"+Date.now(),productId:product.id,description:String(product.name||""),quantity:1,unitValue:Number(product.value||0),ncm:String(product.ncm||""),cest:String(product.cest||""),cfop:String(product.cfop||""),cst:String(product.cst||""),csosn:String(product.csosn||""),taxOrigin:String(product.taxOrigin||""),unit:String(product.unitOfMeasure||"UN"),icmsRate:"",ipiRate:"",pisRate:"",cofinsRate:""}]);};
   const nfeTotal=nfeLines.reduce((sum,line)=>sum+Math.max(0,line.quantity)*Math.max(0,line.unitValue),0);
@@ -120,8 +120,8 @@ export function FiscalWorkspace({
       const authorized=Boolean(response.ok&&result.issued&&result.status==="Autorizada"&&accessKey&&protocol);
       const status=authorized?"Autorizada":result.status==="Processando"?"Processando":"Rejeitada";
       const number=String(provider.number||provider.numero||accessKey.slice(-9));
-      onSaveRecord?.("Documentos Fiscais",{id:"NFE-"+nfeOrigin.id,name:nfeKind+" • "+nfeOrigin.id,client:nfeCustomer.name,doc:nfeCustomer.document,originId:nfeOrigin.id,kind:nfeKind,model:nfeKind==="NF-e"?"55":"65",status,invoiceNumber:authorized?number:"",accessKey,protocol,amount:nfeTotal,series:nfeSeries,environment:config?.company?.environment||"Homologação",error:authorized?"":String(result.error||"A autorização não foi confirmada."),createdAt:new Date().toISOString(),provider:result});
-      if(authorized){onSaveRecord?.("Vendas",{...nfeOrigin,invoiceNumber:number,invoiceAccessKey:accessKey,invoiceProtocol:protocol,invoiceStatus:status});setNfeNotice("NF-e autorizada. Chave: "+accessKey);setNfeOrigin(null);}
+      onSaveRecord?.("Documentos Fiscais",{id:(nfeKind==="NF-e"?"NFE-":"NFCE-")+nfeOrigin.id,name:nfeKind+" • "+nfeOrigin.id,client:nfeCustomer.name,doc:nfeCustomer.document,originId:nfeOrigin.id,kind:nfeKind,model:nfeKind==="NF-e"?"55":"65",status,invoiceNumber:authorized?number:"",accessKey,protocol,amount:nfeTotal,series:nfeSeries,environment:config?.company?.environment||"Homologação",error:authorized?"":String(result.error||"A autorização não foi confirmada."),createdAt:new Date().toISOString(),provider:result});
+      if(authorized){onSaveRecord?.("Vendas",{...nfeOrigin,invoiceNumber:number,invoiceAccessKey:accessKey,invoiceProtocol:protocol,invoiceStatus:status});setNfeNotice(nfeKind+" autorizada. Chave: "+accessKey);setNfeOrigin(null);}
       else setNfeNotice(String(result.error||"NF-e não autorizada. Revise os dados e a resposta do emissor."));
     }catch(error){setNfeNotice(error instanceof Error?error.message:"Falha ao transmitir NF-e.");}
     finally{setNfeBusy(false);}
