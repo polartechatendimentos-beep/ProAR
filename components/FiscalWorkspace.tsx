@@ -105,6 +105,25 @@ export function FiscalWorkspace({
   const updateNfeLine=(id:string,patch:Partial<NfeLine>)=>setNfeLines(current=>current.map(line=>line.id===id?{...line,...patch}:line));
   const addNfeProduct=(productId:string)=>{const product=productCatalog.find(row=>row.id===productId);if(!product)return;setNfeLines(current=>[...current,{id:product.id+"-"+Date.now(),productId:product.id,description:String(product.name||""),quantity:1,unitValue:Number(product.value||0),ncm:String(product.ncm||""),cest:String(product.cest||""),cfop:String(product.cfop||""),cst:String(product.cst||""),csosn:String(product.csosn||""),taxOrigin:String(product.taxOrigin||""),unit:String(product.unitOfMeasure||"UN")}]);};
   const nfeTotal=nfeLines.reduce((sum,line)=>sum+Math.max(0,line.quantity)*Math.max(0,line.unitValue),0);
+  const submitNfe=async()=>{
+    if(!nfeOrigin)return;
+    setNfeBusy(true);setNfeNotice("");
+    const payload={saleId:nfeOrigin.id,model:55,series:nfeSeries,operationNature:nfeNature,freightModality:nfeFreight,paymentMethod:nfePayment,total:nfeTotal,company:{document:company.cnpj||"",stateRegistration:config?.company?.stateRegistration||"",municipalRegistration:config?.company?.municipalRegistration||"",taxRegime:config?.company?.taxRegime||""},customer:nfeCustomer,items:nfeLines};
+    try{
+      const response=await fetch("/api/nfe/issue",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...payload,idempotencyKey:crypto.randomUUID()})});
+      const result=await response.json().catch(()=>({}));
+      const provider=result.result??result.provider??{};
+      const accessKey=String(provider.accessKey||provider.chave||provider.chNFe||provider.key||"");
+      const protocol=String(provider.protocol||provider.protocolo||provider.nProt||"");
+      const authorized=Boolean(response.ok&&result.issued&&result.status==="Autorizada"&&accessKey&&protocol);
+      const status=authorized?"Autorizada":result.status==="Processando"?"Processando":"Rejeitada";
+      const number=String(provider.number||provider.numero||accessKey.slice(-9));
+      onSaveRecord?.("Documentos Fiscais",{id:"NFE-"+nfeOrigin.id,name:"NF-e • "+nfeOrigin.id,client:nfeCustomer.name,doc:nfeCustomer.document,originId:nfeOrigin.id,kind:"NF-e",model:"55",status,invoiceNumber:authorized?number:"",accessKey,protocol,amount:nfeTotal,series:nfeSeries,environment:config?.company?.environment||"Homologação",error:authorized?"":String(result.error||"A autorização não foi confirmada."),createdAt:new Date().toISOString(),provider:result});
+      if(authorized){onSaveRecord?.("Vendas",{...nfeOrigin,invoiceNumber:number,invoiceAccessKey:accessKey,invoiceProtocol:protocol,invoiceStatus:status});setNfeNotice("NF-e autorizada. Chave: "+accessKey);setNfeOrigin(null);}
+      else setNfeNotice(String(result.error||"NF-e não autorizada. Revise os dados e a resposta do emissor."));
+    }catch(error){setNfeNotice(error instanceof Error?error.message:"Falha ao transmitir NF-e.");}
+    finally{setNfeBusy(false);}
+  };
 
   return <section className="fiscal-workspace">
     <div className="fiscal-hero">
