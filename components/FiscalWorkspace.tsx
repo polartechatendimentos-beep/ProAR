@@ -35,6 +35,7 @@ export function FiscalWorkspace({
   const [dfeLoading,setDfeLoading]=useState(false);
   const [dfe,setDfe]=useState<FiscalRecord[]>([]);
   const [nfeOrigin,setNfeOrigin]=useState<FiscalRecord|null>(null);
+  const [nfeKind,setNfeKind]=useState<"NF-e"|"NFC-e">("NF-e");
   const [nfeCustomer,setNfeCustomer]=useState({name:"",document:"",address:"",stateRegistration:""});
   const [nfeNature,setNfeNature]=useState("");
   const [nfeSeries,setNfeSeries]=useState("");
@@ -98,19 +99,20 @@ export function FiscalWorkspace({
       const product=productCatalog.find(item=>item.id===row.productId);
       return {id:String(row.id||sale.id+"-"+index),productId:String(row.productId||""),description:String(row.description||product?.name||""),quantity:Number(row.quantity||1),unitValue:Number(row.unitValue||product?.value||0),ncm:String(product?.ncm||row.ncm||""),cest:String(product?.cest||row.cest||""),cfop:String(product?.cfop||row.cfop||""),cst:String(product?.cst||row.cst||""),csosn:String(product?.csosn||row.csosn||""),taxOrigin:String(product?.taxOrigin||row.taxOrigin||""),unit:String(product?.unitOfMeasure||row.unitOfMeasure||"UN"),icmsRate:String(row.icmsRate??""),ipiRate:String(row.ipiRate??""),pisRate:String(row.pisRate??""),cofinsRate:String(row.cofinsRate??"")} as NfeLine;
     });
-    setNfeOrigin(sale);
+    setNfeOrigin(sale);setNfeKind("NF-e");
     setNfeCustomer({name:String(customer?.name||sale.client||""),document:String(customer?.doc||sale.doc||""),address:String(customer?.address||sale.address||""),stateRegistration:String(customer?.stateRegistration||"")});
     setNfeNature(String(sale.operationNature||""));setNfeSeries(String(config?.nfe?.series||"1"));setNfePayment(String(sale.paymentMethod||sale.paymentType||""));setNfeFreight("9");setNfeLines(lines);setNfeNotice("");
   };
+  const startNfce=(sale:FiscalRecord)=>{startNfe(sale);setNfeKind("NFC-e");};
   const updateNfeLine=(id:string,patch:Partial<NfeLine>)=>setNfeLines(current=>current.map(line=>line.id===id?{...line,...patch}:line));
   const addNfeProduct=(productId:string)=>{const product=productCatalog.find(row=>row.id===productId);if(!product)return;setNfeLines(current=>[...current,{id:product.id+"-"+Date.now(),productId:product.id,description:String(product.name||""),quantity:1,unitValue:Number(product.value||0),ncm:String(product.ncm||""),cest:String(product.cest||""),cfop:String(product.cfop||""),cst:String(product.cst||""),csosn:String(product.csosn||""),taxOrigin:String(product.taxOrigin||""),unit:String(product.unitOfMeasure||"UN"),icmsRate:"",ipiRate:"",pisRate:"",cofinsRate:""}]);};
   const nfeTotal=nfeLines.reduce((sum,line)=>sum+Math.max(0,line.quantity)*Math.max(0,line.unitValue),0);
   const submitNfe=async()=>{
     if(!nfeOrigin)return;
     setNfeBusy(true);setNfeNotice("");
-    const payload={saleId:nfeOrigin.id,model:55,series:nfeSeries,operationNature:nfeNature,freightModality:nfeFreight,paymentMethod:nfePayment,total:nfeTotal,company:{document:company.cnpj||"",stateRegistration:config?.company?.stateRegistration||"",municipalRegistration:config?.company?.municipalRegistration||"",taxRegime:config?.company?.taxRegime||""},customer:nfeCustomer,items:nfeLines};
+    const payload={saleId:nfeOrigin.id,model:nfeKind==="NF-e"?55:65,series:nfeSeries,operationNature:nfeNature,freightModality:nfeFreight,paymentMethod:nfePayment,total:nfeTotal,company:{document:company.cnpj||"",stateRegistration:config?.company?.stateRegistration||"",municipalRegistration:config?.company?.municipalRegistration||"",taxRegime:config?.company?.taxRegime||""},customer:nfeCustomer,items:nfeLines,config:{cscId:config?.nfce?.cscId||"",environment:config?.company?.environment||"Homologação"}};
     try{
-      const response=await fetch("/api/nfe/issue",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...payload,idempotencyKey:crypto.randomUUID()})});
+      const response=await fetch(nfeKind==="NF-e"?"/api/nfe/issue":"/api/nfce/issue",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...payload,idempotencyKey:crypto.randomUUID()})});
       const result=await response.json().catch(()=>({}));
       const provider=result.result??result.provider??{};
       const accessKey=String(provider.accessKey||provider.chave||provider.chNFe||provider.key||"");
@@ -118,7 +120,7 @@ export function FiscalWorkspace({
       const authorized=Boolean(response.ok&&result.issued&&result.status==="Autorizada"&&accessKey&&protocol);
       const status=authorized?"Autorizada":result.status==="Processando"?"Processando":"Rejeitada";
       const number=String(provider.number||provider.numero||accessKey.slice(-9));
-      onSaveRecord?.("Documentos Fiscais",{id:"NFE-"+nfeOrigin.id,name:"NF-e • "+nfeOrigin.id,client:nfeCustomer.name,doc:nfeCustomer.document,originId:nfeOrigin.id,kind:"NF-e",model:"55",status,invoiceNumber:authorized?number:"",accessKey,protocol,amount:nfeTotal,series:nfeSeries,environment:config?.company?.environment||"Homologação",error:authorized?"":String(result.error||"A autorização não foi confirmada."),createdAt:new Date().toISOString(),provider:result});
+      onSaveRecord?.("Documentos Fiscais",{id:"NFE-"+nfeOrigin.id,name:nfeKind+" • "+nfeOrigin.id,client:nfeCustomer.name,doc:nfeCustomer.document,originId:nfeOrigin.id,kind:nfeKind,model:nfeKind==="NF-e"?"55":"65",status,invoiceNumber:authorized?number:"",accessKey,protocol,amount:nfeTotal,series:nfeSeries,environment:config?.company?.environment||"Homologação",error:authorized?"":String(result.error||"A autorização não foi confirmada."),createdAt:new Date().toISOString(),provider:result});
       if(authorized){onSaveRecord?.("Vendas",{...nfeOrigin,invoiceNumber:number,invoiceAccessKey:accessKey,invoiceProtocol:protocol,invoiceStatus:status});setNfeNotice("NF-e autorizada. Chave: "+accessKey);setNfeOrigin(null);}
       else setNfeNotice(String(result.error||"NF-e não autorizada. Revise os dados e a resposta do emissor."));
     }catch(error){setNfeNotice(error instanceof Error?error.message:"Falha ao transmitir NF-e.");}
@@ -153,9 +155,9 @@ export function FiscalWorkspace({
 
     {(tab==="NF-e"||tab==="NFC-e"||tab==="NFS-e")&&<div className="fiscal-list-panel">
       <header><div><small>FILA DE EMISSÃO • {tab.toUpperCase()}</small><h3>{tab==="NFS-e"?"Ordens de serviço elegíveis":"Vendas elegíveis"}</h3><p>Os documentos passam obrigatoriamente pela pré-validação fiscal antes da transmissão.</p></div><span>{candidateRows.length} pendente(s)</span></header>
-      {candidateRows.length?<div className="table-wrap"><table><thead><tr><th>ORIGEM</th><th>CLIENTE</th><th>DESCRIÇÃO</th><th>VALOR</th><th>SITUAÇÃO</th>{tab==="NF-e"&&<th>AÇÃO</th>}</tr></thead><tbody>{candidateRows.map(item=><tr key={item.id}><td><b>{item.id}</b></td><td>{item.client||"—"}</td><td>{item.service||item.name||item.description||"—"}</td><td>{Number(item.total??item.value??0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</td><td><span className="fiscal-state pending">Preparar emissão</span></td>{tab==="NF-e"&&<td><button className="primary-btn" onClick={()=>startNfe(item)}>Preparar NF-e</button></td>}</tr>)}</tbody></table></div>:<div className="fiscal-empty"><CheckCircle2 size={24}/><b>Nenhum documento pendente nesta fila.</b><span>Novas operações elegíveis aparecerão automaticamente aqui.</span></div>}
-      {tab==="NF-e"&&nfeOrigin&&<section className="panel fiscal-emit-form">
-        <header><div><small>NF-e MODELO 55 • ORIGEM {nfeOrigin.id}</small><h3>Revisar dados fiscais</h3><p>Confira destinatário, operação, produto e tributação. O ProAR não preenche códigos fiscais ou alíquotas por suposição.</p></div><button className="outline-btn" onClick={()=>setNfeOrigin(null)}>Fechar</button></header>
+      {candidateRows.length?<div className="table-wrap"><table><thead><tr><th>ORIGEM</th><th>CLIENTE</th><th>DESCRIÇÃO</th><th>VALOR</th><th>SITUAÇÃO</th>{(tab==="NF-e"||tab==="NFC-e")&&<th>AÇÃO</th>}</tr></thead><tbody>{candidateRows.map(item=><tr key={item.id}><td><b>{item.id}</b></td><td>{item.client||"—"}</td><td>{item.service||item.name||item.description||"—"}</td><td>{Number(item.total??item.value??0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</td><td><span className="fiscal-state pending">Preparar emissão</span></td>{(tab==="NF-e"||tab==="NFC-e")&&<td><button className="primary-btn" onClick={()=>tab==="NFC-e"?startNfce(item):startNfe(item)}>Preparar {tab}</button></td>}</tr>)}</tbody></table></div>:<div className="fiscal-empty"><CheckCircle2 size={24}/><b>Nenhum documento pendente nesta fila.</b><span>Novas operações elegíveis aparecerão automaticamente aqui.</span></div>}
+      {(tab==="NF-e"||tab==="NFC-e")&&nfeOrigin&&<section className="panel fiscal-emit-form">
+        <header><div><small>{nfeKind} MODELO {nfeKind==="NF-e"?"55":"65"} • ORIGEM {nfeOrigin.id}</small><h3>Revisar dados fiscais</h3><p>Confira destinatário, operação, produto e tributação. O ProAR não preenche códigos fiscais ou alíquotas por suposição.</p></div><button className="outline-btn" onClick={()=>setNfeOrigin(null)}>Fechar</button></header>
         {nfeNotice&&<div className="pdv-notice" role="status">{nfeNotice}</div>}
         <div className="settings-form">
           <label>Natureza da operação<input value={nfeNature} onChange={e=>setNfeNature(e.target.value)} placeholder="Ex.: venda de mercadoria"/></label>
@@ -184,7 +186,7 @@ export function FiscalWorkspace({
           <td><input aria-label="Alíquota PIS" type="number" min="0" step="0.01" value={line.pisRate} onChange={e=>updateNfeLine(line.id,{pisRate:e.target.value})}/></td>
           <td><input aria-label="Alíquota COFINS" type="number" min="0" step="0.01" value={line.cofinsRate} onChange={e=>updateNfeLine(line.id,{cofinsRate:e.target.value})}/></td>
           <td><button className="danger" onClick={()=>setNfeLines(rows=>rows.filter(row=>row.id!==line.id))}>Remover</button></td></tr>)}</tbody></table></div>
-        <div className="settings-footer-actions"><select aria-label="Adicionar produto cadastrado" defaultValue="" onChange={e=>{addNfeProduct(e.target.value);e.target.value="";}}><option value="">Adicionar produto cadastrado…</option>{productCatalog.map(product=><option key={product.id} value={product.id}>{product.name} • NCM {product.ncm||"pendente"}</option>)}</select><strong>Total dos itens: {nfeTotal.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</strong><button className="primary-btn" disabled={nfeBusy||!nfeNature.trim()||!nfeLines.length} onClick={()=>void submitNfe()}>{nfeBusy?"Transmitindo...":"Transmitir NF-e"}</button></div>
+        <div className="settings-footer-actions"><select aria-label="Adicionar produto cadastrado" defaultValue="" onChange={e=>{addNfeProduct(e.target.value);e.target.value="";}}><option value="">Adicionar produto cadastrado…</option>{productCatalog.map(product=><option key={product.id} value={product.id}>{product.name} • NCM {product.ncm||"pendente"}</option>)}</select><strong>Total dos itens: {nfeTotal.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</strong><button className="primary-btn" disabled={nfeBusy||!nfeNature.trim()||!nfeLines.length} onClick={()=>void submitNfe()}>{nfeBusy?"Transmitindo...":"Transmitir "+nfeKind}</button></div>
       </section>}
       <div className="fiscal-flow-note"><ShieldCheck size={17}/><span><b>Fluxo protegido</b><small>Pré-validar → Transmitir → Processando/Autorizada/Rejeitada → armazenar XML, protocolo e representação fiscal.</small></span></div>
     </div>}
