@@ -1,3 +1,4 @@
+import {validateSchedulePolicy,type SchedulePolicy} from "./chatdesk-scheduling";
 import { createHash } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { sessionFromRequest, hasPermission } from "./permissions";
@@ -83,12 +84,12 @@ export async function chatSettings(companyId: string): Promise<LocalChatSettings
   if (companies[0]?.id !== companyId) throw new Error("Empresa não identificada.");
   return { companyId, revision: 0, botEnabled: false, companyName: String(companies[0].trade_name || companies[0].legal_name || "").slice(0, 100), greeting: "", quickReplies: defaultChatQuickReplies };
 }
-export async function saveChatSettings(companyId: string, input: { revision: number; botEnabled: boolean; companyName: string; greeting: string; quickReplies?: ChatQuickReply[] }) {
+export async function saveChatSettings(companyId: string, input: { revision: number; botEnabled: boolean; companyName: string; greeting: string; quickReplies?: ChatQuickReply[]; schedule?: SchedulePolicy }) {
   await assertActiveWhatsAppCompany(companyId);
   const db = await chatDb(companyId);
   const previous = await chatSettings(companyId);
   if (input.revision !== previous.revision) throw new Error("Configuração alterada por outro administrador. Atualize a página.");
-  const payload = { companyId, revision: previous.revision + 1, botEnabled: input.botEnabled === true, companyName: String(input.companyName || "").trim().slice(0, 100), greeting: String(input.greeting || "").trim().slice(0, 500), quickReplies: validateChatQuickReplies(input.quickReplies === undefined ? previous.quickReplies || defaultChatQuickReplies : input.quickReplies) };
+  const payload = { schedule: validateSchedulePolicy(input.schedule ?? previous.schedule ?? {enabled:false,employeeId:"",service:"",duration:60,buffer:30,days:[1,2,3,4,5],start:"08:00",end:"18:00"}), companyId, revision: previous.revision + 1, botEnabled: input.botEnabled === true, companyName: String(input.companyName || "").trim().slice(0, 100), greeting: String(input.greeting || "").trim().slice(0, 500), quickReplies: validateChatQuickReplies(input.quickReplies === undefined ? previous.quickReplies || defaultChatQuickReplies : input.quickReplies) };
   const result = await commitJsonState(databaseFetch, db.url, tenantHeaders(db.key), settingsId(companyId), previous.revision ? previous as unknown as Record<string, unknown> : null, payload);
   if (!result.ok) throw new Error("Não foi possível salvar. Atualize a configuração e tente novamente.");
   return payload;
