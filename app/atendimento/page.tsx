@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { ArrowLeft, MessageSquare, LayoutGrid, Bell, Bot, Plug, RefreshCw, Inbox, Search, Headphones, Building2, UserRound, ShieldCheck, Send, StickyNote, ChevronRight, Maximize2, Minimize2 } from "lucide-react";
 import { ChatdeskCustomerContext } from "../../components/ChatdeskCustomerContext";
@@ -25,6 +25,9 @@ export default function Atendimento() {
   const [mobilePane,setMobilePane]=useState<"fila"|"conversa"|"ficha">("fila");
   const [chat, setChat] = useState<ChatConversation | null>(null);
   const [search, setSearch] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [startBusy, setStartBusy] = useState(false);
+  const [startNotice, setStartNotice] = useState("");
   const [sector, setSector] = useState("Todos");
   const [mine, setMine] = useState(false);
   const [waitingOnly, setWaitingOnly] = useState(false);
@@ -96,6 +99,28 @@ export default function Atendimento() {
     } catch (error) { setFeedback(error instanceof Error ? error.message : "Solicitação sem confirmação. Confira o histórico antes de repetir."); }
     finally { setBusy(false); }
   }
+  async function startConversation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (startBusy || !queue) return;
+    setStartBusy(true); setStartNotice("");
+    try {
+      const response = await fetch("/api/atendimento/iniciar", {
+        method: "POST",
+        headers: { ...requestHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: newPhone }),
+      });
+      const data: {error?:string;phone?:string;exists?:boolean;message?:string;optOut?:boolean} = await response.json();
+      if (!response.ok || !data.exists || !data.phone) throw new Error(data.error || "O WhatsApp não confirmou o número.");
+      setStartNotice((data.message || "Número confirmado.") + (data.optOut ? " Atenção: cliente solicitou não receber mensagens." : ""));
+      setNewPhone("");
+      setSearch("");
+      setSector("Todos"); setMine(false); setWaitingOnly(false);
+      await loadQueue();
+      selectConversation(data.phone);
+    } catch (error) {
+      setStartNotice(error instanceof Error ? error.message : "Não foi possível consultar o WhatsApp.");
+    } finally { setStartBusy(false); }
+  }
   async function saveSettings() {
     if (!settings) return;
     setBusy(true);
@@ -124,7 +149,15 @@ export default function Atendimento() {
     {feedback && <p className={styles.feedback} role="status">{feedback}</p>}
     {!queue && <section className={styles.loginEmpty}><span className={styles.emptyIcon}><Headphones size={30}/></span><h2>{loading ? "Preparando sua central" : "Seu atendimento começa aqui"}</h2><p>{loading ? "Carregando as configurações da empresa e suas permissões de atendimento." : "Entre com sua conta para acessar as conversas, os lembretes e as configurações da sua empresa."}</p>{!loading && <Link href="/">Acessar o ProAR <ChevronRight size={15}/></Link>}</section>}
     {queue && tab === "Atendimentos" && <><nav className={styles.mobileNav} aria-label="Visão do atendimento"><button aria-pressed={mobilePane==="fila"} onClick={()=>setMobilePane("fila")}>Fila {filtered.length}</button><button disabled={!selected} aria-pressed={mobilePane==="conversa"} onClick={()=>setMobilePane("conversa")}>Conversa</button><button disabled={!chat} aria-pressed={mobilePane==="ficha"} onClick={()=>{setAssistantOpen(true);setMobilePane("ficha");}}>Ficha</button></nav><div data-pane={mobilePane} className={`${styles.desk} ${!chat ? styles.deskIdle : ""} ${!assistantOpen ? styles.deskCollapsed : ""}`}>
-      <aside className={styles.queue}><div className={styles.queueTitle}><div><span className={styles.eyebrow}>CAIXA DE ENTRADA</span><h2>Conversas <span>{filtered.length}</span></h2></div><Inbox size={20}/></div><div className={styles.queueTabs} role="group" aria-label="Filtro da fila"><button aria-pressed={!mine&&!waitingOnly} onClick={()=>{setMine(false);setWaitingOnly(false);}}>Geral</button><button aria-pressed={mine} onClick={()=>{setMine(true);setWaitingOnly(false);}}>Meus</button><button aria-pressed={waitingOnly} onClick={()=>{setMine(false);setWaitingOnly(true);}}>Aguardando</button></div><label className={styles.searchField}><Search size={16}/><input aria-label="Buscar atendimento" value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar cliente, telefone ou OS"/></label><div className={styles.filters}><select aria-label="Filtrar setor" value={sector} onChange={event => setSector(event.target.value)}><option>Todos</option>{queue.actor.sectors.map(item => <option key={item}>{item}</option>)}</select></div><small className={styles.queueScope}>Prioridade dos atendimentos carregados</small>
+      <aside className={styles.queue}><div className={styles.queueTitle}><div><span className={styles.eyebrow}>CAIXA DE ENTRADA</span><h2>Conversas <span>{filtered.length}</span></h2></div><Inbox size={20}/></div><div className={styles.queueTabs} role="group" aria-label="Filtro da fila"><button aria-pressed={!mine&&!waitingOnly} onClick={()=>{setMine(false);setWaitingOnly(false);}}>Geral</button><button aria-pressed={mine} onClick={()=>{setMine(true);setWaitingOnly(false);}}>Meus</button><button aria-pressed={waitingOnly} onClick={()=>{setMine(false);setWaitingOnly(true);}}>Aguardando</button></div><label className={styles.searchField}><Search size={16}/><input aria-label="Buscar atendimento" value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar cliente, telefone ou OS"/></label>{(queue.actor.admin || queue.actor.writeSectors.includes("Geral")) && <form className={styles.newContact} onSubmit={event=>void startConversation(event)}>
+          <label htmlFor="chatdesk-new-phone">Nova conversa por número</label>
+          <div className={styles.newContactRow}>
+            <input id="chatdesk-new-phone" type="tel" inputMode="tel" autoComplete="off" placeholder="(17) 99999-9999" value={newPhone} maxLength={22} onChange={event=>{setNewPhone(event.target.value);setStartNotice("");}} required/>
+            <button type="submit" disabled={startBusy || !newPhone.trim()}>{startBusy ? "Verificando…" : "Verificar e abrir"}</button>
+          </div>
+          <small>Consulta o WhatsApp conectado desta empresa. Não envia mensagem automaticamente.</small>
+          {startNotice && <p role="status" className={styles.newContactNotice}>{startNotice}</p>}
+        </form>}<div className={styles.filters}><select aria-label="Filtrar setor" value={sector} onChange={event => setSector(event.target.value)}><option>Todos</option>{queue.actor.sectors.map(item => <option key={item}>{item}</option>)}</select></div><small className={styles.queueScope}>Prioridade dos atendimentos carregados</small>
         {!filtered.length && <div className={styles.queueEmpty}><span><Inbox size={26}/></span><b>{search || mine || waitingOnly || sector !== "Todos" ? "Nenhum resultado" : "Sua fila está organizada"}</b><p>{search || mine || waitingOnly || sector !== "Todos" ? "Experimente outro termo ou ajuste os filtros para encontrar o atendimento." : "As novas conversas aparecerão aqui quando o WhatsApp da empresa estiver conectado."}</p>{queue.actor.admin && !search && <button onClick={() => setTab("Conexão")}><Plug size={14}/> Configurar WhatsApp</button>}</div>}
         {filtered.map(item => <button key={item.phone} className={`${styles.contact} ${selected === item.phone ? styles.selected : ""}`} onClick={() => { selectConversation(item.phone); setTab("Atendimentos"); }}><strong>{item.name}</strong>{(()=>{const priority=chatQueuePriority(item,queueClock);return priority.urgent?<small className={styles.urgentBadge}>Atenção • risco elétrico relatado</small>:priority.waiting?<small className={styles.waitingBadge}>Aguardando resposta • {priority.waitingMinutes<60?`${priority.waitingMinutes} min`:`${Math.floor(priority.waitingMinutes/60)} h`}</small>:null;})()}<small>{item.sector} • {item.stage}</small><span>{item.messages.at(-1)?.text || "Sem mensagens"}</span><small>{item.assignee ? `Responsável: ${item.assignee}` : "Aguardando responsável"}</small></button>)}
         {queue.hasMore && <button disabled={busy} onClick={() => void loadQueue(queue.nextOffset)}>Carregar mais atendimentos</button>}
