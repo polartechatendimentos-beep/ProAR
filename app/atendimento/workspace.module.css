@@ -303,3 +303,15 @@
  .desk,.deskIdle,.deskCollapsed{display:block;height:auto;min-height:0}.desk[data-pane="fila"]>.conversation,.desk[data-pane="fila"]>.assistant,.desk[data-pane="conversa"]>.queue,.desk[data-pane="conversa"]>.assistant,.desk[data-pane="ficha"]>.queue,.desk[data-pane="ficha"]>.conversation{display:none}
  .queue{max-height:none;min-height:calc(100dvh - 230px);padding:14px}.conversation{height:calc(100dvh - 218px);min-height:420px;max-height:none}.assistant{min-height:calc(100dvh - 230px);max-height:none}.assistantToggle{display:none!important}.assistantCollapsed .assistantTitle>div,.assistantCollapsed>:not(.assistantTitle){display:block}.messages{height:auto;flex:1;min-height:80px;padding:13px}.composer{padding:9px}.chatHeader{padding:10px}.composer .actions{gap:4px}.composer .actions button{font-size:10px;padding:6px;min-height:34px}.workspace .content .composer textarea{min-height:65px}.sendBar small{font-size:9px}.queueSummary{grid-template-columns:1fr}.footer{padding-top:10px}.workspaceFocused .desk{height:auto}
 }
+
+
+/* Atendimento: abertura manual por telefone, acessível em desktop e mobile. */
+.newContact{margin:10px 0 12px;padding:12px;background:#eef5fc;border:1px solid #c5d9ed;border-radius:12px;display:grid;gap:7px;color:#17395c}
+.newContact>label{font-size:12px;font-weight:750}
+.newContactRow{display:flex;gap:6px;min-width:0}
+.newContactRow input{min-width:0;width:100%;flex:1;background:#fff;color:#0e2745;border:1px solid #9db7d2;border-radius:8px;padding:9px;font-size:13px}
+.newContactRow button{border:0;background:#1164b8;color:#fff;border-radius:8px;padding:9px 10px;font-size:12px;font-weight:700;white-space:nowrap;cursor:pointer}
+.newContactRow button:disabled{opacity:.6;cursor:not-allowed}
+.newContact>small{font-size:11px;color:#425d7b;line-height:1.4}
+.newContactNotice{margin:0;color:#17395c;font-size:12px;line-height:1.4;overflow-wrap:anywhere}
+@media(max-width:480px){.newContactRow{flex-direction:column}.newContactRow button{width:100%}}
