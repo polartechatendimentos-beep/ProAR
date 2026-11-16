@@ -1,3 +1,4 @@
+import {autoSchedule} from "@/lib/chatdesk-autoschedule";
 import { recordAppointmentReply } from "../../../../../../lib/chatdesk-appointment-reply";
 import { NextRequest, NextResponse } from "next/server";
 import { validChatWebhookToken, parseEvolutionInbound } from "../../../../../../lib/chatdesk-events";
@@ -38,6 +39,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ co
       // Runs on redelivery too: if the chat write succeeded but the agenda failed, retry safely.
       const appointmentHandled = !triage.optOut && await recordAppointmentReply(companyId, event);
       const chat = result.chat;
+      if(!appointmentHandled && settings.botEnabled && settings.schedule?.enabled && chat && !chat.assignee && !chat.botPaused && !chat.optOut && await tenantEvolutionAutomationEnabled(companyId)){
+        const scheduled=await autoSchedule(companyId,event,settings.schedule);
+        if(scheduled)continue;
+      }
       const recentBot = chat?.messages.some(message => message.actor === "local-assistant" && Date.now() - Date.parse(message.at) < 300000);
       if (appointmentHandled || !result.changed || !chat || !settings.botEnabled || chat.optOut || chat.botPaused || chat.assignee || recentBot || !await tenantEvolutionAutomationEnabled(companyId)) continue;
       const botId = `local:${event.id}`;
