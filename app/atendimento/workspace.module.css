@@ -427,3 +427,77 @@
   .workspace .chatEmpty {padding:22px 12px}
   .workspace .queue {border-width:1px}
 }
+
+
+/* Chatdesk appearance: explicit opt-in theme, scoped to this workspace only.
+   Overrides the older literal PolarTech light palette without changing global pages. */
+.themeToggle {min-height:35px!important;height:35px;white-space:nowrap}
+.header .themeToggle {background:#ffffffed;color:#174e7c;border-color:#e3f1ff}
+.header .themeToggle:hover:not(:disabled) {background:#e6f5ff;color:#0c467b}
+.workspaceDark {
+  color-scheme:dark;
+  --desk-bg:#081321;--surface:#101e30;--surface-soft:#13263c;
+  --ink:#eaf3ff;--muted:#b6c8dd;--line:#334b64;
+  --blue:#8fc4ff;--blue-soft:#1d3c60;--green:#72d6ae;--green-soft:#174638;
+  --shadow:0 5px 24px #0005;
+  background:linear-gradient(145deg,#071320 0%,#0c1e30 48%,#0c292e 100%)!important;
+}
+.workspaceDark .content {background:transparent}
+.workspaceDark :is(.queue,.conversation,.assistant,.panel,.crmPanel,.customerContext) {
+  background:#102136!important;border-color:#35516b!important;color:var(--ink);
+}
+.workspaceDark .queue {background:linear-gradient(180deg,#162f4b 0,#101f31 230px,#0f1d30 100%)!important}
+.workspaceDark :is(.queueTitle,.queueTabs,.newContact) {background:#1a3754!important;border-color:#41668b!important}
+.workspaceDark :is(.queueTitle .eyebrow,.queue h2,.queue h2 span,.queueScope,.newContact>label,.newContact>small,.newContactNotice) {color:#d4e8ff!important}
+.workspaceDark .queue h2 span {background:#254765!important}
+.workspaceDark .queueTabs button:not([aria-pressed=true]) {color:#d4e8ff!important}
+.workspaceDark .contact {background:#152a41!important;border-color:#385a78!important;box-shadow:none!important}
+.workspaceDark .contact:hover:not(:disabled) {background:#1b3956!important;border-color:#6b98c5!important}
+.workspaceDark .contact.selected {background:#234768!important;border-color:#87b7e4!important}
+.workspaceDark .contact :is(strong,small,span) {color:#d8eaff!important}
+.workspaceDark .contact .waitingBadge {background:#513c13!important;color:#ffe3a0!important;border-color:#94722a!important}
+.workspaceDark .contact .urgentBadge {background:#581d2c!important;color:#ffc4ce!important;border-color:#a54a61!important}
+.workspaceDark .conversation {background:linear-gradient(150deg,#10253b,#112a3e 55%,#143333)!important}
+.workspaceDark .chatHeader {background:#19354f!important;border-bottom-color:#3c5e80!important}
+.workspaceDark .chatHeader :is(h2,p) {color:#e8f4ff!important}
+.workspaceDark .chatEmpty {background:radial-gradient(ellipse at center,#1d3e5e 0%,#102339 78%,#0c1d2f 100%)!important}
+.workspaceDark .chatEmpty :is(h2,p,.eyebrow),.workspaceDark .emptyFeatures span {color:#daebff!important}
+.workspaceDark .messages {background-color:#102236!important;background-image:radial-gradient(#50728a55 .7px,transparent .7px)!important}
+.workspaceDark .messages .incoming {background:#213a53!important;border-color:#507b9f!important;color:#f1f7ff!important}
+.workspaceDark .messages .outgoing {background:#174a3e!important;border-color:#408673!important;color:#effff6!important}
+.workspaceDark .messages .note {background:#58451f!important;border-color:#a78b42!important;color:#fff4d0!important}
+.workspaceDark .messages .event {background:#293c51!important;border-color:#50687d!important;color:#e4edf8!important}
+.workspaceDark .messages :is(.incoming,.outgoing,.note,.event) :is(p,small,time) {color:inherit!important}
+.workspaceDark :is(.composer,.actions) {background:#13283f!important;border-color:#3d5b77!important}
+.workspaceDark .composer {background:linear-gradient(180deg,#172f49,#102439)!important}
+.workspaceDark .composer .actions button {background:#213e5e!important;color:#e4f2ff!important;border-color:#45688a!important}
+.workspaceDark .assistant {background:linear-gradient(145deg,#142e49,#10243b)!important}
+.workspaceDark :is(.assistant blockquote,.assistant pre,.assistantEmpty,.botIcon) {background:#203c58!important;border-color:#466987!important;color:#edf5ff!important}
+.workspaceDark :is(.assistantTitle h2,.assistant p,.assistant strong,.assistant span,.assistant b,.assistant summary,.assistant small) {color:#e7f3ff!important}
+.workspaceDark .tabs {background:#11263c!important;border-color:#385874!important}
+.workspaceDark .tabs button {color:#c5daf0!important}
+.workspaceDark .tabs button[aria-current=page] {background:#24598d!important;color:#fff!important;border-color:#5194d5!important}
+.workspaceDark .tabCount {background:#d9ebff!important;color:#174c79!important}
+.workspaceDark .tableWrap {background:#10273d!important;color:#e5f1ff}
+.workspaceDark .tableWrap :is(table,th,td) {background:#10273d!important;color:#e5f1ff!important;border-color:#3c5873!important}
+.workspaceDark :is(.kanban>section,.kanban button,.actionReview,.loginEmpty,.emptyIcon) {background:#152d46!important;color:#eaf4ff!important;border-color:#3d5d79!important}
+.workspaceDark :is(.kanban button b,.kanban button span,.kanban h3,.loginEmpty h2,.loginEmpty p) {color:#eaf4ff!important}
+.workspaceDark :is(.panel h2,.crmPanel h2,.panel p,.crmPanel p,.customerContext p,.customerContext h3) {color:#eaf4ff!important}
+.workspaceDark .feedback {background:#123e35!important;border-color:#39806a!important;color:#c8ffdf!important}
+.workspaceDark .loadError {background:#4a2230!important;border-color:#98536b!important;color:#ffe0e7!important}
+.workspaceDark .company {background:#e5f3ff!important;color:#16476b!important}
+.workspaceDark .header .themeToggle {background:#1c4162!important;color:#eaf4ff!important;border-color:#5784af!important}
+.workspaceDark .header .themeToggle:hover:not(:disabled) {background:#2a5477!important}
+.workspaceDark .content :is(input:not([type=checkbox]),select,textarea) {
+ background:#0d2034!important;color:#ecf6ff!important;border-color:#426180!important;
+}
+.workspaceDark .content :is(input,textarea)::placeholder {color:#a5bed5!important}
+.workspaceDark .content .searchField input,.workspaceDark .content .newContactRow input {background:#0d2034!important;border-color:#426180!important}
+.workspaceDark .content button:not([disabled]) {color:var(--ink)}
+.workspaceDark .content :is(.sendBar button,.newContactRow button,.queueTabs button[aria-pressed=true],.tabs button[aria-current=page]) {color:#fff!important}
+.workspaceDark .content :is(label,small,summary) {color:#c6d8eb}
+.workspaceDark .footer,.workspaceDark .footer span {color:#b9cede!important}
+@media(max-width:720px) {
+  .header .themeToggle {min-width:36px;padding:7px!important}
+  .header .themeToggle span {display:none}
+}
