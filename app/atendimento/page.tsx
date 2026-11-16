@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { ArrowLeft, MessageSquare, LayoutGrid, Bell, Bot, Plug, RefreshCw, Inbox, Search, Headphones, Building2, UserRound, ShieldCheck, Send, StickyNote, ChevronRight, Maximize2, Minimize2 } from "lucide-react";
 import { ChatdeskCustomerContext } from "../../components/ChatdeskCustomerContext";
@@ -99,7 +99,7 @@ export default function Atendimento() {
     } catch (error) { setFeedback(error instanceof Error ? error.message : "Solicitação sem confirmação. Confira o histórico antes de repetir."); }
     finally { setBusy(false); }
   }
-  async function startConversation(event: React.FormEvent<HTMLFormElement>) {
+  async function startConversation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (startBusy || !queue) return;
     setStartBusy(true); setStartNotice("");
