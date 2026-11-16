@@ -315,3 +315,76 @@
 .newContact>small{font-size:11px;color:#425d7b;line-height:1.4}
 .newContactNotice{margin:0;color:#17395c;font-size:12px;line-height:1.4;overflow-wrap:anywhere}
 @media(max-width:480px){.newContactRow{flex-direction:column}.newContactRow button{width:100%}}
+
+
+/* Paleta operacional PolarTech — alto contraste, sem alterar o fluxo da central.
+   Cores semânticas: azul = navegação/recebidas, verde = enviadas,
+   âmbar = notas/aguardando, vermelho = urgência. */
+.workspace {
+  --desk-bg:#edf3fb;
+  --surface-soft:#f1f7ff;
+  --ink:#10283f;
+  --muted:#506780;
+  --line:#cadbea;
+  --blue:#125bb0;
+  --blue-soft:#dcecff;
+  --green:#066947;
+  --green-soft:#d8f5e8;
+  --shadow:0 6px 18px #113c6b12;
+  background:linear-gradient(150deg,#ebf4ff 0%,#f6f9ff 38%,#e9f6f5 100%);
+}
+.header {padding:17px 20px;background:linear-gradient(110deg,#10375d 0%,#1762a9 70%,#14859a 100%);border-radius:16px;box-shadow:0 8px 24px #123f7925}
+.workspace .header h1,.workspace .header p,.header .breadcrumb,.header .breadcrumb a {color:#fff!important}
+.header .breadcrumb {opacity:.86}
+.header .company {background:#fff;color:#14466e;border-color:#d9eafa}
+.header .operator {border-left-color:#ffffff69}
+.header .operator b,.header .operator small {color:#fff!important}
+.header .avatar {background:#d9f4ff;color:#124c78;border-color:#b2e5ff}
+.header .refresh,.header .focusToggle {background:#ffffffed;color:#174e7c;border:1px solid #e3f1ff}
+.header .refresh:hover:not(:disabled),.header .focusToggle:hover:not(:disabled){background:#e6f5ff;color:#0c467b}
+.tabs {background:#fff;border:1px solid #d3e2f2;padding:7px;border-radius:12px;box-shadow:0 2px 8px #13496f0b}
+.tabs button {color:#325676;border-radius:8px}
+.tabs button[aria-current=page] {color:#fff;background:#145da9;border-color:#145da9;box-shadow:0 3px 10px #145da929}
+.tabCount {background:#fff;color:#13568e}
+.queue {background:linear-gradient(#f9fcff,#fff 220px);border-color:#c3d7ea}
+.queueTitle .eyebrow {color:#1763a6}
+.queue h2 {color:#173f68}
+.queue h2 span {background:#dcecff;color:#15559b}
+.queueTabs {background:#e9f3ff;border-color:#c9e0f5}
+.queueTabs button[aria-pressed=true] {background:#1762b1;color:#fff;border-color:#1762b1;box-shadow:0 2px 7px #0f4e9423}
+.workspace .content .searchField input {background:#fff!important;border-color:#b6d2ee!important}
+.contact {border:1px solid #dbe8f5!important;border-radius:11px!important;margin:0 0 8px;background:#fff!important;box-shadow:0 2px 6px #1f4f7a0a}
+.workspace .contact:hover:not(:disabled){background:#f0f7ff!important;border-color:#8ebae7!important}
+.workspace .contact.selected {background:#dcecff!important;border:1px solid #76abe2!important;box-shadow:0 3px 11px #1567b225}
+.contact strong {font-size:13px;color:#143d62}
+.contact small {color:#41607b}
+.contact span {color:#345573}
+.contact .urgentBadge {color:#8f1525;background:#ffe4e8;border:1px solid #f5abb5;font-weight:750;padding:4px 7px}
+.contact .waitingBadge {color:#775000;background:#fff0bb;border:1px solid #e8ca6d;border-radius:6px;padding:3px 6px;font-weight:700}
+.queueScope {color:#486c8a;font-weight:650}
+.conversation {border-color:#bed6ea;background:#f7fbff}
+.chatHeader {background:linear-gradient(90deg,#e6f3ff,#f7fcff);border-bottom-color:#bad8f1}
+.chatHeader h2 {color:#124a81}
+.actions {background:#f5faff}
+.messages {background-color:#e7f1f7;background-image:radial-gradient(#a9c7dd6e .7px,transparent .7px)}
+.messages article {box-shadow:0 3px 10px #173b5910;border-radius:13px;padding:13px 15px}
+.workspace .messages .incoming {background:#fff;border:1px solid #bbdafa;border-left:4px solid #2274cc;color:#153957}
+.workspace .messages .outgoing {background:#d5f5e3;border:1px solid #a7dec3;border-right:4px solid #13835c;color:#164c38}
+.workspace .messages .note {background:#fff1c2;border:1px solid #ecd185;border-left:4px solid #d69d12;color:#614809}
+.workspace .messages .event {background:#e9edf3;color:#4b5e75;border:1px solid #cbd4df}
+.workspace .messages :is(.incoming,.outgoing,.note) p {color:inherit!important}
+.composer {background:linear-gradient(180deg,#fff,#f0f8ff);border-top:2px solid #c5e0f5}
+.composer .actions button {background:#e6f0ff;color:#19578b;border:1px solid #cddff2}
+.composer .actions button[aria-pressed=true] {background:#ffedbb;color:#755008;border-color:#eac46b}
+.workspace .sendBar button {background:#087e57;color:#fff;border-color:#087e57;font-weight:750;box-shadow:0 4px 12px #087e5724}
+.workspace .sendBar button:hover:not(:disabled){background:#076c4b;border-color:#076c4b}
+.assistant {background:linear-gradient(155deg,#f8fbff,#e8f3ff);border-color:#bcd8f0}
+.assistantTitle .botIcon {background:#d5e8ff;color:#145ca3;border-color:#a9cdec}
+.assistant blockquote {background:#fff;border-color:#bad8f2;color:#244d77}
+.newContact {background:#e6f2ff;border-color:#a6cdef;box-shadow:0 2px 8px #1660a317}
+.newContactRow button {background:#1464b5;color:#fff;border-color:#1464b5}
+.feedback {background:#e0f4e9;color:#07583d!important;border-color:#a2dcbc}
+.loadError {background:#fff0f1;color:#911e30!important;border-color:#efb1b9}
+@media (prefers-reduced-motion:reduce) {
+  .workspace button {transition:none}
+}
