@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { ArrowLeft, MessageSquare, LayoutGrid, Bell, Bot, Plug, RefreshCw, Inbox, Search, Headphones, Building2, UserRound, ShieldCheck, Send, StickyNote, ChevronRight, Maximize2, Minimize2 } from "lucide-react";
+import { ArrowLeft, MessageSquare, LayoutGrid, Bell, Bot, Plug, RefreshCw, Inbox, Search, Headphones, Building2, UserRound, ShieldCheck, Send, StickyNote, ChevronRight, Maximize2, Minimize2, Moon, Sun } from "lucide-react";
 import { ChatdeskCustomerContext } from "../../components/ChatdeskCustomerContext";
 import { ChatdeskSystemActions } from "../../components/ChatdeskSystemActions";
 import { WhatsAppWebConnection } from "../../components/WhatsAppWebConnection";
@@ -18,6 +18,7 @@ const stamp = (value: string) => new Date(value).toLocaleString("pt-BR", { timeZ
 const statusLabel = (value?: string) => value === "accepted" ? "Aceito pelo servidor" : value === "processing" ? "Em processamento" : value === "blocked-optout" ? "Bloqueado por pedido do cliente" : value === "disconnected" ? "Desconectado; confira antes de reenviar" : value ? "Sem confirmação; conferir" : "";
 export default function Atendimento() {
   const [tab, setTab] = useState<typeof tabs[number]>("Atendimentos");
+  const [darkMode,setDarkMode] = useState(false);
   const [queue, setQueue] = useState<Queue | null>(null);
   const [selected, setSelected] = useState("");
   const [assistantOpen, setAssistantOpen] = useState(true);
@@ -45,6 +46,8 @@ export default function Atendimento() {
   const selection = useRef("");
   const pending = useRef<{ key: string; id: string } | null>(null);
   const companyId = queue?.companyId || "";
+  useEffect(()=>{ try {setDarkMode(window.localStorage.getItem("proar-chatdesk-theme")==="dark");} catch { /* Storage unavailable: keep light mode. */ } },[]);
+  function toggleTheme(){setDarkMode(current=>{const next=!current;try{window.localStorage.setItem("proar-chatdesk-theme",next?"dark":"light");}catch{/* Session-only preference */}return next;});}
   const requestHeaders = useCallback((): Record<string, string> => companyId ? { "X-Proar-Company-ID": companyId } : {}, [companyId]);
   const loadQueue = useCallback(async (offset = 0) => {
     try {
@@ -140,10 +143,10 @@ export default function Atendimento() {
     } catch (error) { setFeedback(error instanceof Error ? error.message : "Recebimento indisponível."); }
     finally { setBusy(false); }
   }
-  return <main className={`${styles.workspace} ${focused ? styles.workspaceFocused : ""}`} aria-busy={loading || busy}>
+  return <main className={`${styles.workspace} ${darkMode ? styles.workspaceDark : ""} ${focused ? styles.workspaceFocused : ""}`} aria-busy={loading || busy}>
     <aside className={styles.rail} aria-label="Navegação ProAR"><Link className={styles.brandMark} href="/" title="Voltar ao ProAR">P<span className={styles.srOnly}>ProAR</span></Link><span className={styles.railDivider}/><button className={tab === "Atendimentos" ? styles.railActive : ""} title="Atendimentos" aria-label="Atendimentos" onClick={() => setTab("Atendimentos")}><MessageSquare size={21}/></button><button className={tab === "CRM" ? styles.railActive : ""} title="CRM" aria-label="CRM" onClick={() => setTab("CRM")}><LayoutGrid size={20}/></button>{queue?.actor.admin && <button title="Conexão WhatsApp" aria-label="Conexão WhatsApp" onClick={() => setTab("Conexão")}><Plug size={21}/></button>}<Link className={styles.railBack} href="/" title="Voltar ao sistema" aria-label="Voltar ao sistema"><ArrowLeft size={20}/></Link></aside>
     <div className={styles.content}>
-    <header className={styles.header}><div><div className={styles.breadcrumb}><Link href="/">ProAR</Link><ChevronRight size={12}/><span>Relacionamento com o cliente</span></div><h1>Central de atendimento</h1><p>Organize conversas, acompanhe sua equipe e dê continuidade a cada solicitação.</p></div><div className={styles.headerActions}><span className={styles.company}><Building2 size={15}/>{settings?.companyName || "Sua empresa"}</span><div className={styles.operator}><span className={styles.avatar}>{queue ? initials(queue.actor.displayName) : <UserRound size={17}/>}</span><span><b>{queue?.actor.displayName || (loading ? "Carregando…" : "Acesse sua conta")}</b><small>{queue?.actor.role || "Acesso por empresa"}</small></span></div><button className={styles.focusToggle} aria-pressed={focused} onClick={()=>setFocused(value=>!value)} title={focused?"Reduzir painel (Esc)":"Ampliar painel"}>{focused?<Minimize2 size={16}/>:<Maximize2 size={16}/>}<span>{focused?"Reduzir":"Ampliar"}</span></button><button className={styles.refresh} disabled={busy || loading} title="Atualizar atendimentos" onClick={() => void loadQueue()}><RefreshCw size={16}/><span>Atualizar</span></button></div></header>
+    <header className={styles.header}><div><div className={styles.breadcrumb}><Link href="/">ProAR</Link><ChevronRight size={12}/><span>Relacionamento com o cliente</span></div><h1>Central de atendimento</h1><p>Organize conversas, acompanhe sua equipe e dê continuidade a cada solicitação.</p></div><div className={styles.headerActions}><span className={styles.company}><Building2 size={15}/>{settings?.companyName || "Sua empresa"}</span><div className={styles.operator}><span className={styles.avatar}>{queue ? initials(queue.actor.displayName) : <UserRound size={17}/>}</span><span><b>{queue?.actor.displayName || (loading ? "Carregando…" : "Acesse sua conta")}</b><small>{queue?.actor.role || "Acesso por empresa"}</small></span></div><button type="button" className={styles.themeToggle} onClick={toggleTheme} aria-pressed={darkMode} aria-label={darkMode?"Ativar tema claro":"Ativar tema escuro"} title={darkMode?"Mudar para tema claro":"Mudar para tema escuro"}>{darkMode?<Sun size={16}/>:<Moon size={16}/>}<span>{darkMode?"Claro":"Escuro"}</span></button><button className={styles.focusToggle} aria-pressed={focused} onClick={()=>setFocused(value=>!value)} title={focused?"Reduzir painel (Esc)":"Ampliar painel"}>{focused?<Minimize2 size={16}/>:<Maximize2 size={16}/>}<span>{focused?"Reduzir":"Ampliar"}</span></button><button className={styles.refresh} disabled={busy || loading} title="Atualizar atendimentos" onClick={() => void loadQueue()}><RefreshCw size={16}/><span>Atualizar</span></button></div></header>
     <nav className={styles.tabs} aria-label="Áreas da central">{tabs.filter(item => queue?.actor.admin || !["Lembretes", "Assistente local", "Conexão"].includes(item)).map(item => { const Icon = tabIcons[item]; return <button key={item} aria-current={tab === item ? "page" : undefined} onClick={() => setTab(item)}><Icon size={17} aria-hidden="true"/>{item === "Assistente local" ? "Assistente" : item}{item === "Atendimentos" && queue && <span className={styles.tabCount}>{queue.items.length}</span>}</button>; })}<span className={styles.privateBadge}><ShieldCheck size={14}/> Ambiente da empresa</span></nav>
     {loadError && <p className={styles.loadError} role="alert">{loadError}</p>}
     {feedback && <p className={styles.feedback} role="status">{feedback}</p>}
