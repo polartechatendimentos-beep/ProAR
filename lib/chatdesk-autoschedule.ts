@@ -2,7 +2,7 @@ import {createHash} from 'node:crypto';
 import {chatDb,readChat,changeChat} from './chatdesk-store';
 import {databaseFetch,commitNeonOperationalState,PRIMARY_DATABASE_URL} from './supabase-rest';
 import {tenantHeaders} from './tenant-rest';
-import {availableSlots,preferredAfter,offerMessage,type SchedulePolicy} from './chatdesk-scheduling';
+import {availableSlots,preferredAfter,offerMessage,bookingChatStillEligible,type SchedulePolicy} from './chatdesk-scheduling';
 import {prepareDeskAction,actionPhone,type ActionState} from './chatdesk-actions';
 import {prepareOperationalState,independentOperationalRows} from './operational-ledger';
 import {dispatchEvolutionJob} from './evolution-jobs';
@@ -42,6 +42,9 @@ export async function autoSchedule(companyId:string,event:{id:string;phone:strin
    if(latest.serviceOrders.some(o=>o.customerId===customer.id&&!/cancelad|conclu[ií]d|finalizad/i.test(String(o.status)))){await send('Você já possui um atendimento aberto. A equipe vai conferir se deseja reagendar ou marcar outro serviço.');return true;}
    if(!availableSlots(latest,policy,String(customer.id),offer.address,slot.time).some(s=>s.date===slot.date&&s.time===slot.time)){await send('O horário escolhido não está mais disponível. Informe novamente seu período preferido para consultar outras opções.');return true;}
    const prepared=prepareDeskAction(latest,{kind:'schedule',fields:[String(customer.id),slot.date,slot.time,String(policy.duration),policy.employeeId,policy.service,offer.address]},requestId);
+   // Recheck ownership immediately before the operational commit. Never book
+   // from a stale conversation snapshot after an operator takeover.
+   if(!bookingChatStillEligible(await readChat(companyId,event.phone),current.revision,offer.id))return true;
    const validated=prepareOperationalState(latest,prepared.next,{username:'schedule-assistant',can:p=>p==='os.editar'}),revision=Number(latest._revision||0),payload={...validated,_revision:revision+1,_updatedAt:new Date().toISOString(),_companyId:companyId};
    let saved=false;
    if(db.url===PRIMARY_DATABASE_URL)saved=Boolean(await commitNeonOperationalState(id,revision,payload,independentOperationalRows(companyId,payload,latest)));
