@@ -450,7 +450,7 @@
 .workspaceDark :is(.queueTitle,.queueTabs,.newContact) {background:#1a3754!important;border-color:#41668b!important}
 .workspaceDark :is(.queueTitle .eyebrow,.queue h2,.queue h2 span,.queueScope,.newContact>label,.newContact>small,.newContactNotice) {color:#d4e8ff!important}
 .workspaceDark .queue h2 span {background:#254765!important}
-.workspaceDark .queueTabs button:not([aria-pressed=true) {color:#d4e8ff!important}
+.workspaceDark .queueTabs button:not([aria-pressed=true]) {color:#d4e8ff!important}
 .workspaceDark .contact {background:#152a41!important;border-color:#385a78!important;box-shadow:none!important}
 .workspaceDark .contact:hover:not(:disabled) {background:#1b3956!important;border-color:#6b98c5!important}
 .workspaceDark .contact.selected {background:#234768!important;border-color:#87b7e4!important}
