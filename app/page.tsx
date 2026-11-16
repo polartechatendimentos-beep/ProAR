@@ -2102,7 +2102,7 @@ function FinancialModule({ records, modules, onOpen, onOperation, onIssueInvoice
   return <OperationalFinance records={records} modules={modules} onOpen={onOpen} onOperation={onOperation} onIssueInvoice={(record, number) => onIssueInvoice(record as ModuleRecord, number)}/>;
 }
 
-function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectCompany, isAdministrator }: { companies: TenantCompany[]; activeCompany: TenantCompany; onCompaniesChange: (companies: TenantCompany[]) => void; onSelectCompany: (company: TenantCompany) => void; isAdministrator: boolean }) {
+function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectCompany, isAdministrator }: { companies: TenantCompany[]; activeCompany: TenantCompany; onCompaniesChange: (companies: TenantCompany[], alreadyPersisted?: boolean) => void; onSelectCompany: (company: TenantCompany) => void; isAdministrator: boolean }) {
   const [tab, setTab] = useState<"Empresa" | "WhatsApp" | "Google Agenda" | "Fiscal" | "Diagnóstico" | "Inteligência Artificial" | "Segurança">("Empresa");
   const [companyName, setCompanyName] = useState(activeCompany.legalName);
   const [tradeName, setTradeName] = useState(activeCompany.tradeName);
@@ -2321,16 +2321,29 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
       if (previous) localStorage.setItem(companyStorageKey(updatedId, resource), previous);
     });
     const next = companies.map(company => company.id === activeCompany.id ? updated : company);
-    onCompaniesChange(next);
+    onCompaniesChange(next, true);
     onSelectCompany(updated);
     return updated;
   };
-  const save = () => {
-    const updated = updateCompany();
-    localStorage.setItem(companyStorageKey(updated.id, "settings"), JSON.stringify({ companyName, companyDoc, city, state, logo, phoneNumberId, wabaId, businessPhone, tokenConfigured: Boolean(token) }));
-    setToken("");
-    setSaved(tab === "WhatsApp" ? "Identificadores salvos. O token foi mascarado e não será exibido novamente." : "Configurações salvas com sucesso.");
-    window.setTimeout(() => setSaved(""), 3500);
+  const [companySaving, setCompanySaving] = useState(false);
+  const save = async () => {
+    if (companySaving) return;
+    setCompanySaving(true);
+    setSaved("");
+    try {
+      const proposed = { ...activeCompany, legalName: companyName.trim(), tradeName: tradeName.trim() || companyName.trim(), cnpj: formatCnpj(companyDoc), city: city.trim(), state, email: email.trim(), address: address.trim(), phone: businessPhone, logo };
+      const response = await fetch("/api/companies", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(proposed) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.saved) throw new Error(result.error || "O servidor não confirmou o salvamento da empresa.");
+      const updated = updateCompany();
+      localStorage.setItem(companyStorageKey(updated.id, "settings"), JSON.stringify({ companyName, companyDoc, city, state, logo, phoneNumberId, wabaId, businessPhone, tokenConfigured: Boolean(token) }));
+      setToken("");
+      setSaved("✓ Cadastro da empresa confirmado no banco de dados.");
+    } catch (error) {
+      setSaved(error instanceof Error ? "Não foi salvo: " + error.message : "Não foi possível salvar a empresa.");
+    } finally {
+      setCompanySaving(false);
+    }
   };
   const readLogo = (file?: File) => {
     if (!file) return;
@@ -2405,7 +2418,7 @@ function SettingsModule({ companies, activeCompany, onCompaniesChange, onSelectC
         </div>}
         {tab === "Inteligência Artificial" && isAdministrator && <div className="settings-form"><div className="wide settings-security-note"><ShieldCheck size={17}/><span><b>A chave nunca volta ao navegador</b><small>O servidor armazena a credencial criptografada e informa apenas os quatro últimos caracteres.</small></span></div><label className="wide">{aiStatus.configured ? "Trocar chave da OpenAI" : "Chave da OpenAI"}<input type="password" autoComplete="new-password" value={aiKey} onChange={event=>setAiKey(event.target.value)} placeholder={aiStatus.configured?`Configurada • final ${aiStatus.last4}`:"sk-proj-..."}/></label><div className="wide settings-footer-actions"><button className="primary-btn" disabled={aiBusy||!aiKey.trim()} onClick={()=>void saveAiCredential()}><LockKeyhole size={14}/>{aiStatus.configured?"Trocar chave":"Salvar chave"}</button><button className="outline-btn" disabled={aiBusy||(!aiStatus.configured&&aiStatus.source==="none")} onClick={()=>void testAiCredential()}><Zap size={14}/> Testar conexão</button>{aiStatus.configured&&<button className="outline-btn" disabled={aiBusy} onClick={()=>void removeAiCredential()}><Trash2 size={14}/> Remover chave</button>}</div></div>}
         {tab === "Segurança" && <div className="settings-form"><label className="wide settings-switch"><span><b>Exigir autenticação individual</b><small>Somente funcionários ativos podem entrar.</small></span><input type="checkbox" defaultChecked/></label><label className="wide settings-switch"><span><b>Encerrar sessão por inatividade</b><small>Protege o sistema em computadores compartilhados.</small></span><input type="checkbox" defaultChecked/></label></div>}
-        <footer><small>Empresa ativa: {activeCompany.tradeName} • base {activeCompany.id}</small>{tab !== "Inteligência Artificial" && tab !== "Google Agenda" && tab !== "WhatsApp" && tab !== "Diagnóstico" && <div className="settings-footer-actions">{tab === "Empresa" && normalizeCnpj(companyDoc) !== normalizeCnpj(activeCompany.cnpj) && <button className="outline-btn" onClick={createCompany}><Plus size={15}/> Criar como nova empresa</button>}<button className="primary-btn" disabled={tab === "Fiscal" && fiscalBusy} onClick={tab === "Fiscal" ? ()=>void saveFiscalConfiguration() : save}><CheckCircle2 size={15}/> {tab === "Fiscal" ? "Salvar configuração fiscal" : "Salvar configurações"}</button></div>}</footer>
+        <footer><small>Empresa ativa: {activeCompany.tradeName} • base {activeCompany.id}</small>{tab !== "Inteligência Artificial" && tab !== "Google Agenda" && tab !== "WhatsApp" && tab !== "Diagnóstico" && <div className="settings-footer-actions">{tab === "Empresa" && normalizeCnpj(companyDoc) !== normalizeCnpj(activeCompany.cnpj) && <button className="outline-btn" onClick={createCompany}><Plus size={15}/> Criar como nova empresa</button>}<button className="primary-btn" disabled={(tab === "Fiscal" && fiscalBusy) || (tab === "Empresa" && companySaving)} onClick={tab === "Fiscal" ? ()=>void saveFiscalConfiguration() : ()=>void save()}><CheckCircle2 size={15}/> {tab === "Fiscal" ? "Salvar configuração fiscal" : "Salvar configurações"}</button></div>}</footer>
       </div></div>
   </section>;
 }
@@ -4274,10 +4287,10 @@ export default function Home() {
     localStorage.setItem("proar-v4-companies", JSON.stringify(available));
     localStorage.setItem("proar-v4-active-company", selected.id);
   }, []);
-  const updateCompanies = (next: TenantCompany[]) => {
+  const updateCompanies = (next: TenantCompany[], alreadyPersisted = false) => {
     setCompanies(next);
     localStorage.setItem("proar-v4-companies", JSON.stringify(next));
-    next.filter(company => normalizeCnpj(company.cnpj).length === 14).forEach(company => {
+    if (!alreadyPersisted) next.filter(company => normalizeCnpj(company.cnpj).length === 14).forEach(company => {
       void fetch("/api/companies", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(company) });
     });
   };
