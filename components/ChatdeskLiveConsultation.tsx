@@ -24,8 +24,8 @@ export function ChatdeskLiveConsultation(){
  function prepare(){
   if(!service)return;
   setDraft(service.price===null
-   ? \`Olá! Localizei o serviço "\${service.name}" no nosso catálogo, mas o preço de venda não está preenchido. Vou confirmar o valor antes de informar o orçamento. Posso verificar a data e o melhor período para o atendimento?\`
-   : \`Olá! O serviço "\${service.name}" está cadastrado por \${service.price.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}. \${service.description||""} Para verificar o agendamento, informe o dia e o período desejado. A disponibilidade será confirmada pela equipe antes da reserva.\`);
+   ? `Olá! Localizei o serviço "${service.name}" no nosso catálogo, mas o preço de venda não está preenchido. Vou confirmar o valor antes de informar o orçamento. Posso verificar a data e o melhor período para o atendimento?`
+   : `Olá! O serviço "${service.name}" está cadastrado por ${service.price.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}. ${service.description||""} Para verificar o agendamento, informe o dia e o período desejado. A disponibilidade será confirmada pela equipe antes da reserva.`);
  }
  return <section className="rounded-xl border border-slate-700 bg-slate-900 p-4 text-white space-y-3" aria-label="Consulta real para atendimento">
   <h3 className="text-lg font-bold">Catálogo e agenda do ProAR</h3>
