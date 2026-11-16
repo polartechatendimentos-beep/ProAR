@@ -388,3 +388,42 @@
 @media (prefers-reduced-motion:reduce) {
   .workspace button {transition:none}
 }
+
+
+/* Correção visual após revisão da tela real: cores visíveis também sem chat aberto. */
+.workspace {--desk-bg:#e3eefb;--surface-soft:#eaf3ff;--line:#b4cce5;background:linear-gradient(130deg,#dcecff,#edf4ff 48%,#def4f1)}
+.workspace .content {background:transparent}
+.workspace .queue {background:linear-gradient(180deg,#e0eeff 0,#f3f9ff 210px,#fff 100%);border:2px solid #8fb8e3}
+.workspace .queueTitle {padding:9px 10px;background:#d2e6fc;border-radius:10px}
+.workspace .queueTitle .eyebrow {color:#11518c}
+.workspace .queueTabs {background:#c9e1fc;border:1px solid #95bce9}
+.workspace .queueTabs button:not([aria-pressed=true]) {color:#1d4b77}
+.workspace .conversation {background:linear-gradient(145deg,#d9eaff 0%,#e7f5ff 55%,#d8f2ee 100%);border:2px solid #9bbfe5}
+.workspace .chatEmpty {background:radial-gradient(ellipse at center,#fff 0%,#dcecff 75%,#c9e4fa 100%);padding:24px}
+.workspace .chatEmpty h2 {color:#0e497d}
+.workspace .chatEmpty>p {color:#315b7e!important}
+.workspace .chatEmpty .eyebrow {color:#1a65a3}
+.workspace .emptyFeatures {border-top-color:#9ebfe0}
+.workspace .emptyFeatures span {color:#215b8a}
+.workspace .queueSummary {gap:10px}
+.workspace .queueSummary>*:nth-child(3n+1) {background:#fff0c5!important;border:1px solid #e2b85c!important;color:#765000!important}
+.workspace .queueSummary>*:nth-child(3n+2) {background:#d9eaff!important;border:1px solid #94bce6!important;color:#164f85!important}
+.workspace .queueSummary>*:nth-child(3n+3) {background:#d6f3e6!important;border:1px solid #8ccdb0!important;color:#116342!important}
+.workspace .queueSummary>* :is(b,strong,span) {color:inherit}
+.workspace .contact {border-left:4px solid #65a6df!important}
+.workspace .contact.selected {border-left:5px solid #145da9!important}
+.workspace .newContact {background:#cfe5ff;border:1px solid #85b6e9;padding:12px;border-radius:12px}
+.workspace .newContact>label {color:#144c80;font-weight:800}
+.workspace .newContactRow {display:grid;grid-template-columns:minmax(0,1fr);gap:7px}
+.workspace .content .newContactRow input {width:100%;min-width:0;min-height:42px;background:#fff!important;border:1px solid #8fb8df!important;font-size:13px!important}
+.workspace .newContactRow button {width:100%;min-height:38px;background:#1264b5!important;color:#fff!important;border-color:#1264b5!important;font-weight:750}
+.workspace .newContact>small {color:#315b7e}
+.workspace .newContactNotice {color:#174a79}
+.workspace .assistant {background:linear-gradient(155deg,#e0eeff,#f6faff 48%,#e2f2ff);border:2px solid #a9c9ec}
+.workspace .customerContext {background:#eaf4ff;border-color:#a9c9e7}
+.workspace .panel {border-color:#9fc5e8}
+.workspace .newContactRow button:hover:not(:disabled) {background:#0c4f92!important}
+@media (max-width:900px) {
+  .workspace .chatEmpty {padding:22px 12px}
+  .workspace .queue {border-width:1px}
+}
