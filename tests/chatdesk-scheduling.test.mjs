@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {preferredAfter,availableSlots,validateSchedulePolicy,defaultSchedulePolicy} from '../lib/chatdesk-scheduling.ts';
+import {preferredAfter,availableSlots,validateSchedulePolicy,defaultSchedulePolicy,bookingChatStillEligible} from '../lib/chatdesk-scheduling.ts';
 const policy={...defaultSchedulePolicy,enabled:true,employeeId:'T1',service:'Higienização',duration:60,buffer:30};
 const state={customers:[{id:'C1',name:'Cliente',status:'Ativo'}],serviceOrders:[],moduleRecords:{Funcionários:[{id:'T1',name:'Técnico',status:'Ativo'}]}};
 test('interpreta preferência após 16h sem aceitar horas inválidas',()=>{
@@ -14,4 +14,15 @@ test('opções respeitam expediente, duração, deslocamento e conflitos de téc
 test('não oferece técnico inativo e exige regras completas para ativar',()=>{
  const unavailable=structuredClone(state);unavailable.moduleRecords.Funcionários[0].status='Inativo';assert.deepEqual(availableSlots(unavailable,policy,'C1','Rua A','16:00',new Date('2026-11-16T12:00:00-03:00')),[]);
  assert.throws(()=>validateSchedulePolicy({...policy,employeeId:''}));assert.throws(()=>validateSchedulePolicy({...policy,end:'07:00'}));
+});
+
+test('handoff cancels stale autonomous reservation before OS persistence',()=>{
+ const chat={revision:7,assignee:'',botPaused:false,optOut:false,scheduleOffer:{id:'abcdef12'}};
+ assert.equal(bookingChatStillEligible(chat,7,'abcdef12'),true);
+ assert.equal(bookingChatStillEligible({...chat,assignee:'operador'},7,'abcdef12'),false);
+ assert.equal(bookingChatStillEligible({...chat,botPaused:true},7,'abcdef12'),false);
+ assert.equal(bookingChatStillEligible({...chat,optOut:true},7,'abcdef12'),false);
+ assert.equal(bookingChatStillEligible({...chat,revision:8},7,'abcdef12'),false);
+ assert.equal(bookingChatStillEligible({...chat,scheduleOffer:{id:'nova1234'}},7,'abcdef12'),false);
+ assert.equal(bookingChatStillEligible(null,7,'abcdef12'),false);
 });
