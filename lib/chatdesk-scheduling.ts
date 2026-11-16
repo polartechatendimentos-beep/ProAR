@@ -28,3 +28,17 @@ export function availableSlots(state:ActionState,policy:SchedulePolicy,customerI
  return results;
 }
 export function offerMessage(offer:ScheduleOffer){return `Encontrei estas opções para ${offer.policy.service}:\n${offer.slots.map((s,i)=>`${i+1} — ${s.date.split('-').reverse().join('/')} às ${s.time}`).join('\n')}\nEndereço: ${offer.address}\nResponda AGENDAR ${offer.id} 1 (ou 2, 3) para escolher. As opções expiram em 15 minutos; o horário será conferido novamente. Para outra data ou endereço, peça ajuda à equipe.`;}
+
+/** Fail-closed guard before persisting a chosen slot.
+ * If an operator takes over or the conversation changes, require a new review.
+ * This is a defense in depth; it is NOT an atomic cross-store transaction.
+ */
+export function bookingChatStillEligible(
+ chat:{revision:number;assignee?:string;botPaused?:boolean;optOut?:boolean;scheduleOffer?:{id:string}}|null,
+ expectedRevision:number,
+ offerId:string,
+):boolean{
+ return !!chat && Number.isSafeInteger(expectedRevision) &&
+  chat.revision===expectedRevision && !chat.assignee && !chat.botPaused &&
+  !chat.optOut && chat.scheduleOffer?.id===offerId;
+}
