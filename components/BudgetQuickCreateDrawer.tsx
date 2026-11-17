@@ -1,5 +1,7 @@
 "use client";
 
+import {CustomerAddressFields} from "./CustomerAddressFields";
+import type {CustomerAddress} from "@/lib/customer-address";
 import { useEffect, useMemo, useState } from "react";
 import { CustomerHierarchyTree } from "./CustomerHierarchyTree";
 import { isMunicipalCustomer } from "@/lib/customer-hierarchy";
@@ -8,7 +10,7 @@ import { Building2, CheckCircle2, ChevronRight, LoaderCircle, MapPin, Plus, Sear
 type QuickCustomer = { organizationType?:string; id: string; name: string; doc: string; legalName?: string; tradeName?: string; phone?: string; email?: string; city?: string; state?: string };
 type QuickStructure = { customerId?:string; id: string; name: string; client: string; category?: string; parentId?: string; hierarchyLevel?: string; environmentType?: string };
 
-type CustomerDraft = { name: string; legalName: string; tradeName: string; doc: string; phone: string; email: string; city: string; state: string };
+type CustomerDraft = CustomerAddress & { name: string; legalName: string; tradeName: string; doc: string; phone: string; email: string; city: string; state: string };
 type StructureDraft = { kind: "Setor" | "Unidade" | "Ambiente"; name: string; parentId: string; environmentType: string; roomNumber: string; description: string };
 
 export type QuickCreateMode = "customer" | "structure";
@@ -102,8 +104,7 @@ export function BudgetQuickCreateDrawer({
         <label>Nome fantasia<input value={customerDraft.tradeName} onChange={event => setCustomerDraft(current => ({ ...current, tradeName: event.target.value }))}/></label>
         <label>Telefone<input value={customerDraft.phone} onChange={event => setCustomerDraft(current => ({ ...current, phone: event.target.value }))}/></label>
         <label>E-mail<input type="email" value={customerDraft.email} onChange={event => setCustomerDraft(current => ({ ...current, email: event.target.value }))}/></label>
-        <label>Cidade<input value={customerDraft.city} onChange={event => setCustomerDraft(current => ({ ...current, city: event.target.value }))}/></label>
-        <label>UF<select value={customerDraft.state} onChange={event => setCustomerDraft(current => ({ ...current, state: event.target.value }))}>{["SP","MG","PR","RJ","MS","GO","SC","RS"].map(item => <option key={item}>{item}</option>)}</select></label>
+        <CustomerAddressFields value={customerDraft} onChange={patch=>setCustomerDraft(current=>({...current,...patch}))}/>
         {feedback && <p className={`budget-quick-feedback ${lookupState === "error" ? "error" : ""}`}><CheckCircle2 size={14}/>{feedback}</p>}
         <footer><button type="button" className="outline-btn" onClick={onClose}>Cancelar</button><button type="submit" className="primary-btn"><CheckCircle2 size={15}/> Salvar e selecionar</button></footer>
       </form> : <form className="budget-quick-form" onSubmit={submitStructure}>
