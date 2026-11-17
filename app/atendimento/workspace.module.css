@@ -564,3 +564,8 @@
 .workspace :global(.connection-badge) {display:inline-flex;align-items:center;padding:4px 9px;border-radius:999px;background:#dcfce7;color:#166534;font-size:12px;font-weight:700}
 .workspace :global(.whatsapp-settings-form .wide) {min-width:0}
 .workspace :global(.whatsapp-settings-form button) {margin-block:5px}
+
+.workspace .panel,.workspace .crmPanel {width:100%;max-width:none}
+.workspace .panel>p,.workspace .crmPanel>p {max-width:100%}
+.workspace .systemActions>form {width:100%;max-width:none}
+.workspace .systemActions {width:100%}
