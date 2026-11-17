@@ -115,10 +115,3 @@ export function WhatsAppWebConnection({ companyId }: { companyId: string }) {
   </div>;
 }
 
-
-.connection-actions {display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:12px 0}
-.connection-actions>button {margin:0!important}
-.connection-status {display:flex;align-items:center;flex-wrap:wrap;gap:8px}
-.connection-badge {display:inline-flex;align-items:center;padding:4px 9px;border-radius:999px;background:#dcfce7;color:#166534;font-size:12px;font-weight:700}
-.whatsapp-settings-form .wide {min-width:0}
-.whatsapp-settings-form button {margin-block:5px}

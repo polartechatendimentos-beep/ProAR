@@ -557,3 +557,10 @@
 .workspace :global(.connection-badge) {display:inline-flex;align-items:center;padding:4px 9px;border-radius:999px;background:#dcfce7;color:#166534;font-size:12px;font-weight:700}
 .workspace :global(.whatsapp-settings-form .wide) {min-width:0}
 .workspace :global(.whatsapp-settings-form button) {margin-block:5px}
+
+.workspace :global(.connection-actions) {display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:12px 0}
+.workspace :global(.connection-actions>button) {margin:0!important}
+.workspace :global(.connection-status) {display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.workspace :global(.connection-badge) {display:inline-flex;align-items:center;padding:4px 9px;border-radius:999px;background:#dcfce7;color:#166534;font-size:12px;font-weight:700}
+.workspace :global(.whatsapp-settings-form .wide) {min-width:0}
+.workspace :global(.whatsapp-settings-form button) {margin-block:5px}
