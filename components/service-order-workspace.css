@@ -14,6 +14,29 @@
 
 /* Keep daily work visible on narrow screens without removing secondary actions. */
 .os-location-toggle{display:none}
+/* Service order detail: wider desktop canvas and legible operational summary. */
+@media(min-width:769px){
+ .order-detail-modal{width:min(1160px,96vw)!important;max-width:1160px!important}
+ .os-embedded .os-summary-grid{grid-template-columns:minmax(0,2fr) minmax(300px,.88fr);gap:18px;padding:18px 20px}
+ .os-embedded .os-form-grid{gap:14px}
+ .os-embedded.os-workspace .os-form-grid label{color:#c3d4e8!important;font-size:12px;line-height:1.35}
+ .os-embedded .os-form-grid select,.os-embedded .os-form-grid input{min-height:44px;box-sizing:border-box;border-radius:9px;font-size:13px}
+ .os-embedded .os-form-grid label small{color:#91a9c3;font-size:11px;line-height:1.4}
+ .os-embedded .os-readiness{border-left:3px solid #2185ff}
+ .os-embedded .os-readiness h3,.os-embedded .os-close-check h3{font-size:15px;line-height:1.35}
+ .os-embedded .os-readiness p{color:#b6c9df!important;line-height:1.55}
+ .os-embedded .os-close-check dl{display:grid;gap:9px;margin:13px 0}
+ .os-embedded .os-close-check dl div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:start}
+ .os-embedded .os-close-check dt{color:#9db3cc;line-height:1.45}
+ .os-embedded .os-close-check dd{max-width:150px;color:#edf5ff;text-align:right;overflow-wrap:anywhere;line-height:1.4}
+ .os-embedded .os-close-list{display:grid;gap:7px;margin-top:13px}
+ .os-embedded .os-helper-text{color:#a9bfd7;line-height:1.45}
+}
+@media(min-width:769px) and (max-width:1024px){
+ .os-embedded .os-summary-grid{grid-template-columns:minmax(0,1fr)}
+ .os-embedded .os-side-column{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+ .os-embedded .os-side-column>.os-card:last-child{grid-column:1/-1}
+}
 @media(max-width:700px){
  .order-detail-modal .order-detail-head{padding:10px 12px;gap:7px}
  .order-detail-modal .order-detail-head h2{font-size:16px!important;margin:3px 0;line-height:1.3}
