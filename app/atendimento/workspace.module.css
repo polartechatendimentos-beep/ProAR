@@ -501,3 +501,14 @@
   .header .themeToggle {min-width:36px;padding:7px!important}
   .header .themeToggle span {display:none}
 }
+
+/* Suggestions stay next to the message being drafted. */
+.composer{max-height:55%;overflow-y:auto;flex-shrink:0}
+.composer :global(.chat-reply-ai){margin:8px 0;padding:9px;border:1px solid var(--line);border-radius:9px;background:var(--surface);font-size:12px}
+.composer :global(.chat-reply-ai-toolbar),.composer :global(.chat-reply-ai) section>div{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.composer :global(.chat-reply-ai) button{min-height:29px;padding:5px 8px;font-size:11px}
+.composer :global(.chat-reply-ai) label{display:flex;gap:5px;align-items:center;font-size:11px}
+.composer :global(.chat-reply-ai) input[type=checkbox]{width:14px;height:14px;min-height:0;margin:0}
+.composer :global(.chat-reply-ai) section{margin-top:8px;padding:8px;max-height:175px;overflow-y:auto;border:1px solid var(--line);border-radius:7px;background:var(--surface-soft)}
+.composer :global(.chat-reply-ai) p{white-space:pre-wrap;overflow-wrap:anywhere;margin:4px 0 8px}
+.composer :global(.chat-reply-ai)>small{display:block;margin-top:5px;color:var(--muted);font-size:10px}
