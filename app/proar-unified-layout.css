@@ -1,7 +1,7 @@
 /* ProAR Unified Layout 2026 — camada final de remodelação administrativa */
-:root{--ux-bg:#050a14;--ux-surface:#081120;--ux-card:#0b1628;--ux-soft:#0e1d35;--ux-border:#14253e;--ux-border2:#1f385c;--ux-hover:#112038;--ux-primary:#1d6bf3;--ux-primary2:#1657c7;--ux-cyan:#38bdf8;--ux-text:#e2e8f0;--ux-muted:#8294aa;--ux-good:#34d399;--ux-warn:#fbbf24;--ux-danger:#fb7185;--ux-radius:14px}
+:root{--ux-bg:#081321;--ux-surface:#0d1b2c;--ux-card:#102136;--ux-soft:#13263c;--ux-border:#334b64;--ux-border2:#45627f;--ux-hover:#1b3956;--ux-primary:#1671df;--ux-primary2:#24598d;--ux-cyan:#23a8ff;--ux-text:#eaf3ff;--ux-muted:#b6c8dd;--ux-good:#72d6ae;--ux-warn:#fbbf24;--ux-danger:#fb7185;--ux-radius:14px}
 html,body{background:var(--ux-bg)!important;color:var(--ux-text)!important;font-family:Inter,var(--font-geist-sans),ui-sans-serif,system-ui,sans-serif!important}.app-shell,.main,.page-content{background:var(--ux-bg)!important}.page-content{max-width:1680px;margin:0 auto;padding:16px 20px 32px!important}
-.topbar{background:rgba(5,10,20,.96)!important;border-bottom:1px solid var(--ux-border)!important}.company-context{background:#071426!important;border-color:var(--ux-border)!important;color:#7ebcff!important}
+.topbar{background:linear-gradient(105deg,#174f88 0%,#117f96 100%)!important;border-bottom:1px solid #3b7890!important;color:#f4f9ff!important}.company-context{background:#071426!important;border-color:var(--ux-border)!important;color:#7ebcff!important}
 :where(.panel,.module-page,.module-hero,.management-hero,.settings-card,.settings-nav,.erp-card,.detail-header,.orders-panel,.customer-panel,.pmoc-panel,.os-tracking-panel,.os-status-panel,.os-contract-panel,.assistance-panel,.order-items-panel,.houses-hero,.bidding-hero,.budget-pdv-hero){border-color:var(--ux-border)!important;background:var(--ux-card)!important;color:var(--ux-text)!important;box-shadow:0 12px 32px rgba(0,0,0,.18)!important}
 :where(.management-hero,.module-hero,.budget-pdv-hero,.bidding-hero,.houses-hero){border-radius:16px!important}
 :where(.management-tabs,.tabs,.tab-bar,.settings-nav){border-color:var(--ux-border)!important;background:#071426!important}
@@ -48,3 +48,7 @@ footer{border-color:var(--ux-border)!important;color:#60758c!important}
   }
   .page-content>.module-page.management-module{max-width:none!important}
 }
+
+/* Paleta alinhada à Central de Atendimento: contraste, navegação e foco. */
+:where(.management-tabs,.tabs,.tab-bar) button.active{background:linear-gradient(110deg,#2167a8,#1677c8)!important;color:#fff!important;border-color:#6ca8d6!important}
+:where(.proar-full-system button,.proar-full-system a,.proar-full-system input,.proar-full-system select,.proar-full-system textarea):focus-visible{outline:3px solid #42a5ff!important;outline-offset:2px!important}
