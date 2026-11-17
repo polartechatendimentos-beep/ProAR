@@ -33,3 +33,201 @@
   .database-contingency{grid-template-columns:auto 1fr;margin:10px 10px 0}
   .database-contingency small,.database-contingency button{grid-column:2}
 }
+
+
+/* Ajustes globais de contraste, alinhamento e sobreposições — ProAR 2026 */
+
+/* Superfícies e textos seguem o tema escolhido, inclusive utilitários Tailwind antigos. */
+html[data-proar-system-theme="dark"] .proar-full-system :where(.bg-white,.bg-slate-50,.bg-slate-100,.bg-gray-50,.bg-gray-100,.bg-neutral-50) {
+  background-color: var(--ux-card, #0b1628) !important;
+  color: var(--ux-text, #e2e8f0) !important;
+  border-color: var(--ux-border, #14253e) !important;
+}
+html[data-proar-system-theme="dark"] .proar-full-system :where(.bg-white,.bg-slate-50,.bg-slate-100,.bg-gray-50,.bg-gray-100,.bg-neutral-50) :where(.text-slate-900,.text-slate-800,.text-slate-700,.text-gray-900,.text-gray-800,.text-gray-700,.text-neutral-900) {
+  color: #e2e8f0 !important;
+}
+html[data-proar-system-theme="light"] .proar-full-system :where(.bg-white,.bg-slate-50,.bg-slate-100,.bg-gray-50,.bg-gray-100,.bg-neutral-50) {
+  background-color: #fff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+html[data-proar-system-theme="light"] .proar-full-system :where(.bg-white,.bg-slate-50,.bg-slate-100,.bg-gray-50,.bg-gray-100,.bg-neutral-50) :where(.text-slate-100,.text-slate-200,.text-slate-300,.text-gray-100,.text-gray-200,.text-gray-300) {
+  color: #0f172a !important;
+}
+
+/* Banners, cabeçalhos e painéis de operação mantêm texto claro quando usam fundo escuro. */
+html[data-proar-system-theme="light"] .proar-full-system :where(
+  .management-hero,.module-hero,.budget-pdv-hero,.bidding-hero,.houses-hero,
+  .finance-control-strip,.report-filter-bar,.dashboard-hero,.activity-hero,
+  .operations-hero,.tender-hero,.fiscal-hero,.diagnostic-hero,.work-today-panel
+) {
+  color: #e2e8f0 !important;
+}
+html[data-proar-system-theme="light"] .proar-full-system :where(
+  .management-hero,.module-hero,.budget-pdv-hero,.bidding-hero,.houses-hero,
+  .finance-control-strip,.report-filter-bar,.dashboard-hero,.activity-hero,
+  .operations-hero,.tender-hero,.fiscal-hero,.diagnostic-hero,.work-today-panel
+) :where(h1,h2,h3,h4,p,small,label,strong,b,span) {
+  color: #e2e8f0 !important;
+}
+html[data-proar-system-theme="dark"] .proar-full-system :where(.table-wrap,.material-table,.fiscal-list-panel,.profile-table) {
+  color: #e2e8f0 !important;
+}
+html[data-proar-system-theme="dark"] .proar-full-system :where(.table-wrap,.material-table,.fiscal-list-panel,.profile-table) :where(table,thead,tbody,tr,td,th) {
+  background-color: #0b1628 !important;
+  color: #dbe7f6 !important;
+  border-color: #1b304a !important;
+}
+html[data-proar-system-theme="light"] .proar-full-system :where(.table-wrap,.material-table,.fiscal-list-panel,.profile-table) :where(table,thead,tbody,tr,td,th) {
+  background-color: #fff !important;
+  color: #1e293b !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Contexto da empresa legível nos dois temas. */
+html[data-proar-system-theme="dark"] .proar-full-system .company-context {
+  color: #dbeafe !important;
+}
+html[data-proar-system-theme="dark"] .proar-full-system .company-context small {
+  color: #c2d3e8 !important;
+}
+html[data-proar-system-theme="light"] .proar-full-system .company-context {
+  background: #eaf2fb !important;
+  color: #334155 !important;
+  border-color: #cbd5e1 !important;
+}
+html[data-proar-system-theme="light"] .proar-full-system .company-context small {
+  color: #475569 !important;
+}
+
+/* Barra de busca: campo preenche a pílula sem ultrapassar seus limites. */
+.proar-full-system :where(.list-search,.wide-search,.budget-search,.pdv-search,.service-picker-search,.finance-search,.bidding-filters>label:first-child) {
+  box-sizing: border-box !important;
+  flex: 1 1 240px !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+.proar-full-system :where(.list-search,.wide-search,.budget-search,.pdv-search,.service-picker-search,.finance-search,.bidding-filters>label:first-child) > input {
+  box-sizing: border-box !important;
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Tabelas largas rolam dentro do próprio painel; a coluna final não some. */
+.proar-full-system :where(.table-wrap,.material-table,.fiscal-list-panel,.profile-table,.employee-table,.employee-history-table,.product-table,.supplier-table) {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto !important;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.proar-full-system :where(.table-wrap,.material-table,.fiscal-list-panel,.profile-table,.employee-table,.employee-history-table,.product-table,.supplier-table) table {
+  width: 100%;
+}
+@media (min-width: 768px) {
+  .proar-full-system :where(.table-wrap,.material-table,.fiscal-list-panel,.profile-table,.employee-table,.employee-history-table,.product-table,.supplier-table):has(th:nth-child(6)) table {
+    min-width: 900px;
+  }
+}
+.proar-full-system :where(.service-orders,.employees-workspace,.employee-table,.product-table,.supplier-table) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Cinco indicadores ficam na mesma linha em desktop e quebram em grupos equilibrados. */
+@media (min-width: 1200px) {
+  .proar-full-system :where(.module-summary,.finance-kpis,.report-kpis,.activity-kpis,.pending-kpis,.operations-kpis,.dashboard-kpis,.work-today-kpis):has(> :nth-child(5)) {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+}
+@media (min-width: 768px) and (max-width: 1199px) {
+  .proar-full-system :where(.module-summary,.finance-kpis,.report-kpis,.activity-kpis,.pending-kpis,.operations-kpis,.dashboard-kpis,.work-today-kpis):has(> :nth-child(5)) {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+@media (max-width: 767px) {
+  .proar-full-system :where(.module-summary,.finance-kpis,.report-kpis,.activity-kpis,.pending-kpis,.operations-kpis,.dashboard-kpis,.work-today-kpis):has(> :nth-child(5)) {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+.proar-full-system :where(.module-summary,.finance-kpis,.report-kpis,.activity-kpis,.pending-kpis,.operations-kpis,.dashboard-kpis,.work-today-kpis) > * {
+  min-width: 0;
+}
+.proar-full-system :where(.action-count-badge,.dashboard-action-count,.pending-count,.badge-count) {
+  white-space: nowrap !important;
+}
+
+/* Aparência sai do canto de ações e entra na faixa superior, sem cobrir conteúdo. */
+.proar-appearance-toolbar {
+  top: 14px !important;
+  left: 52vw !important;
+  right: auto !important;
+  bottom: auto !important;
+  z-index: 75 !important;
+}
+.proar-appearance-toolbar[data-open="true"] {
+  top: 82px !important;
+  left: auto !important;
+  right: 16px !important;
+}
+@media (min-width: 768px) and (max-width: 1180px) {
+  .proar-appearance-toolbar:not([data-open="true"]) {
+    top: 78px !important;
+    left: auto !important;
+    right: 16px !important;
+  }
+}
+@media (max-width: 767px) {
+  .proar-appearance-toolbar:not([data-open="true"]) {
+    top: 78px !important;
+    left: auto !important;
+    right: 10px !important;
+  }
+}
+
+/* Avisos ficam abaixo do cabeçalho e separados entre si. */
+.proar-connectivity-banner {
+  top: 82px !important;
+  left: auto !important;
+  right: 18px !important;
+  transform: none !important;
+  z-index: 70 !important;
+  width: min(430px, calc(100vw - 36px)) !important;
+}
+.global-feedback-stack {
+  top: 154px !important;
+  right: 18px !important;
+  z-index: 10000 !important;
+}
+@media (max-width: 680px) {
+  .proar-connectivity-banner { top: 76px !important; right: 10px !important; width: calc(100vw - 20px) !important; }
+  .global-feedback-stack { top: 144px !important; right: 10px !important; width: calc(100vw - 20px) !important; }
+}
+
+/* Evita que cabeçalhos longos de Obras se aproximem do perfil. */
+.proar-full-system .topbar .headline {
+  min-width: 0;
+  max-width: min(56vw, 620px);
+}
+.proar-full-system .topbar .headline p {
+  max-width: 480px;
+  overflow-wrap: anywhere;
+}
+.proar-full-system .settings-page,
+.proar-full-system .settings-content,
+.proar-full-system .settings-main {
+  box-sizing: border-box;
+  min-width: 0;
+  padding-right: clamp(14px, 2vw, 32px);
+}
