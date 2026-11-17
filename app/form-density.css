@@ -14,6 +14,16 @@
   height: 72px;
 }
 
+/* Modal textareas that are rendered outside labels use the same compact size. */
+.app-shell .modal textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 680px !important;
+  min-height: 72px;
+  height: 72px;
+}
+
 .app-shell .customer-create-modal label > input.street {
   max-width: 520px !important;
 }
@@ -53,6 +63,10 @@
 
   .app-shell :where(.modal,.panel,.settings-card,.module-page,.customer-profile-workspace)
     label > textarea {
+    max-width: 100% !important;
+  }
+
+  .app-shell .modal textarea {
     max-width: 100% !important;
   }
 }
