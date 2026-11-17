@@ -270,3 +270,17 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+
+@media (min-width: 801px) {
+  .work-register-modal:not(.external-access-modal) .work-register-body > label.wide > input {
+    width: 100%;
+    max-width: none !important;
+  }
+}
+
+.work-register-modal:not(.external-access-modal) .work-config-section > header > button {
+  flex: 0 0 auto;
+  min-width: max-content;
+  white-space: nowrap;
+}
