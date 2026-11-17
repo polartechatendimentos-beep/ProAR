@@ -1,0 +1,58 @@
+/* ProAR — campos proporcionais nas telas de cadastro e operação */
+.app-shell :where(.modal,.panel,.settings-card,.module-page,.customer-profile-workspace)
+  label > :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),select,textarea) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 460px !important;
+}
+
+.app-shell :where(.modal,.panel,.settings-card,.module-page,.customer-profile-workspace)
+  label > textarea {
+  max-width: 680px !important;
+  min-height: 72px;
+  height: 72px;
+}
+
+.app-shell .customer-create-modal label > input.street {
+  max-width: 520px !important;
+}
+
+.app-shell .customer-create-modal label > input.full {
+  max-width: 680px !important;
+}
+
+.app-shell .modal .form-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 12px 14px;
+}
+
+.app-shell .modal .form-grid > .wide {
+  grid-column: 1 / -1 !important;
+}
+
+@media (max-width: 1024px) {
+  .app-shell .modal .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .app-shell .modal .form-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .app-shell .modal .form-grid > .wide {
+    grid-column: 1 / -1 !important;
+  }
+
+  .app-shell :where(.modal,.panel,.settings-card,.module-page,.customer-profile-workspace)
+    label > :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),select) {
+    max-width: 100% !important;
+  }
+
+  .app-shell :where(.modal,.panel,.settings-card,.module-page,.customer-profile-workspace)
+    label > textarea {
+    max-width: 100% !important;
+  }
+}
