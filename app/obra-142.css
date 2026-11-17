@@ -242,3 +242,31 @@
   }
 }
 
+
+
+/* Modal de cadastro de obra: distribuição equilibrada em duas colunas no desktop. */
+@media (min-width: 801px) {
+  .work-register-modal:not(.external-access-modal) {
+    width: min(980px, 94vw);
+    max-width: 980px;
+  }
+
+  .work-register-modal:not(.external-access-modal) .work-register-body {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .work-register-modal:not(.external-access-modal) .work-register-body > .wide {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 800px) {
+  .work-register-modal:not(.external-access-modal) {
+    width: min(720px, 94vw);
+  }
+
+  .work-register-modal:not(.external-access-modal) .work-register-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
