@@ -77,9 +77,10 @@ export function WhatsAppWebConnection({ companyId }: { companyId: string }) {
 
   return <div className="settings-form whatsapp-settings-form">
     <div className="wide">
+      <div className="connection-actions">
       <h4>NexoCloud • WhatsApp Web por QR Code</h4>
       <p>O servidor Evolution API da NexoCloud mantém uma instância separada para esta empresa. Leia o QR Code com o número que ela usará; outras empresas não compartilham a conexão.</p>
-      <p role="status">{connection?.error || (connection?.state === "open" ? "WhatsApp conectado" :
+      <p role="status" className={connection?.state === "open" ? "connection-status is-connected" : "connection-status"}>{connection?.state === "open" && <span className="connection-badge">Conectado</span>}{connection?.error || (connection?.state === "open" ? "WhatsApp conectado" :
         connection?.state === "connecting" ? "Aguardando pareamento" :
         connection?.needsProvisioning ? "Pronto para conectar o WhatsApp da empresa." :
         connection?.state === "close" ? "WhatsApp desconectado" :
@@ -109,6 +110,8 @@ export function WhatsAppWebConnection({ companyId }: { companyId: string }) {
           {new Date(item.createdAt).toLocaleString("pt-BR")} • {item.recipient} • {item.status === "accepted" ? "Aceito pelo servidor" : item.status === "processing" ? "Em processamento; conferir antes de reenviar" : item.status === "blocked-optout" ? "Bloqueado por pedido do cliente" : "Aguardando conferência"}{item.error ? ` • ${item.error}` : ""}
         </li>)}</ul>
       </div>}
+      </div>
     </div>
   </div>;
 }
+

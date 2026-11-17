@@ -1,7 +1,7 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
-type Props={phone:string;companyId:string;draft:string;disabled:boolean;canRemember?:boolean;onApply:(text:string)=>void};
-export function ChatReplyAssistant({phone,companyId,draft,disabled,canRemember=false,onApply}:Props){
+type Props={phone:string;companyId:string;draft:string;disabled:boolean;canRemember?:boolean;onApply:(text:string)=>void;onOpenSettings?:()=>void};
+export function ChatReplyAssistant({phone,companyId,draft,disabled,canRemember=false,onApply,onOpenSettings}:Props){
  const [result,setResult]=useState<{text:string;input:string}|null>(null),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[automatic,setAutomatic]=useState(true);
  const sequence=useRef(0),controller=useRef<AbortController|null>(null),latest=useRef({phone,draft}),applied=useRef('');
  useEffect(()=>{latest.current={phone,draft};},[phone,draft]);
@@ -30,6 +30,6 @@ export function ChatReplyAssistant({phone,companyId,draft,disabled,canRemember=f
   {result&&result.input===draft&&<section aria-label="Prévia da sugestão"><p>{result.text}</p><small>Confira antes de enviar.</small><div><button type="button" disabled={disabled||busy} onClick={()=>{applied.current=result.text;onApply(result.text);setResult(null);}}>Usar sugestão</button><button type="button" onClick={()=>setResult(null)}>Descartar</button></div></section>}
   {canRemember&&<button type="button" disabled={disabled||busy||draft.trim().length<10} onClick={()=>void remember()}>Salvar texto como referência da empresa</button>}
   <small>Considera esta conversa e os modelos aprovados da empresa. O envio continua com você.</small>
-  {notice&&<p role="status">{notice}</p>}
+  {notice&&<p role="status">{notice}{onOpenSettings&&/ative a ia|configura[cç][aã]o/i.test(notice)&&<> <button type="button" onClick={onOpenSettings}>Abrir configurações do assistente</button></>}</p>}
  </div>;
 }
