@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     const query = String(request.nextUrl.searchParams.get("q") || "").trim().toLocaleLowerCase("pt-BR").slice(0,100);
     const modules = Object.entries(state.moduleRecords || {}).map(([module, rows]) => ({ module, count: rows.length }));
     const phoneMatches = (value:unknown) => {try {return query.replace(/\D/g, "").length >= 10 && actionPhoneForSearch(value) === actionPhoneForSearch(query);}catch{return false;}};
-    const queryTokens = query.split(/\\s+/).filter(token => token.length >= 4);
+    const queryTokens = query.split(/\s+/).filter(token => token.length >= 4);
     const matches = (row: Record<string,unknown>) => {
       if (!query) return true;
       if (phoneMatches(row.phone) || phoneMatches(row.whatsapp)) return true;
