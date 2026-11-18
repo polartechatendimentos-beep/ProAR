@@ -43,7 +43,7 @@ export function ChatdeskSystemActions({ companyId, phone = "", name = "" }: {com
   }
   const value = (key:string) => fields[key] || "";
   function edit(key:string,text:string){setFields(previous=>({...previous,[key]:text}));setReview(null);if(kind==="customer"&&["name","address"].includes(key)){setSimilarCheck("idle");setSimilarCustomers([]);setAllowSimilarCreate(false);}}
-  const normalizeComparable=(input:string)=>input.normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").toLocaleLowerCase("pt-BR").replace(/[^a-z0-9]+/g," ").trim();
+  const normalizeComparable=(input:string)=>input.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR").replace(/[^a-z0-9]+/g," ").trim();
   async function checkSimilarCustomers() {
     const customerName=value("name").trim(), customerAddress=value("address").trim();
     if(customerName.length<3||customerAddress.length<5){setFeedback("Preencha nome e endereço para verificar cadastros parecidos.");return;}
@@ -131,8 +131,8 @@ export function ChatdeskSystemActions({ companyId, phone = "", name = "" }: {com
     finally{setCepBusy(false);}
   }
   function useCepMatch(match:CepMatch) {
-    const number=voiceDraft?.address.match(/\\b(?:n(?:ú|u)mero|n[º°o]|#)\\s*(\\d+[A-Za-z]?)\\b/i)?.[1];
-    const reference=voiceDraft?.address.match(/\\(([^)]+)\\)/)?.[1];
+    const number=voiceDraft?.address.match(/\b(?:n(?:ú|u)mero|n[º°o]|#)\s*(\d+[A-Za-z]?)\b/i)?.[1];
+    const reference=voiceDraft?.address.match(/\(([^)]+)\)/)?.[1];
     const address=[match.street,number?`nº ${number}`:null,match.complement,match.neighborhood,match.city+`/${match.state}`,`CEP ${match.zipCode}`,reference?`Referência: ${reference}`:null].filter(Boolean).join(" • ");
     setFields(previous=>({...previous,address}));
     setVoiceDraft(previous=>previous?({...previous,address,city:match.city,state:match.state,street:match.street}):previous);
