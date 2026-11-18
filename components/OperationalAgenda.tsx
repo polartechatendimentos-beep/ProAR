@@ -1,5 +1,6 @@
 "use client";
-import {createPortal,useMemo,useState,useSyncExternalStore} from "react";
+import {useMemo,useState,useSyncExternalStore} from "react";
+import {createPortal} from "react-dom";
 import {CalendarDays,ChevronLeft,ChevronRight,Plus,Search,Clock,MapPin,UserRound,AlertCircle} from "lucide-react";
 import {agendaToday,agendaDates,validAgendaDate,navigateAgenda,closedAgendaOrder,filterAgendaOrders,type AgendaMode,type AgendaOrder} from "../lib/agenda-calendar";
 import {orderEndTime,orderReadiness,type OrderScheduleSeed} from "../lib/order-workspace-state";
