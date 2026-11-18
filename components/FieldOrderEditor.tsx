@@ -1,7 +1,5 @@
 "use client";
 import {FieldServicePicker} from "./FieldServicePicker";
-import dynamic from "next/dynamic";
-const MobileTechnicalLibrary=dynamic(()=>import("./MobileTechnicalLibrary").then(m=>m.MobileTechnicalLibrary));
 import {MobileOrderWorkflow} from "./MobileOrderWorkflow";
 import {reportConsistency} from "@/lib/mobile-workflow-insights";
 import { useEffect, useRef, useState } from "react";
@@ -31,7 +29,6 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
   const mediaBusy=photoProcessing.before||photoProcessing.after;
   const [equipmentIds,setEquipmentIds]=useState(order.equipmentIds);
   const [confirmed,setConfirmed]=useState(false);
-  const [acervoOpen,setAcervoOpen]=useState(false);
   const [review,setReview]=useState(false),[pendingSubmission,setPendingSubmission]=useState<PendingOrderSubmission|undefined>();
   const submissionRef=useRef<PendingOrderSubmission|undefined>(undefined),operationLock=useRef(false);
   const noticeRef=useRef<HTMLParagraphElement|null>(null);
@@ -159,7 +156,6 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
     <label className={styles.formLabel}>Modelo de relatório<select value={template} onChange={e=>setTemplate(e.target.value)}><option value="">Selecionar modelo</option>{reportTemplates.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select></label><button type="button" className={styles.secondaryAction} disabled={!template||busy} onClick={()=>{const chosen=reportTemplates.find(item=>item.id===template);if(chosen)setReport(previous=>[previous,chosen.text].filter(Boolean).join("\n\n").slice(0,8000));}}>Inserir modelo para preencher</button>
     <label className={styles.formLabel}>Observações adicionais • opcional<textarea maxLength={4000} value={observations} onChange={e=>setObservations(e.target.value)}/></label>
     <h3>Medições técnicas <small>opcionais</small></h3><div className={styles.measurementGrid}>{fieldMeasurements.map(item=><label key={item.key} className={styles.formLabel}>{item.label} ({item.unit})<input type="number" inputMode="decimal" step="any" min={item.min} max={item.max} value={measurements[item.key]||""} onChange={e=>setMeasurements({...measurements,[item.key]:e.target.value})}/></label>)}</div>
-    <MobileTechnicalLibrary scope={scope} compact initialTab="tools" onResult={value=>setDiagnosis(previous=>previous.includes(value)?previous:[previous,value].filter(Boolean).join("\n"))}/>
     <h3 id={`field-${order.id}-equipment`}>Equipamentos do atendimento (opcional)</h3>
     {(order.equipmentOptions || []).map(item=><label key={item.id} className={styles.checkLabel}><input type="checkbox" checked={equipmentIds.includes(item.id)} disabled={busy} onChange={event=>setEquipmentIds(event.target.checked?[...equipmentIds,item.id]:equipmentIds.filter(id=>id!==item.id))}/>{item.label}</label>)}
     {!order.equipmentOptions?.length&&!equipmentIds.length&&<p className={styles.warning}>Não há equipamento cadastrado para este cliente e local. Você pode salvar e concluir a OS sem equipamento. Se desejar, use “Cadastrar equipamento nesta OS”.</p>}
@@ -177,7 +173,6 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
     {mediaBusy&&<p role="status">Preparando as fotos selecionadas. Aguarde antes de salvar ou concluir.</p>}
     <button type="button" className={styles.primaryAction} disabled={busy||mediaBusy||!draftReady||Boolean(olderDraft)} onClick={()=>void execute("save")}>Salvar relatório e evidências</button>
     <button type="button" className={styles.finishAction} disabled={busy||mediaBusy||!draftReady||Boolean(olderDraft)} onClick={()=>{if(mediaBusy)return;if(pendingRequirements.length){setNotice("Complete os requisitos indicados antes de concluir.");jumpTo(pendingRequirements[0].key);}else setReview(true);}}>Revisar e concluir OS</button>
-    <details className={styles.journeyPanel} onToggle={e=>setAcervoOpen(e.currentTarget.open)}><summary>Acervo técnico • consultar sem sair da OS</summary>{acervoOpen&&<MobileTechnicalLibrary scope={scope}/>}</details>
     <FieldAttendanceControls order={order} busy={busy||mediaBusy||!draftReady||Boolean(olderDraft)} canApprove={canApprove} send={sendExtra}/>
     <LocalFieldAssistant diagnosis={diagnosis} report={report} disabled={busy||mediaBusy||!draftReady||Boolean(olderDraft)} onApply={setReport}/>
     <FieldServicePicker order={order} busy={busy||mediaBusy||!draftReady||Boolean(olderDraft)||Boolean(pendingSubmission)||confirmed} send={sendExtra}/>

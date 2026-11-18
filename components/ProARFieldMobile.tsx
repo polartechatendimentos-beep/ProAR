@@ -5,7 +5,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 const MobileTechnicalLibrary=dynamic(()=>import("./MobileTechnicalLibrary").then(m=>m.MobileTechnicalLibrary));
 import {
-  ArrowLeft, ArrowRight, CalendarDays, ChevronRight,
+  ArrowLeft, ArrowRight, BookOpen, CalendarDays, ChevronRight,
   ClipboardList, CloudOff, Home, MapPin, Menu, RefreshCw,
   Search, ShieldCheck, Smartphone, UserRound, Wifi,
 } from "lucide-react";
@@ -158,6 +158,7 @@ export function ProARFieldMobile() {
     { id:"agenda", label:"Agenda", icon:CalendarDays },
     { id:"ordens", label:"Ordens", icon:ClipboardList },
     { id:"central", label:"Central", icon:ShieldCheck },
+    { id:"acervo", label:"Acervo", icon:BookOpen },
     { id:"mais", label:"Mais", icon:Menu },
   ];
   return <div data-mobile-text={preferences.value.textScale} data-mobile-theme={appearance.resolved} className={`${styles.app} ${sunlightMode ? styles.sunlightMode : ""}`}>
@@ -224,7 +225,6 @@ export function ProARFieldMobile() {
                 <div><strong>{data.summary.inProgress}</strong><span>Em andamento</span></div>
                 <div><strong>{data.summary.pending}</strong><span>Pendentes</span></div>
               </div>
-              <button type="button" className={styles.secondaryAction} onClick={()=>setTab("acervo")}>Acervo técnico • fluidos, códigos e manuais</button>
               <MobileWorkQueueInsights key={data.user.scope} orders={orders} scope={data.user.scope} manager={data.user.manager} today={todayISO()} onOpen={id=>setSelected(id)} onFilter={filter=>{setOrderFilter(filter);setQuery("");setVisibleLimit(100);setTab("ordens");}}/>
               <div className={styles.sectionHeading}><h2>Atendimentos em aberto</h2><button type="button" onClick={()=>setTab("agenda")}>Ver agenda <ArrowRight size={14}/></button></div>
               <p className={styles.subtitle}>Em andamento primeiro, depois atrasados e demais atendimentos.{openOrders.length>8?` Mostrando 8 de ${openOrders.length}.`:""}</p>
