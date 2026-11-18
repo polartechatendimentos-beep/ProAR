@@ -3,6 +3,7 @@ import {FieldServicePicker} from "./FieldServicePicker";
 import {MobileOrderWorkflow} from "./MobileOrderWorkflow";
 import {reportConsistency} from "@/lib/mobile-workflow-insights";
 import { useEffect, useRef, useState } from "react";
+import { PhoneCall } from "lucide-react";
 import type { MobileFieldOrder } from "@/lib/mobile-field";
 import {equipmentInspection} from "@/lib/mobile-experience";
 import {FieldPhotoComparison} from "./FieldPhotoComparison";
@@ -140,6 +141,8 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
   function pointer(event:React.PointerEvent<HTMLCanvasElement>,start:boolean){const c=canvas.current;if(!c||busy||confirmed||mediaBusy||submissionRef.current||olderDraft||!draftReady)return;const rect=c.getBoundingClientRect(),ctx=c.getContext("2d")!,x=(event.clientX-rect.left)*c.width/rect.width,y=(event.clientY-rect.top)*c.height/rect.height;ctx.strokeStyle="#122b47";ctx.lineWidth=2;
     if(start){drawing.current=true;drew.current=false;c.setPointerCapture(event.pointerId);ctx.beginPath();ctx.moveTo(x,y);}else if(drawing.current){ctx.lineTo(x,y);ctx.stroke();drew.current=true;}}
   return <article className={`${styles.detailCard} ${styles.orderEditor}`}><h2>Executar atendimento</h2>
+    <button type="button" className={styles.secondaryAction} onClick={()=>{const popup=window.open(`/api/mobile/orders/contact?orderId=${encodeURIComponent(order.id)}`,"_blank");if(popup)popup.opener=null;else setNotice("Permita a abertura de nova aba para acessar o WhatsApp.");}}><PhoneCall size={18} aria-hidden="true"/> Abrir WhatsApp para ligar</button>
+    <small>O telefone fica oculto no ProAR. O WhatsApp abrirá a conversa; toque no ícone de ligação para iniciar a chamada.</small>
     <p role="status" className={styles.syncBanner}>{confirmed?"Sincronizado • gravação confirmada no servidor.":pendingSubmission?"Envio preservado neste aparelho • aguardando confirmação.":draftNotice||"Preparando rascunho…"}</p>
     {olderDraft&&!pendingSubmission&&<section className={styles.reviewPanel}><h3>Comparar antes de recuperar</h3><p>A recuperação substitui os campos do rascunho em edição. Nada é enviado automaticamente.</p><div className={styles.photoComparison}><div><h4>Servidor atual</h4><p>Diagnóstico: {order.diagnosis||"Não informado"}</p><p>Serviço: {order.executedService||"Não informado"}</p></div><div><h4>Rascunho local</h4><p>Salvo em {new Date(olderDraft.savedAt).toLocaleString("pt-BR")}</p><p>Diagnóstico: {olderDraft.diagnosis||"Não informado"}</p><p>Serviço: {olderDraft.report||"Não informado"}</p><p>{(olderDraft.beforePhotos?.length||0)+Number(Boolean(olderDraft.before))} foto(s) antes e {(olderDraft.afterPhotos?.length||0)+Number(Boolean(olderDraft.after))} depois preservadas.</p></div></div></section>}
     {olderDraft&&!pendingSubmission&&<button type="button" className={styles.secondaryAction} onClick={()=>{restoreDraft(olderDraft);setOlderDraft(null);}}>Recuperar rascunho para revisão</button>}
