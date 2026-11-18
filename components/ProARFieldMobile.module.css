@@ -68,7 +68,7 @@
 .profile{display:flex;align-items:center;gap:13px;border:1px solid #214a73;background:#132e51;padding:18px;border-radius:16px;margin-top:20px}
 .avatar{height:49px;width:49px;border-radius:14px;background:#165578;display:grid;place-items:center;color:#9decf6}
 .profile strong,.profile span{display:block}.profile span{font-size:12px;color:#91a9c4;margin-top:4px}
-.bottomNav{position:sticky;bottom:0;display:grid;grid-template-columns:repeat(5,1fr);background:#0a1e38;border-top:1px solid #214a73;z-index:10;padding:7px 8px max(8px,env(safe-area-inset-bottom))}
+.bottomNav{position:sticky;bottom:0;display:grid;grid-template-columns:repeat(6,1fr);background:#0a1e38;border-top:1px solid #214a73;z-index:10;padding:7px 8px max(8px,env(safe-area-inset-bottom))}
 .navItem{display:flex;flex-direction:column;align-items:center;gap:4px;border:0;background:transparent;color:#91a9c4;min-height:52px;padding:6px;cursor:pointer;font-size:10px;font-weight:800}
 .navActive{color:#28d7f2}
 .footer{display:flex;justify-content:space-between;gap:8px;padding:8px 16px;background:#08172b;color:#6e86a3;font-size:9px}
@@ -94,7 +94,7 @@
 .formLabel input,.formLabel textarea,.formLabel select{min-height:44px}.formLabel textarea{line-height:1.6}
 .checkLabel input{accent-color:#5ed8af;min-width:20px;min-height:20px}
 .journeyPanel{background:linear-gradient(110deg,#172b4e,#152a40);border-left:4px solid #a99bff}.journeyPanel summary{min-height:24px;color:#d8ceff}
-.navItem:nth-child(1){--tab-accent:#67d5f1}.navItem:nth-child(2){--tab-accent:#bfa9ff}.navItem:nth-child(3){--tab-accent:#79c7ff}.navItem:nth-child(4){--tab-accent:#ffa9bd}.navItem:nth-child(5){--tab-accent:#86e4c2}
+.navItem:nth-child(1){--tab-accent:#67d5f1}.navItem:nth-child(2){--tab-accent:#bfa9ff}.navItem:nth-child(3){--tab-accent:#79c7ff}.navItem:nth-child(4){--tab-accent:#ffa9bd}.navItem:nth-child(5){--tab-accent:#86e4c2}.navItem:nth-child(6){--tab-accent:#82cfff}
 .navItem svg{color:var(--tab-accent)}.navActive{color:var(--tab-accent);background:#213754;border-radius:12px;box-shadow:inset 0 3px var(--tab-accent)}
 .syncBanner{padding:10px 12px;border:1px solid #467a97;border-radius:10px;background:#17374e;color:#ceecff!important}
 .progressPanel{background:#112f48;border:1px solid #347390;border-radius:14px;padding:14px;margin:16px 0}.progressPanel progress{width:100%;height:12px;accent-color:#53d8ad}.progressPanel .secondaryAction{min-height:42px;justify-content:flex-start;text-align:left;border-color:#a07637;background:#49371f;color:#ffe4b0}
@@ -181,7 +181,7 @@
 .progressPanel{padding:14px;margin:14px 0 20px}.progressPanel p{margin:0 0 8px;color:var(--field-text)!important}.progressPanel progress{display:block;height:9px;border-radius:20px;overflow:hidden}.requirementsList{margin-top:12px}.requirementsList summary{cursor:pointer;font-size:13px;font-weight:700;min-height:36px;padding:8px 0}.requirementsList>div{display:flex;flex-wrap:wrap;gap:8px;padding-top:8px}.requirementsList .secondaryAction{margin:0;max-width:100%;font-size:12px;padding:9px 12px;background:var(--field-card);color:var(--field-text);border-color:var(--field-line)}
 .signatureFrame{border:1px dashed #96abc2;border-radius:14px;padding:12px;background:#fff;margin:10px 0 20px;overflow:hidden}.signatureFrame>span{display:block;color:#526b83;font-size:12px;margin-bottom:8px}.signatureFrame .signatureCanvas{display:block;width:100%!important;height:160px!important;max-height:160px;background:#fff!important;border:0;border-bottom:1px solid #d2dce6;border-radius:0;touch-action:none}
 .app input[type=file]{padding:10px;font-size:12px!important;white-space:normal}.app input[type=file]::file-selector-button{background:var(--field-soft);color:var(--field-text);border:1px solid var(--field-line);border-radius:8px;padding:10px;margin-right:8px;font:inherit;cursor:pointer}
-.orderEditor .primaryAction,.orderEditor .finishAction{width:100%;margin-top:12px;font-weight:750}.bottomNav{padding-top:8px}.navItem{font-size:11px}.sosButton{bottom:calc(86px + env(safe-area-inset-bottom));padding:10px 14px;font-size:12px}
+.orderEditor .primaryAction,.orderEditor .finishAction{width:100%;margin-top:12px;font-weight:750}.bottomNav{padding-top:8px}.navItem{font-size:10px;padding:4px 2px}.navItem svg{width:21px;height:21px}.sosButton{bottom:calc(86px + env(safe-area-inset-bottom));padding:10px 14px;font-size:12px}
 @media(max-width:600px){.shell{box-shadow:none}.screen{max-width:none}.orderEditor{padding:14px}.detailCard{padding:16px}.headerRight{gap:6px}.connection{font-size:10px}.orderToolbar label{flex:1}.orderToolbar select{flex:1;min-width:0}.checklistGrid{grid-template-columns:1fr}.orderEditor .detailCard{padding:12px}.sosButton{right:12px}}
 @media(min-width:680px){.content{padding:24px}.screen{max-width:760px}}
 @media(max-width:350px){.measurementGrid{grid-template-columns:1fr}.connection{max-width:58px;white-space:normal}}
