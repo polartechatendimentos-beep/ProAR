@@ -364,3 +364,138 @@ html[data-proar-system-theme="light"] .proar-full-system :is(
 html[data-proar-system-theme="light"] .proar-full-system :is(input,select,textarea)::placeholder {
   color:#64788d!important;opacity:1!important;-webkit-text-fill-color:#64788d!important;
 }
+
+
+/* Final contrast pass: enforce the Atendimento palette across every ERP module. */
+html body .proar-full-system {
+  background:var(--ux-bg)!important;
+  color:var(--ux-text)!important;
+}
+html body .proar-full-system :is(main,.main,[role="main"],.page-content) {
+  background-color:var(--ux-bg)!important;
+  color:var(--ux-text)!important;
+}
+html body .proar-full-system :is(h1,h2,h3,h4,h5,h6,legend,summary,th) {
+  color:var(--ux-text)!important;
+}
+html body .proar-full-system :is(p,small,label,dt,dd,figcaption,caption,li) {
+  color:var(--ux-muted)!important;
+}
+html body .proar-full-system :is(div,span,em,time) {
+  color:inherit;
+}
+html body .proar-full-system a:not([class*="button"]):not([role="button"]) {
+  color:var(--ux-cyan)!important;
+}
+html body .proar-full-system :is(
+  [class*="card"],[class*="panel"],[class*="workspace"],[class*="toolbar"],
+  [class*="popover"],[data-surface]
+) {
+  background-color:var(--ux-card)!important;
+  color:var(--ux-text)!important;
+  border-color:var(--ux-border)!important;
+}
+html body .proar-full-system :is(
+  [class*="card"],[class*="panel"],[class*="workspace"],[class*="popover"],[data-surface]
+) :is(h1,h2,h3,h4,h5,h6,strong,b) {color:var(--ux-text)!important}
+html body .proar-full-system :is(
+  [class*="card"],[class*="panel"],[class*="workspace"],[class*="popover"],[data-surface]
+) :is(p,small,label,span,em,time,td,dd) {color:var(--ux-muted)!important}
+
+/* Consistent navy inputs, readable placeholders, and a visible focus ring. */
+html body .proar-full-system :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,textarea,[contenteditable="true"]
+),
+html body .modal-layer[role="dialog"] :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,textarea,[contenteditable="true"]
+) {
+  background:var(--ux-surface)!important;
+  color:var(--ux-text)!important;
+  border-color:var(--ux-border2)!important;
+  caret-color:var(--ux-cyan)!important;
+  color-scheme:dark;
+}
+html body .proar-full-system :is(input,textarea,[contenteditable="true"])::placeholder,
+html body .modal-layer[role="dialog"] :is(input,textarea,[contenteditable="true"])::placeholder {
+  color:var(--ux-muted)!important;
+  opacity:1!important;
+}
+html body .proar-full-system :is(input[type="checkbox"],input[type="radio"]) {
+  accent-color:var(--ux-primary)!important;
+}
+html body .proar-full-system :is(button,a,[role="button"],input,select,textarea,[contenteditable="true"]):focus-visible,
+html body .modal-layer[role="dialog"] :is(button,a,[role="button"],input,select,textarea):focus-visible {
+  outline:3px solid var(--ux-cyan)!important;
+  outline-offset:2px!important;
+  box-shadow:0 0 0 3px #23a8ff30!important;
+}
+html body .proar-full-system button:not([class*="primary"]):not([class*="danger"]):not([class*="success"]):not([class*="warning"]):not([class*="green"]):not([class*="red"]):not([class*="amber"]) {
+  background-color:var(--ux-soft)!important;
+  color:var(--ux-text)!important;
+  border-color:var(--ux-border2)!important;
+}
+html body .proar-full-system button:not(:disabled):hover {
+  background-color:var(--ux-hover)!important;
+  border-color:var(--ux-cyan)!important;
+  color:var(--ux-text)!important;
+}
+html body .proar-full-system :is(table,thead,tbody,tr,td,th) {border-color:var(--ux-border)!important}
+html body .proar-full-system table {background:var(--ux-card)!important;color:var(--ux-text)!important}
+html body .proar-full-system thead {background:var(--ux-soft)!important}
+html body .proar-full-system td {color:var(--ux-text)!important}
+html body .proar-full-system tbody tr:nth-child(even) {background-color:#13263c!important}
+html body .proar-full-system tbody tr:hover {background-color:var(--ux-hover)!important}
+
+/* Portaled dialogs sit under body; apply the same visual tokens outside the app shell. */
+html body .modal-layer[role="dialog"] {color:var(--ux-text)!important}
+html body .modal-layer[role="dialog"] :is(.modal,.modal-card,.dialog,.dialog-card,[class*="modal-panel"]) {
+  background:var(--ux-card)!important;
+  color:var(--ux-text)!important;
+  border-color:var(--ux-border)!important;
+}
+html body .modal-layer[role="dialog"] :is(h1,h2,h3,h4,h5,h6,strong,b,legend,summary) {color:var(--ux-text)!important}
+html body .modal-layer[role="dialog"] :is(p,small,label,span,li,td,dd) {color:var(--ux-muted)!important}
+html body .modal-layer[role="dialog"] :is(.primary-btn,.os-primary-button,.primary,.submit-button,[type="submit"]) {
+  background:linear-gradient(105deg,#176ec0,#087f94)!important;
+  color:#fff!important;
+  border-color:#23a8ff!important;
+}
+html body .proar-full-system :is([data-tone="success"],.status-success,.badge-success,.text-success) {color:#8ce4bd!important}
+html body .proar-full-system :is([data-tone="warning"],.status-warning,.badge-warning,.text-warning) {color:#ffd47a!important}
+html body .proar-full-system :is([data-tone="danger"],[data-tone="error"],.status-danger,.badge-danger,.text-danger) {color:#ff9eae!important}
+html body .proar-full-system :is([data-tone="info"],.status-info,.badge-info,.text-info) {color:#8ed6ff!important}
+
+/* The light appearance keeps the same blue/cyan identity with dark readable text. */
+html[data-proar-system-theme="light"] body .proar-full-system {
+  background:var(--ux-bg)!important;color:#17334e!important;
+}
+html[data-proar-system-theme="light"] body .proar-full-system :is(main,.main,[role="main"],.page-content) {
+  background-color:var(--ux-bg)!important;color:#17334e!important;
+}
+html[data-proar-system-theme="light"] body .proar-full-system :is(h1,h2,h3,h4,h5,h6,legend,summary,th) {color:#17334e!important}
+html[data-proar-system-theme="light"] body .proar-full-system :is(p,small,label,dt,dd,figcaption,caption,li) {color:#536b82!important}
+html[data-proar-system-theme="light"] body .proar-full-system :is([class*="card"],[class*="panel"],[class*="workspace"],[class*="toolbar"],[class*="popover"],[data-surface]) {
+  background-color:#fff!important;color:#17334e!important;border-color:#c5d5e3!important;
+}
+html[data-proar-system-theme="light"] body .proar-full-system :is([class*="card"],[class*="panel"],[class*="workspace"],[class*="popover"],[data-surface]) :is(h1,h2,h3,h4,h5,h6,strong,b,td) {color:#17334e!important}
+html[data-proar-system-theme="light"] body .proar-full-system :is([class*="card"],[class*="panel"],[class*="workspace"],[class*="popover"],[data-surface]) :is(p,small,label,span,em,time,dd) {color:#536b82!important}
+html[data-proar-system-theme="light"] body .proar-full-system :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),select,textarea,[contenteditable="true"]
+),
+html[data-proar-system-theme="light"] body .modal-layer[role="dialog"] :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),select,textarea,[contenteditable="true"]
+) {
+  background:#fff!important;color:#17334e!important;border-color:#9fb5c8!important;color-scheme:light;
+}
+html[data-proar-system-theme="light"] body .proar-full-system :is(input,textarea,[contenteditable="true"])::placeholder,
+html[data-proar-system-theme="light"] body .modal-layer[role="dialog"] :is(input,textarea,[contenteditable="true"])::placeholder {color:#64788d!important}
+html[data-proar-system-theme="light"] body .proar-full-system button:not([class*="primary"]):not([class*="danger"]):not([class*="success"]):not([class*="warning"]):not([class*="green"]):not([class*="red"]):not([class*="amber"]) {
+  background:#fff!important;color:#17334e!important;border-color:#9fb5c8!important;
+}
+html[data-proar-system-theme="light"] body .proar-full-system tbody tr:nth-child(even) {background:#f3f7fb!important}
+html[data-proar-system-theme="light"] body .proar-full-system :is([data-tone="success"],.status-success,.badge-success,.text-success) {color:#087e60!important}
+html[data-proar-system-theme="light"] body .proar-full-system :is([data-tone="warning"],.status-warning,.badge-warning,.text-warning) {color:#8b6200!important}
+html[data-proar-system-theme="light"] body .proar-full-system :is([data-tone="danger"],[data-tone="error"],.status-danger,.badge-danger,.text-danger) {color:#a63145!important}
+html[data-proar-system-theme="light"] body .proar-full-system :is([data-tone="info"],.status-info,.badge-info,.text-info) {color:#176ec0!important}
