@@ -547,6 +547,7 @@ type ModuleRecord = {
   empenhoId?: string;
   invoiceNumber?: string;
   invoiceSeries?: string;
+  supplierDoc?: string;
   invoiceIssuedAt?: string;
   employeeRole?: string;
   accessProfile?: string;
