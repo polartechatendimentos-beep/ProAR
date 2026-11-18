@@ -165,3 +165,32 @@
  .agenda .serviceLegend .legendItem{font-size:9px!important;padding:4px 7px}
  .week,.month{min-width:910px}
 }
+
+
+/* Improve date and empty-column legibility in the light weekly grid. */
+.agenda .dayTitle>span,.agenda .dayTitle small{color:#526b84!important}
+.agenda .dayTitle b{color:#18334e!important}
+.agenda .today .dayTitle b{color:#fff!important}
+.agenda .outside .dayTitle{opacity:1}
+.agenda .outside .dayTitle>span,.agenda .outside .dayTitle small{color:#647b92!important}
+.agenda .free{color:#526b84!important}
+.agenda .nowMarker{color:#075985}
+.agenda .nowMarker span{color:#075985!important}
+.agenda .hint{color:#526b84!important}
+
+/* Fullscreen shows only the agenda workspace and keeps it scrollable on small screens. */
+.heroActions{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap}
+.agenda .fullscreenButton{background:#173651;color:#eaf3ff;border-color:#3e6684;min-height:42px}
+.agenda .fullscreenButton:hover{background:#215174;border-color:#66c8f2;color:#fff}
+.fullscreenNotice{margin:8px 0 12px;padding:8px 11px;border:1px solid #3e6684;border-radius:9px;background:#102b43;color:#dcefff!important}
+.agenda:fullscreen{width:100vw;height:100dvh;max-width:none;overflow:auto;border-radius:0;padding:clamp(12px,2vw,28px);overscroll-behavior:contain;background:linear-gradient(145deg,#081625 0%,#0c2135 54%,#0d2b34 100%)}
+.agenda:fullscreen .hero{position:sticky;top:0;z-index:2;padding:8px 0;background:#0b1e30f2;backdrop-filter:blur(12px)}
+.agenda:fullscreen .calendarScroll{max-height:none}
+.agenda:fullscreen .week{min-height:calc(100dvh - 360px)}
+@media(max-width:700px){
+ .heroActions{width:100%;justify-content:stretch}
+ .heroActions>*{flex:1}
+ .agenda:fullscreen{padding:12px}
+ .agenda:fullscreen .hero{align-items:flex-start}
+ .agenda:fullscreen .week{min-height:auto}
+}
