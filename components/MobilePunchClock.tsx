@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { loadPunchCache, savePunchCache, type MobilePunchCommand, type MobilePunchDay } from "@/lib/mobile-punch-cache";
 import styles from "./MobilePunchClock.module.css";
 
@@ -10,7 +10,7 @@ const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/
 const emptyDay = (date: string, employeeId = "", employeeName = ""): MobilePunchDay => ({ companyId: "", employeeId, employeeName, date, _revision: 0, punches: [], corrections: [], adjustments: [] });
 const format = (value: string) => new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 function statusOf(punches: MobilePunchDay["punches"]): "off" | "active" | "break" {
-  const last = [...punches].sort((a, b) => a.at.localeCompare(b.at)).at(-1);
+  const ordered = [...punches].sort((a, b) => a.at.localeCompare(b.at));\n  const last = ordered[ordered.length - 1];
   if (!last || last.type === "clock-out") return "off";
   if (last.type === "break-start") return "break";
   return "active";
@@ -107,7 +107,7 @@ export function MobilePunchClock({ scope, employeeId, employeeName, manager }: P
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível registrar a marcação."); }
     finally { setBusy(false); }
   }
-  async function requestCorrection(event: React.FormEvent) {
+  async function requestCorrection(event: FormEvent) {
     event.preventDefault();
     if (!correctionAt || correctionReason.trim().length < 8) { setError("Informe o horário e explique o motivo com pelo menos 8 caracteres."); return; }
     const command: MobilePunchCommand = { action: "correction-request", requestId: crypto.randomUUID(), date, at: new Date().toISOString(), offline: !navigator.onLine, correctionType, requestedAt: new Date(correctionAt).toISOString(), reason: correctionReason.trim() };
