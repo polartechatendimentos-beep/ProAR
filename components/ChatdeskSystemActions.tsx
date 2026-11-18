@@ -1,8 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { parseAppointmentVoice, type AppointmentVoiceDraft } from "../lib/chatdesk-voice";
 import styles from "../app/atendimento/workspace.module.css";
 type Row = Record<string,string>;
 type Context = { records: Row[]; customers: Row[]; orders: Row[]; technicians: Row[]; modules: {module:string;count:number}[]; capabilities: {customer:boolean;schedule:boolean;confirmation:boolean} };
+type VoiceRecognition = { lang:string; continuous:boolean; interimResults:boolean; maxAlternatives:number; onresult:((event:{results:ArrayLike<ArrayLike<{transcript:string}>>})=>void)|null; onerror:((event:{error?:string})=>void)|null; onend:(()=>void)|null; start:()=>void; stop:()=>void };
+type VoiceConstructor = new()=>VoiceRecognition;
 export function ChatdeskSystemActions({ companyId, phone = "", name = "" }: {companyId:string;phone?:string;name?:string}) {
   const [context,setContext] = useState<Context|null>(null);
   const [query,setQuery] = useState(phone);
@@ -13,14 +16,18 @@ export function ChatdeskSystemActions({ companyId, phone = "", name = "" }: {com
   const [feedback,setFeedback] = useState("");
   const [busy,setBusy] = useState(false);
   const [log,setLog] = useState<string[]>([]);
+  const [voiceTranscript,setVoiceTranscript] = useState("");
+  const [voiceDraft,setVoiceDraft] = useState<AppointmentVoiceDraft|null>(null);
+  const [listening,setListening] = useState(false);
+  const voiceRef = useRef<VoiceRecognition|null>(null);
   const headers = {"Content-Type":"application/json","X-Proar-Company-ID":companyId};
-  async function consult() {
+  async function consult(search=query):Promise<Context|null> {
     setBusy(true);setFeedback("");
     try {
-      const response = await fetch(`/api/atendimento/acoes?q=${encodeURIComponent(query)}&module=${encodeURIComponent(module)}`,{headers,cache:"no-store"});
+      const response = await fetch(`/api/atendimento/acoes?q=${encodeURIComponent(search)}&module=${encodeURIComponent(module)}`,{headers,cache:"no-store"});
       const data = await response.json();if(!response.ok)throw new Error(data.error);
-      setContext(data);
-    } catch(error) {setFeedback(error instanceof Error?error.message:"Consulta indisponível.");}
+      setContext(data);return data as Context;
+    } catch(error) {setFeedback(error instanceof Error?error.message:"Consulta indisponível.");return null;}
     finally{setBusy(false);}
   }
   const value = (key:string) => fields[key] || "";
@@ -36,6 +43,37 @@ export function ChatdeskSystemActions({ companyId, phone = "", name = "" }: {com
     }catch(error){setFeedback(error instanceof Error?error.message:"Ação sem confirmação. Consulte o sistema antes de repetir.");}
     finally{setBusy(false);}
   }
+  function startVoice() {
+    if(listening){voiceRef.current?.stop();return;}
+    const voiceWindow=window as Window & {SpeechRecognition?:VoiceConstructor;webkitSpeechRecognition?:VoiceConstructor};
+    const Constructor=voiceWindow.SpeechRecognition||voiceWindow.webkitSpeechRecognition;
+    if(!Constructor){setFeedback("Este navegador não oferece ditado por voz. Digite o relato no campo de transcrição.");return;}
+    const recognition=new Constructor();recognition.lang="pt-BR";recognition.continuous=false;recognition.interimResults=false;recognition.maxAlternatives=1;
+    recognition.onresult=event=>{const transcript=event.results[0]?.[0]?.transcript||"";setVoiceTranscript(transcript);void applyVoice(transcript);};
+    recognition.onerror=event=>{setFeedback(event.error==="not-allowed"?"Permissão de microfone negada. Você ainda pode digitar o relato.":"Não foi possível reconhecer o áudio. Tente novamente ou digite o relato.");};
+    recognition.onend=()=>{setListening(false);voiceRef.current=null;};
+    voiceRef.current=recognition;setFeedback("");setListening(true);recognition.start();
+  }
+  async function applyVoice(transcript=voiceTranscript) {
+    const parsed=parseAppointmentVoice(transcript);
+    setVoiceDraft(parsed);setKind("schedule");setReview(null);
+    setFields(previous=>({...previous,voiceName:parsed.name,address:parsed.address||previous.address||"",service:parsed.service||previous.service||"",date:parsed.date||previous.date||"",time:parsed.time||previous.time||"",duration:previous.duration||"60",customer:""}));
+    if(!parsed.name&&!parsed.address&&!parsed.service){setFeedback("Não consegui separar nome, endereço e problema. Revise o texto ou dite em frases curtas.");return;}
+    setFeedback("Relato interpretado. Confira os campos e complete os dados que faltam antes de criar o agendamento.");
+    const search=parsed.phone||parsed.name;
+    if(search){
+      const found=await consult(search);
+      const normalize=(value:string)=>value.normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").toLocaleLowerCase("pt-BR").trim();
+      const matches=(found?.customers||[]).filter(row=>parsed.phone?String(row.phone||"").replace(/\\D/g,"").endsWith(parsed.phone.replace(/\\D/g,"").slice(-10)):normalize(row.name)===normalize(parsed.name));
+      if(matches.length===1){setFields(previous=>({...previous,customer:matches[0].id,address:parsed.address||matches[0].address||previous.address}));setFeedback("Cliente localizado. Confira o endereço, relato, data, horário e técnico antes de gravar.");}
+      else if(parsed.name)setFeedback("Relato interpretado, mas o cliente não foi localizado de forma única. Selecione o cadastro correto ou cadastre o cliente com telefone.");
+    }
+  }
+  function prepareVoiceCustomer() {
+    if(!voiceDraft)return;
+    setKind("customer");setReview(null);setFields(previous=>({...previous,name:voiceDraft.name||previous.name,phone:voiceDraft.phone||previous.phone,address:voiceDraft.address||previous.address}));
+    setFeedback("Complete o WhatsApp com DDD e confirme o cadastro. Depois consulte e selecione o cliente para agendar.");
+  }
   return <section className={`${styles.panel} ${styles.systemActions}`} aria-label="Assistente operacional do sistema">
     <span className={styles.badge}>AÇÕES REAIS NO PROAR</span><h2>Assistente operacional</h2>
     <p>Consulte os dados da empresa, cadastre clientes e agende atendimentos. Comandos guiados locais, sem serviço externo de IA. Cada ação respeita seu perfil e fica registrada no sistema.</p>
@@ -44,10 +82,18 @@ export function ChatdeskSystemActions({ companyId, phone = "", name = "" }: {com
       {module && <div className={styles.tableWrap}><table><caption>Registros do módulo selecionado • até 50 resultados</caption><thead><tr><th>ID</th><th>Registro</th><th>Cliente</th><th>Data</th><th>Status</th></tr></thead><tbody>{context.records.map(row=><tr key={row.id}><td>{row.id}</td><td>{row.name}</td><td>{row.client}</td><td>{row.date}</td><td>{row.status}</td></tr>)}</tbody></table></div>}
       <div className={styles.tableWrap}><table><caption>Clientes encontrados</caption><thead><tr><th>Cliente</th><th>ID</th><th>Contato</th><th>Ação</th></tr></thead><tbody>{context.customers.map(row=><tr key={row.id}><td>{row.name}</td><td>{row.id}</td><td>{row.phone}</td><td><button onClick={()=>{setKind("schedule");setFields(previous=>({...previous,customer:row.id,address:row.address||""}));setReview(null);}}>Agendar</button></td></tr>)}</tbody></table></div>
       <div className={styles.tableWrap}><table><caption>Agendamentos encontrados</caption><thead><tr><th>OS / Cliente</th><th>Data e hora</th><th>Técnico</th><th>Confirmação</th><th>Ação</th></tr></thead><tbody>{context.orders.map(row=><tr key={row.id}><td>{row.id}<br/>{row.client}</td><td>{row.date} {row.time}</td><td>{row.tech}</td><td>{row.confirmation}</td><td><button onClick={()=>{setKind("confirmation");edit("order",row.id);}}>Pedir confirmação</button></td></tr>)}</tbody></table></div></>}
+    <section className={styles.voiceCapture} aria-label="Agendamento por áudio">
+      <div><span className={styles.badge}>DITADO EM PORTUGUÊS</span><h3>Agendar por áudio</h3><p>Dite o nome, endereço, problema e, se souber, a data e o horário. O ProAR prepara um rascunho para revisão; não cria a OS automaticamente.</p></div>
+      <button type="button" disabled={busy} onClick={startVoice}>{listening?"Parar gravação":"Falar com o microfone"}</button>
+      <label>Transcrição para revisar<textarea value={voiceTranscript} onChange={event=>setVoiceTranscript(event.target.value)} maxLength={1500} placeholder="Ex.: José da Silva. Rua João Paulo II, 3017, bloco 6, AP 302, Mirassol. Ar não está gelando."/></label>
+      <div className={styles.voiceButtons}><button type="button" disabled={busy||!voiceTranscript.trim()} onClick={()=>void applyVoice()}>Interpretar e preencher</button>{voiceDraft?.name&&<button type="button" disabled={busy} onClick={prepareVoiceCustomer}>Cadastrar novo cliente</button>}</div>
+      <small>O reconhecimento usa o navegador ou serviço de voz do aparelho; o áudio não é enviado ao ProAR. Revise a transcrição antes de salvar.</small>
+      {voiceDraft&&<div className={styles.voicePreview}><b>Confira o que foi entendido</b><span>Cliente: {voiceDraft.name||"não identificado"}</span><span>Endereço: {voiceDraft.address||"não identificado"}</span><span>Relato: {voiceDraft.service||"não identificado"}</span><span>Data e horário: {voiceDraft.date||"pendentes"} {voiceDraft.time||""}</span></div>}
+    </section>
     <hr/><form onSubmit={event=>{event.preventDefault();void run();}}>
       <label>O que deseja fazer?<select value={kind} onChange={event=>{setKind(event.target.value);setReview(null);}}><option value="customer">Cadastrar cliente</option><option value="schedule">Criar agendamento</option><option value="confirmation">Enviar pedido de confirmação</option></select></label>
       {kind === "customer" && <><label>Nome completo<input required value={value("name")} onChange={event=>edit("name",event.target.value)} maxLength={150}/></label><label>WhatsApp com DDD<input required type="tel" value={value("phone")} onChange={event=>edit("phone",event.target.value)} maxLength={20}/></label></>}
-      {kind === "schedule" && <><label>Cliente<select required value={value("customer")} onChange={event=>edit("customer",event.target.value)}><option value="">Consulte e selecione o cliente</option>{context?.customers.map(row=><option key={row.id} value={row.id}>{row.name} • {row.id}</option>)}</select></label><div className={styles.actions}><label>Data<input required type="date" value={value("date")} onChange={event=>edit("date",event.target.value)}/></label><label>Horário de Brasília<input required type="time" value={value("time")} onChange={event=>edit("time",event.target.value)}/></label><label>Duração em minutos<input type="number" min={15} max={480} value={value("duration")||"60"} onChange={event=>edit("duration",event.target.value)}/></label></div><label>Técnico<select required value={value("tech")} onChange={event=>edit("tech",event.target.value)}><option value="">Consulte e selecione o técnico</option>{context?.technicians.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}</select></label><label>Serviço<input required value={value("service")} maxLength={500} onChange={event=>edit("service",event.target.value)}/></label></>}
+      {kind === "schedule" && <><>{voiceDraft?.name&&<label>Nome informado por áudio<input value={value("voiceName")} onChange={event=>edit("voiceName",event.target.value)} maxLength={150}/></label>}<label>Cliente<select required value={value("customer")} onChange={event=>edit("customer",event.target.value)}><option value="">Consulte e selecione o cliente</option>{context?.customers.map(row=><option key={row.id} value={row.id}>{row.name} • {row.id}</option>)}</select></label><div className={styles.actions}><label>Data<input required type="date" value={value("date")} onChange={event=>edit("date",event.target.value)}/></label><label>Horário de Brasília<input required type="time" value={value("time")} onChange={event=>edit("time",event.target.value)}/></label><label>Duração em minutos<input type="number" min={15} max={480} value={value("duration")||"60"} onChange={event=>edit("duration",event.target.value)}/></label></div><label>Técnico<select required value={value("tech")} onChange={event=>edit("tech",event.target.value)}><option value="">Consulte e selecione o técnico</option>{context?.technicians.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}</select></label><label>Serviço<input required value={value("service")} maxLength={500} onChange={event=>edit("service",event.target.value)}/></label></>}
       {kind !== "confirmation" && <label>Endereço do atendimento<input required maxLength={500} value={value("address")} onChange={event=>edit("address",event.target.value)}/></label>}
       {kind === "confirmation" && <><label>Número da OS<input required value={value("order")} onChange={event=>edit("order",event.target.value)}/></label><p>O destinatário e o horário serão carregados da OS. A resposta CONFIRMAR + número da OS registra a presença; REAGENDAR registra um pedido, sem mudar o horário automaticamente.</p></>}
       <button disabled={busy}>Preparar ação</button>
