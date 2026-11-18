@@ -110,11 +110,12 @@ export async function POST(request: NextRequest) {
     if (!["clock-in", "break-start", "break-end", "clock-out", "correction-request"].includes(action)) return reply({ error: "Ação de ponto inválida." }, 400);
     const date = String(body.date || ""), requestId = String(body.requestId || "");
     if (!validDate(date) || !/^[A-Za-z0-9-]{8,100}$/.test(requestId)) return reply({ error: "Data ou identificador da operação inválido." }, 400);
-    if (date > workDate(new Date().toISOString()) || Date.parse(date + "T12:00:00Z") < Date.now() - 3 * 86400000) return reply({ error: "A marcação está fora do período permitido." }, 400);
+    if (date > workDate(new Date().toISOString())) return reply({ error: "A data não pode estar no futuro." }, 400);
     const offline = body.offline === true;
     const now = new Date().toISOString();
     const suppliedAt = String(body.at || now), parsedAt = Date.parse(suppliedAt);
-    if (!Number.isFinite(parsedAt) || workDate(new Date(parsedAt).toISOString()) !== date || parsedAt > Date.now() + 5 * 60000 || parsedAt < Date.now() - 3 * 86400000) return reply({ error: "Horário da marcação inválido." }, 400);
+    if (action !== "correction-request" && (Date.parse(date + "T12:00:00Z") < Date.now() - 3 * 86400000 || !Number.isFinite(parsedAt) || workDate(new Date(parsedAt).toISOString()) !== date || parsedAt > Date.now() + 5 * 60000 || parsedAt < Date.now() - 3 * 86400000)) return reply({ error: "Horário da marcação inválido." }, 400);
+    if (action === "correction-request" && Date.parse(date + "T12:00:00Z") < Date.now() - 90 * 86400000) return reply({ error: "O pedido de correção está fora do período permitido." }, 400);
     let location: PunchEvent["location"];
     if (body.location && typeof body.location === "object") {
       const p = body.location as Record<string, unknown>, latitude = Number(p.latitude), longitude = Number(p.longitude), accuracy = Number(p.accuracy), capturedAt = String(p.capturedAt || "");
