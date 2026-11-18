@@ -3765,7 +3765,7 @@ function Modal({ title, initialOrderSeed, customers, structures, catalogRecords,
     const [hours, minutes] = orderEstimatedDuration.split(":").map(Number);
     return Math.max(0, (Number.isFinite(hours) ? hours : 0) * 60 + (Number.isFinite(minutes) ? minutes : 0));
   })();
-  const orderAddress = initialOrderSeed?.address || hierarchyLocation?.address || (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "");
+  const orderAddress = hierarchyLocation?.address || (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : initialOrderSeed?.address || selectedClientData?.address || "");
   const toggleOrderCatalogItem = (id: string) => {
     setSelectedCatalogIds(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
     setCatalogQuantities(current => ({ ...current, [id]: current[id] || 1 }));
