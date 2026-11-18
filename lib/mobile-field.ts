@@ -20,7 +20,9 @@ export type MobileFieldOrder = {
   diagnosis: string;
   executedService: string;
   mobileChecklist: Record<string, boolean>;
-  evidence: { before: boolean; after: boolean; signature: boolean };
+  evidence: { before: boolean; after: boolean; equipmentLabel?:boolean; signature: boolean };
+  equipmentLabelAbsent?:boolean;
+  equipmentLabelAbsentReason?:string;
   attendancePaused?:boolean;
   estimatedDurationMinutes?:number;
   requests?:{id:string;kind:string;note:string;status:string;date?:string;time?:string;decidedBy?:string;decisionNote?:string}[];
@@ -29,7 +31,7 @@ export type MobileFieldOrder = {
   warranty?:{days:number;terms:string};
   observations?:string;
   measurements?:Record<string,string>;
-  photoCounts?:{before:number;after:number};
+  photoCounts?:{before:number;after:number;equipmentLabel?:number};
   appliedServices?:{id:string;name:string;quantity:number}[];
   appliedMaterials?:{name:string;quantity:number}[];
   technicianSignaturePreview?:string;
@@ -124,13 +126,15 @@ export function mobileFieldOrders(
       warranty:isRecord(order.fieldWarranty)?{days:boundedInteger((order.fieldWarranty as Record<string,unknown>).days,3650),terms:short((order.fieldWarranty as Record<string,unknown>).terms,2000)}:undefined,
       observations: short(order.fieldObservations,4000),
       measurements: Object.fromEntries(["pressure","temperature","voltage","current"].filter(key=>typeof (order.fieldMeasurements as Record<string,unknown>|undefined)?.[key]==="string").map(key=>[key,short((order.fieldMeasurements as Record<string,unknown>)[key],30)])),
-      photoCounts:{before:Array.isArray((order.photos as Record<string,unknown>|undefined)?.before)?(order.photos as Record<string,string[]>).before.length:0,after:Array.isArray((order.photos as Record<string,unknown>|undefined)?.after)?(order.photos as Record<string,string[]>).after.length:0},
+      photoCounts:{before:Array.isArray((order.photos as Record<string,unknown>|undefined)?.before)?(order.photos as Record<string,string[]>).before.length:0,after:Array.isArray((order.photos as Record<string,unknown>|undefined)?.after)?(order.photos as Record<string,string[]>).after.length:0,equipmentLabel:Array.isArray((order.photos as Record<string,unknown>|undefined)?.["Etiqueta"])?(order.photos as Record<string,string[]>)["Etiqueta"].length:0},
       appliedServices:Array.isArray(order.catalogItems)?order.catalogItems.filter(isRecord).filter(item=>item.kind==="Serviço").slice(0,100).map(item=>({id:short(item.id,120),name:short(item.name,200),quantity:typeof item.quantity==="number"&&Number.isFinite(item.quantity)&&item.quantity>0?item.quantity:1})):[],
       appliedMaterials:Array.isArray(order.catalogItems)?order.catalogItems.filter(isRecord).filter(item=>item.kind==="Produto").slice(0,100).map(item=>({name:short(item.name,150),quantity:typeof item.quantity==="number"&&Number.isFinite(item.quantity)&&item.quantity>0?item.quantity:1})):[],
       diagnosis: short(order.diagnosis, 4000),
       executedService: short(order.executedService, 8000),
       mobileChecklist: Object.fromEntries(Object.entries(isRecord(order.mobileChecklist) ? order.mobileChecklist : {}).filter(([,value])=>typeof value === "boolean")) as Record<string,boolean>,
-      evidence: { before: Boolean((order.photos as Record<string,unknown[]>|undefined)?.before?.length), after: Boolean((order.photos as Record<string,unknown[]>|undefined)?.after?.length), signature: Boolean(order.customerSignature) },
+      evidence: { before: Boolean((order.photos as Record<string,unknown[]>|undefined)?.before?.length), after: Boolean((order.photos as Record<string,unknown[]>|undefined)?.after?.length), equipmentLabel:Boolean((order.photos as Record<string,unknown[]>|undefined)?.["Etiqueta"]?.length), signature: Boolean(order.customerSignature) },
+      equipmentLabelAbsent:order.equipmentLabelAbsent===true,
+      equipmentLabelAbsentReason:short(order.equipmentLabelAbsentReason,300),
     });
     if (results.length >= limit) break;
   }
