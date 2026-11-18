@@ -403,3 +403,52 @@ label.status-filter select option,.status-filter select option{background:#08101
  .modal-layer{padding:12px!important}
  .modal-layer>.modal{width:100%!important;max-width:100%!important;max-height:calc(100dvh - 24px);border-radius:16px}
 }
+
+
+/* Busca de cliente na OS: leitura nítida e sugestões compatíveis com o tema. */
+.customer-search-control{min-height:44px}
+.customer-search-control>input{font-size:14px!important;font-weight:600}
+.customer-search-control>svg{flex:none;width:17px;height:17px}
+.customer-search-results{min-width:min(320px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:min(360px,55vh);padding:6px}
+.customer-search-results>button{min-height:58px;padding:9px 10px;gap:10px}
+.customer-search-results b{font-size:13px;line-height:1.35}
+.customer-search-results small{font-size:11px;line-height:1.35}
+.customer-search-avatar{width:34px;height:34px;font-size:10px}
+.customer-search-no-results{font-size:12px}
+html[data-proar-system-theme="dark"] .customer-search-control{
+ background:#102136!important;color:#bfe4ff!important;border-color:#3b607d!important
+}
+html[data-proar-system-theme="dark"] .customer-search-control>input{
+ color:#f2f7ff!important;-webkit-text-fill-color:#f2f7ff!important;background:transparent!important
+}
+html[data-proar-system-theme="dark"] .customer-search-control>input::placeholder{
+ color:#b7c9dc!important;-webkit-text-fill-color:#b7c9dc!important;opacity:1
+}
+html[data-proar-system-theme="dark"] .customer-search-clear{
+ background:#1b3b57!important;color:#eaf3ff!important;border:1px solid #3a5c77!important
+}
+html[data-proar-system-theme="dark"] .customer-search-results{
+ background:#102136!important;color:#eaf3ff!important;border-color:#3b607d!important;box-shadow:0 18px 45px #0009!important
+}
+html[data-proar-system-theme="dark"] .customer-search-results>button{
+ background:transparent!important;color:#eaf3ff!important;border-color:#29445d!important
+}
+html[data-proar-system-theme="dark"] .customer-search-results>button b{
+ color:#f2f7ff!important
+}
+html[data-proar-system-theme="dark"] .customer-search-results>button small{
+ color:#bfd1e2!important
+}
+html[data-proar-system-theme="dark"] .customer-search-results>button:hover,
+html[data-proar-system-theme="dark"] .customer-search-results .customer-search-empty-option{
+ background:#183651!important
+}
+html[data-proar-system-theme="dark"] .customer-search-avatar{
+ background:#1d4c70!important;color:#d6efff!important
+}
+html[data-proar-system-theme="dark"] .customer-search-results>button>svg{
+ color:#6ee7b7!important
+}
+html[data-proar-system-theme="dark"] .customer-search-no-results{
+ color:#c6d8e8!important
+}
