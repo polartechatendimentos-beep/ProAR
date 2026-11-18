@@ -14,7 +14,7 @@ const buildAddress=(fields:Extracted["address"])=>[fields.street,fields.number,f
 export function QuickScheduleAssistant({customers,technicians,onCreate}:Props){
  const [text,setText]=useState(""),[busy,setBusy]=useState(false),[recording,setRecording]=useState(false),[transcribing,setTranscribing]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
  const [fields,setFields]=useState<Extracted|null>(null),[candidates,setCandidates]=useState<CustomerCandidate[]>([]),[selectedId,setSelectedId]=useState(""),[homonymChoice,setHomonymChoice]=useState<"same"|"new"|null>(null);
- const recognitionRef=useRef<SpeechRecognizer|null>(null),recorderRef=useRef<MediaRecorder|null>(null),streamRef=useRef<MediaStream|null>(null),chunksRef=useRef<Blob[]>([]);
+ const recognitionRef=useRef<SpeechRecognizer|null>(null),recorderRef=useRef<MediaRecorder|null>(null),streamRef=useRef<MediaStream|null>(null),chunksRef=useRef<Blob[]>([]),speechBaseRef=useRef(""),speechFinalRef=useRef("");
  const selected=useMemo(()=>candidates.find(item=>item.customer.id===selectedId)||null,[candidates,selectedId]);
  useEffect(()=>()=>{recognitionRef.current?.abort();recorderRef.current?.stop();streamRef.current?.getTracks().forEach(track=>track.stop());},[]);
  const transcribeFallback=async(blob:Blob)=>{
@@ -28,10 +28,10 @@ export function QuickScheduleAssistant({customers,technicians,onCreate}:Props){
  };
  const toggleVoice=()=>{
   setError("");setNotice("");
-  if(recording){recorderRef.current?.stop();return}
+  if(recording){if(recorderRef.current?.state==="recording")recorderRef.current.stop();else recognitionRef.current?.stop();return}
   if(transcribing)return;
   const Constructor=speechApi();
-  if(Constructor){try{const recognition=new Constructor();recognition.lang="pt-BR";recognition.interimResults=true;recognition.continuous=false;recognition.onresult=event=>{let final="",interim="";for(let i=event.resultIndex;i<event.results.length;i++){const phrase=event.results[i][0]?.transcript||"";if(event.results[i].isFinal)final+=phrase;else interim+=phrase}setText(current=>{const base=current.trim();const spoken=(final||interim).trim();return spoken?([base,spoken].filter(Boolean).join(" ")):current})};recognition.onerror=event=>{setError(event.error==="not-allowed"?"Permita o acesso ao microfone ou digite a solicitação.":"Não foi possível reconhecer a fala. Tente novamente.");setRecording(false)};recognition.onend=()=>setRecording(false);recognitionRef.current=recognition;recognition.start();setRecording(true);return}catch{void startRecorder();return}}
+  if(Constructor){try{speechBaseRef.current=text.trim();speechFinalRef.current="";const recognition=new Constructor();recognition.lang="pt-BR";recognition.interimResults=true;recognition.continuous=false;recognition.onresult=event=>{let final="",interim="";for(let i=0;i<event.results.length;i++){const phrase=event.results[i][0]?.transcript||"";if(event.results[i].isFinal)final+=phrase;else interim+=phrase}speechFinalRef.current=final.trim();const spoken=[speechBaseRef.current,speechFinalRef.current,interim.trim()].filter(Boolean).join(" ");if(spoken)setText(spoken)};recognition.onerror=event=>{setError(event.error==="not-allowed"?"Permita o acesso ao microfone ou digite a solicitação.":"Não foi possível reconhecer a fala. Tente novamente.");setRecording(false)};recognition.onend=()=>setRecording(false);recognitionRef.current=recognition;recognition.start();setRecording(true);return}catch{void startRecorder();return}}
   void startRecorder();
  };
  const parse=async()=>{
