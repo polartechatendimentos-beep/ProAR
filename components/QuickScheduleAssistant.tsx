@@ -73,6 +73,7 @@ export function QuickScheduleAssistant({customers,technicians,onCreate}:Props){
    {selected?.kind==="homonym"&&<div className="quick-schedule-homonym"><b>O nome parece semelhante, mas o endereço é diferente.</b><button type="button" aria-pressed={homonymChoice==="same"} onClick={()=>setHomonymChoice("same")}>Mesmo cliente • usar este endereço nesta OS</button><button type="button" aria-pressed={homonymChoice==="new"} onClick={()=>setHomonymChoice("new")}>Pessoa/empresa diferente • novo cadastro</button></div>}
    {selected?.kind==="strong"&&<p className="quick-schedule-strong"><CheckCircle2 size={14}/>Vínculo forte {selected.phoneMatch?"pelo telefone":"pelo endereço e nome"}; confirme os dados.</p>}
    <footer><button type="button" className="quick-schedule-primary" onClick={confirm} disabled={!fields.client.name&&!fields.client.phone}>{newClient?"Preparar cliente e OS":"Usar cadastro e preparar OS"}</button></footer>
+   </div>
   </div>}
  </section>;
 }
