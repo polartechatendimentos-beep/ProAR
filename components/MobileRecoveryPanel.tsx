@@ -38,7 +38,7 @@ export function MobileRecoveryPanel({scope,orderIds,readAt,onResume,onCentral,on
     setBusy(true);setNotice(`Reenviando a operação original de ${id}…`);
     let status:number|undefined;
     try{
-      const response=await fetch("/api/mobile/orders",{method:"POST",credentials:"same-origin",cache:"no-store",headers:{"Content-Type":"application/json"},body:JSON.stringify(pending.command)});
+      const response=await fetch("/api/mobile/orders",{method:"POST",credentials:"same-origin",cache:"no-store",headers:{"Content-Type":"application/json"},body:JSON.stringify(pending.command),signal:AbortSignal.timeout(45000)});
       status=response.status;const body=await response.json().catch(()=>({}));
       if(status===401||status===403){onSessionExpired();throw new Error(body.error||"A sessão ou a permissão precisa ser atualizada.");}
       if(!response.ok){
@@ -101,7 +101,7 @@ export function MobileRecoveryPanel({scope,orderIds,readAt,onResume,onCentral,on
       const current=Number(order.fieldVersion||0);
       const changed=Number.isFinite(expected)&&Number(expected)!==current;
       const status=pending?.blocked||changed?"Conflito ou revisão necessária":pending?.sentAt?"Confirmação do servidor pendente":pending?"Aguardando envio":local?"Rascunho salvo neste aparelho":data?.connected?"Carregada do servidor":"Disponível na cópia offline";
-      return <article key={order.id} className={styles.supportItem}><strong>{order.id} • {order.client}</strong><p>{status}{expected!==undefined? ` • versão local ${expected}, servidor ${current}`:""}</p>{pending?.error&&<p>{pending.error}</p>}{pending&&!pending.blocked&&<button type="button" className={styles.secondaryAction} disabled={busy||!navigator.onLine||data?.connected!==true||!orderIds.includes(order.id)} onClick={()=>void retryPending(local!)}>Reenviar operação original</button>}{(pending?.blocked||changed)&&<p>Não substituímos dados automaticamente. Abra a O.S. para comparar e revisar antes de salvar.</p>}</article>;
+      return <article key={order.id} className={styles.supportItem}><strong>{order.id} • {order.client}</strong><p>{status}{expected!==undefined? ` • versão local ${expected}, servidor ${current}`:""}</p>{pending?.error&&<p>{pending.error}</p>}{pending&&!pending.blocked&&<button type="button" className={styles.secondaryAction} disabled={busy||data?.connected!==true||!orderIds.includes(order.id)} onClick={()=>void retryPending(local!)}>Reenviar operação original</button>}{(pending?.blocked||changed)&&<p>Não substituímos dados automaticamente. Abra a O.S. para comparar e revisar antes de salvar.</p>}</article>;
     })}{(data?.orders||snapshot?.data.orders||[]).length>100&&<p>Mostrando as primeiras 100 O.S. O pacote offline conserva a lista completa autorizada.</p>}</details>
     {notice&&<p role="status" className={styles.warning}>{notice}</p>}
     <MobileCloudDrafts key={scope} scope={scope} drafts={drafts} orderIds={orderIds} canEdit={data?.user.canEdit===true} onResume={onResume} onRefresh={()=>void refresh()}/>
