@@ -6,6 +6,7 @@ type Row = Record<string,string>;
 type Context = { records: Row[]; customers: Row[]; orders: Row[]; technicians: Row[]; modules: {module:string;count:number}[]; capabilities: {customer:boolean;schedule:boolean;confirmation:boolean} };
 type VoiceRecognition = { lang:string; continuous:boolean; interimResults:boolean; maxAlternatives:number; onresult:((event:{results:ArrayLike<ArrayLike<{transcript:string}>>})=>void)|null; onerror:((event:{error?:string})=>void)|null; onend:(()=>void)|null; start:()=>void; stop:()=>void };
 type VoiceConstructor = new()=>VoiceRecognition;
+type CepMatch = {zipCode:string;street:string;complement:string;neighborhood:string;city:string;state:string};
 export function ChatdeskSystemActions({ companyId, phone = "", name = "" }: {companyId:string;phone?:string;name?:string}) {
   const [context,setContext] = useState<Context|null>(null);
   const [query,setQuery] = useState(phone);
@@ -18,6 +19,12 @@ export function ChatdeskSystemActions({ companyId, phone = "", name = "" }: {com
   const [log,setLog] = useState<string[]>([]);
   const [voiceTranscript,setVoiceTranscript] = useState("");
   const [voiceDraft,setVoiceDraft] = useState<AppointmentVoiceDraft|null>(null);
+  const [voiceCity,setVoiceCity] = useState("");
+  const [voiceState,setVoiceState] = useState("SP");
+  const [voiceStreet,setVoiceStreet] = useState("");
+  const [cepMatches,setCepMatches] = useState<CepMatch[]>([]);
+  const [cepFeedback,setCepFeedback] = useState("");
+  const [cepBusy,setCepBusy] = useState(false);
   const [listening,setListening] = useState(false);
   const voiceRef = useRef<VoiceRecognition|null>(null);
   useEffect(()=>()=>{voiceRef.current?.stop();},[]);
@@ -57,7 +64,7 @@ export function ChatdeskSystemActions({ companyId, phone = "", name = "" }: {com
   }
   async function applyVoice(transcript=voiceTranscript) {
     const parsed=parseAppointmentVoice(transcript);
-    setVoiceDraft(parsed);setKind("schedule");setReview(null);
+    setVoiceDraft(parsed);setVoiceCity(parsed.city);setVoiceState(parsed.state||"SP");setVoiceStreet(parsed.street);setCepMatches([]);setCepFeedback("");setKind("schedule");setReview(null);
     setFields(previous=>({...previous,voiceName:parsed.name,address:parsed.address||previous.address||"",service:parsed.service||previous.service||"",date:parsed.date||previous.date||"",time:parsed.time||previous.time||"",duration:previous.duration||"60",customer:""}));
     if(!parsed.name&&!parsed.address&&!parsed.service){setFeedback("Não consegui separar nome, endereço e problema. Revise o texto ou dite em frases curtas.");return;}
     setFeedback("Relato interpretado. Confira os campos e complete os dados que faltam antes de criar o agendamento.");
@@ -71,6 +78,28 @@ export function ChatdeskSystemActions({ companyId, phone = "", name = "" }: {com
       if(matches.length===1){setFields(previous=>({...previous,customer:matches[0].id,address:parsed.address||matches[0].address||previous.address}));setFeedback("Cliente localizado. Confira o endereço, relato, data, horário e técnico antes de gravar.");}
       else if(parsed.name)setFeedback("Relato interpretado, mas o cliente não foi localizado de forma única. Selecione o cadastro correto ou cadastre o cliente com telefone.");
     }
+  }
+  async function validateVoiceAddress() {
+    if(voiceCity.trim().length<3||voiceStreet.trim().length<3||voiceState.trim().length!==2){setCepFeedback("Informe cidade, UF e ao menos 3 letras do logradouro.");return;}
+    setCepBusy(true);setCepFeedback("");
+    try {
+      const params=new URLSearchParams({city:voiceCity.trim(),state:voiceState.trim().toUpperCase(),street:voiceStreet.trim()});
+      const response=await fetch(`/api/cep/search?${params.toString()}`,{cache:"no-store"});
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.error||"Não foi possível localizar o CEP.");
+      setCepMatches((data.matches||[]) as CepMatch[]);
+      setCepFeedback(data.matches?.length===1?"Encontramos uma opção. Confira o logradouro e selecione para preencher o endereço.":"Selecione a correspondência correta para preencher o CEP e complementar o endereço.");
+    } catch(error){setCepFeedback(error instanceof Error?error.message:"Consulta de CEP indisponível.");setCepMatches([]);}
+    finally{setCepBusy(false);}
+  }
+  function useCepMatch(match:CepMatch) {
+    const number=voiceDraft?.address.match(/\\b(?:n(?:ú|u)mero|n[º°o]|#)\\s*(\\d+[A-Za-z]?)\\b/i)?.[1];
+    const reference=voiceDraft?.address.match(/\\(([^)]+)\\)/)?.[1];
+    const address=[match.street,number?`nº ${number}`:null,match.complement,match.neighborhood,match.city+`/${match.state}`,`CEP ${match.zipCode}`,reference?`Referência: ${reference}`:null].filter(Boolean).join(" • ");
+    setFields(previous=>({...previous,address}));
+    setVoiceDraft(previous=>previous?({...previous,address,city:match.city,state:match.state,street:match.street}):previous);
+    setCepFeedback("Endereço e CEP preenchidos. Confirme com o cliente o número, bloco e complemento.");
+    setCepMatches([]);
   }
   function prepareVoiceCustomer() {
     if(!voiceDraft)return;
@@ -91,7 +120,7 @@ export function ChatdeskSystemActions({ companyId, phone = "", name = "" }: {com
       <label>Transcrição para revisar<textarea value={voiceTranscript} onChange={event=>setVoiceTranscript(event.target.value)} maxLength={1500} placeholder="Ex.: José da Silva. Rua João Paulo II, 3017, bloco 6, AP 302, Mirassol. Ar não está gelando."/></label>
       <div className={styles.voiceButtons}><button type="button" disabled={busy||!voiceTranscript.trim()} onClick={()=>void applyVoice()}>Interpretar e preencher</button>{voiceDraft?.name&&<button type="button" disabled={busy} onClick={prepareVoiceCustomer}>Cadastrar novo cliente</button>}</div>
       <small>O reconhecimento usa o navegador ou serviço de voz do aparelho; o áudio não é enviado ao ProAR. Revise a transcrição antes de salvar.</small>
-      {voiceDraft&&<div className={styles.voicePreview}><b>Confira o que foi entendido</b><span>Cliente: {voiceDraft.name||"não identificado"}</span><span>Endereço: {voiceDraft.address||"não identificado"}</span><span>Relato: {voiceDraft.service||"não identificado"}</span><span>Data e horário: {voiceDraft.date||"pendentes"} {voiceDraft.time||""}</span></div>}
+      {voiceDraft&&<div className={styles.voicePreview}><b>Confira o que foi entendido</b><span>Cliente: {voiceDraft.name||"não identificado"}</span><span>Endereço informado: {voiceDraft.address||"não identificado"}</span><div className={styles.addressLookup}><label>Cidade<input value={voiceCity} onChange={event=>setVoiceCity(event.target.value)} maxLength={80} placeholder="Ex.: Bálsamo"/></label><label>UF<input value={voiceState} onChange={event=>setVoiceState(event.target.value.toUpperCase().slice(0,2))} maxLength={2} placeholder="SP"/></label><label>Logradouro para busca de CEP<input value={voiceStreet} onChange={event=>setVoiceStreet(event.target.value)} maxLength={100} placeholder="Ex.: Elson Pelisson"/></label><button type="button" disabled={cepBusy||busy} onClick={()=>void validateVoiceAddress()}>{cepBusy?"Buscando CEP…":"Validar endereço e buscar CEP"}</button></div>{cepFeedback&&<small role="status">{cepFeedback}</small>}{cepMatches.length>0&&<div className={styles.cepMatches} aria-label="Endereços encontrados">{cepMatches.map(match=><button type="button" key={match.zipCode+match.street} onClick={()=>useCepMatch(match)}><b>{match.street}</b><span>{[match.neighborhood,match.city+"/"+match.state,"CEP "+match.zipCode].filter(Boolean).join(" • ")}</span></button>)}</div>}<small>O CEP identifica o logradouro ou região. Confirme número, bloco e apartamento com o cliente antes de salvar.</small><span>Relato: {voiceDraft.service||"não identificado"}</span><span>Data e horário: {voiceDraft.date||"pendentes"} {voiceDraft.time||""}</span></div>}
     </section>
     <hr/><form onSubmit={event=>{event.preventDefault();void run();}}>
       <label>O que deseja fazer?<select value={kind} onChange={event=>{setKind(event.target.value);setReview(null);}}><option value="customer">Cadastrar cliente</option><option value="schedule">Criar agendamento</option><option value="confirmation">Enviar pedido de confirmação</option></select></label>
