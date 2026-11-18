@@ -42,6 +42,10 @@ function normalizedName(value: unknown) {
 
 export async function GET(request: NextRequest) {
   const session = sessionFromRequest(request);
+  const fetchSite = request.headers.get("sec-fetch-site");
+  if (fetchSite && fetchSite !== "same-origin" && fetchSite !== "none") return html("Acesse o contato pelo botão dentro da O.S. no ProAR.", 403);
+  const referrer = request.headers.get("referer");
+  if (referrer) { try { if (new URL(referrer).origin !== request.nextUrl.origin) return html("Acesse o contato pelo botão dentro da O.S. no ProAR.", 403); } catch { return html("Solicitação inválida.", 403); } }
   if (!session) return html("Sua sessão expirou. Entre novamente no ProAR.", 401);
   if (!hasPermission(session, "os.visualizar")) return html("Seu perfil não tem acesso a esta ordem de serviço.", 403);
 
