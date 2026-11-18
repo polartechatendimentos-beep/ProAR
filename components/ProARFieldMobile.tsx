@@ -109,6 +109,7 @@ export function ProARFieldMobile() {
       const result = await response.json();
       if(run!==generation.current||controller.signal.aborted)return;
       if (!response.ok) {
+        if(response.status>=500&&await restoreOfflineSnapshot())return;
         setLoginRequired(response.status === 401);
         if(response.status===401||response.status===403){setData(null);setSelected(null);setRecovery(null);clearOfflineSnapshotLease(localStorage);try{clearOfflineLease(sessionStorage);}catch{}}
         throw new Error(result.error || "Não foi possível carregar os atendimentos.");
