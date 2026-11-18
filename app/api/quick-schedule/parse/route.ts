@@ -11,8 +11,8 @@ export async function POST(request:NextRequest){
  if(!text||text.length>3000)return reply({error:"Digite ou transcreva a solicitação (máximo de 3.000 caracteres)."},400);
  const credential=await getOpenAiCredential(safeCompanyId(access.session.companyId));
  if(!credential)return reply({error:"IA não configurada. Configure em Configurações → Inteligência Artificial."},503);
- const now=typeof body.now==="string"?body.now.slice(0,40):new Date().toISOString();
  const timezone="America/Sao_Paulo";
+ const now=new Intl.DateTimeFormat("sv-SE",{timeZone:timezone,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}).format(new Date());
  const prompt=[
  "Extraia do texto um possível agendamento de manutenção de ar-condicionado.",
  "Retorne somente JSON no formato especificado; não invente campos ausentes, use null.",
