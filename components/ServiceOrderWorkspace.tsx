@@ -117,7 +117,6 @@ export function ServiceOrderWorkspace({ order, companyId, baseOrder, dirty, onCh
   const selectedCustomerName = text(customer, "name", "legalName", "tradeName", "client") || draft.client;
   const isDefaultLocation=(value:unknown)=>/^(unidade principal|cliente principal|endereço principal|local não informado|local de atendimento não selecionado|sala\s*\/\s*ambiente não informado|sala ou ambiente)$/i.test(String(value||"").trim());
   const selectedUnitName=isDefaultLocation(draft.unit)?"":String(draft.unit||"").trim();
-  const selectedLocationLabel=selectedUnitName||(!isDefaultLocation(selectedRoom)?selectedRoom:"Local de atendimento não selecionado");
   const customerStructures = structures.filter(item => {
     const structureCustomerId = text(item, "customerId", "clientId");
     if (selectedCustomerId && structureCustomerId) return structureCustomerId === selectedCustomerId;
@@ -125,6 +124,7 @@ export function ServiceOrderWorkspace({ order, companyId, baseOrder, dirty, onCh
     return normalizeCustomerKey(structureCustomerName) === normalizeCustomerKey(selectedCustomerName);
   });
   const {structure:selectedStructure,roomValue,roomLabel:selectedRoom}=orderLocation({...draft,customerId:selectedCustomerId||draft.customerId},structures);
+  const selectedLocationLabel=selectedUnitName||(!isDefaultLocation(selectedRoom)?selectedRoom:"Local de atendimento não selecionado");
   const selectedEquipmentIds = Array.isArray(draft.equipmentIds) ? draft.equipmentIds as string[] : typeof draft.equipmentId === "string" ? [draft.equipmentId] : [];
   const availableEquipment = equipment.filter(item => {
     const sameCustomer = draft.customerId && item.customerId ? item.customerId === draft.customerId : text(item, "client", "customer", "customerName") === draft.client;
