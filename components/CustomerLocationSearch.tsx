@@ -127,7 +127,7 @@ export function CustomerLocationSearch({ customers, structures, value = "", disa
               <span className="customer-search-avatar">{option.icon === "location" ? <MapPin size={14}/> : <Building2 size={14}/>}</span>
               <span>
                 <b>{option.name}</b>
-                <small>{option.icon === "location" ? `${option.customer.name} • ${option.path}` : "Cliente principal / endereço fiscal"}</small>
+                <small>{option.icon === "location" ? option.path : "Cliente principal / endereço fiscal"}</small>
                 {option.address && <small>{option.address}</small>}
               </span>
             </button>
