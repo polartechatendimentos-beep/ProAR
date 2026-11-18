@@ -394,3 +394,12 @@ label.status-filter select option,.status-filter select option{background:#08101
 .management-advanced-grid{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px;border-top:1px solid #1d4f72}
 .management-advanced-grid>label{display:grid;gap:4px;color:#9bb7cc;font-size:9px}
 @media(max-width:720px){.management-filter-row{align-items:stretch;flex-direction:column}.management-filter-row>label,.management-filter-row>.management-advanced-filters{width:100%;box-sizing:border-box}.management-filter-row>label{justify-content:space-between}.management-filter-row select,.management-filter-row input{min-width:0;flex:1}.management-advanced-grid{display:grid;grid-template-columns:1fr 1fr}.management-advanced-grid .outline-btn{grid-column:1/-1}}
+
+
+/* Modal layers escape page stacking contexts and keep internal scroll on tablet/desktop. */
+.modal-layer{position:fixed!important;inset:0!important;z-index:15000!important;padding:clamp(12px,2.5vw,24px)!important;box-sizing:border-box!important}
+.modal-layer>.modal{max-height:calc(100dvh - 2 * clamp(12px,2.5vw,24px));box-sizing:border-box;overscroll-behavior:contain}
+@media(max-width:700px){
+ .modal-layer{padding:12px!important}
+ .modal-layer>.modal{width:100%!important;max-width:100%!important;max-height:calc(100dvh - 24px);border-radius:16px}
+}
