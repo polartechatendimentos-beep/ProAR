@@ -27,3 +27,18 @@ export function readOfflineLease(storage:Pick<StorageLike,"getItem">,now=Date.no
 }
 export function clearOfflineLease(storage:Pick<StorageLike,"removeItem">){try{storage.removeItem(OFFLINE_LEASE_KEY);}catch{}}
 export function draftRecoveryState(draft:{pendingSubmission?:{blocked?:boolean;sentAt?:number}}){return draft.pendingSubmission?.blocked?"BLOCKED":draft.pendingSubmission?.sentAt?"AWAITING_CONFIRMATION":draft.pendingSubmission?"PENDING":"DRAFT";}
+export const OFFLINE_SNAPSHOT_LEASE_KEY="proar-mobile-offline-snapshot-lease-v1";
+export type MobileOfflineSnapshot={version:1;scope:string;preparedAt:number;validUntil:number;data:MobileDayData};
+export function createOfflineSnapshot(data:MobileDayData,now=Date.now()):MobileOfflineSnapshot{
+  const scope=data.user?.scope;
+  if(data.mode!=="operational"||!scope||scope.length>240||!Array.isArray(data.orders)||!Number.isFinite(data.offlineAccessUntil)||Number(data.offlineAccessUntil)<=now)throw new Error("Sessão online válida necessária para preparar as OS.");
+  return {version:1,scope,preparedAt:now,validUntil:Math.min(Number(data.offlineAccessUntil),now+8*3600000),data:{...data,orders:[...data.orders]}};
+}
+export function validOfflineSnapshot(value:MobileOfflineSnapshot|null,scope:string,now=Date.now()):value is MobileOfflineSnapshot{
+  return Boolean(value&&value.version===1&&value.scope===scope&&value.data?.user?.scope===scope&&scope.length<=240&&Number.isFinite(value.preparedAt)&&value.preparedAt<=now&&Number.isFinite(value.validUntil)&&value.validUntil>now&&value.validUntil<=Number(value.data.offlineAccessUntil)&&value.validUntil<=value.preparedAt+8*3600000&&Array.isArray(value.data.orders));
+}
+export function rememberOfflineSnapshotLease(storage:StorageLike,value:MobileOfflineSnapshot){storage.setItem(OFFLINE_SNAPSHOT_LEASE_KEY,JSON.stringify({scope:value.scope,preparedAt:value.preparedAt,validUntil:value.validUntil}));}
+export function readOfflineSnapshotLease(storage:Pick<StorageLike,"getItem">,now=Date.now()){
+  try{const v=JSON.parse(storage.getItem(OFFLINE_SNAPSHOT_LEASE_KEY)||"null");return v&&typeof v.scope==="string"&&v.scope.length>0&&v.scope.length<=240&&Number.isFinite(v.preparedAt)&&v.preparedAt<=now&&Number.isFinite(v.validUntil)&&v.validUntil>now&&v.validUntil<=v.preparedAt+8*3600000?v as {scope:string;preparedAt:number;validUntil:number}:null;}catch{return null;}
+}
+export function clearOfflineSnapshotLease(storage:Pick<StorageLike,"removeItem">){try{storage.removeItem(OFFLINE_SNAPSHOT_LEASE_KEY);}catch{}}
