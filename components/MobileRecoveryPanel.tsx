@@ -1,21 +1,63 @@
 "use client";
 import {MobileCloudDrafts} from "./MobileCloudDrafts";
 import {useCallback,useEffect,useRef,useState} from "react";
-import {listOrderDrafts,type OrderDraft} from "@/lib/mobile-order-drafts";
+import {clearOrderDraft,listOrderDrafts,saveOrderDraft,type OrderDraft} from "@/lib/mobile-order-drafts";
 import {fieldQueueSummary} from "@/lib/field-offline-queue";
 import {prepareMobileShell} from "@/lib/mobile-shell";
-import {loadDayPackage,saveDayHistories,saveDayPackage} from "@/lib/mobile-day-cache";
-import {createDayPackage,rememberOfflineLease,clearOfflineLease,draftRecoveryState,type MobileDayData,type CachedHistory,type MobileDayPackage} from "@/lib/mobile-day-policy";
+import {loadDayPackage,loadOfflineSnapshot,saveDayHistories,saveDayPackage} from "@/lib/mobile-day-cache";
+import {createDayPackage,rememberOfflineLease,clearOfflineLease,draftRecoveryState,type MobileDayData,type CachedHistory,type MobileDayPackage,type MobileOfflineSnapshot} from "@/lib/mobile-day-policy";
+import {orderSubmissionConfirmed,orderSubmissionFailure} from "@/lib/mobile-order-submission";
 import {isOpenMobileOrder} from "@/lib/mobile-field";
 import styles from "./ProARFieldMobile.module.css";
 const labels={DRAFT:"Rascunho local • ainda não enviado",PENDING:"Preparado • aguardando envio",AWAITING_CONFIRMATION:"Enviado • confirmação pendente",BLOCKED:"Bloqueado • precisa de revisão"};
 type QueueRow=Awaited<ReturnType<typeof fieldQueueSummary>>[number];
-export function MobileRecoveryPanel({scope,orderIds,readAt,onResume,onCentral,onSessionExpired,data}:{data?:MobileDayData;scope:string;orderIds:string[];readAt:string;onResume:(draft:OrderDraft)=>void;onCentral:()=>void;onSessionExpired:()=>void}){
-  const [drafts,setDrafts]=useState<OrderDraft[]>([]),[queue,setQueue]=useState<QueueRow[]>([]),[pack,setPack]=useState<MobileDayPackage|null>(null),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
+export function MobileRecoveryPanel({scope,orderIds,readAt,onResume,onCentral,onSessionExpired,onRefreshOnline,data}:{data?:MobileDayData;scope:string;orderIds:string[];readAt:string;onResume:(draft:OrderDraft)=>void;onCentral:()=>void;onSessionExpired:()=>void;onRefreshOnline:()=>Promise<void>}){
+  const [drafts,setDrafts]=useState<OrderDraft[]>([]),[queue,setQueue]=useState<QueueRow[]>([]),[pack,setPack]=useState<MobileDayPackage|null>(null),[snapshot,setSnapshot]=useState<MobileOfflineSnapshot|null>(null),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
   const [selectedIds,setSelectedIds]=useState<string[]>([]);
   const abort=useRef<AbortController|null>(null);
-  const refresh=useCallback(async()=>{try{const [d,q,p]=await Promise.allSettled([listOrderDrafts(scope),fieldQueueSummary(scope),loadDayPackage(scope)]);if(d.status==="fulfilled")setDrafts(d.value.sort((a,b)=>b.savedAt-a.savedAt));if(q.status==="fulfilled")setQueue(q.value);if(p.status==="fulfilled")setPack(p.value);if([d,q,p].some(r=>r.status==="rejected"))setNotice("Parte do armazenamento local não respondeu. Os registros que puderam ser lidos continuam disponíveis. Não apague os dados do navegador.");}catch{setNotice("Não foi possível consultar o armazenamento local. Não apague os dados do navegador.");}},[scope]);
+  const refresh=useCallback(async()=>{try{const [d,q,p,o]=await Promise.allSettled([listOrderDrafts(scope),fieldQueueSummary(scope),loadDayPackage(scope),loadOfflineSnapshot(scope)]);if(d.status==="fulfilled")setDrafts(d.value.sort((a,b)=>b.savedAt-a.savedAt));if(q.status==="fulfilled")setQueue(q.value);if(p.status==="fulfilled")setPack(p.value);if(o.status==="fulfilled")setSnapshot(o.value);if([d,q,p,o].some(r=>r.status==="rejected"))setNotice("Parte do armazenamento local não respondeu. Os registros que puderam ser lidos continuam disponíveis. Não apague os dados do navegador.");}catch{setNotice("Não foi possível consultar o armazenamento local. Não apague os dados do navegador.");}},[scope]);
   useEffect(()=>{void refresh();const timer=setInterval(()=>void refresh(),15000);return()=>{clearInterval(timer);abort.current?.abort();};},[refresh,readAt]);
+  async function refreshOfflineCopy(){
+    if(busy)return;if(!navigator.onLine||data?.connected!==true){setNotice("Conecte ao ProAR antes de atualizar a cópia offline.");return;}
+    setBusy(true);setNotice("Atualizando as O.S. autorizadas para uso offline…");
+    const previous=snapshot?.preparedAt||0;
+    try{
+      await onRefreshOnline();
+      const updated=await loadOfflineSnapshot(scope);
+      if(!updated||updated.preparedAt<=previous)throw new Error("A cópia offline não foi atualizada. Confirme a conexão e tente novamente.");
+      setSnapshot(updated);await refresh();
+      setNotice(`${updated.data.orders.length} O.S. autorizadas atualizadas em ${new Date(updated.preparedAt).toLocaleString("pt-BR")}. Disponíveis até ${new Date(updated.validUntil).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}.`);
+    }catch(error){setNotice(error instanceof Error?error.message:"Não foi possível atualizar a cópia offline.");}
+    finally{setBusy(false);}
+  }
+  async function retryPending(draft:OrderDraft){
+    const pending=draft.pendingSubmission,id=pending?.command.orderId;
+    if(!pending||!id||busy)return;
+    if(!navigator.onLine||data?.connected!==true){setNotice("Conecte e atualize os dados antes de reenviar esta O.S.");return;}
+    if(!orderIds.includes(id)){setNotice("Esta O.S. não está mais autorizada para o usuário atual. O rascunho foi preservado.");return;}
+    setBusy(true);setNotice(`Reenviando a operação original de ${id}…`);
+    let status:number|undefined;
+    try{
+      const response=await fetch("/api/mobile/orders",{method:"POST",credentials:"same-origin",cache:"no-store",headers:{"Content-Type":"application/json"},body:JSON.stringify(pending.command)});
+      status=response.status;const body=await response.json().catch(()=>({}));
+      if(status===401||status===403){onSessionExpired();throw new Error(body.error||"A sessão ou a permissão precisa ser atualizada.");}
+      if(!response.ok){
+        const conflict=body?.conflict;
+        const message=conflict? `${body.error||"A O.S. mudou no servidor."} Versão local: ${conflict.expectedVersion}; versão atual: ${conflict.currentVersion}. Revise antes de reenviar.` : String(body?.error||"Envio não confirmado.");
+        await saveOrderDraft(scope,id,{...draft,pendingSubmission:orderSubmissionFailure(pending,message,status),savedAt:Date.now()});
+        setNotice(message);await refresh();return;
+      }
+      if(!orderSubmissionConfirmed(pending,body))throw new Error("O servidor não confirmou completamente esta operação. O identificador original foi mantido.");
+      await clearOrderDraft(scope,id);
+      await onRefreshOnline();await refresh();
+      setNotice(`O.S. ${id}: envio confirmado pelo servidor.`);
+    }catch(error){
+      const message=error instanceof Error?error.message:"Não foi possível confirmar o envio.";
+      if(status===401||status===403){setNotice(message);return;}
+      await saveOrderDraft(scope,id,{...draft,pendingSubmission:orderSubmissionFailure(pending,message,status),savedAt:Date.now()}).catch(()=>{});
+      setNotice(message);await refresh();
+    }finally{setBusy(false);}
+  }
   async function prepareHistories(){
     if(busy)return;if(!navigator.onLine){setNotice("Conecte para preparar os históricos do dia.");return;}
     setBusy(true);const controller=new AbortController();abort.current=controller;
@@ -49,7 +91,18 @@ export function MobileRecoveryPanel({scope,orderIds,readAt,onResume,onCentral,on
     <button type="button" className={styles.secondaryAction} onClick={()=>void refresh()}>Atualizar estado local</button>
     <button type="button" className={styles.secondaryAction} onClick={diagnostic}>Baixar diagnóstico de sincronização • sem dados de clientes</button>
     {data&&<details className={styles.requirementsList}><summary>Escolher OS de qualquer data para uso offline</summary><p>Selecionadas: {selectedIds.length}/200. A seleção substitui o pacote anterior; os rascunhos são preservados.</p>{data.orders.filter(o=>isOpenMobileOrder(o.status)).slice(0,200).map(o=><label key={o.id} className={styles.checkLabel}><input type="checkbox" checked={selectedIds.includes(o.id)} onChange={e=>setSelectedIds(ids=>e.target.checked?[...ids,o.id]:ids.filter(id=>id!==o.id))}/>{o.id} • {o.client} • {o.date||"Sem data"}</label>)}{data.orders.filter(o=>isOpenMobileOrder(o.status)).length>200&&<p>Mostrando as primeiras 200 OS abertas autorizadas.</p>}<button type="button" className={styles.primaryAction} disabled={busy||!selectedIds.length} onClick={()=>void prepareSelected()}>Preparar seleção no aparelho</button></details>}
-    <h3>Prontidão offline</h3>{pack?<><p>{pack.data.orders.length} OS autorizada(s) no pacote • {Object.keys(pack.histories).length} histórico(s). Preparado em {new Date(pack.preparedAt).toLocaleString("pt-BR")}. Leitura offline até {new Date(pack.validUntil).toLocaleString("pt-BR")}.{pack.truncated?" Pacote parcial: limite de 200 OS.":""}</p><button type="button" disabled={busy} className={styles.primaryAction} onClick={()=>void prepareHistories()}>{busy?"Preparando históricos…":"Preparar acesso offline e históricos"}</button></>:<p>Atualize os atendimentos com conexão para preparar as OS autorizadas do dia. A cópia expira com a sessão ou a mudança do dia.</p>}
+    <h3>Prontidão offline</h3>
+    <article className={styles.supportItem} aria-live="polite"><strong>Cópia completa das O.S.</strong>{snapshot?<p>{snapshot.data.orders.length} O.S. salvas neste aparelho. Atualizada em {new Date(snapshot.preparedAt).toLocaleString("pt-BR")}; disponível até {new Date(snapshot.validUntil).toLocaleString("pt-BR")}.</p>:<p>Nenhuma cópia offline válida foi encontrada para este usuário.</p>}<button type="button" disabled={busy||!navigator.onLine||data?.connected!==true} className={styles.primaryAction} onClick={()=>void refreshOfflineCopy()}>{busy?"Atualizando…":"Atualizar O.S. para uso offline"}</button></article>
+    {pack?<><p>{pack.data.orders.length} OS autorizada(s) no pacote do dia • {Object.keys(pack.histories).length} histórico(s). Preparado em {new Date(pack.preparedAt).toLocaleString("pt-BR")}. Leitura offline até {new Date(pack.validUntil).toLocaleString("pt-BR")}.{pack.truncated?" Pacote parcial: limite de 200 OS.":""}</p><button type="button" disabled={busy} className={styles.primaryAction} onClick={()=>void prepareHistories()}>{busy?"Preparando históricos…":"Preparar históricos e interface offline"}</button></>:<p>Prepare históricos e interface com conexão. Fotos e PDFs externos precisam ser baixados separadamente.</p>}
+    <details className={styles.requirementsList}><summary>Estado de sincronização por O.S. ({(data?.orders||snapshot?.data.orders||[]).length})</summary>{(data?.orders||snapshot?.data.orders||[]).slice(0,100).map(order=>{
+      const local=drafts.find(item=>(item.orderSnapshot?.id||item.pendingSubmission?.command.orderId)===order.id);
+      const pending=local?.pendingSubmission;
+      const expected=pending?.command.expectedVersion??local?.version;
+      const current=Number(order.fieldVersion||0);
+      const changed=Number.isFinite(expected)&&Number(expected)!==current;
+      const status=pending?.blocked||changed?"Conflito ou revisão necessária":pending?.sentAt?"Confirmação do servidor pendente":pending?"Aguardando envio":local?"Rascunho salvo neste aparelho":data?.connected?"Carregada do servidor":"Disponível na cópia offline";
+      return <article key={order.id} className={styles.supportItem}><strong>{order.id} • {order.client}</strong><p>{status}{expected!==undefined? ` • versão local ${expected}, servidor ${current}`:""}</p>{pending?.error&&<p>{pending.error}</p>}{pending&&!pending.blocked&&<button type="button" className={styles.secondaryAction} disabled={busy||!navigator.onLine||data?.connected!==true||!orderIds.includes(order.id)} onClick={()=>void retryPending(local!)}>Reenviar operação original</button>}{(pending?.blocked||changed)&&<p>Não substituímos dados automaticamente. Abra a O.S. para comparar e revisar antes de salvar.</p>}</article>;
+    })}{(data?.orders||snapshot?.data.orders||[]).length>100&&<p>Mostrando as primeiras 100 O.S. O pacote offline conserva a lista completa autorizada.</p>}</details>
     {notice&&<p role="status" className={styles.warning}>{notice}</p>}
     <MobileCloudDrafts key={scope} scope={scope} drafts={drafts} orderIds={orderIds} canEdit={data?.user.canEdit===true} onResume={onResume} onRefresh={()=>void refresh()}/>
     <h3>OS neste aparelho • {drafts.length}</h3>{!drafts.length&&<p>Nenhum rascunho recuperável neste usuário.</p>}
