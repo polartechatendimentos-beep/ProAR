@@ -1,7 +1,7 @@
 import {isOpenMobileOrder} from "./mobile-field.ts";
 import type {MobileFieldOrder} from "./mobile-field";
 export const OFFLINE_LEASE_KEY="proar-mobile-offline-lease-v1";
-export type MobileDayData={connected:boolean;stateFound:boolean;mode:"operational";user:{displayName:string;role:string;canEdit:boolean;canApprove:boolean;scope:string;linkedEmployee:boolean;manager:boolean};orders:MobileFieldOrder[];summary:{today:number;inProgress:number;pending:number};lastReadAt:string;notice:string;offlineAccessUntil?:number};
+export type MobileDayData={connected:boolean;stateFound:boolean;mode:"operational";user:{displayName:string;role:string;canEdit:boolean;canApprove:boolean;scope:string;linkedEmployee:boolean;employeeId?:string;employeeName?:string;manager:boolean};orders:MobileFieldOrder[];summary:{today:number;inProgress:number;pending:number};lastReadAt:string;notice:string;offlineAccessUntil?:number};
 export type CachedHistory={id:string;date:string;service:string;diagnosis:string;report:string;unit?:string};
 export type MobileDayPackage={version:1;scope:string;day:string;preparedAt:number;validUntil:number;truncated:boolean;selectedOrderIds?:string[];data:MobileDayData;histories:Record<string,CachedHistory[]>};
 export const mobileCivilDay=(now=Date.now())=>new Date(now).toLocaleDateString("en-CA",{timeZone:"America/Sao_Paulo"});
