@@ -115,6 +115,9 @@ export function ServiceOrderWorkspace({ order, companyId, baseOrder, dirty, onCh
   const selectedCustomerId = text(customer, "id", "customerId", "uuid") || String(draft.customerId || "");
   const municipal=isMunicipalCustomer({id:selectedCustomerId,name:draft.client,organizationType:String(customer?.organizationType||"")});
   const selectedCustomerName = text(customer, "name", "legalName", "tradeName", "client") || draft.client;
+  const isDefaultLocation=(value:unknown)=>/^(unidade principal|cliente principal|endereço principal|local não informado|local de atendimento não selecionado|sala\s*\/\s*ambiente não informado|sala ou ambiente)$/i.test(String(value||"").trim());
+  const selectedUnitName=isDefaultLocation(draft.unit)?"":String(draft.unit||"").trim();
+  const selectedLocationLabel=selectedUnitName||(!isDefaultLocation(selectedRoom)?selectedRoom:"Local de atendimento não selecionado");
   const customerStructures = structures.filter(item => {
     const structureCustomerId = text(item, "customerId", "clientId");
     if (selectedCustomerId && structureCustomerId) return structureCustomerId === selectedCustomerId;
@@ -287,9 +290,9 @@ export function ServiceOrderWorkspace({ order, companyId, baseOrder, dirty, onCh
     <div className={`os-location-section ${locationExpanded?"expanded":""}`}><button type="button" className="os-location-toggle" aria-expanded={locationExpanded} aria-controls="os-location-fields" onClick={()=>setLocationExpanded(value=>!value)}>Cliente e local • {selectedCustomerName} <span>{locationExpanded?"Recolher":"Alterar"}</span></button>
     <div className="os-location-bar" id="os-location-fields">
       <label>Cliente<CustomerSearchSelect customers={customerOptions} value={selectedCustomerId} valueMode="id" disabled={!canEdit} locationId={String(draft.structureId || draft.roomId || draft.sectorId || draft.unitId || "")} onLocationChange={selection=>setDraft(current=>({...current,...selection,environment:undefined,equipmentIds:[],equipmentId:undefined,equipmentLabelCode:undefined}))} onChange={(value,selected)=>setDraft(current=>({...current,...orderCustomerPatch(current,value,selected as unknown as RecordItem)}))} /></label>
-      <ChevronRight size={15}/><label className={municipal?"municipal-legacy-location":""}>Unidade / setor<select disabled={!canEdit || saving} value={draft.unit} onChange={event => setField("unit", event.target.value)}><option>{draft.unit || "Selecionar"}</option>{customerStructures.map(item => <option key={text(item, "id", "name")} value={text(item, "name", "unit")}>{text(item, "name", "unit")}</option>)}</select></label>
+      <ChevronRight size={15}/><label className={municipal?"municipal-legacy-location":""}>Unidade / setor<select disabled={!canEdit || saving} value={selectedUnitName} onChange={event => setField("unit", event.target.value)}><option value="">{selectedUnitName || "Selecione a unidade de execução"}</option>{customerStructures.map(item => <option key={text(item, "id", "name")} value={text(item, "name", "unit")}>{text(item, "name", "unit")}</option>)}</select></label>
       <ChevronRight size={15}/><label className={municipal?"municipal-legacy-location":""}>Sala / ambiente<input disabled={!canEdit || saving} value={roomValue} onChange={event => setField("environment", event.target.value)} placeholder="Sala ou ambiente"/></label>
-      <div className="os-location-summary"><MapPin size={15}/><span>{draft.unit || "Local não informado"} <b>›</b> {selectedRoom}</span></div>
+      <div className="os-location-summary"><MapPin size={15}/><span>{selectedLocationLabel} <b>›</b> {isDefaultLocation(selectedRoom)?"Sala/ambiente não selecionado":selectedRoom}</span></div>
     </div>
 
     </div>
