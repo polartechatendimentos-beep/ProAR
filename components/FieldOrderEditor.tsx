@@ -3,8 +3,7 @@ import {FieldServicePicker} from "./FieldServicePicker";
 import {MobileOrderWorkflow} from "./MobileOrderWorkflow";
 import {reportConsistency} from "@/lib/mobile-workflow-insights";
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, PhoneCall } from "lucide-react";
-import { MobileTechnicalLibrary } from "./MobileTechnicalLibrary";
+import { PhoneCall } from "lucide-react";
 import type { MobileFieldOrder } from "@/lib/mobile-field";
 import {equipmentInspection} from "@/lib/mobile-experience";
 import {FieldPhotoComparison} from "./FieldPhotoComparison";
@@ -35,7 +34,6 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
   const submissionRef=useRef<PendingOrderSubmission|undefined>(undefined),operationLock=useRef(false);
   const noticeRef=useRef<HTMLParagraphElement|null>(null);
   const signatureDialog=useRef<HTMLDialogElement|null>(null);
-  const technicalDialog=useRef<HTMLDialogElement|null>(null);
   const canvas=useRef<HTMLCanvasElement|null>(null),drawing=useRef(false),drew=useRef(false);
   const approved=(kind:string)=>order.fieldExceptions?.some(item=>item.kind===kind&&item.status==="Aprovado"&&item.decidedBy&&item.decidedAt);
   const done={...checklist,equipment:equipmentIds.length>0||Boolean(approved("equipment")),checkin:Boolean(order.checkInAt),beforePhoto:Boolean(before||beforePhotos.length||order.evidence.before),afterPhoto:Boolean(after||afterPhotos.length||order.evidence.after),signature:Boolean((signature&&signerName.trim())||order.evidence.signature)||Boolean(approved("signature")),executedService:Boolean(report.trim()),diagnosis:Boolean(diagnosis.trim())};
@@ -157,9 +155,6 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
     {requiresJourney&&<p>Para atuar, mantenha a jornada ativa. A pausa e o fim do expediente bloqueiam a gravação.</p>}
     {notice&&<p ref={noticeRef} role="alert" className={styles.warning}>{notice}</p>}
     <fieldset className={styles.editorFields} disabled={busy||confirmed||!draftReady||Boolean(olderDraft)||Boolean(pendingSubmission)}>
-    <button type="button" className={styles.secondaryAction} onClick={()=>technicalDialog.current?.showModal()}><BookOpen size={18} aria-hidden="true"/> Abrir diagnóstico guiado do acervo</button>
-    <small>Preencha a análise no acervo e anexe o resumo a esta O.S.; ele ficará no rascunho até salvar no servidor.</small>
-    <dialog ref={technicalDialog} className={styles.signatureDialog} aria-label="Diagnóstico guiado do equipamento"><h2>Diagnóstico guiado do equipamento</h2><p>O resumo será anexado ao campo de diagnóstico desta O.S. A análise é uma orientação para investigação; confirme a causa com inspeção, medições e manual da linha.</p><MobileTechnicalLibrary scope={scope} initialTab="diagnostic" onResult={value=>{setDiagnosis(current=>[current.trim(),value].filter(Boolean).join("\n\n").slice(0,4000));setNotice("Resumo anexado ao diagnóstico e guardado no rascunho local. Salve a O.S. para enviar ao servidor.");technicalDialog.current?.close();}}/><button type="button" className={styles.secondaryAction} onClick={()=>technicalDialog.current?.close()}>Fechar diagnóstico</button></dialog>
     {!order.checkInAt&&<button id={`field-${order.id}-checkin`} className={styles.primaryAction} type="button" disabled={busy||mediaBusy||!draftReady||Boolean(olderDraft)} onClick={()=>void execute("start")}>Iniciar atendimento com check-in</button>}
     <label id={`field-${order.id}-diagnosis`} className={styles.formLabel}>{diagnosisFieldLabel} • obrigatório<small>{isCorrectiveOrDiagnostic?"Descreva o sintoma, o que foi verificado e a causa provável (se identificada).":"Registre o estado do equipamento antes do serviço e qualquer irregularidade observada."} Exemplo: “Cliente relata que não gela; filtros limpos; causa ainda em investigação.”</small><textarea value={diagnosis} onChange={event=>setDiagnosis(event.target.value)} maxLength={4000} placeholder={isCorrectiveOrDiagnostic?"Sintoma relatado:\nVerificações realizadas:\nCausa provável ou situação:":"Estado inicial:\nIrregularidades observadas:"}/></label>
     <label id={`field-${order.id}-executedService`} className={styles.formLabel}>Serviço executado • obrigatório<small>Descreva o que foi feito para atender a O.S. Este campo é separado do diagnóstico.</small><textarea value={report} onChange={event=>setReport(event.target.value)} maxLength={8000} placeholder="Ex.: limpeza realizada, dreno desobstruído, teste funcional concluído."/></label>
