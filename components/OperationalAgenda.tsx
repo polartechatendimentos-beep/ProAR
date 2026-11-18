@@ -88,9 +88,11 @@ export function OperationalAgenda<T extends AgendaOrder>({companyId,orders,onCre
   const kind=serviceKind(order),status=statusInfo(order),urgency=kind==="urgent";
   const categoryClass=({cleaning:styles.serviceCleaning,pmoc:styles.servicePmoc,installation:styles.serviceInstallation,corrective:styles.serviceCorrective,urgent:styles.serviceUrgent,works:styles.serviceWorks,other:styles.serviceOther} as Record<AgendaServiceKind,string>)[kind];
   const readiness=orderReadiness(order as unknown as Record<string,unknown>,contactFor(order));
-  return <button className={[styles.event,categoryClass,compact?styles.compact:"",urgency?styles.urgentEvent:""].join(" ")} key={order.id} onClick={()=>onSelect(order)} title={"Abrir "+order.id+" — "+order.client}>
+  const locationTitle=String(order.unit||order.room||order.client||"Local a definir").trim();
+  const locationContext=[order.client,order.sector,order.unit&&order.room?order.room:""].map(value=>String(value||"").trim()).filter(value=>value&&value!==locationTitle).join(" • ");
+  return <button className={[styles.event,categoryClass,compact?styles.compact:"",urgency?styles.urgentEvent:""].join(" ")} key={order.id} onClick={()=>onSelect(order)} title={"Abrir "+order.id+" — "+locationTitle+(locationContext?" • "+locationContext:"")}>
    <span className={styles.eventTime}><Clock size={12}/>{order.time||"A definir"}{orderEndTime(order as unknown as Record<string,unknown>)?" – "+orderEndTime(order as unknown as Record<string,unknown>):""}<small>{order.id}</small></span>
-   <strong>{order.client}</strong><span>{order.service||"Serviço não informado"}</span>
+   <strong>{locationTitle}</strong>{locationContext&&<small className={styles.eventContext}>{locationContext}</small>}<span>{order.service||"Serviço não informado"}</span>
    <span className={styles.eventTechnician}>{technicianBadge(order.tech||"")}</span>
    {!compact&&<span className={styles.eventAddress}><MapPin size={12}/>{order.address||order.unit||"Local a definir"}</span>}
    <span className={[styles.eventStatus,styles[status.tone as keyof typeof styles]].join(" ")}><i/> {status.label}{order.appointmentConfirmation?" • "+order.appointmentConfirmation:""}</span>
