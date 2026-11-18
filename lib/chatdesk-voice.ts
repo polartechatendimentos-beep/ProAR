@@ -1,4 +1,7 @@
-export type AppointmentVoiceDraft = { name: string; address: string; service: string; phone: string; date: string; time: string };
+export type AppointmentVoiceDraft = {
+  name: string; address: string; service: string; phone: string; date: string; time: string;
+  city: string; state: string; street: string;
+};
 const clean = (value: string) => value.replace(/^[\s,.;:—-]+|[\s,.;:—-]+$/g, "").replace(/\s+/g, " ").trim();
 function saoPauloToday(now: number) { return new Date(now).toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }); }
 function shiftDay(date: string, amount: number) {
@@ -22,8 +25,14 @@ export function parseAppointmentVoice(input: string, now = Date.now()): Appointm
   if (streetStart >= 0) {
     const end = issueStart > streetStart ? issueStart : text.length;
     address = clean(text.slice(streetStart, end));
-    if (dateToken && dateToken.index > streetStart && dateToken.index < (issueStart > streetStart ? issueStart : text.length)) address = clean(text.slice(streetStart, dateToken.index));
+    if (dateToken && dateToken.index > streetStart && dateToken.index < end) address = clean(text.slice(streetStart, dateToken.index));
   }
+  const cityMatch = address.match(/\s[-–]\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ ]{2,}?)(?:\/([A-Za-z]{2}))?$/);
+  const city = clean(cityMatch?.[1] || "");
+  const state = (cityMatch?.[2] || "").toUpperCase();
+  const addressWithoutCity = cityMatch ? clean(address.slice(0, cityMatch.index)) : address;
+  const streetMatch = addressWithoutCity.match(/^(?:rua|r\.?|avenida|av\.?|alameda|travessa|estrada|rodovia|praça|praca)\s+([^,]+)/i);
+  const streetName = clean(streetMatch?.[1] || "").replace(/\([^)]*\)/g, "").replace(/\b(?:n(?:ú|u)mero|n[º°o])\s*\d+[A-Za-z]?\b.*$/i, "").replace(/,.*$/, "");
   const symptom = issue ? clean(issue[0]) : "";
   const service = symptom ? "Relato do cliente: " + symptom : "";
   let date = "";
@@ -42,5 +51,5 @@ export function parseAppointmentVoice(input: string, now = Date.now()): Appointm
     const match = timeToken[0].match(/(\d{1,2})(?::|h)?(\d{2})?/i);
     if (match) time = match[1].padStart(2, "0") + ":" + (match[2] || "00");
   }
-  return { name: clean(name), address, service, phone: clean(phoneToken?.[1] || ""), date, time };
+  return { name: clean(name), address, service, phone: clean(phoneToken?.[1] || ""), date, time, city, state, street: clean(streetName) };
 }
