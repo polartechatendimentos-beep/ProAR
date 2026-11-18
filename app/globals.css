@@ -452,3 +452,47 @@ html[data-proar-system-theme="dark"] .customer-search-results>button>svg{
 html[data-proar-system-theme="dark"] .customer-search-no-results{
  color:#c6d8e8!important
 }
+
+
+/* Assistente de agendamento por voz/texto — padrão azul-marinho do Atendimento. */
+.quick-schedule-card{display:grid;gap:12px;margin:0 0 18px;padding:16px 18px;border:1px solid #31506a;border-radius:15px;background:linear-gradient(145deg,#10263c,#102c42 72%,#0c3441);color:#eaf3ff;box-shadow:0 8px 24px #020a1435}
+.quick-schedule-card>header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.quick-schedule-card>header span{display:flex;align-items:center;gap:7px;color:#67c8f5;font-size:10px;font-weight:800;letter-spacing:.1em}
+.quick-schedule-card h3{margin:5px 0 3px;color:#f2f7ff;font-size:18px}
+.quick-schedule-card header p{margin:0;color:#b9cde0;font-size:12px;line-height:1.5}
+.quick-schedule-input-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:stretch;gap:10px}
+.quick-schedule-input-row textarea{width:100%;min-height:72px;resize:vertical;padding:11px 12px;border:1px solid #3a5c78;border-radius:10px;background:#091b2d;color:#f3f8ff;font-size:13px;line-height:1.5}
+.quick-schedule-input-row textarea::placeholder{color:#a9bfd3;opacity:1}
+.quick-schedule-input-row textarea:focus{outline:2px solid #37b4df;outline-offset:2px}
+.quick-schedule-actions{display:flex;flex-direction:column;justify-content:center;gap:8px;min-width:150px}
+.quick-schedule-card button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:8px 12px;border:1px solid #41617d;border-radius:9px;background:#173550;color:#eaf3ff;font-size:12px;font-weight:700}
+.quick-schedule-card button:hover:not(:disabled){background:#204867;border-color:#65bce6}
+.quick-schedule-card button:disabled{opacity:.55;cursor:wait}
+.quick-schedule-card .quick-schedule-primary{background:linear-gradient(100deg,#176cba,#078c9d);border-color:#1a8cb7;color:#fff}
+.quick-schedule-notice,.quick-schedule-error{margin:0;padding:9px 11px;border-radius:9px;font-size:12px;line-height:1.45}
+.quick-schedule-notice{background:#123c34;border:1px solid #267b60;color:#c4f5df}
+.quick-schedule-error{background:#48212b;border:1px solid #9a4653;color:#ffd3d9}
+.quick-schedule-review{display:grid;grid-template-columns:minmax(220px,.8fr) minmax(320px,1.2fr);gap:12px;padding-top:12px;border-top:1px solid #31506a}
+.quick-schedule-review>b,.quick-schedule-data>b,.quick-schedule-matches>b{display:block;color:#eaf3ff;font-size:13px}
+.quick-schedule-data{display:grid;align-content:start;gap:9px;padding:12px;border:1px solid #31506a;border-radius:11px;background:#0b2033}
+.quick-schedule-data>span{display:flex;align-items:flex-start;gap:7px;color:#d3e3f1;font-size:12px;line-height:1.4;overflow-wrap:anywhere}
+.quick-schedule-data>span svg{flex:none;color:#77ccf2}
+.quick-schedule-data small{color:#b5cadc;font-size:11px;line-height:1.45}
+.quick-schedule-matches{display:grid;align-content:start;gap:7px}
+.quick-schedule-matches>button{display:grid;grid-template-columns:42px minmax(0,1fr) auto;justify-content:stretch;text-align:left}
+.quick-schedule-matches>button.selected{border-color:#55b8e4;background:#1a405c;box-shadow:0 0 0 2px #42b9e51f}
+.quick-schedule-matches>button>span:nth-child(2){display:grid;min-width:0;gap:3px}
+.quick-schedule-matches strong{color:#f0f7ff;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.quick-schedule-matches small{color:#b8cde0;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.quick-schedule-matches em{align-self:center;color:#b9e9ff;font-size:9px;font-style:normal}
+.quick-schedule-score{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:#183e5a;color:#d9f3ff;font-size:10px;font-weight:800}
+.quick-schedule-new,.quick-schedule-warning,.quick-schedule-strong{display:flex;align-items:flex-start;gap:7px;margin:0;padding:9px 10px;border-radius:9px;font-size:11px;line-height:1.45}
+.quick-schedule-new,.quick-schedule-strong{background:#123a34;border:1px solid #26785f;color:#c8f3df}
+.quick-schedule-warning{background:#463716;border:1px solid #8c6b27;color:#ffe5a8}
+.quick-schedule-homonym{display:grid;gap:7px;padding:10px;border:1px solid #775b2b;border-radius:9px;background:#3c311c}
+.quick-schedule-homonym>b{color:#ffe6ab;font-size:11px}
+.quick-schedule-homonym button[aria-pressed=true]{background:#695122;border-color:#d1a64f;color:#fff5d6}
+.quick-schedule-review footer{grid-column:1/-1;display:flex;justify-content:flex-end}
+.quick-schedule-spin{animation:quickScheduleSpin 1s linear infinite}
+@keyframes quickScheduleSpin{to{transform:rotate(360deg)}}
+@media(max-width:700px){.quick-schedule-card{padding:13px}.quick-schedule-input-row{grid-template-columns:minmax(0,1fr)}.quick-schedule-actions{flex-direction:row;min-width:0}.quick-schedule-actions button{flex:1}.quick-schedule-review{grid-template-columns:minmax(0,1fr)}.quick-schedule-matches>button{grid-template-columns:38px minmax(0,1fr)}.quick-schedule-matches em{grid-column:2}.quick-schedule-review footer{grid-column:auto}}
