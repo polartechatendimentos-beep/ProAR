@@ -17,7 +17,7 @@ import { FieldSupportPanel } from "./FieldSupportPanel";
 import { FieldOrderReceipt } from "./FieldOrderReceipt";
 import {MobileRecoveryPanel} from "./MobileRecoveryPanel";
 import {createDayPackage,readOfflineLease,rememberOfflineLease,clearOfflineLease,createOfflineSnapshot,readOfflineSnapshotLease,rememberOfflineSnapshotLease,clearOfflineSnapshotLease,type MobileDayData} from "@/lib/mobile-day-policy";
-import {loadDayPackage,saveDayPackage,loadOfflineSnapshot,saveOfflineSnapshot,removeDayOrder} from "@/lib/mobile-day-cache";
+import {loadDayPackage,saveDayPackage,loadOfflineSnapshot,saveOfflineSnapshot,clearOtherOfflineSnapshots,clearOfflineSnapshot,removeDayOrder} from "@/lib/mobile-day-cache";
 import { listPendingOrderDrafts } from "@/lib/mobile-order-drafts";
 import { MOBILE_RELEASE } from "@/lib/mobile-release";
 import { filterFieldOrders, fieldOrderTone, openFieldWorkQueue, type OrderFilter } from "@/lib/mobile-order-display";
@@ -117,7 +117,7 @@ export function ProARFieldMobile() {
       setLoginRequired(false);
       setData(result as FieldData);setOfflineCopy(false);setOfflineNotice("");
       try{
-        const snapshot=createOfflineSnapshot(result as FieldData,Date.now());await saveOfflineSnapshot(snapshot);
+        const snapshot=createOfflineSnapshot(result as FieldData,Date.now());await clearOtherOfflineSnapshots(snapshot.scope);await saveOfflineSnapshot(snapshot);
         if(run!==generation.current||controller.signal.aborted)return;
         rememberOfflineSnapshotLease(localStorage,snapshot);
         try{const previous=await loadDayPackage(result.user.scope);const pack=createDayPackage(result as FieldData,Date.now(),previous?.selectedOrderIds);await saveDayPackage(pack);rememberOfflineLease(sessionStorage,pack);}catch{}
@@ -161,7 +161,7 @@ export function ProARFieldMobile() {
     return()=>{cancelled=true;};
   },[pendingScope,selected,data?.lastReadAt]);
   async function signOutMobile(){
-    setError("");try{const response=await fetch("/api/auth",{method:"DELETE",credentials:"same-origin",cache:"no-store"});if(!response.ok)throw new Error("Não foi possível encerrar a sessão. Tente novamente com conexão.");generation.current++;requestAbort.current?.abort();setLoading(false);clearOfflineSnapshotLease(localStorage);try{clearOfflineLease(sessionStorage);}catch{}setData(null);setRecovery(null);setSelected(null);setCompletion(null);setTab("inicio");setQuery("");setOrderFilter("open");setLoginRequired(true);}catch(error){setError(error instanceof Error?error.message:"Não foi possível sair.");}
+    setError("");try{const response=await fetch("/api/auth",{method:"DELETE",credentials:"same-origin",cache:"no-store"});if(!response.ok)throw new Error("Não foi possível encerrar a sessão. Tente novamente com conexão.");generation.current++;requestAbort.current?.abort();setLoading(false);clearOfflineSnapshotLease(localStorage);try{clearOfflineLease(sessionStorage);}catch{}try{if(data?.user.scope)await clearOfflineSnapshot(data.user.scope);}catch{}setData(null);setRecovery(null);setSelected(null);setCompletion(null);setTab("inicio");setQuery("");setOrderFilter("open");setLoginRequired(true);}catch(error){setError(error instanceof Error?error.message:"Não foi possível sair.");}
   }
   async function checkVersion(){try{const response=await fetch("/api/mobile/version",{cache:"no-store"});if(!response.ok)throw new Error();const result=await response.json();const changed=result.version!==MOBILE_RELEASE;setUpdateAvailable(changed);setVersionNotice(changed?"Nova versão disponível. Seus rascunhos permanecem neste aparelho.":"Você está usando a versão atual.");}catch{setVersionNotice("Não foi possível consultar a versão. Tente novamente com conexão.");}}
   const openOrders = useMemo(() => openFieldWorkQueue(orders,todayISO()), [orders]);
