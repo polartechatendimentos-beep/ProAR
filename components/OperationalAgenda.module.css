@@ -44,3 +44,124 @@
 .quickLayer{z-index:15000;padding:clamp(12px,2.5vw,24px)}
 .quickPanel{max-height:calc(100dvh - 2 * clamp(12px,2.5vw,24px))}
 @media(max-width:700px){.quickLayer{padding:12px}.quickPanel{max-height:calc(100dvh - 24px)}}
+
+
+/* Agenda theme aligned with Atendimento: navy surfaces, blue and cyan focus. */
+.agenda{
+ --line:#334b64;--muted:#b6c8dd;--blue:#2c8bd8;--ink:#eaf3ff;--surface:#102136;--surfaceRaised:#17324b;
+ background:linear-gradient(145deg,#081625 0%,#0c2135 54%,#0d2b34 100%);color:var(--ink);border-color:#29465f
+}
+.agenda :is(h2,h3,p,strong,b){color:var(--ink)}
+.agenda p{color:#c2d3e5}
+.kicker{color:#69c5ff}
+.hero p,.hint{color:#b6c8dd}
+.agenda button{background:#132a40;color:#e3f1ff;border-color:#36536e}
+.agenda button:hover{background:#1b3b57;border-color:#62b9ed;color:#fff}
+.agenda .primary{background:linear-gradient(100deg,#1d65a8,#118b9b)!important;border-color:#16829f}
+.stats>div,.agenda .stats>button{background:#102136;border-color:#334b64;box-shadow:0 5px 16px #02091433}
+.stats span{color:#b6c8dd}
+.stats b{color:#f1f7ff}
+.modes{background:#0c1e30;border-color:#334b64}
+.agenda .modes button{color:#c4d7e9}
+.agenda .modes button[aria-pressed=true]{background:#1c4a70;border-color:#3f85b6;color:#fff}
+.filters{background:#102136;border-color:#334b64}
+.filters label{color:#bdcfe2}
+.agenda .filters :is(input,select){background:#0b1c2e!important;color:#eaf3ff!important;border-color:#36536e!important}
+.agenda .filters :is(input,select)::placeholder{color:#91a9c0}
+.search svg{color:#83b9dc}
+.activeFilters{background:#102136;border-color:#334b64}
+.activeFilters button{background:#17324b;color:#d8eaff;border-color:#36536e}
+.insights{color:#e7f1fc}
+.insights details,.metricsScroll{background:#102136;border-color:#334b64}
+.insights summary{color:#e9f4ff}
+.insights summary span{color:#adc4da}
+.insights p{color:#b9cce0}
+.pendingList article,.pendingRow{background:#122940;border-color:#35536d}
+.pendingList button{color:#e7f3ff}
+.calendarScroll{background:#0c1b2c;border-color:#334b64}
+.week,.month{background:#0c1b2c}
+.day{background:#0d2033;border-color:#2c465f}
+.day:nth-child(7n){border-right:0}
+.agenda .dayTitle{background:transparent;color:#eaf3ff}
+.dayTitle>span,.dayTitle small{color:#a8bfd5}
+.dayTitle b{color:#f0f7ff}
+.today{background:#12304a}
+.today .dayTitle b{background:#1d70b7;color:#fff;box-shadow:0 0 0 3px #4cb8e822}
+.outside{background:#0a1725}
+.outside .dayTitle{opacity:.55}
+.free{color:#91a8bf}
+.dateBadge{background:#17324b;color:#bfe4ff}
+.technicians>section{background:#102136;border-color:#334b64}
+.technicians h3,.technicians h3 svg{color:#dceeff}
+.technicians h3 small{background:#1a3b58;color:#d9edff}
+.technicians>section>div>small{color:#a8bfd5}
+.empty{background:#102136;border-color:#3a5a76;color:#b6c8dd}
+.empty h3{color:#eaf3ff}
+.empty p{color:#b6c8dd}
+.more{color:#80cdff!important}
+.quickLayer{background:#030a12c9}
+.quickPanel{background:#102136;color:#eaf3ff;border-color:#3b5a75;box-shadow:0 28px 80px #0008}
+.quickPanel h3,.quickPanel p{color:#eaf3ff}
+.quickPanel header span{color:#6bc8ff}
+.quickPanel header button,.quickPanel form>button{background:#183651;color:#eaf3ff;border-color:#3b5a75}
+.agenda .quickPanel :is(input,select){color:#eaf3ff!important;-webkit-text-fill-color:#eaf3ff!important;color-scheme:dark!important;background:#0b1c2e!important;border-color:#36536e!important}
+.quickPanel label{color:#c5d9ec!important}
+.quickPanel footer{border-color:#334b64}
+.quickPanel footer button{background:#17324b;color:#eaf3ff;border-color:#36536e}
+
+/* Service colors are restrained accents over the Atendimento navy base. */
+.agenda .event{background:#10243a;color:#eaf3ff;border-color:#334b64;border-left-width:4px;box-shadow:0 3px 9px #02091435}
+.agenda .event :is(strong,.eventTime,.eventTime small,.eventAddress){color:#e7f2ff}
+.agenda .event>span:not(.eventTime){color:#c1d3e5}
+.agenda .event.serviceCleaning{--service:#10b981;background:linear-gradient(100deg,#10352f,#10243a 58%);border-color:#24564d;border-left-color:#10b981}
+.agenda .event.servicePmoc{--service:#10b981;background:linear-gradient(100deg,#10352f,#10243a 58%);border-color:#24564d;border-left-color:#10b981}
+.agenda .event.serviceInstallation{--service:#0ea5e9;background:linear-gradient(100deg,#102f49,#10243a 58%);border-color:#28506e;border-left-color:#0ea5e9}
+.agenda .event.serviceCorrective{--service:#f59e0b;background:linear-gradient(100deg,#392c16,#10243a 58%);border-color:#66502b;border-left-color:#f59e0b}
+.agenda .event.serviceUrgent{--service:#f43f5e;background:linear-gradient(100deg,#3d1b2a,#10243a 58%);border-color:#693249;border-left-color:#f43f5e}
+.agenda .event.serviceWorks{--service:#8b5cf6;background:linear-gradient(100deg,#281f45,#10243a 58%);border-color:#4c3a75;border-left-color:#8b5cf6}
+.agenda .event.serviceOther{border-left-color:#70a9d8}
+.agenda .event.urgentEvent{box-shadow:0 0 0 1px #f43f5e33,0 4px 14px #02091445}
+.agenda .eventStatus{display:inline-flex!important;align-items:center;gap:6px;background:#19344e!important;color:#cfe6fb!important;border:1px solid #36536e}
+.agenda .eventStatus i{width:7px;height:7px;border-radius:50%;background:#91a8bf;flex:none}
+.agenda .statusScheduled{background:#17395a!important;color:#cceaff!important;border-color:#2d6392}
+.agenda .statusScheduled i{background:#45a8ee}
+.agenda .statusOverdue{background:#4a202c!important;color:#ffc3cc!important;border-color:#984353}
+.agenda .statusOverdue i{background:#fb7185}
+.agenda .statusActive{background:#123d50!important;color:#b9efff!important;border-color:#1b7895}
+.agenda .statusActive i{background:#38bdf8;animation:agendaPulse 1.4s ease-in-out infinite}
+.agenda .statusCompleted{background:#123c32!important;color:#b9f6d6!important;border-color:#267356}
+.agenda .statusCompleted i{width:12px;height:12px;background:transparent}
+.agenda .statusCompleted i:after{content:"✓";font-size:11px;font-style:normal;color:#6ee7b7;position:relative;top:-2px}
+.agenda .statusCancelled{background:#263449!important;color:#c0ccda!important;border-color:#4a5a70}
+.agenda .statusCancelled i{background:#8998aa}
+.eventTechnician{width:100%}
+.technicianBadge{display:inline-flex;align-items:center;gap:6px;color:#dceeff!important;font-size:10px!important;font-weight:650}
+.technicianBadge b{display:inline-grid;place-items:center;width:21px;height:21px;border-radius:50%;font-size:9px!important;color:white!important;line-height:1}
+.techBlue b{background:#2563eb}
+.techPurple b{background:#7c3aed}
+.techTeal b{background:#0f766e}
+.techGreen b{background:#15803d}
+.techAmber b{background:#b45309}
+.unassigned{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border:1px dashed #71839a;border-radius:999px;color:#bdc9d7!important;font-size:10px!important;font-weight:700}
+.readinessBadge{background:#493918!important;color:#ffe3a3!important;border:1px solid #80652c}
+
+/* Clickable filter legend and current-day time marker. */
+.serviceLegend{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:-5px 0 14px;padding:9px 10px;border:1px solid #2d4962;border-radius:11px;background:#0d1e30}
+.serviceLegend>span{margin-right:3px;color:#a9bfd4;font-size:10px;font-weight:750;text-transform:uppercase;letter-spacing:.06em}
+.agenda .serviceLegend .legendItem{min-height:30px;padding:5px 9px;background:#13283e;color:#cfe0f1;border-color:#34516a;font-size:10px!important}
+.agenda .serviceLegend .legendItem i{width:9px;height:9px;border-radius:3px;background:#7ea8c8}
+.agenda .serviceLegend .legendItem[aria-pressed=true]{background:#1a4261;border-color:#59a9da;color:#fff;box-shadow:0 0 0 2px #47b7e51c}
+.legendInstallation i{background:#0ea5e9!important}.legendCleaning i,.legendPmoc i{background:#10b981!important}
+.legendCorrective i{background:#f59e0b!important}.legendUrgent i{background:#f43f5e!important}.legendWorks i{background:#8b5cf6!important}
+.agenda .serviceLegend .legendClear{min-height:28px;background:transparent;border-color:transparent;color:#80cdff;font-size:10px!important}
+.nowMarker{position:relative;display:flex;align-items:center;gap:6px;margin:0 5px 7px;padding:4px 2px 5px;color:#77d5ff;font-size:9px;font-weight:750}
+.nowMarker:before{content:"";height:1px;flex:1;background:linear-gradient(90deg,#38bdf8,#38bdf822)}
+.nowMarker i{position:absolute;left:0;width:7px;height:7px;border-radius:50%;background:#38bdf8;box-shadow:0 0 0 3px #38bdf822}
+.nowMarker span{position:relative;padding-left:10px}
+@keyframes agendaPulse{50%{box-shadow:0 0 0 4px #38bdf833}}
+@media(prefers-reduced-motion:reduce){.statusActive i{animation:none}}
+@media(max-width:760px){
+ .agenda .serviceLegend{gap:6px;padding:8px}
+ .agenda .serviceLegend .legendItem{font-size:9px!important;padding:4px 7px}
+ .week,.month{min-width:910px}
+}
