@@ -40,3 +40,7 @@
 .agenda .technicians>section{background:#edf5ff;border-color:#b5d3f4}
 .agenda .dateBadge{background:#d8e9ff;color:#1256a0}
 @media(max-width:700px){.agenda .hero{padding:14px}.agenda .stats>div,.agenda .stats>button{min-height:82px}}
+
+.quickLayer{z-index:15000;padding:clamp(12px,2.5vw,24px)}
+.quickPanel{max-height:calc(100dvh - 2 * clamp(12px,2.5vw,24px))}
+@media(max-width:700px){.quickLayer{padding:12px}.quickPanel{max-height:calc(100dvh - 24px)}}
