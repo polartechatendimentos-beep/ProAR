@@ -34,7 +34,13 @@ export async function GET(request: NextRequest) {
     const query = String(request.nextUrl.searchParams.get("q") || "").trim().toLocaleLowerCase("pt-BR").slice(0,100);
     const modules = Object.entries(state.moduleRecords || {}).map(([module, rows]) => ({ module, count: rows.length }));
     const phoneMatches = (value:unknown) => {try {return query.replace(/\D/g, "").length >= 10 && actionPhoneForSearch(value) === actionPhoneForSearch(query);}catch{return false;}};
-    const matches = (row: Record<string,unknown>) => !query || phoneMatches(row.phone) || phoneMatches(row.whatsapp) || [row.id,row.name,row.client,row.phone,row.service,row.date].some(value => String(value || "").toLocaleLowerCase("pt-BR").includes(query));
+    const queryTokens = query.split(/\\s+/).filter(token => token.length >= 4);
+    const matches = (row: Record<string,unknown>) => {
+      if (!query) return true;
+      if (phoneMatches(row.phone) || phoneMatches(row.whatsapp)) return true;
+      const searchable = [row.id,row.name,row.client,row.phone,row.whatsapp,row.address,row.service,row.date].map(value => String(value || "").toLocaleLowerCase("pt-BR"));
+      return searchable.some(value => value.includes(query) || queryTokens.some(token => value.includes(token)));
+    };
     const customers = state.customers.filter(matches).slice(0,30).map(row => ({ id: row.id, name: row.name, phone: row.phone, address: row.address }));
     const orders = state.serviceOrders.filter(matches).slice(0,50).map(row => ({ id: row.id, client: row.client, service: row.service, date: row.date, time: row.time, tech: row.tech, status: row.status, confirmation: row.appointmentConfirmation || "Pendente" }));
     const technicians = (state.moduleRecords["Funcionários"] || []).filter(row => !/inativ/i.test(String(row.status))).map(row => ({ id: row.id, name: row.name || row.employeeName || row.id }));
