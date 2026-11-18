@@ -20,7 +20,7 @@ function normalizeBrazilNumber(value: unknown) {
 
 function contactNumber(row: Record<string, unknown> | undefined) {
   if (!row) return "";
-  for (const key of ["whatsapp", "phone", "telefone", "celular", "mobile", "phoneNumber", "contactPhone", "telefoneContato", "whatsappNumber"]) {
+  for (const key of ["whatsapp", "phone", "telefone", "celular", "mobile", "phoneNumber", "contactPhone", "telefoneContato", "whatsappNumber", "customerPhone", "clientPhone", "telefoneCliente", "clientWhatsapp"]) {
     const number = normalizeBrazilNumber(row[key]);
     if (number) return number;
   }
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
     let customer: Record<string, unknown> | undefined;
     if (customerId) {
       customer = allCustomers.find(row => String(row.id || row.customerId || "").trim() === customerId);
-    } else if (customerName) {
+    } if (!customer && customerName) {
       const matches = allCustomers.filter(row => normalizedName(row.name || row.nome || row.client) === customerName);
       if (matches.length === 1) customer = matches[0];
     }
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
     const number = contactNumber(order) || contactNumber(customer);
     if (!number) return html("Não há um WhatsApp válido vinculado a esta O.S.", 404);
 
-    const greeting = encodeURIComponent(`Olá, sou da equipe técnica da PolarTech. Estou no atendimento ${orderId}.`);
+    const greeting = `Olá, sou da equipe técnica da PolarTech. Estou no atendimento ${orderId}.`;
     const destination = new URL(`https://wa.me/${number}`);
     destination.searchParams.set("text", greeting);
     const response = NextResponse.redirect(destination, 302);
