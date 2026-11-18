@@ -126,11 +126,12 @@ export function ProARFieldMobile() {
     } catch (reason) {
       if(run!==generation.current||controller.signal.aborted)return;
       if(!navigator.onLine){setData(null);setSelected(null);setRecovery(null);}
+      if(navigator.onLine&&reason instanceof SyntaxError&&await restoreOfflineSnapshot())return;
       setError(reason instanceof Error ? reason.message : "Falha de conexão com o ProAR.");
     } finally {
       if(run===generation.current)setLoading(false);
     }
-  }, []);
+  }, [restoreOfflineSnapshot]);
   useEffect(() => {
     setOnline(navigator.onLine);
     const change = () => {setOnline(navigator.onLine);if(navigator.onLine)void refresh();};
