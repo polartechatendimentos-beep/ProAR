@@ -40,6 +40,12 @@ export async function POST(request:NextRequest) {
       if(technicianRole(session.role))await activeJourneyContext(session);
       if(Object.keys(state._mobileFieldOps||{}).length>=10000)throw new FieldSupportError("Limite de auditoria mobile atingido. Solicite arquivamento.",409);
       const order=(state.serviceOrders||[]).find(item=>item.id===command.orderId);if(!order)throw new FieldSupportError("OS não encontrada.",404);
+      const actor={...session,employeeId:c.actor?.employeeId};
+      if(!assignedToSession(order,actor))throw new FieldSupportError("OS não disponível para este perfil.",403);
+      const currentVersion=Number(order.fieldVersion||0);
+      if(currentVersion!==command.expectedVersion||command.expectedToken!==fieldOrderFingerprint(order)){
+        return reply({error:"Esta O.S. foi alterada no servidor. A operação local não foi aplicada.",code:"OS_VERSION_CONFLICT",conflict:{expectedVersion:command.expectedVersion,currentVersion}},409);
+      }
       if(technicianRole(session.role) && ["start","finish"].includes(command.action)){
         if(!("point" in command) || !command.point)throw new FieldSupportError("Localização necessária para check-in/check-out.",403);
         const point=validatePoint(command.point,new Date().toISOString());
