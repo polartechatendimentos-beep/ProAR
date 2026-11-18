@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { Building2, ChevronDown, ChevronRight, MapPin, Search } from "lucide-react";
-import { customerHierarchy, filterHierarchy, visibleHierarchyNodes, hierarchySelection, hierarchyCounts, type HierarchyCustomer, type HierarchyRecord, type HierarchySelection } from "@/lib/customer-hierarchy";
+import { customerHierarchy, filterHierarchy, visibleHierarchyNodes, hierarchySelection, hierarchyCounts, isMunicipalCustomer, type HierarchyCustomer, type HierarchyRecord, type HierarchySelection } from "@/lib/customer-hierarchy";
 import { useCustomerHierarchy } from "./CustomerHierarchyContext";
 import "./customer-hierarchy.css";
 type Props = { customer: HierarchyCustomer; records: HierarchyRecord[]; customers?: HierarchyCustomer[]; value?: string; onSelect?: (selection: HierarchySelection) => void; onEdit?: (id:string) => void; includeInactive?: boolean; disabled?: boolean; query?: string };
@@ -19,7 +19,7 @@ export function CustomerHierarchyTree({customer,records,customers,value="",onSel
   const selection=nodes.find(node=>node.id===value && !node.issue);
   const toggle=(id:string)=>setCollapsed(current=>{const next=new Set(current);if(next.has(id))next.delete(id);else next.add(id);return next;});
   return <section className="customer-hierarchy" aria-label={`Árvore de locais de ${customer.name}`}>
-    <div className="customer-hierarchy-caption">Matriz → Filial/Unidade → Setor → Ambiente</div>
+    <div className="customer-hierarchy-caption">{isMunicipalCustomer(customer)?"Prefeitura (pagador) → Secretaria / órgão → Unidade de execução → Ambiente (opcional)":"Cliente pagador → Regional / setor → Unidade / filial → Ambiente (opcional)"}</div>
     {externalQuery===undefined && <div className="customer-hierarchy-search"><Search size={14}/><input aria-label="Buscar na árvore de locais" placeholder="Buscar unidade, setor ou ambiente" value={query} onChange={event=>{setQuery(event.target.value);setRootCollapsed(false);setCollapsed(new Set());}}/></div>}
     <div className="customer-hierarchy-tools"><button type="button" onClick={()=>{setRootCollapsed(false);setCollapsed(new Set());}}>Expandir tudo</button><button type="button" onClick={()=>{setRootCollapsed(true);setCollapsed(new Set(parents));}}>Recolher tudo</button></div>
     <div className="customer-hierarchy-root"><button type="button" className="hierarchy-toggle" aria-label={`${rootCollapsed?"Expandir":"Recolher"} estrutura de ${customer.name}`} aria-expanded={!rootCollapsed} onClick={()=>setRootCollapsed(current=>!current)}>{rootCollapsed?<ChevronRight size={14}/>:<ChevronDown size={14}/>}</button><Building2 size={16}/><button type="button" disabled={disabled || !onSelect} aria-pressed={!value} onClick={()=>onSelect?.(hierarchySelection(customer,nodes))}><b>{customer.name}</b><small>Matriz · Prefeitura · {counts.get("")?.orders || 0} OS · {counts.get("")?.equipment || 0} equipamentos</small></button></div>
