@@ -3449,6 +3449,7 @@ function Modal({ title, initialOrderSeed, customers, structures, catalogRecords,
   const [formDirty,setFormDirty]=useState(false);
   const [formSaving,setFormSaving]=useState(false);
   const [selectedClient, setSelectedClient] = useState("");
+  const [selectedClientId, setSelectedClientId] = useState("");
   const [quickCustomerOpen,setQuickCustomerOpen]=useState(false);
   const [quickCustomerBusy,setQuickCustomerBusy]=useState(false);
   const [quickCustomerError,setQuickCustomerError]=useState("");
@@ -3738,7 +3739,8 @@ function Modal({ title, initialOrderSeed, customers, structures, catalogRecords,
   const parentCustomer = isLinkedStructure ? title.split("•")[1]?.trim() : "";
   const parentStructures = isLinkedStructure ? customerStructures(parentCustomer, customers, structures) : [];
   const parentCandidates = parentStructures.filter(item => item.id !== parentStructureId);
-  const selectedClientData = customers.find(customer => customer.name === selectedClient);
+  const selectedClientData = (isNewOrder && selectedClientId ? customers.find(customer => customer.id === selectedClientId) : undefined) ?? customers.find(customer => customer.name === selectedClient);
+  useEffect(() => { if (!isNewOrder || !selectedClientId) return; const selected = customers.find(customer => customer.id === selectedClientId); if (selected && selected.name !== selectedClient) setSelectedClient(selected.name); }, [customers, isNewOrder, selectedClient, selectedClientId]);
   const orderLocations=selectedClientData?orderSectorLocationOptions(selectedClientData,structures,customers,hierarchyLocation?.sectorId||"",hierarchyLocation?.unitId||""):null;
   const availableRooms = isNewOrder?(orderLocations?.rooms.map(node=>node.record as ModuleRecord)||[]):selectedClient ? customerStructures(selectedClient, customers, structures).filter(item => /sala|ambiente|consult|labor|farm|uti|recep|almox|audit|cozinha|cpd|quarto/i.test(`${item.name} ${item.category ?? ""} ${item.environmentType ?? ""}`)) : [];
   const serviceRecords = catalogRecords.filter(item => (item.kind || "Serviço") === "Serviço");
@@ -3837,7 +3839,7 @@ function Modal({ title, initialOrderSeed, customers, structures, catalogRecords,
     try{
       const created=await onCreateCustomer(quickCustomerDraft);
       if(!created)throw new Error("O servidor não confirmou o cadastro.");
-      setSelectedClient(created.name);chooseModalLocation(hierarchySelection(created,[]));
+      setSelectedClientId(created.id);setSelectedClient(created.name);chooseModalLocation(hierarchySelection(created,[]));
       setQuickSectorOpen(false);setQuickSectorName("");setQuickSectorFeedback("");
       setQuickCustomerOpen(false);
       setQuickCustomerDraft({name:"",legalName:"",tradeName:"",doc:"",phone:"",email:"",city:"",state:"SP",address:"",organizationType:"Empresa"});
@@ -3900,7 +3902,7 @@ function Modal({ title, initialOrderSeed, customers, structures, catalogRecords,
             <div className="os-create-left">
               <article className="os-create-card">
                 <div className="os-create-card-head"><span><UserRound size={15}/> Cliente & Local do Serviço</span><em>* Obrigatório</em></div>
-                <label>Cliente principal<CustomerSearchSelect showHierarchy={false} disabled={orderSaveBusy||quickSectorBusy||quickCustomerBusy} customers={customers} value={selectedClient} locationId={hierarchyLocation?.structureId} onLocationChange={chooseModalLocation} onChange={(value,selected) => { setSelectedClient(value); setHierarchyLocation(selected?hierarchySelection(customers.find(item=>item.id===selected.id)!,[]):null); setUnit(""); setSector(""); setRoom(""); setSelectedEquipmentIds([]); setQuickSectorOpen(false); setQuickSectorFeedback(""); }} /></label>
+                <label>Cliente principal<CustomerSearchSelect showHierarchy={false} valueMode="id" disabled={orderSaveBusy||quickSectorBusy||quickCustomerBusy} customers={customers} value={selectedClientId} locationId={hierarchyLocation?.structureId} onLocationChange={chooseModalLocation} onChange={(_value,selected) => { setSelectedClientId(selected?.id||""); setSelectedClient(selected?.name||""); setHierarchyLocation(selected?hierarchySelection(customers.find(item=>item.id===selected.id)!,[]):null); setUnit(""); setSector(""); setRoom(""); setSelectedEquipmentIds([]); setQuickSectorOpen(false); setQuickSectorFeedback(""); }} /></label>
                 <button type="button" className="inline-create-link" disabled={!canCreateCustomer||orderSaveBusy||quickSectorBusy||quickCustomerBusy} title={canCreateCustomer?"Cadastrar sem sair da OS":"Seu perfil não permite cadastrar clientes"} onClick={()=>{setQuickCustomerError("");setQuickCustomerOpen(value=>!value);}}><Plus size={13}/> Cadastrar cliente</button>
                 {quickCustomerOpen&&<section className="os-inline-customer" aria-label="Cadastrar cliente diretamente na OS" aria-busy={quickCustomerBusy}>
                   <div><b>Novo cliente principal</b><p>Os dados da OS serão mantidos. Salve o cliente para selecioná-lo.</p></div>
