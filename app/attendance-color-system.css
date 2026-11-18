@@ -163,3 +163,76 @@ html[data-proar-system-theme="light"] .proar-full-system :is(table,thead,tr,td,t
 html[data-proar-system-theme="light"] .proar-full-system :is(th,.module-summary article p,.finance-kpis article p,.bidding-summary article p,.tender-kpis article p,.stat-card p) {color:#536b82!important}
 html[data-proar-system-theme="light"] .proar-full-system :is(input:not([type=checkbox]):not([type=radio]),select,textarea) {background:#fff!important;color:#17334e!important;border-color:#9fb5c8!important}
 html[data-proar-system-theme="light"] .proar-full-system .sidebar {background:#081a2d!important;color:#eaf3ff!important}
+
+
+/* Central de pendências: contraste alinhado ao tema do Atendimento. */
+.proar-full-system .top-actions .header-tool-button {
+  background:#124468!important;
+  color:#f4f9ff!important;
+  border-color:#73a9c8!important;
+}
+.proar-full-system .top-actions .header-tool-button svg {color:#f4f9ff!important;stroke:#f4f9ff!important}
+.proar-full-system .top-actions .header-tool-button:hover:not(:disabled) {
+  background:#1b5c83!important;border-color:#a4d7f0!important;color:#fff!important;
+}
+.proar-full-system .top-actions .header-tool-button:focus-visible {
+  outline:3px solid #b9e8ff!important;outline-offset:2px!important;
+}
+.proar-full-system .top-actions .header-tool-button>i {
+  background:#071a2c!important;color:#fff!important;border:1px solid #75b8dd;
+}
+html[data-proar-system-theme="dark"] .proar-full-system .header-popover.pending-popover {
+  background:#0b2034!important;color:#eaf3ff!important;border-color:#45627f!important;
+  box-shadow:0 18px 45px #0008!important;
+}
+html[data-proar-system-theme="dark"] .proar-full-system .pending-popover .header-popover-title {
+  background:#0b2034!important;color:#eaf3ff!important;border-bottom:1px solid #334b64;
+}
+html[data-proar-system-theme="dark"] .proar-full-system .pending-popover .header-popover-title :is(b,span) {
+  color:#eaf3ff!important;
+}
+html[data-proar-system-theme="dark"] .proar-full-system .pending-popover .header-popover-title span {
+  background:#244b6b!important;color:#eaf3ff!important;
+}
+html[data-proar-system-theme="dark"] .proar-full-system .pending-popover .header-result-list button {
+  background:#15334d!important;color:#eaf3ff!important;border:1px solid #355a77!important;
+}
+html[data-proar-system-theme="dark"] .proar-full-system .pending-popover .header-result-list button :is(b,span,em) {
+  color:#eaf3ff!important;
+}
+html[data-proar-system-theme="dark"] .proar-full-system .pending-popover .header-result-list button span {
+  color:#c4d8e9!important;
+}
+html[data-proar-system-theme="dark"] .proar-full-system .pending-popover .header-result-list button em {
+  color:#9cc9e5!important;
+}
+html[data-proar-system-theme="dark"] .proar-full-system .pending-popover .header-result-list button:hover {
+  background:#1b4969!important;border-color:#77b7da!important;
+}
+html[data-proar-system-theme="light"] .proar-full-system .header-popover.pending-popover {
+  background:#fff!important;color:#17334e!important;border-color:#9fb5c8!important;
+}
+html[data-proar-system-theme="light"] .proar-full-system .pending-popover .header-popover-title {
+  background:#fff!important;color:#17334e!important;border-bottom:1px solid #d1dfea;
+}
+html[data-proar-system-theme="light"] .proar-full-system .pending-popover .header-popover-title :is(b,span) {
+  color:#17334e!important;
+}
+html[data-proar-system-theme="light"] .proar-full-system .pending-popover .header-popover-title span {
+  background:#e6f1f8!important;color:#15598e!important;
+}
+html[data-proar-system-theme="light"] .proar-full-system .pending-popover .header-result-list button {
+  background:#f2f7fb!important;color:#17334e!important;border:1px solid #d1dfea!important;
+}
+html[data-proar-system-theme="light"] .proar-full-system .pending-popover .header-result-list button :is(b,span,em) {
+  color:#17334e!important;
+}
+html[data-proar-system-theme="light"] .proar-full-system .pending-popover .header-result-list button span {
+  color:#536b82!important;
+}
+html[data-proar-system-theme="light"] .proar-full-system .pending-popover .header-result-list button em {
+  color:#315d7b!important;
+}
+html[data-proar-system-theme="light"] .proar-full-system .pending-popover .header-result-list button:hover {
+  background:#e6f1f8!important;border-color:#176ec0!important;
+}
