@@ -16,8 +16,8 @@ import { MobileRouteControls } from "./MobileRouteControls";
 import { FieldSupportPanel } from "./FieldSupportPanel";
 import { FieldOrderReceipt } from "./FieldOrderReceipt";
 import {MobileRecoveryPanel} from "./MobileRecoveryPanel";
-import {createDayPackage,readOfflineLease,rememberOfflineLease,clearOfflineLease,type MobileDayData} from "@/lib/mobile-day-policy";
-import {loadDayPackage,saveDayPackage,removeDayOrder} from "@/lib/mobile-day-cache";
+import {createDayPackage,readOfflineLease,rememberOfflineLease,clearOfflineLease,createOfflineSnapshot,readOfflineSnapshotLease,rememberOfflineSnapshotLease,clearOfflineSnapshotLease,type MobileDayData} from "@/lib/mobile-day-policy";
+import {loadDayPackage,saveDayPackage,loadOfflineSnapshot,saveOfflineSnapshot,removeDayOrder} from "@/lib/mobile-day-cache";
 import { listPendingOrderDrafts } from "@/lib/mobile-order-drafts";
 import { MOBILE_RELEASE } from "@/lib/mobile-release";
 import { filterFieldOrders, fieldOrderTone, openFieldWorkQueue, type OrderFilter } from "@/lib/mobile-order-display";
@@ -86,27 +86,42 @@ export function ProARFieldMobile() {
   const [agendaMode,setAgendaMode]=useState<"day"|"week">("day");
   const [mapApp,setMapApp]=useState("google");
   const [completion,setCompletion]=useState<{orderId:string;completedAt:string}|null>(null);
+  const restoreOfflineSnapshot=useCallback(async()=>{
+    const lease=readOfflineSnapshotLease(localStorage),cached=lease?await loadOfflineSnapshot(lease.scope):null;
+    if(!lease||!cached||cached.preparedAt!==lease.preparedAt||cached.validUntil!==lease.validUntil)return false;
+    setData({...cached.data,connected:false});setOfflineCopy(true);setLoginRequired(false);setOnline(false);setError("");
+    setOfflineNotice(`Cópia local com ${cached.data.orders.length} OS, salva em ${new Date(cached.preparedAt).toLocaleString("pt-BR")}. Os dados ficam disponíveis até ${new Date(cached.validUntil).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})} ou até a sessão validada expirar.`);
+    return true;
+  },[]);
   const refresh = useCallback(async () => {
     const run=++generation.current;requestAbort.current?.abort();const controller=new AbortController();requestAbort.current=controller;
     setLoading(true); setError("");
     try {
       if (!navigator.onLine) {
-        const lease=readOfflineLease(sessionStorage),cached=lease?await loadDayPackage(lease.scope):null;
         if(run!==generation.current)return;
-        if(!lease||!cached||cached.validUntil>lease.validUntil){setData(null);setSelected(null);throw new Error("Conecte para validar a sessão e preparar as OS do dia. Os rascunhos permanecem no aparelho.");}
-        setData({...cached.data,connected:false});setOfflineCopy(true);setLoginRequired(false);setOfflineNotice(`Cópia local de ${new Date(cached.preparedAt).toLocaleString("pt-BR")}. Atualizações de outros usuários só aparecem com conexão.`);return;
+        if(await restoreOfflineSnapshot())return;
+        setData(null);setSelected(null);setRecovery(null);
+        throw new Error("Este aparelho ainda não tem uma cópia offline válida. Entre com conexão para carregar as ordens de serviço.");
       }
-      const response = await fetch("/api/mobile/bootstrap", { cache:"no-store", credentials:"same-origin",signal:controller.signal });
+      let response:Response;
+      try{response=await fetch("/api/mobile/bootstrap", { cache:"no-store", credentials:"same-origin",signal:controller.signal });}
+      catch(reason){if(run!==generation.current||controller.signal.aborted)return;if(await restoreOfflineSnapshot())return;throw reason;}
       const result = await response.json();
       if(run!==generation.current||controller.signal.aborted)return;
       if (!response.ok) {
         setLoginRequired(response.status === 401);
-        if(response.status===401||response.status===403){setData(null);setSelected(null);setRecovery(null);try{clearOfflineLease(sessionStorage);}catch{}}
+        if(response.status===401||response.status===403){setData(null);setSelected(null);setRecovery(null);clearOfflineSnapshotLease(localStorage);try{clearOfflineLease(sessionStorage);}catch{}}
         throw new Error(result.error || "Não foi possível carregar os atendimentos.");
       }
       setLoginRequired(false);
       setData(result as FieldData);setOfflineCopy(false);setOfflineNotice("");
-      try{const previous=await loadDayPackage(result.user.scope);const pack=createDayPackage(result as FieldData,Date.now(),previous?.selectedOrderIds);await saveDayPackage(pack);if(run!==generation.current||controller.signal.aborted)return;rememberOfflineLease(sessionStorage,pack);setOfflineNotice(`${pack.data.orders.length} OS preparadas neste aparelho para uso offline.${pack.truncated?" Pacote parcial: limite de 200 OS.":""}`);}catch{setOfflineNotice("Dados carregados do servidor; pacote offline não confirmado. Seus rascunhos continuam separados.");}
+      try{
+        const snapshot=createOfflineSnapshot(result as FieldData,Date.now());await saveOfflineSnapshot(snapshot);
+        if(run!==generation.current||controller.signal.aborted)return;
+        rememberOfflineSnapshotLease(localStorage,snapshot);
+        try{const previous=await loadDayPackage(result.user.scope);const pack=createDayPackage(result as FieldData,Date.now(),previous?.selectedOrderIds);await saveDayPackage(pack);rememberOfflineLease(sessionStorage,pack);}catch{}
+        setOfflineNotice(`${snapshot.data.orders.length} OS autorizadas salvas neste aparelho para uso offline por até 8 horas, respeitando o prazo da sessão.`);
+      }catch{setOfflineNotice("Dados carregados do servidor; não foi possível confirmar a cópia offline. Seus rascunhos continuam separados.");}
     } catch (reason) {
       if(run!==generation.current||controller.signal.aborted)return;
       if(!navigator.onLine){setData(null);setSelected(null);setRecovery(null);}
@@ -123,7 +138,7 @@ export function ProARFieldMobile() {
     window.addEventListener("offline", change);
     window.addEventListener("focus", focus);
     void refresh();
-    const expiryTimer=setInterval(()=>{if(!navigator.onLine){let valid=false;try{valid=Boolean(readOfflineLease(sessionStorage));}catch{}if(!valid){setData(null);setSelected(null);setRecovery(null);setError("A leitura offline expirou. Conecte para validar a sessão.");}}},60000);
+    const expiryTimer=setInterval(()=>{if(!navigator.onLine){const valid=Boolean(readOfflineSnapshotLease(localStorage));if(!valid){setData(null);setSelected(null);setRecovery(null);setError("A leitura offline expirou. Conecte para validar a sessão.");}}},60000);
     return () => {
       clearInterval(expiryTimer);generation.current++;requestAbort.current?.abort();
       window.removeEventListener("online", change);
@@ -144,7 +159,7 @@ export function ProARFieldMobile() {
     return()=>{cancelled=true;};
   },[pendingScope,selected,data?.lastReadAt]);
   async function signOutMobile(){
-    setError("");try{const response=await fetch("/api/auth",{method:"DELETE",credentials:"same-origin",cache:"no-store"});if(!response.ok)throw new Error("Não foi possível encerrar a sessão. Tente novamente com conexão.");generation.current++;requestAbort.current?.abort();setLoading(false);try{clearOfflineLease(sessionStorage);}catch{}setData(null);setRecovery(null);setSelected(null);setCompletion(null);setTab("inicio");setQuery("");setOrderFilter("open");setLoginRequired(true);}catch(error){setError(error instanceof Error?error.message:"Não foi possível sair.");}
+    setError("");try{const response=await fetch("/api/auth",{method:"DELETE",credentials:"same-origin",cache:"no-store"});if(!response.ok)throw new Error("Não foi possível encerrar a sessão. Tente novamente com conexão.");generation.current++;requestAbort.current?.abort();setLoading(false);clearOfflineSnapshotLease(localStorage);try{clearOfflineLease(sessionStorage);}catch{}setData(null);setRecovery(null);setSelected(null);setCompletion(null);setTab("inicio");setQuery("");setOrderFilter("open");setLoginRequired(true);}catch(error){setError(error instanceof Error?error.message:"Não foi possível sair.");}
   }
   async function checkVersion(){try{const response=await fetch("/api/mobile/version",{cache:"no-store"});if(!response.ok)throw new Error();const result=await response.json();const changed=result.version!==MOBILE_RELEASE;setUpdateAvailable(changed);setVersionNotice(changed?"Nova versão disponível. Seus rascunhos permanecem neste aparelho.":"Você está usando a versão atual.");}catch{setVersionNotice("Não foi possível consultar a versão. Tente novamente com conexão.");}}
   const openOrders = useMemo(() => openFieldWorkQueue(orders,todayISO()), [orders]);
