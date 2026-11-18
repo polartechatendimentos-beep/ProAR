@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { hasPermission, sessionFromRequest, type Permission } from "../../../../lib/permissions";
 import { routeContext } from "../../../../lib/work-route-store";
 import { activeJourneyContext } from "../../../../lib/journey-gate";
-import { technicianRole, applyFieldOrder, type FieldOrderCommand } from "../../../../lib/mobile-workday";
+import { technicianRole, applyFieldOrder, fieldOrderFingerprint, type FieldOrderCommand } from "../../../../lib/mobile-workday";
 import { FieldSupportError } from "../../../../lib/field-support";
 import { RouteError, validatePoint } from "../../../../lib/work-routes";
 import { prepareOperationalState, independentOperationalRows, OperationError, type ErpState } from "../../../../lib/operational-ledger";
