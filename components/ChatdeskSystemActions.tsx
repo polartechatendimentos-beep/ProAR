@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { parseAppointmentVoice, type AppointmentVoiceDraft } from "../lib/chatdesk-voice";
 import styles from "../app/atendimento/workspace.module.css";
 type Row = Record<string,string>;
@@ -20,6 +20,7 @@ export function ChatdeskSystemActions({ companyId, phone = "", name = "" }: {com
   const [voiceDraft,setVoiceDraft] = useState<AppointmentVoiceDraft|null>(null);
   const [listening,setListening] = useState(false);
   const voiceRef = useRef<VoiceRecognition|null>(null);
+  useEffect(()=>()=>{voiceRef.current?.stop();},[]);
   const headers = {"Content-Type":"application/json","X-Proar-Company-ID":companyId};
   async function consult(search=query):Promise<Context|null> {
     setBusy(true);setFeedback("");
@@ -64,7 +65,9 @@ export function ChatdeskSystemActions({ companyId, phone = "", name = "" }: {com
     if(search){
       const found=await consult(search);
       const normalize=(value:string)=>value.normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").toLocaleLowerCase("pt-BR").trim();
-      const matches=(found?.customers||[]).filter(row=>parsed.phone?String(row.phone||"").replace(/\\D/g,"").endsWith(parsed.phone.replace(/\\D/g,"").slice(-10)):normalize(row.name)===normalize(parsed.name));
+      const phoneDigits=(value:string)=>value.replace(/\\D/g,"").replace(/^55/,"");
+      const parsedDigits=phoneDigits(parsed.phone);
+      const matches=(found?.customers||[]).filter(row=>parsed.phone?phoneDigits(String(row.phone||""))===parsedDigits:normalize(row.name)===normalize(parsed.name));
       if(matches.length===1){setFields(previous=>({...previous,customer:matches[0].id,address:parsed.address||matches[0].address||previous.address}));setFeedback("Cliente localizado. Confira o endereço, relato, data, horário e técnico antes de gravar.");}
       else if(parsed.name)setFeedback("Relato interpretado, mas o cliente não foi localizado de forma única. Selecione o cadastro correto ou cadastre o cliente com telefone.");
     }
