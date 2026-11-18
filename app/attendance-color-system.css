@@ -1,0 +1,165 @@
+/* Identidade da Central de Atendimento aplicada ao ERP completo. */
+:root {
+  --ux-bg:#081321;
+  --ux-surface:#0d1b2c;
+  --ux-card:#102136;
+  --ux-soft:#13263c;
+  --ux-border:#334b64;
+  --ux-border2:#45627f;
+  --ux-hover:#1b3956;
+  --ux-primary:#1671df;
+  --ux-primary2:#24598d;
+  --ux-cyan:#23a8ff;
+  --ux-text:#eaf3ff;
+  --ux-muted:#b6c8dd;
+  --ux-good:#72d6ae;
+  --ux-warn:#fbbf24;
+  --ux-danger:#fb7185;
+}
+:root[data-proar-system-theme="dark"] {
+  --ux-bg:#081321;
+  --ux-surface:#0d1b2c;
+  --ux-card:#102136;
+  --ux-soft:#13263c;
+  --ux-border:#334b64;
+  --ux-border2:#45627f;
+  --ux-hover:#1b3956;
+  --ux-primary:#1671df;
+  --ux-primary2:#24598d;
+  --ux-cyan:#23a8ff;
+  --ux-text:#eaf3ff;
+  --ux-muted:#b6c8dd;
+  --ux-good:#72d6ae;
+  color-scheme:dark;
+}
+:root[data-proar-system-theme="light"] {
+  --ux-bg:#f1f6fa;
+  --ux-surface:#ffffff;
+  --ux-card:#ffffff;
+  --ux-soft:#eaf1f7;
+  --ux-border:#c5d5e3;
+  --ux-border2:#9fb5c8;
+  --ux-hover:#e1eff7;
+  --ux-primary:#176ec0;
+  --ux-primary2:#15598e;
+  --ux-cyan:#168fa4;
+  --ux-text:#17334e;
+  --ux-muted:#536b82;
+  --ux-good:#087e60;
+  color-scheme:light;
+}
+.proar-full-system,
+.proar-full-system :is(.app-shell,.main,.page-content) {
+  background:var(--ux-bg)!important;
+  color:var(--ux-text)!important;
+}
+.proar-full-system .topbar {
+  background:linear-gradient(105deg,#174f88 0%,#117f96 100%)!important;
+  color:#f4f9ff!important;
+  border-color:#3b7890!important;
+  box-shadow:0 8px 28px #071a2a33!important;
+}
+.proar-full-system .topbar :is(h1,h2,h3,p,small,label,span,a,button) {color:inherit}
+.proar-full-system .company-context {
+  background:#0d2b43!important;
+  color:#e6f5ff!important;
+  border-color:#5b8da8!important;
+}
+.proar-full-system .sidebar {
+  background:#081a2d!important;
+  color:#eaf3ff!important;
+  border-color:#294761!important;
+}
+.proar-full-system .sidebar :is(p,small,label,.nav-label,.nav-group-title) {color:#b6c8dd!important}
+.proar-full-system .sidebar :is(.nav-item.active,.nav-item[aria-current="page"],button.active) {
+  background:linear-gradient(110deg,#1d5e99,#176eae)!important;
+  color:#fff!important;
+  border-color:#5a9bcd!important;
+}
+.proar-full-system :is(.panel,.module-page,.module-hero,.management-hero,.settings-card,.settings-nav,.erp-card,.detail-header,.orders-panel,.customer-panel,.pmoc-panel,.os-tracking-panel,.os-status-panel,.os-contract-panel,.assistance-panel,.order-items-panel,.houses-hero,.bidding-hero,.budget-pdv-hero,.settings-health,.settings-security-note,.settings-switch) {
+  background:var(--ux-card)!important;
+  color:var(--ux-text)!important;
+  border-color:var(--ux-border)!important;
+}
+.proar-full-system :is(.module-toolbar,.management-toolbar,.commercial-manager-toolbar,.houses-toolbar,.report-filter-bar,.bidding-filters,.tabs,.tab-bar,.management-tabs,.os-tabs,.settings-nav) {
+  background:var(--ux-surface)!important;
+  color:var(--ux-text)!important;
+  border-color:var(--ux-border)!important;
+}
+.proar-full-system :is(.management-tabs,.tabs,.tab-bar,.os-tabs,.settings-nav) button {color:var(--ux-muted)!important}
+.proar-full-system :is(.management-tabs,.tabs,.tab-bar,.os-tabs,.settings-nav) button:is(.active,[aria-selected="true"],[aria-current="page"]) {
+  background:linear-gradient(110deg,#2167a8,#1677c8)!important;
+  color:#fff!important;
+  border-color:#6ca8d6!important;
+}
+.proar-full-system :is(.module-summary article,.finance-kpis article,.bidding-summary article,.tender-kpis article,.stat-card) {
+  border-color:var(--ux-border)!important;
+  background:var(--ux-card)!important;
+  color:var(--ux-text)!important;
+}
+.proar-full-system :is(.module-summary,.finance-kpis,.bidding-summary,.tender-kpis) {gap:12px!important}
+.proar-full-system :is(.module-summary article,.finance-kpis article,.bidding-summary article,.tender-kpis article,.stat-card) :is(h2,h3,p,span,small,label) {color:var(--ux-muted)!important}
+.proar-full-system :is(.module-summary article,.finance-kpis article,.bidding-summary article,.tender-kpis article,.stat-card) :is(strong,b) {color:var(--ux-text)!important}
+.proar-full-system :is(input:not([type=checkbox]):not([type=radio]),select,textarea) {
+  border-color:var(--ux-border2)!important;
+  background:var(--ux-surface)!important;
+  color:var(--ux-text)!important;
+}
+.proar-full-system :is(input,textarea)::placeholder {color:var(--ux-muted)!important;opacity:.82}
+.proar-full-system select option {background:var(--ux-card);color:var(--ux-text)}
+.proar-full-system :is(.list-search,.wide-search,.budget-search,.pdv-search,.service-picker-search,.finance-search,.bidding-filters>label:first-child) {
+  border-color:var(--ux-border2)!important;background:var(--ux-surface)!important;color:var(--ux-muted)!important;
+}
+.proar-full-system :is(input,select,textarea):focus-visible {
+  outline:3px solid #42a5ff!important;
+  outline-offset:2px!important;
+  border-color:#42a5ff!important;
+  box-shadow:0 0 0 3px #42a5ff2e!important;
+}
+.proar-full-system :is(.primary-btn,.os-primary-button,.settle-button) {
+  background:#1671df!important;color:#fff!important;border-color:transparent!important;
+}
+.proar-full-system :is(.outline-btn,.secondary-btn,.os-secondary-button,.icon-btn,.filter-btn,.os-icon-button) {
+  border-color:var(--ux-border2)!important;background:var(--ux-soft)!important;color:var(--ux-text)!important;
+}
+.proar-full-system :is(.outline-btn,.secondary-btn,.os-secondary-button,.icon-btn,.filter-btn,.os-icon-button):hover {
+  background:var(--ux-hover)!important;border-color:var(--ux-cyan)!important;color:var(--ux-text)!important;
+}
+.proar-full-system :is(table,thead,tbody,tr,td,th) {
+  border-color:var(--ux-border)!important;
+}
+.proar-full-system table {background:var(--ux-card)!important;color:var(--ux-text)!important}
+.proar-full-system thead {background:var(--ux-soft)!important}
+.proar-full-system th {color:var(--ux-muted)!important}
+.proar-full-system td {color:var(--ux-text)!important}
+.proar-full-system tbody tr:hover {background:var(--ux-hover)!important}
+.proar-full-system :is(.modal,.modal-card,.dialog,.dialog-card,.proar-side-drawer) {
+  background:var(--ux-card)!important;color:var(--ux-text)!important;border-color:var(--ux-border)!important;
+}
+.proar-full-system :is(.modal,.modal-card,.dialog,.dialog-card,.proar-side-drawer) :is(h1,h2,h3,h4,p,small,label,span,td,th) {color:inherit}
+.proar-full-system .os-workspace,
+.proar-full-system :is(.os-workspace-header,.os-tabs,.os-card,.os-location-summary,.os-quick-links button) {
+  background:var(--ux-card)!important;color:var(--ux-text)!important;border-color:var(--ux-border)!important;
+}
+.proar-full-system :is(.os-status.green,.proar-deadline[data-tone="normal"]) {background:#d8f4e9!important;color:#116146!important}
+.proar-full-system :is(.os-status.red,.proar-deadline[data-tone="urgent"]) {background:#ffe1e6!important;color:#8f2337!important}
+.proar-full-system :is(.os-status.amber,.proar-deadline[data-tone="soon"]) {background:#fff0c2!important;color:#745100!important}
+.proar-full-system :is(.work-routes,.compact-address,.pdv-context,.pdv-payment-check,.work-block-summary button) {
+  background:var(--ux-card)!important;color:var(--ux-text)!important;border-color:var(--ux-border)!important;
+}
+.proar-full-system footer {color:var(--ux-muted)!important;border-color:var(--ux-border)!important}
+.proar-full-system :is(button,a,[role="button"],input,select,textarea):focus-visible {outline-color:#42a5ff!important;outline-offset:2px!important}
+.proar-full-system .proar-appearance-toolbar,
+.proar-full-system .appearance-toolbar-controls,
+.proar-full-system .proar-appearance-toolbar .appearance-toolbar-trigger {
+  background:var(--ux-card)!important;color:var(--ux-text)!important;border-color:var(--ux-border)!important;
+}
+html[data-proar-system-theme="light"] .proar-full-system :is(.panel,.module-page,.module-hero,.management-hero,.settings-card,.settings-nav,.erp-card,.detail-header,.orders-panel,.customer-panel,.pmoc-panel,.os-tracking-panel,.os-status-panel,.os-contract-panel,.assistance-panel,.order-items-panel,.houses-hero,.bidding-hero,.budget-pdv-hero,.settings-health,.settings-security-note,.settings-switch,.os-workspace,.os-workspace-header,.os-tabs,.os-card,.os-location-summary,.work-routes,.compact-address,.pdv-context,.pdv-payment-check) {
+  background:#fff!important;color:#17334e!important;border-color:#c5d5e3!important;
+}
+html[data-proar-system-theme="light"] .proar-full-system :is(table,thead,tr,td,th,.module-toolbar,.management-toolbar,.commercial-manager-toolbar,.houses-toolbar,.report-filter-bar,.bidding-filters,.tabs,.tab-bar,.management-tabs,.settings-nav,.os-tabs) {
+  background:#fff!important;color:#17334e!important;border-color:#c5d5e3!important;
+}
+html[data-proar-system-theme="light"] .proar-full-system :is(th,.module-summary article p,.finance-kpis article p,.bidding-summary article p,.tender-kpis article p,.stat-card p) {color:#536b82!important}
+html[data-proar-system-theme="light"] .proar-full-system :is(input:not([type=checkbox]):not([type=radio]),select,textarea) {background:#fff!important;color:#17334e!important;border-color:#9fb5c8!important}
+html[data-proar-system-theme="light"] .proar-full-system .sidebar {background:#081a2d!important;color:#eaf3ff!important}
