@@ -191,6 +191,18 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
   assertUnique(list(modules.Produtos), list(oldModules.Produtos), "sku");
   assertUnique(list(modules.Produtos), list(oldModules.Produtos), "barcode");
   assertUnique(list(modules.Equipamentos), list(oldModules.Equipamentos), "serialNumber");
+  for (const purchase of list(modules.Compras)) {
+    const invoiceNumber=String(purchase.invoiceNumber||"").trim();
+    if(!invoiceNumber) continue;
+    const supplierIdentity=digits(purchase.supplierDoc)||normalize(purchase.client);
+    const invoiceSeries=String(purchase.invoiceSeries||"").trim().toLocaleLowerCase("pt-BR");
+    const before=list(oldModules.Compras).find(item=>item.id===purchase.id);
+    const beforeIdentity=digits(before?.supplierDoc)||normalize(before?.client);
+    const unchanged=before&&String(before.invoiceNumber||"").trim()===invoiceNumber&&(digits(before.supplierDoc)||beforeIdentity)===supplierIdentity&&String(before.invoiceSeries||"").trim().toLocaleLowerCase("pt-BR")===invoiceSeries;
+    if(unchanged) continue;
+    const duplicate=list(modules.Compras).find(item=>item.id!==purchase.id&&String(item.invoiceNumber||"").trim().toLocaleLowerCase("pt-BR")===invoiceNumber.toLocaleLowerCase("pt-BR")&&(digits(item.supplierDoc)||normalize(item.client))===supplierIdentity&&String(item.invoiceSeries||"").trim().toLocaleLowerCase("pt-BR")===invoiceSeries);
+    if(duplicate) throw new OperationError(`NF-e ${invoiceNumber}${invoiceSeries?` série ${invoiceSeries}`:""} deste fornecedor já está cadastrada na compra ${duplicate.id}.`);
+  }
   for(const employee of list(modules.Funcionários)) {
     const before=list(oldModules.Funcionários).find(item=>item.id===employee.id);
     if(before && (!same(employee.employeePermissions,before.employeePermissions)||employee.employeeRole!==before.employeeRole||employee.accessProfile!==before.accessProfile))requireAction(actor,"configuracoes.usuarios");
