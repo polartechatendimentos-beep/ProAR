@@ -379,3 +379,18 @@ label.status-filter select option,.status-filter select option{background:#08101
 .proar-edit-content{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:20px 22px}.proar-edit-footer{border-top:1px solid #31516c;flex-wrap:wrap}.proar-edit-footer>span{font-size:12px;color:#bcd5ed}.proar-edit-footer>div{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .proar-edit-content :is(input,select,textarea){max-width:100%;min-width:0}.proar-edit-content label{min-width:0}
 @media(max-width:680px){.proar-edit-overlay{padding:0}.proar-edit-shell{height:100dvh;max-height:100dvh;border-radius:0;border:0}.proar-edit-header,.proar-edit-footer{padding:12px 14px}.proar-edit-content{padding:14px}.proar-edit-footer>div{width:100%}.proar-edit-footer>div>button{flex:1}}
+
+
+/* Filtros reutilizáveis nos módulos de gestão */
+.management-filter-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.management-filter-row>label{display:flex;align-items:center;gap:8px;min-height:42px;padding:0 11px;border:1px solid #1d4f72;border-radius:10px;background:#07192b;color:#a9c8dd;font-size:10px}
+.management-filter-row>label span{white-space:nowrap;color:#9bb7cc}
+.management-filter-row select,.management-filter-row input{height:38px;min-width:120px;border:0;border-radius:7px;outline:0;background:#0b2035;color:#e7f1f8;padding:0 9px;font-size:10px}
+.management-filter-row select option{background:#08101e;color:#e2e8f0}
+.management-filter-row .outline-btn{min-height:42px}
+.management-filter-row .outline-btn:disabled{opacity:.5;cursor:not-allowed}
+.management-advanced-filters{border:1px solid #1d4f72;border-radius:10px;background:#07192b;color:#d6e7f3}
+.management-advanced-filters>summary{min-height:40px;padding:0 12px;display:flex;align-items:center;cursor:pointer;font-size:10px;font-weight:700;list-style-position:inside}
+.management-advanced-grid{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px;border-top:1px solid #1d4f72}
+.management-advanced-grid>label{display:grid;gap:4px;color:#9bb7cc;font-size:9px}
+@media(max-width:720px){.management-filter-row{align-items:stretch;flex-direction:column}.management-filter-row>label,.management-filter-row>.management-advanced-filters{width:100%;box-sizing:border-box}.management-filter-row>label{justify-content:space-between}.management-filter-row select,.management-filter-row input{min-width:0;flex:1}.management-advanced-grid{display:grid;grid-template-columns:1fr 1fr}.management-advanced-grid .outline-btn{grid-column:1/-1}}
