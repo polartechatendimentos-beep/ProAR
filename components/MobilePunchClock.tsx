@@ -10,7 +10,8 @@ const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/
 const emptyDay = (date: string, employeeId = "", employeeName = ""): MobilePunchDay => ({ companyId: "", employeeId, employeeName, date, _revision: 0, punches: [], corrections: [], adjustments: [] });
 const format = (value: string) => new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 function statusOf(punches: MobilePunchDay["punches"]): "off" | "active" | "break" {
-  const ordered = [...punches].sort((a, b) => a.at.localeCompare(b.at));\n  const last = ordered[ordered.length - 1];
+  const ordered = [...punches].sort((a, b) => a.at.localeCompare(b.at));
+  const last = ordered[ordered.length - 1];
   if (!last || last.type === "clock-out") return "off";
   if (last.type === "break-start") return "break";
   return "active";
