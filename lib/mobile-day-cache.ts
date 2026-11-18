@@ -26,5 +26,24 @@ export async function loadOfflineSnapshot(scope:string,now=Date.now()){
     const value=JSON.parse(new TextDecoder().decode(bytes)) as MobileOfflineSnapshot;return validOfflineSnapshot(value,scope,now)?value:null;
   }catch{return null;}finally{db.close();}
 }
+export async function clearOtherOfflineSnapshots(scope:string){
+  const db=await open();try{
+    const packageIds=await read(db.transaction("packages").objectStore("packages").getAllKeys());
+    const keyIds=await read(db.transaction("keys").objectStore("keys").getAllKeys());
+    await new Promise<void>((resolve,reject)=>{
+      const tx=db.transaction(["packages","keys"],"readwrite"),packages=tx.objectStore("packages"),keys=tx.objectStore("keys");
+      for(const id of packageIds)if(id!==scope&&id!==`offline:${scope}`)packages.delete(id);
+      for(const id of keyIds)if(id!==scope)keys.delete(id);
+      tx.oncomplete=()=>resolve();tx.onabort=()=>reject(tx.error);tx.onerror=()=>reject(tx.error);
+    });
+  }finally{db.close();}
+}
+export async function clearOfflineSnapshot(scope:string){
+  const db=await open();try{await new Promise<void>((resolve,reject)=>{
+    const tx=db.transaction(["packages","keys"],"readwrite");
+    tx.objectStore("packages").delete(scope);tx.objectStore("packages").delete(`offline:${scope}`);tx.objectStore("keys").delete(scope);
+    tx.oncomplete=()=>resolve();tx.onabort=()=>reject(tx.error);tx.onerror=()=>reject(tx.error);
+  });}finally{db.close();}
+}
 export function saveDayHistories(scope:string,preparedAt:number,histories:Record<string,CachedHistory[]>){return serial(scope,async()=>{const value=await loadDayPackage(scope);if(!value||value.preparedAt!==preparedAt)return false;const allowed=new Set(value.data.orders.map(o=>o.id));const filtered=Object.fromEntries(Object.entries(histories).filter(([id])=>allowed.has(id)));await writePackage(scope,{...value,histories:{...value.histories,...filtered}});return true;});}
 export function removeDayOrder(scope:string,orderId:string){return serial(scope,async()=>{const value=await loadDayPackage(scope);if(!value)return;const orders=value.data.orders.filter(o=>o.id!==orderId),histories={...value.histories};delete histories[orderId];await writePackage(scope,{...value,histories,data:{...value.data,orders,summary:{today:orders.filter(o=>o.date===value.day).length,inProgress:orders.filter(o=>Boolean(o.checkInAt)).length,pending:orders.filter(o=>!o.checkInAt).length}}});});}
