@@ -3448,13 +3448,13 @@ function Modal({ title, initialOrderSeed, customers, structures, catalogRecords,
   const isEquipmentRegistration = title.includes("Equipamentos");
   const [formDirty,setFormDirty]=useState(false);
   const [formSaving,setFormSaving]=useState(false);
-  const [selectedClient, setSelectedClient] = useState("");
-  const [selectedClientId, setSelectedClientId] = useState("");
-  const [quickCustomerOpen,setQuickCustomerOpen]=useState(false);
+  const [selectedClient, setSelectedClient] = useState(isNewOrder?initialOrderSeed?.customerName||"":"");
+  const [selectedClientId, setSelectedClientId] = useState(isNewOrder?initialOrderSeed?.customerId||"":"");
+  const [quickCustomerOpen,setQuickCustomerOpen]=useState(Boolean(isNewOrder&&initialOrderSeed?.newCustomer));
   const [quickCustomerBusy,setQuickCustomerBusy]=useState(false);
   const [quickCustomerError,setQuickCustomerError]=useState("");
   const quickCustomerLock=useRef(false);
-  const [quickCustomerDraft,setQuickCustomerDraft]=useState<CustomerDraft & {address:string;organizationType:Customer["organizationType"]}>({name:"",legalName:"",tradeName:"",doc:"",phone:"",email:"",city:"",state:"SP",address:"",organizationType:"Empresa"});
+  const [quickCustomerDraft,setQuickCustomerDraft]=useState<CustomerDraft & {address:string;organizationType:Customer["organizationType"]}>({name:initialOrderSeed?.newCustomer?.name||"",legalName:initialOrderSeed?.newCustomer?.legalName||initialOrderSeed?.newCustomer?.name||"",tradeName:initialOrderSeed?.newCustomer?.tradeName||initialOrderSeed?.newCustomer?.name||"",doc:"",phone:initialOrderSeed?.newCustomer?.phone||"",email:"",city:initialOrderSeed?.newCustomer?.city||"",state:initialOrderSeed?.newCustomer?.state||"SP",address:initialOrderSeed?.newCustomer?.address||"",organizationType:(initialOrderSeed?.newCustomer?.organizationType as Customer["organizationType"])||"Empresa"});
 
   const [unit, setUnit] = useState("");
   const [sector, setSector] = useState("");
@@ -3491,7 +3491,7 @@ function Modal({ title, initialOrderSeed, customers, structures, catalogRecords,
   const [addressValidated, setAddressValidated] = useState(false);
   const [showAddressMap, setShowAddressMap] = useState(false);
   const [date, setDate] = useState(isNewOrder?initialOrderSeed?.date||"":"");
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState(isNewOrder?initialOrderSeed?.description||"":"");
   const requestedModule = title.includes("•") ? title.split("•").pop()!.trim() : title.replace(/^Novo(a)?\s+/i, "");
   const [recordStatus, setRecordStatus] = useState(moduleStatuses[requestedModule]?.[0] ?? "Ativo");
   const [recordValue, setRecordValue] = useState("");
@@ -3566,8 +3566,8 @@ function Modal({ title, initialOrderSeed, customers, structures, catalogRecords,
   const [quickStructureKind,setQuickStructureKind]=useState<"Setor"|"Unidade">("Setor");
   const [quickSectorFeedback, setQuickSectorFeedback] = useState("");
   const [orderTab, setOrderTab] = useState<"Geral" | "Equipamentos" | "Valores" | "Anexos" | "Configurações">("Geral");
-  const [orderPriority, setOrderPriority] = useState<ServiceOrder["priority"]>("Normal");
-  const [orderServiceType, setOrderServiceType] = useState("Manutenção corretiva");
+  const [orderPriority, setOrderPriority] = useState<ServiceOrder["priority"]>(isNewOrder?initialOrderSeed?.priority||"Normal":"Normal");
+  const [orderServiceType, setOrderServiceType] = useState(isNewOrder?initialOrderSeed?.serviceType||"Manutenção corretiva":"Manutenção corretiva");
   const [orderChecklist, setOrderChecklist] = useState("Diagnóstico corretivo");
   const [orderTag, setOrderTag] = useState("");
   const [orderExternalCode, setOrderExternalCode] = useState("");
@@ -3765,7 +3765,7 @@ function Modal({ title, initialOrderSeed, customers, structures, catalogRecords,
     const [hours, minutes] = orderEstimatedDuration.split(":").map(Number);
     return Math.max(0, (Number.isFinite(hours) ? hours : 0) * 60 + (Number.isFinite(minutes) ? minutes : 0));
   })();
-  const orderAddress = hierarchyLocation?.address || (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "");
+  const orderAddress = initialOrderSeed?.address || hierarchyLocation?.address || (unit ? availableUnits.find(item => item.name === unit)?.address ?? selectedClientData?.address ?? "" : selectedClientData?.address ?? "");
   const toggleOrderCatalogItem = (id: string) => {
     setSelectedCatalogIds(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
     setCatalogQuantities(current => ({ ...current, [id]: current[id] || 1 }));
