@@ -198,7 +198,7 @@ export function ProARFieldMobile() {
         {data && <>
           {pendingOrders.length>0&&!current&&<section className={styles.pendingPanel}><h2>{pendingOrders.length} envio(s) aguardando confirmação</h2><p>Retome cada envio para sincronizar ou consultar a confirmação, sem duplicar o registro.</p>{pendingOrders.map(order=><button key={order.id} type="button" className={styles.secondaryAction} onClick={()=>setSelected(order.id)}>Retomar envio • {order.id}</button>)}</section>}
           <button type="button" className={styles.secondaryAction} onClick={()=>{setSelected(null);setTab("mais");}}>Central de sincronização • pacote offline e rascunhos</button>
-          <details className={styles.journeyPanel}><summary>Minha jornada • entrada, pausa e saída</summary><MobileRouteControls /></details>
+          <details className={styles.journeyPanel}><summary>Ponto e jornada • entrada, pausa e saída</summary><MobileRouteControls /></details>
           {tab === "central" && !current && data.user.manager && <section className={styles.detailCard}><h2>Supervisão • ordens autorizadas</h2><p>Resumo da última leitura do servidor. Envios locais aparecem separadamente e não representam a fila dos outros aparelhos.</p><div className={styles.metrics}>{Object.entries({"Em aberto":supervision.open,"Atrasadas":supervision.overdue,"Com check-in":supervision.active,"Hoje":supervision.today}).map(([label,count])=><div key={label}><strong>{count}</strong><span>{label}</span></div>)}</div><p>{pendingOrders.length} envio(s) pendente(s) neste aparelho e usuário.</p></section>}
           {tab==="acervo"&&!current&&<MobileTechnicalLibrary key={data.user.scope} scope={data.user.scope}/>}
           <FieldSupportPanel visible={tab === "central" && !current}/>
