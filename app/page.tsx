@@ -3104,7 +3104,7 @@ function GenericModule({ name, onOpen, onDelete, onUpdate, onConvert, companyCnp
     if (activeView === "Comissões") return /comissão/i.test(`${record.category} ${record.description}`);
     return true;
   };
-  const dateKey = (record:ModuleRecord) => { const fields=record as unknown as Record<string,unknown>; const raw=String(record.date||fields.dueDate||record.createdAt||"").trim(); const iso=raw.match(/^(\\d{4}-\\d{2}-\\d{2})/); if(iso)return iso[1]; const br=raw.match(/^(\\d{2})\\/(\\d{2})\\/(\\d{4})/); return br?`${br[3]}-${br[2]}-${br[1]}`:""; };
+  const dateKey = (record:ModuleRecord) => { const fields=record as unknown as Record<string,unknown>; const raw=String(record.date||fields.dueDate||record.createdAt||"").trim(); const iso=raw.match(/^(\d{4}-\d{2}-\d{2})/); if(iso)return iso[1]; const br=raw.match(/^(\d{2})\/(\d{2})\/(\d{4})/); return br?`${br[3]}-${br[2]}-${br[1]}`:""; };
   const responsibleOf = (record:ModuleRecord) => { const fields=record as unknown as Record<string,unknown>; return String(fields.technician||fields.responsible||fields.engineer||fields.tech||"").trim(); };
   const unitOf = (record:ModuleRecord) => { const fields=record as unknown as Record<string,unknown>; return String(fields.unit||fields.equipmentUnit||fields.branch||"").trim(); };
   const responsibleOptions = Array.from(new Set(records.map(responsibleOf).filter(Boolean))).sort((a,b)=>a.localeCompare(b,"pt-BR"));
