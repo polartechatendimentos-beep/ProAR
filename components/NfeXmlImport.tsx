@@ -8,6 +8,7 @@ type InvoiceLine = { code: string; description: string; quantity: number; unitPr
 type Props = {
   purchaseItems: PurchaseLine[];
   products: ErpRecord[];
+  productIds: Record<string, string>;
   onApply: (rows: Array<{ itemId: string; productId: string; quantity: number }>) => void;
 };
 
@@ -51,7 +52,7 @@ function parseInvoice(xml: string) {
   };
 }
 
-export function NfeXmlImport({ purchaseItems, products, onApply }: Props) {
+export function NfeXmlImport({ purchaseItems, products, productIds, onApply }: Props) {
   const [invoice, setInvoice] = useState<ReturnType<typeof parseInvoice> | null>(null);
   const [mapping, setMapping] = useState<Record<number, string>>({});
   const [error, setError] = useState("");
@@ -84,7 +85,7 @@ export function NfeXmlImport({ purchaseItems, products, onApply }: Props) {
       const row = invoice.lines[Number(index)];
       const item = purchaseItems.find(candidate => candidate.id === itemId);
       if (!row || !item) return [];
-      return [{ itemId, productId: item.productId || "", quantity: Math.min(row.quantity, item.pending) }];
+      return [{ itemId, productId: item.productId || productIds[itemId] || "", quantity: Math.min(row.quantity, item.pending) }];
     }).filter(row => row.quantity > 0);
     if (!mapped.length) {
       setError("Vincule ao menos um item da NF-e a um item pendente do pedido.");
