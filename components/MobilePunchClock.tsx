@@ -34,7 +34,7 @@ export function MobilePunchClock({ scope, employeeId, employeeName, manager }: P
   const [error, setError] = useState("");
   const day = cache.days[date] || serverDay || emptyDay(date, employeeId, employeeName);
   const queued = cache.pending.filter(item => item.date === date);
-  const projectedPunches = useMemo(() => [...day.punches, ...queued.filter(item => item.action !== "correction-request").map(item => ({ id: item.requestId, type: item.action, at: item.at, recordedAt: item.at, offline: true }))].sort((a, b) => a.at.localeCompare(b.at)), [day, queued]);
+  const projectedPunches = useMemo(() => [...day.punches, ...queued.filter(item => item.action !== "correction-request").map(item => ({ id: item.requestId, type: item.action, at: item.at, recordedAt: item.at, offline: true, location: item.location }))].sort((a, b) => a.at.localeCompare(b.at)), [day, queued]);
   const status = statusOf(projectedPunches);
   const syncPending = useCallback(async (initial: Cache) => {
     if (!navigator.onLine || !initial.pending.length) return initial;
