@@ -37,9 +37,9 @@ export function OperationalAgenda<T extends AgendaOrder>({companyId,orders,onCre
  const mode=useMemo(()=>preferredAgendaMode(narrow,selectedMode),[narrow,selectedMode]);
  const [editing,setEditing]=useState<T|null>(null),[quick,setQuick]=useState({date:"",time:"",tech:"",duration:""}),[quickBusy,setQuickBusy]=useState(false),[quickNotice,setQuickNotice]=useState("");
  const [serviceFilter,setServiceFilter]=useState<AgendaServiceKind|"all">("all");
- const [clock,setClock]=useState(()=>new Date());
- useEffect(()=>{const timer=window.setInterval(()=>setClock(new Date()),60000);return()=>window.clearInterval(timer);},[]);
- const nowTime=new Intl.DateTimeFormat("pt-BR",{hour:"2-digit",minute:"2-digit",timeZone:"America/Sao_Paulo"}).format(clock);
+ const [clock,setClock]=useState<Date|null>(null);
+ useEffect(()=>{const tick=()=>setClock(new Date());tick();const timer=window.setInterval(tick,60000);return()=>window.clearInterval(timer);},[]);
+ const nowTime=clock?new Intl.DateTimeFormat("pt-BR",{hour:"2-digit",minute:"2-digit",timeZone:"America/Sao_Paulo"}).format(clock):"--:--";
  const today=agendaToday();
  const filtered=useMemo(()=>filterAgendaOrders(orders,{status,tech,query,today,overdueOnly:overdue}),[orders,status,tech,query,today,overdue]);
  const serviceFiltered=useMemo(()=>serviceFilter==="all"?filtered:filtered.filter(order=>serviceKind(order)===serviceFilter),[filtered,serviceFilter]);
