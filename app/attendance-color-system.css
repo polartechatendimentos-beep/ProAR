@@ -236,3 +236,131 @@ html[data-proar-system-theme="light"] .proar-full-system .pending-popover .heade
 html[data-proar-system-theme="light"] .proar-full-system .pending-popover .header-result-list button:hover {
   background:#e6f1f8!important;border-color:#176ec0!important;
 }
+
+
+/* Auditoria global de contraste: tema escuro, indicadores e cadastros. */
+html[data-proar-system-theme="dark"] .proar-full-system :is(
+  .operations-health,
+  .operations-summary article,
+  .operation-action,
+  .customer-tab-content,
+  .units-content,
+  .detail-tabs,
+  .management-flow,
+  .finance-control-strip article,
+  .report-card,
+  .purchase-item-row,
+  .xml-registration-review,
+  .permission-matrix,
+  .order-item-list article,
+  .selected-service-grid article,
+  .catalog-check-list label,
+  .kind-selector label,
+  .signature-box,
+  .signature-pad,
+  .upload-box,
+  .work-meta>span,
+  .budget-quick-drawer,
+  .budget-quick-form footer,
+  .budget-customer-results,
+  .service-picker,
+  .service-picker-grid label,
+  .management-stats article,
+  .module-summary article,
+  .finance-kpis article,
+  .report-kpis article,
+  .activity-kpis article,
+  .pending-kpis article,
+  .operations-kpis article,
+  .dashboard-kpis article,
+  .work-today-kpis article,
+  .houses-kpis article,
+  .block-section,
+  .work-today-panel,
+  .report-filter-bar,
+  .report-active-filter,
+  .pdv-catalog>button,
+  .payment-grid button,
+  .status-filter,
+  .context-report-menu,
+  .customer-search-control
+) {
+  background-color:var(--ux-card,#102136)!important;
+  color:var(--ux-text,#eaf3ff)!important;
+  border-color:var(--ux-border,#334b64)!important;
+  box-shadow:none;
+}
+html[data-proar-system-theme="dark"] .proar-full-system .operations-summary article.critical {
+  background:#351d2b!important;border-color:#8e4054!important;color:#ffe7ed!important;
+}
+html[data-proar-system-theme="dark"] .proar-full-system .operations-summary article.attention {
+  background:#382e18!important;border-color:#8a7131!important;color:#fff0c2!important;
+}
+html[data-proar-system-theme="dark"] .proar-full-system .operations-summary article.follow {
+  background:#17314c!important;border-color:#3c6b93!important;color:#e4f2ff!important;
+}
+html[data-proar-system-theme="dark"] .proar-full-system .operations-summary article :is(small,strong,span) {
+  color:inherit!important;
+}
+html[data-proar-system-theme="dark"] .proar-full-system .operations-summary article span,
+html[data-proar-system-theme="dark"] .proar-full-system .operation-main :is(p,small),
+html[data-proar-system-theme="dark"] .proar-full-system .operations-health {
+  color:#c4d8e9!important;
+}
+html[data-proar-system-theme="dark"] .proar-full-system .operations-health :is(svg,b,span) {
+  color:#eaf3ff!important;
+}
+html[data-proar-system-theme="dark"] .proar-full-system .operation-action :is(h3,p,small,b,span,time) {
+  color:#eaf3ff!important;
+}
+html[data-proar-system-theme="dark"] .proar-full-system .operation-meta :is(b,span,time) {
+  background:#24435e!important;color:#dceeff!important;
+}
+html[data-proar-system-theme="dark"] .proar-full-system :is(
+  .form-grid label,.form-grid legend,.customer-tab-content label,
+  .settings-form label,.settings-card label,.registration-form label,
+  .catalog-edit-form label,.budget-quick-form label,.payment-type-options label,
+  .public-contract-fields label,.os-contract-selector label,.preventive-fields label,
+  .reminder-fields label,.status-filter,.field-label,.form-label
+) {
+  color:#c4d8e9!important;
+}
+html[data-proar-system-theme="dark"] .proar-full-system :is(input,select,textarea) {
+  color:#eaf3ff!important;
+  -webkit-text-fill-color:#eaf3ff!important;
+}
+html[data-proar-system-theme="dark"] .proar-full-system :is(input,select,textarea)::placeholder {
+  color:#a9bfd3!important;opacity:1!important;-webkit-text-fill-color:#a9bfd3!important;
+}
+html[data-proar-system-theme="dark"] .proar-full-system :is(.form-grid input,.form-grid select,.form-grid textarea,.customer-tab-content input,.customer-tab-content select,.customer-tab-content textarea) {
+  background:#0d1b2c!important;border-color:#45627f!important;color:#eaf3ff!important;
+}
+html[data-proar-system-theme="dark"] .proar-full-system :is(.form-grid input,.form-grid select,.form-grid textarea,.customer-tab-content input,.customer-tab-content select,.customer-tab-content textarea):focus {
+  border-color:#42a5ff!important;box-shadow:0 0 0 3px #42a5ff2e!important;
+}
+html[data-proar-system-theme="light"] .proar-full-system :is(
+  .operations-health,.operations-summary article,.operation-action,
+  .customer-tab-content,.units-content,.detail-tabs,.management-flow,
+  .finance-control-strip article,.report-card,.purchase-item-row,
+  .xml-registration-review,.permission-matrix,.order-item-list article,
+  .selected-service-grid article,.catalog-check-list label,.kind-selector label,
+  .signature-box,.signature-pad,.upload-box,.budget-quick-drawer,
+  .budget-customer-results,.service-picker,.management-stats article,
+  .module-summary article,.finance-kpis article,.report-kpis article,
+  .activity-kpis article,.pending-kpis article,.operations-kpis article,
+  .dashboard-kpis article,.work-today-kpis article,.houses-kpis article,
+  .block-section,.work-today-panel,.report-filter-bar,.report-active-filter,
+  .pdv-catalog>button,.payment-grid button,.status-filter,.context-report-menu,
+  .customer-search-control
+) {
+  background-color:#fff!important;color:#17334e!important;border-color:#c5d5e3!important;
+}
+html[data-proar-system-theme="light"] .proar-full-system :is(
+  .operations-summary article :is(small,strong,span),
+  .operation-action :is(h3,p,small,b,span,time),
+  .form-grid label,.customer-tab-content label,.settings-form label,
+  .registration-form label,.catalog-edit-form label,.budget-quick-form label
+) {color:#354f68!important}
+html[data-proar-system-theme="light"] .proar-full-system :is(input,select,textarea)::placeholder {
+  color:#64788d!important;opacity:1!important;-webkit-text-fill-color:#64788d!important;
+}
