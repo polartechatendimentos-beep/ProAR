@@ -58,6 +58,10 @@ export function CompanyReportLetterhead({ company }: { company: CompanyPrintProf
         .app-shell > .main > footer, .app-shell > .main > .sync-progress,
         .app-shell > .main > .database-contingency, .appearance-control, .appearance-launcher,
         .toast-container, [role="status"].sync-progress { display: none !important; }
+        .print-order-header { display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 8mm !important; padding: 0 0 5mm !important; margin: 0 0 7mm !important; border-bottom: 1.2pt solid #35bce7 !important; background: #fff !important; color: #17365a !important; }
+        .print-order-header img { display: block !important; max-width: 48mm !important; max-height: 23mm !important; object-fit: contain !important; object-position: left center !important; }
+        .print-order-header > div { flex: 1 !important; text-align: right !important; color: #17365a !important; }
+        .print-order-header > div span, .print-order-header > div h1, .print-order-header > div p { color: #17365a !important; }
         .app-shell > .main { display: block !important; width: 100% !important; min-width: 0 !important; max-width: none !important; margin: 0 !important; padding: 0 !important; background: #fff !important; color: #17365a !important; box-shadow: none !important; }
         .app-shell > .main > header { display: none !important; }
         .app-shell > .main > footer { display: none !important; }
