@@ -18,6 +18,7 @@ type CompanyPrintProfile = {
 
 export function CompanyReportLetterhead({ company }: { company: CompanyPrintProfile }) {
   const companyName = company.legalName?.trim() || company.tradeName?.trim() || "Empresa";
+  const logoSource = company.logo?.trim() || "/proar-logo.png";
   const address = [
     company.address?.trim(),
     company.zipCode?.trim() ? `CEP ${company.zipCode.trim()}` : "",
@@ -75,9 +76,7 @@ export function CompanyReportLetterhead({ company }: { company: CompanyPrintProf
     `}</style>
     <header className="proar-company-letterhead" aria-label={`Papel timbrado de ${companyName}`}>
       <div className="proar-company-letterhead-logo">
-        {company.logo
-          ? <img src={company.logo} alt={company.tradeName || companyName} />
-          : <span className="proar-company-letterhead-fallback">{company.tradeName?.trim() || companyName}</span>}
+        <img src={logoSource} alt={company.tradeName?.trim() || companyName} />
       </div>
       <div className="proar-company-letterhead-data">
         <strong>{companyName}</strong>
