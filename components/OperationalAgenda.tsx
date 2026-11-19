@@ -61,7 +61,7 @@ export function OperationalAgenda<T extends AgendaOrder>({companyId,orders,onCre
  function clearFilters(){setQuery("");setTech("");setStatus("Em aberto");setOverdue(false);setServiceFilter("all");}
  const contactFor=(order:T)=>customers.find(customer=>customer.id&&customer.id===(order as unknown as Record<string,unknown>).customerId)||customers.find(customer=>customer.name===order.client);
  const currentClientName=(order:T)=>{const fields=order as unknown as Record<string,unknown>;const customer=customers.find(item=>item.id&&String(item.id)===String(fields.customerId||""))||customers.find(item=>String(item.name||"")===order.client);return String(customer?.name||order.client||"Cliente não informado");};
- const isDefaultLocation=(value:unknown)=>/^(unidade principal|cliente principal|endereço principal|local não informado|local de atendimento não selecionado|sala\s*\/\s*ambiente não informado|sala ou ambiente)$/i.test(String(value||"").trim());
+ const isDefaultLocation=(value:unknown)=>{const label=String(value??"").trim();return !label||/^(undefined|null|n\/?a|-)$/i.test(label)||/^(unidade principal|cliente principal|endereço principal|local não informado|local de atendimento não selecionado|sala\s*\/\s*ambiente não informado|sala ou ambiente)$/i.test(label);};
  const technicianInfo=(name:string)=>{
   const normalized=name.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR").trim();
   const missing=!normalized||/^(a definir|nao definido|nao informado|sem tecnico|tecnico a definir)$/.test(normalized);
@@ -92,12 +92,13 @@ export function OperationalAgenda<T extends AgendaOrder>({companyId,orders,onCre
   const readiness=orderReadiness(order as unknown as Record<string,unknown>,contactFor(order));
   const currentClient=currentClientName(order);
   const locationTitle=String(!isDefaultLocation(order.unit)?order.unit:!isDefaultLocation(order.room)?order.room:currentClient).trim();
+  const locationAddress=[order.address,order.unit,order.room].find(value=>!isDefaultLocation(value))||"Local a definir";
   const locationContext=[currentClient,order.sector,order.unit&&!isDefaultLocation(order.unit)&&order.room&&!isDefaultLocation(order.room)?order.room:""].map(value=>String(value||"").trim()).filter(value=>value&&value!==locationTitle).join(" • ");
   return <button className={[styles.event,categoryClass,compact?styles.compact:"",urgency?styles.urgentEvent:""].join(" ")} key={order.id} onClick={()=>onSelect(order)} title={"Abrir "+order.id+" — "+locationTitle+(locationContext?" • "+locationContext:"")}>
    <span className={styles.eventTime}><Clock size={12}/>{order.time||"A definir"}{orderEndTime(order as unknown as Record<string,unknown>)?" – "+orderEndTime(order as unknown as Record<string,unknown>):""}<small>{order.id}</small></span>
    <strong>{locationTitle}</strong>{locationContext&&<small className={styles.eventContext}>{locationContext}</small>}<span>{order.service||"Serviço não informado"}</span>
    <span className={styles.eventTechnician}>{technicianBadge(order.tech||"")}</span>
-   {!compact&&<span className={styles.eventAddress}><MapPin size={12}/>{order.address||order.unit||"Local a definir"}</span>}
+   {!compact&&<span className={styles.eventAddress}><MapPin size={12}/>{locationAddress}</span>}
    <span className={[styles.eventStatus,styles[status.tone as keyof typeof styles]].join(" ")}><i/> {status.label}{order.appointmentConfirmation?" • "+order.appointmentConfirmation:""}</span>
    {readiness.length>0&&<span className={styles.readinessBadge} title={readiness.join(", ")}>Dados a conferir</span>}
   </button>;
