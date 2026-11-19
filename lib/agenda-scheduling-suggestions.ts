@@ -1,4 +1,4 @@
-import {closedAgendaOrder,validAgendaDate,type AgendaOrder} from "./agenda-calendar.ts";
+import {validAgendaDate,type AgendaOrder} from "./agenda-calendar.ts";
 
 type SuggestionOrder=Pick<AgendaOrder,"id"|"date"|"time"|"tech"|"status"|"estimatedDurationMinutes"|"durationMinutes">;
 type Input={technicians:string[];orders:SuggestionOrder[];date:string;time:string;durationMinutes:number;excludeOrderId?:string};
@@ -12,7 +12,7 @@ export function suggestAgendaTechnician(input:Input){
  const duration=Number.isInteger(input.durationMinutes)&&input.durationMinutes>0?input.durationMinutes:120;
  const candidates=[...new Set(input.technicians.map(name=>name.trim()).filter(name=>name&&!isMissingTechnician(name)))];
  const ranked:Candidate[]=candidates.map(name=>{
-  const visits=input.orders.filter(order=>order.id!==input.excludeOrderId&&order.date===date&&order.tech.trim()===name&&!closedAgendaOrder(order));
+  const visits=input.orders.filter(order=>order.id!==input.excludeOrderId&&order.date===date&&order.tech.trim()===name&&!/conclu[ií]d|cancelad|finalizad/i.test(order.status));
   const conflict=Boolean(date&&validTime(input.time)&&visits.some(order=>{
    if(!validTime(order.time||""))return false;
    const existingDuration=Number(order.estimatedDurationMinutes||order.durationMinutes)||0;
