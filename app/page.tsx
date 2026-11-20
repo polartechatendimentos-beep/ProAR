@@ -1,5 +1,6 @@
 "use client";
 import { CompanyReportLetterhead } from "@/components/CompanyReportLetterhead";
+import { ChatGPTAssistant } from "@/components/ChatGPTAssistant";
 import {CustomerAddressFields} from "@/components/CustomerAddressFields";
 import {ServiceOrderReportPreview} from "../components/ServiceOrderReportPreview";
 import {prepareOrderWorkspaceSave,orderStatusTone,workspaceDraftKey,newOrderSchedulingIssue,type OrderScheduleSeed} from "../lib/order-workspace-state";
@@ -5393,7 +5394,7 @@ export default function Home() {
   const mobileAllowedModules = mobileManager ? mobileManagerModules : mobileTechnicianModules;
   const mobileBlocked = mobileExperience && !mobileAllowedModules.has(current);
   const planBlocked = !primaryTenantAccess && Array.isArray(effectiveEntitledModules) && !effectiveEntitledModules.includes(current);
-  return <CustomerHierarchyProvider customers={customerRecords} records={moduleRecords["Unidades e setores"] ?? []} equipment={(moduleRecords.Equipamentos ?? []) as unknown as Record<string,unknown>[]} orders={serviceOrders as unknown as Record<string,unknown>[]}><div className={`app-shell ${mobileExperience?"mobile-operation-policy mobile-dedicated-experience":"proar-full-system"}`}>{!selectedOrder&&<CompanyReportLetterhead company={activeCompany}/>}<a className="proar-skip-link" href="#conteudo-principal">Pular para o conteúdo</a><ConnectivityBanner/>
+  return <CustomerHierarchyProvider customers={customerRecords} records={moduleRecords["Unidades e setores"] ?? []} equipment={(moduleRecords.Equipamentos ?? []) as unknown as Record<string,unknown>[]} orders={serviceOrders as unknown as Record<string,unknown>[]}><div className={`app-shell ${mobileExperience?"mobile-operation-policy mobile-dedicated-experience":"proar-full-system"}`}>{!selectedOrder&&<CompanyReportLetterhead company={activeCompany}/>}<a className="proar-skip-link" href="#conteudo-principal">Pular para o conteúdo</a><ConnectivityBanner/><ChatGPTAssistant/>
     <div data-testid="proar-sidebar"><Sidebar current={current} setCurrent={setCurrent} open={menuOpen} close={() => setMenuOpen(false)} permissions={authenticatedUser.permissions} role={authenticatedUser.role} entitledModules={effectiveEntitledModules}/></div>
     <main id="conteudo-principal" tabIndex={-1} className="main">
       <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNew={openNew} searchItems={globalSearchItems} pendingItems={pendingItems} onSearchSelect={openGlobalSearch} onPendingSelect={openPending} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onSwitchUser={logout} online={online} syncing={syncing} onPull={() => void pullFromDatabase()} onPush={() => void pushToDatabase()}/>
