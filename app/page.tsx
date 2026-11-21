@@ -154,13 +154,6 @@ export default function HomePage() {
           <div className="space-y-6">
             <DailyWorkCenter
               onNavigateTab={(t) => setActiveTab(t)}
-              osCount={3}
-              osAtrasadasCount={1}
-              obrasCount={2}
-              obrasGargaloCount={1}
-              orcamentosPendentesCount={4}
-              contasVencendoCount={2}
-              empenhosFaturarCount={1}
             />
 
             {/* Painéis operacionais em destaque */}
