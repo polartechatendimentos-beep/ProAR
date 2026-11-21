@@ -2,7 +2,7 @@ import { databaseFetch } from "./supabase-rest";
 import { decryptTenantSecret } from "./tenant-crypto";
 import { resolveTenantDb, tenantHeaders } from "./tenant-rest";
 
-type StoredIntegration = { encrypted_api_key?: string; key_last4?: string; enabled?: boolean };
+type StoredIntegration = { encrypted_api_key?: string; key_last4?: string; enabled?: boolean; validation_status?: "pending" | "valid" | "failed"; validation_message?: string; validated_at?: string | null; validation_source?: "company" | "environment" | null; created_at?: string; updated_at?: string };
 export type OpenAiCredential = { apiKey: string; source: "company" | "environment" };
 export const safeCompanyId = (value: unknown) => String(value || process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80) || "polartech-principal";
 export const openAiIntegrationId = (companyId: string) => `secure-integration-${safeCompanyId(companyId)}-openai`;
