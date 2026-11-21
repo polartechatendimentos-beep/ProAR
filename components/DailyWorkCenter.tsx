@@ -8,24 +8,24 @@ import {
 
 interface DailyWorkCenterProps {
   onNavigateTab: (tab: "dashboard" | "os" | "obras" | "orcamento" | "pdv" | "financeiro" | "contratos" | "pmoc") => void;
-  osCount: number;
-  osAtrasadasCount: number;
-  obrasCount: number;
-  obrasGargaloCount: number;
-  orcamentosPendentesCount: number;
-  contasVencendoCount: number;
-  empenhosFaturarCount: number;
+  osCount?: number | null;
+  osAtrasadasCount?: number | null;
+  obrasCount?: number | null;
+  obrasGargaloCount?: number | null;
+  orcamentosPendentesCount?: number | null;
+  contasVencendoCount?: number | null;
+  empenhosFaturarCount?: number | null;
 }
 
 export function DailyWorkCenter({
   onNavigateTab,
-  osCount = 3,
-  osAtrasadasCount = 1,
-  obrasCount = 2,
-  obrasGargaloCount = 1,
-  orcamentosPendentesCount = 4,
-  contasVencendoCount = 2,
-  empenhosFaturarCount = 1,
+  osCount = null,
+  osAtrasadasCount = null,
+  obrasCount = null,
+  obrasGargaloCount = null,
+  orcamentosPendentesCount = null,
+  contasVencendoCount = null,
+  empenhosFaturarCount = null,
 }: DailyWorkCenterProps) {
   return (
     <div className="bg-slate-900 rounded-2xl p-6 text-white shadow-lg border border-slate-800">
@@ -35,7 +35,7 @@ export function DailyWorkCenter({
           <div className="flex items-center gap-2 mb-1">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider font-mono">
-              OPERAÇÃO EM TEMPO REAL — MATRIZ MIRASSOL
+              CENTRAL OPERACIONAL — INDICADORES DISPONÍVEIS
             </span>
           </div>
           <h2 className="text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
@@ -50,7 +50,7 @@ export function DailyWorkCenter({
         <div className="flex items-center gap-3">
           <div className="text-right hidden sm:block">
             <span className="text-[11px] text-slate-400 block">Eficiência Operacional</span>
-            <span className="text-sm font-bold text-emerald-400">98,2% em dia</span>
+            <span className="text-sm font-bold text-slate-300">Sem medição disponível</span>
           </div>
           <button
             onClick={() => onNavigateTab("os")}
@@ -73,7 +73,7 @@ export function DailyWorkCenter({
             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300">Hoje</span>
           </div>
           <div>
-            <div className="text-2xl font-black text-white">{osCount}</div>
+            <div className="text-2xl font-black text-white">{osCount ?? "—"}</div>
             <div className="text-xs font-medium text-slate-300 mt-0.5">OS Agendadas</div>
             <div className="text-[10px] text-blue-400 mt-2 font-bold flex items-center gap-1">
               Despachar equipe →
@@ -85,7 +85,7 @@ export function DailyWorkCenter({
         <button
           onClick={() => onNavigateTab("os")}
           className={`text-left p-4 rounded-xl transition group flex flex-col justify-between border ${
-            osAtrasadasCount > 0 
+            (osAtrasadasCount ?? 0) > 0 
               ? "bg-rose-950/40 border-rose-800/60 hover:border-rose-500" 
               : "bg-slate-800/80 border-slate-700/80"
           }`}
@@ -97,7 +97,7 @@ export function DailyWorkCenter({
             )}
           </div>
           <div>
-            <div className="text-2xl font-black text-rose-400">{osAtrasadasCount}</div>
+            <div className="text-2xl font-black text-rose-400">{osAtrasadasCount ?? "—"}</div>
             <div className="text-xs font-medium text-slate-300 mt-0.5">OS Atrasadas</div>
             <div className="text-[10px] text-rose-300 mt-2 font-bold">
               Priorizar técnico →
@@ -115,7 +115,7 @@ export function DailyWorkCenter({
             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">Etapas</span>
           </div>
           <div>
-            <div className="text-2xl font-black text-white">{obrasGargaloCount}</div>
+            <div className="text-2xl font-black text-white">{obrasGargaloCount ?? "—"}</div>
             <div className="text-xs font-medium text-slate-300 mt-0.5">Gargalo de Obra</div>
             <div className="text-[10px] text-amber-400 mt-2 font-bold">
               Resolver material →
@@ -133,7 +133,7 @@ export function DailyWorkCenter({
             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300">Follow-up</span>
           </div>
           <div>
-            <div className="text-2xl font-black text-white">{orcamentosPendentesCount}</div>
+            <div className="text-2xl font-black text-white">{orcamentosPendentesCount ?? "—"}</div>
             <div className="text-xs font-medium text-slate-300 mt-0.5">Orçamentos</div>
             <div className="text-[10px] text-purple-400 mt-2 font-bold">
               Cobrar no WhatsApp →
@@ -151,7 +151,7 @@ export function DailyWorkCenter({
             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">Hoje</span>
           </div>
           <div>
-            <div className="text-2xl font-black text-white">{contasVencendoCount}</div>
+            <div className="text-2xl font-black text-white">{contasVencendoCount ?? "—"}</div>
             <div className="text-xs font-medium text-slate-300 mt-0.5">Contas a Pagar</div>
             <div className="text-[10px] text-emerald-400 mt-2 font-bold">
               Dar baixa / saldo →
@@ -169,7 +169,7 @@ export function DailyWorkCenter({
             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300">PNCP</span>
           </div>
           <div>
-            <div className="text-2xl font-black text-white">{empenhosFaturarCount}</div>
+            <div className="text-2xl font-black text-white">{empenhosFaturarCount ?? "—"}</div>
             <div className="text-xs font-medium text-slate-300 mt-0.5">Empenhos Prefeitura</div>
             <div className="text-[10px] text-indigo-400 mt-2 font-bold">
               Pronto para faturar →
