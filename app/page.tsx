@@ -669,6 +669,8 @@ type ModuleRecord = {
   auditDetail?: string;
   auditUser?: string;
   auditChanges?: { field:string; before:string; after:string }[];
+  auditBeforeData?: Record<string,unknown>;
+  auditAfterData?: Record<string,unknown>;
 };
 
 // Fonte única para os seletores Cliente → Unidade/Filial/Setor. Ela lê os
