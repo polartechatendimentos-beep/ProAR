@@ -5,7 +5,7 @@ import { readSession } from "../../../lib/proar-auth";
 import { resolveTenantDb, tenantHeaders } from "../../../lib/tenant-rest";
 
 async function adminContext(request: NextRequest) {
-  const session = await readSession(request);
+  const session = await readSession(request.cookies.get("proar_session")?.value);
   if (!session) return { error: NextResponse.json({ error: "Sessão inválida." }, { status: 401 }) };
   if (session.role !== "Administrador") return { error: NextResponse.json({ error: "Apenas administradores podem configurar a IA." }, { status: 403 }) };
   const requested = safeCompanyId(request.nextUrl.searchParams.get("company") || session.companyId);
@@ -55,7 +55,7 @@ export async function PUT(request: NextRequest) {
     validation_source: null,
     created_at: now,
     updated_at: now,
-    updated_by: context.session.nome || context.session.email
+    updated_by: context.session.displayName || context.session.username
   });
   return ok
     ? NextResponse.json({ configured: true, last4: apiKey.slice(-4), validationStatus: "pending", validatedAt: null })
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
     validated_at: validatedAt,
     validation_source: credential.source,
     updated_at: new Date().toISOString(),
-    updated_by: context.session.nome || context.session.email
+    updated_by: context.session.displayName || context.session.username
   });
 
   if (!connected) return NextResponse.json({ error: validationMessage, validationStatus, validatedAt: null, persisted }, { status: 400 });
@@ -120,7 +120,7 @@ export async function DELETE(request: NextRequest) {
     validation_source: null,
     created_at: current?.created_at || now,
     updated_at: now,
-    updated_by: context.session.nome || context.session.email
+    updated_by: context.session.displayName || context.session.username
   });
   return ok
     ? NextResponse.json({ configured: false, last4: null, validationStatus: "pending", validatedAt: null })
