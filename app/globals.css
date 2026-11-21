@@ -12,3 +12,40 @@ body {
   background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Impressão A4 compartilhada pelos relatórios padronizados do ProAR. */
+@media print {
+  @page { size: A4 portrait; margin: 12mm; }
+  html, body { background: #fff !important; }
+  .proar-report-overlay {
+    position: static !important;
+    overflow: visible !important;
+    display: block !important;
+    padding: 0 !important;
+    background: transparent !important;
+  }
+  .proar-report-sheet {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    display: block !important;
+  }
+  .proar-report-sheet table { width: 100%; border-collapse: collapse; }
+  .proar-report-sheet thead { display: table-header-group; }
+  .proar-report-sheet tfoot { display: table-footer-group; }
+  .proar-report-sheet tr,
+  .proar-report-sheet section,
+  .proar-report-sheet header {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .proar-report-sheet img { max-width: 100%; }
+  .proar-report-sheet * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
