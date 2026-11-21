@@ -50,6 +50,7 @@ import "./usability-hardening.css";
 import "./fiscal-workspace.css";
 import "./responsive-hardening.css";
 import "./resilience-status.css";
+import "./proar-petroleum-palette.css";
 import { ConnectivityBanner } from "@/components/ResponsivePrimitives";
 import { MobileToday } from "@/components/MobileToday";
 
