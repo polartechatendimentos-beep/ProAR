@@ -96,19 +96,19 @@ export function StandardDocumentReport({
   const [empresa, setEmpresa] = useState<CompanyData>({
     razaoSocial: "PolarTech Mirassol Ar Condicionado Ltda.",
     nomeFantasia: "POLARTECH AR CONDICIONADO",
-    cnpj: "44.378.865/0001-61",
-    inscricaoEstadual: "451.467.248.110",
-    endereco: "Rua São Pedro, 2184",
+    cnpj: "",
+    inscricaoEstadual: "",
+    endereco: "",
     bairro: "Centro",
     cidade: "Mirassol",
     uf: "SP",
     cep: "15130-000",
-    telefone: "(17) 2122-2806",
+    telefone: "",
     whatsapp: "(17) 99156-7798",
-    email: "contato@polartechsolucoes.com.br",
+    email: "",
     site: "polartechsolucoes.com.br",
     slogan: "Mais conforto, mais qualidade de vida!",
-    responsavelTecnico: "Engenheiro Mecânico Responsável Técnico (CREA-SP)",
+    responsavelTecnico: "",
     ...empresaProp,
   });
 
@@ -152,11 +152,11 @@ export function StandardDocumentReport({
     tipo === "ORCAMENTO"
       ? "Execução de serviço especializado de higienização, manutenção preventiva e adequação de sistemas de ar-condicionado, visando garantir a eficiência térmica, conservação dos compressores e a qualidade do ar conforme as normas vigentes."
       : tipo === "ORDEM_SERVICO"
-      ? "Atendimento técnico presencial executado conforme checklist PMOC, com aplicação de produtos bactericidas biodegradáveis registrados no Ministério da Saúde e testes operacionais de rendimento e estanqueidade."
+      ? "Atendimento técnico conforme os serviços efetivamente registrados nesta ordem de serviço."
       : "Fornecimento de equipamentos, peças e insumos com garantia de fábrica e procedência técnica para sistemas de climatização."
   );
 
-  const defaultEscopo = escopoCards || [
+  const defaultEscopo = escopoCards || (tipo === "ORCAMENTO" ? [
     {
       titulo: "SERPENTINA (UNIDADE INTERNA)",
       itens: ["Limpeza e higienização química profunda da serpentina e aletas."],
@@ -180,24 +180,24 @@ export function StandardDocumentReport({
         "Higienização conforme Portaria 3.523 e ANVISA RE nº 09.",
       ],
     },
-  ];
+  ] : []);
 
-  const defaultInclusos = itensInclusos || [
+  const defaultInclusos = itensInclusos || (tipo === "ORCAMENTO" ? [
     "Mão de obra técnica especializada com EPIs e ferramentas certificadas;",
     "Produtos de higienização bactericida com laudo do Ministério da Saúde;",
     "Limpeza completa de serpentina, bandeja de condensado, turbina e dreno;",
     "Emissão de relatório / checklist técnico do serviço;",
     "Deslocamento da equipe técnica.",
-  ];
+  ] : []);
 
-  const defaultNaoInclusos = itensNaoInclusos || [
+  const defaultNaoInclusos = itensNaoInclusos || (tipo === "ORCAMENTO" ? [
     "Recarga de gás refrigerante (caso não contratada nesta proposta);",
     "Reparo de vazamentos ocultos na tubulação estrutural;",
     "Troca de peças, placas eletrônicas e compressores;",
     "Infraestrutura de ponto elétrico e disjuntores da edificação;",
     "Serviços de alvenaria, pintura ou gesso civil;",
     "Outros serviços não discriminados formalmente nesta proposta.",
-  ];
+  ] : []);
 
   const dataAtualFormatada = data || new Date().toLocaleDateString("pt-BR");
 
@@ -257,23 +257,19 @@ export function StandardDocumentReport({
                 )}
               </div>
 
-              {/* Lado Direito: Box de Identificação e Número do Documento */}
-              <div className="border border-blue-900 bg-blue-50/40 rounded-xl p-3 text-right shrink-0 min-w-[200px]">
-                <span className="text-[10px] font-bold text-blue-900 uppercase tracking-wider block">
-                  {documentNumberLabel}
-                </span>
-                <span className="text-lg font-black text-blue-950 font-mono block">
-                  {numero}
-                </span>
-                <span className="text-[10px] text-slate-600 font-bold block mt-0.5">
-                  DATA: {dataAtualFormatada}
-                </span>
+              {/* Identificação institucional da empresa ativa, sem dados fiscais fictícios. */}
+              <div className="text-left sm:text-right min-w-0 sm:max-w-[48%] text-[10px] leading-relaxed">
+                <strong className="block text-blue-950 text-[12px]">{empresa.razaoSocial || empresa.nomeFantasia}</strong>
+                {empresa.cnpj && <span className="block">CNPJ: {empresa.cnpj}</span>}
+                {empresa.endereco && <span className="block">{[empresa.endereco, empresa.bairro, empresa.cidade, empresa.uf].filter(Boolean).join(" • ")}</span>}
+                {empresa.telefone && <span className="block">Telefone: {empresa.telefone}</span>}
+                {empresa.email && <span className="block break-all">{empresa.email}</span>}
               </div>
             </div>
 
-            {/* Faixa com Título do Documento */}
+            {/* Título e identificação do documento */}
             <div className="mt-3 bg-blue-900 text-white font-bold text-xs uppercase px-3 py-1.5 rounded-lg tracking-wider text-center">
-              {documentTitle}
+              {documentTitle} • {documentNumberLabel} {numero} • {dataAtualFormatada}
             </div>
 
             {/* Dados do Cliente e Local de Atendimento */}
@@ -403,7 +399,7 @@ export function StandardDocumentReport({
                 4. INVESTIMENTO — VALOR GLOBAL DO SERVIÇO
               </span>
               <p className="text-[11px] text-slate-700 leading-snug">
-                Utilizamos produtos de alta performance com ação bactericida e fungicida registrados no Ministério da Saúde, garantindo máxima eficiência térmica e qualidade do ar de interiores.
+                Valores correspondentes aos produtos e serviços discriminados neste documento.
               </p>
             </div>
             <div className="bg-white border-2 border-blue-900 rounded-xl p-3 text-center min-w-[210px] shadow-sm shrink-0">
