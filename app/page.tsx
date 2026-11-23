@@ -5264,7 +5264,7 @@ export default function Home() {
   const createOrderStructure=async(draft:StructureDraft & {client:string}):Promise<ModuleRecord|null>=>{
     const owner=customerRecords.find(item=>item.name===draft.client);
     if(!owner)return null;
-    const created:ModuleRecord={id:"SET-"+crypto.randomUUID(),name:draft.name.trim(),client:owner.name,customerId:owner.id,category:draft.kind,hierarchyLevel:draft.kind,parentId:draft.parentId||undefined,description:draft.description,status:"Ativo",createdAt:new Date().toISOString()};
+    const created:ModuleRecord={id:"SET-"+crypto.randomUUID(),name:draft.name.trim(),client:owner.name,customerId:owner.id,category:draft.kind,hierarchyLevel:draft.kind,parentId:draft.parentId||undefined,address:draft.address?.trim()||undefined,description:draft.description,status:"Ativo",createdAt:new Date().toISOString()};
     try{prepareCustomerStructureSave(owner,created,moduleRecords["Unidades e setores"]||[]);}
     catch(error){throw new Error(error instanceof Error?error.message:"Vínculo inválido.");}
     return await saveConfirmedModuleRecord("Unidades e setores",created)?created:null;
