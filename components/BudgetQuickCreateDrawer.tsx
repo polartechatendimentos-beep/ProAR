@@ -11,7 +11,7 @@ type QuickCustomer = { organizationType?:string; id: string; name: string; doc: 
 type QuickStructure = { customerId?:string; id: string; name: string; client: string; category?: string; parentId?: string; hierarchyLevel?: string; environmentType?: string };
 
 type CustomerDraft = CustomerAddress & { name: string; legalName: string; tradeName: string; doc: string; phone: string; email: string; city: string; state: string };
-type StructureDraft = { kind: "Setor" | "Unidade" | "Ambiente"; name: string; parentId: string; environmentType: string; roomNumber: string; description: string; address?: string };
+type StructureDraft = { kind: "Setor" | "Unidade" | "Ambiente"; name: string; parentId: string; environmentType: string; roomNumber: string; description: string } & CustomerAddress;
 
 export type QuickCreateMode = "customer" | "structure";
 

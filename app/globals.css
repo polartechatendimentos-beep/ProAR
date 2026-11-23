@@ -509,3 +509,23 @@ html[data-proar-system-theme="dark"] .customer-search-no-results{
 .os-create-modal-compact .order-sector-quick-create.os-inline-sector{grid-template-columns:minmax(130px,.7fr) minmax(170px,1fr) minmax(190px,1.3fr) auto;gap:8px;padding:9px 10px}
 .os-create-modal-compact .order-sector-quick-create input{min-height:32px}
 @media(max-width:800px){.os-create-modal-compact .order-sector-quick-create.os-inline-sector{grid-template-columns:1fr}}
+
+.os-inline-unit-address{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:10px;border:1px solid #28445d;border-radius:9px;background:#0b1929}
+.os-inline-unit-address label{min-width:0}
+.os-inline-unit-address .budget-quick-wide{grid-column:span 2}
+.os-open-map-link{display:inline-flex;align-items:center;gap:5px;margin-top:5px;color:#47b8f5;font-size:10px;font-weight:700;text-decoration:none}
+.os-open-map-link:hover{text-decoration:underline}
+.os-review-overlay{position:fixed;inset:0;z-index:4000;display:grid;place-items:center;padding:18px;background:rgba(2,8,18,.76);backdrop-filter:blur(4px)}
+.os-review-card{width:min(680px,100%);max-height:min(86dvh,820px);overflow:auto;padding:22px;border:1px solid #285478;border-radius:15px;background:#0b1727;color:#eef6ff;box-shadow:0 24px 90px rgba(0,0,0,.55)}
+.os-review-card>span{color:#49baff;font-size:9px;font-weight:900;letter-spacing:.08em}
+.os-review-card h2{margin:7px 0 18px;font-size:19px}
+.os-review-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.os-review-grid>div{display:grid;gap:4px;min-width:0;padding:10px;border:1px solid #213a53;border-radius:9px;background:#102136}
+.os-review-grid>div.wide{grid-column:1/-1}
+.os-review-grid small{color:#8daac4;font-size:9px;font-weight:800;letter-spacing:.04em}
+.os-review-grid strong{font-size:12px;line-height:1.45;overflow-wrap:anywhere}
+.os-review-warning{display:grid;gap:5px;margin-top:12px;padding:11px 12px;border:1px solid #a8503e;border-radius:9px;background:#3b211f;color:#ffd4ca;font-size:11px}
+.os-review-warning.travel{border-color:#8b7132;background:#342c1b;color:#ffe6a6}
+.os-review-warning small{line-height:1.45}
+.os-review-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:18px}
+@media(max-width:700px){.os-inline-unit-address{grid-template-columns:repeat(2,minmax(0,1fr))}.os-review-overlay{padding:10px}.os-review-card{padding:15px}.os-review-grid{grid-template-columns:1fr}.os-review-grid>div.wide{grid-column:auto}.os-review-actions{flex-direction:column-reverse}.os-review-actions button{min-height:44px}}
