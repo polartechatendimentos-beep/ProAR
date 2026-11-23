@@ -496,3 +496,16 @@ html[data-proar-system-theme="dark"] .customer-search-no-results{
 .quick-schedule-spin{animation:quickScheduleSpin 1s linear infinite}
 @keyframes quickScheduleSpin{to{transform:rotate(360deg)}}
 @media(max-width:700px){.quick-schedule-card{padding:13px}.quick-schedule-input-row{grid-template-columns:minmax(0,1fr)}.quick-schedule-actions{flex-direction:row;min-width:0}.quick-schedule-actions button{flex:1}.quick-schedule-review{grid-template-columns:minmax(0,1fr)}.quick-schedule-matches>button{grid-template-columns:38px minmax(0,1fr)}.quick-schedule-matches em{grid-column:2}.quick-schedule-review footer{grid-column:auto}}
+
+/* OS create density control and direct unit registration */
+.os-create-head-actions .os-compact-toggle{min-width:104px;border-color:#315574;color:#b8d8ef;font-size:10px}
+.os-create-modal-compact .os-create-header{padding:9px 14px}
+.os-create-modal-compact .os-create-schedule{margin:6px 14px;padding:7px 10px}
+.os-create-modal-compact .os-create-body{padding:9px 14px}
+.os-create-modal-compact .os-create-card{padding:10px}
+.os-create-modal-compact .os-create-card input,.os-create-modal-compact .os-create-card select,.os-create-modal-compact .os-create-card textarea{min-height:32px;font-size:11px}
+.os-create-modal-compact .os-create-card label{gap:4px;font-size:10px}
+.os-create-modal-compact .os-location-lineage,.os-create-modal-compact .os-client-confirm{margin-top:6px;margin-bottom:7px;padding:8px 10px}
+.os-create-modal-compact .order-sector-quick-create.os-inline-sector{grid-template-columns:minmax(130px,.7fr) minmax(170px,1fr) minmax(190px,1.3fr) auto;gap:8px;padding:9px 10px}
+.os-create-modal-compact .order-sector-quick-create input{min-height:32px}
+@media(max-width:800px){.os-create-modal-compact .order-sector-quick-create.os-inline-sector{grid-template-columns:1fr}}
