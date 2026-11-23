@@ -3811,7 +3811,7 @@ function Modal({ title, initialOrderSeed, customers, structures, catalogRecords,
   const getScheduleWarnings=()=>{
     const [hours,minutes]=time.split(":").map(Number),start=hours*60+minutes,end=start+durationMinutes;
     const appointments=serviceOrders.filter(item=>item.date===date&&normalizeRelation(item.tech)===normalizeRelation(tech)&&tech.trim()&&!/cancelad|conclu[ií]d|finalizad/i.test(item.status));
-    const timed=appointments.flatMap(item=>{const match=String(item.time||"").match(/^([01]\\d|2[0-3]):([0-5]\\d)$/);if(!match)return[];const itemStart=Number(match[1])*60+Number(match[2]),itemDuration=Number(item.estimatedDurationMinutes)||120;return[{item,start:itemStart,end:itemStart+itemDuration}];});
+    const timed=appointments.flatMap(item=>{const match=String(item.time||"").match(/^([01]\d|2[0-3]):([0-5]\d)$/);if(!match)return[];const itemStart=Number(match[1])*60+Number(match[2]),itemDuration=Number(item.estimatedDurationMinutes)||120;return[{item,start:itemStart,end:itemStart+itemDuration}];});
     return {overlaps:timed.filter(row=>start<row.end&&row.start<end),travel:timed.filter(row=>{const gap=start>=row.end?start-row.end:row.start>=end?row.start-end:-1;return gap>=0&&gap<30&&orderAddress.trim()&&row.item.address?.trim()&&normalizeRelation(orderAddress)!==normalizeRelation(row.item.address);})};
   };
   const saveNewOrder = async (status: "Agendada" | "Rascunho",confirmed=false) => {
@@ -4400,7 +4400,7 @@ export default function Home() {
     const onOnline = () => setOnline(true);
     const onOffline = () => { setOnline(false); setDatabaseMode("offline"); };
     window.addEventListener("online", onOnline); window.addEventListener("offline", onOffline);
-    const runId = `BOOT-${new Date().toISOString().replace(/\\D/g,"").slice(0,14)}-${Math.random().toString(36).slice(2,7).toUpperCase()}`;
+    const runId = `BOOT-${new Date().toISOString().replace(/\D/g,"").slice(0,14)}-${Math.random().toString(36).slice(2,7).toUpperCase()}`;
     setBootRunId(runId); setBootError(""); setCheckingSession(true);
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 12000);
