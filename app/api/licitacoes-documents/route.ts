@@ -5,6 +5,8 @@ import { licitacaoDocuments } from "@/db/schema";
 import { readSession } from "@/lib/proar-auth";
 import { assertCompanyAccess, getEffectiveCompanyId } from "@/lib/company-access";
 
+const DOCUMENT_APPROVER_ROLES = new Set(["Administrador", "Gerência", "superadmin", "manager"]);
+
 export async function GET(request: Request) {
   try {
     const session = await readSession(request);
@@ -51,5 +53,49 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, data: saved }, { status: 201 });
   } catch (error) {
     return NextResponse.json({ success: false, error: error instanceof Error ? error.message : "Não foi possível salvar o documento." }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const session = await readSession(request);
+    if (!session) return NextResponse.json({ success: false, error: "Não autorizado." }, { status: 401 });
+    const body = await request.json();
+    if (!body.id) return NextResponse.json({ success: false, error: "ID do documento é obrigatório." }, { status: 400 });
+    const companyId = assertCompanyAccess(session, body.companyId ? Number(body.companyId) : null);
+    const [existing] = await db.select().from(licitacaoDocuments)
+      .where(and(eq(licitacaoDocuments.id, Number(body.id)), eq(licitacaoDocuments.companyId, companyId)))
+      .limit(1);
+    if (!existing) return NextResponse.json({ success: false, error: "Documento não encontrado." }, { status: 404 });
+
+    const oldMetadata = existing.metadadosIa && typeof existing.metadadosIa === "object" && !Array.isArray(existing.metadadosIa)
+      ? existing.metadadosIa as Record<string, unknown>
+      : {};
+    const history = Array.isArray(oldMetadata.historicoRevisao) ? oldMetadata.historicoRevisao : [];
+    const action = String(body.situacao || existing.situacao);
+    if (!["aprovado", "revisar", "pendente_revisao"].includes(action)) {
+      return NextResponse.json({ success: false, error: "Situação de revisão inválida." }, { status: 400 });
+    }
+    if (action === "aprovado" && !DOCUMENT_APPROVER_ROLES.has(session.role)) {
+      return NextResponse.json({ success: false, error: "Apenas responsáveis autorizados podem aprovar documentos." }, { status: 403 });
+    }
+    const nextMetadata = {
+      ...oldMetadata,
+      ...(body.metadadosIa && typeof body.metadadosIa === "object" ? body.metadadosIa : {}),
+      historicoRevisao: [...history, {
+        data: new Date().toISOString(),
+        usuario: session.nome,
+        situacao: action,
+        observacao: typeof body.observacao === "string" ? body.observacao.slice(0, 1000) : null,
+      }],
+    };
+    const [saved] = await db.update(licitacaoDocuments).set({
+      situacao: action,
+      metadadosIa: nextMetadata,
+      atualizadoEm: new Date(),
+    }).where(and(eq(licitacaoDocuments.id, existing.id), eq(licitacaoDocuments.companyId, companyId))).returning();
+    return NextResponse.json({ success: true, data: saved });
+  } catch (error) {
+    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : "Não foi possível revisar o documento." }, { status: 500 });
   }
 }
