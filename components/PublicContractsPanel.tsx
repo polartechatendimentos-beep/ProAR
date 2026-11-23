@@ -3,7 +3,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
-  BarChart3,
   Bell,
   Bot,
   CheckCircle2,
@@ -11,8 +10,6 @@ import {
   Clock3,
   ExternalLink,
   FileCheck,
-  Folder,
-  Gavel,
   Landmark,
   Link2,
   Loader2,
@@ -20,12 +17,11 @@ import {
   RefreshCw,
   Search,
   ShieldAlert,
-  ShieldCheck,
   Siren,
   X,
 } from "lucide-react";
 import type { CertameItem, CertameMovement } from "@/lib/public-contracts";
-import { normalizeProcurementStatus, procurementStatusLabel } from "@/lib/procurement/domain";
+import { procurementStatusLabel } from "@/lib/procurement/domain";
 
 type LicTab = "radar" | "preflight" | "checklist" | "documentos" | "capacidade" | "propostas" | "lances" | "prazos" | "resultado" | "fontes" | "historico";
 
@@ -63,7 +59,7 @@ type Preflight = { readyToSubmit: boolean; calculatedAt: string; summary: { pass
 type Source = { id: string; name: string; mode: string; status: string; officialUrl: string; docsUrl?: string | null; note: string };
 type SourceHealth = { status: string; lastAttemptAt?: string | null; lastSuccessAt?: string | null; durationMs?: number; pagesRead?: number; accepted?: number; rejected?: number; duplicates?: number; errorMessage?: string; docsUrl?: string };
 type ChecklistItem = { id: number; categoria: string; requisito: string; status: string; risco?: string | null; paginaClausula?: string | null; documentoRelacionado?: string | null };
-type DocumentItem = { id: number; tipo: string; empresa: string; validade?: string | null; arquivoNome?: string | null; arquivoUrl?: string | null; computedStatus?: string; expiresInDays?: number | null };
+type DocumentItem = { id: number; tipo: string; empresa: string; cnpj: string; validade?: string | null; arquivoNome?: string | null; arquivoUrl?: string | null; situacao?: string; metadadosIa?: Record<string, unknown> | null; criadoEm?: string | null; computedStatus?: string; expiresInDays?: number | null };
 type BidSimulation = { suggestedBid: number | null; evaluatedBid: number | null; effectiveFloor: number | null; authorizationRequired: boolean; canCopy: boolean; canSubmitExternally: false; message: string };
 
 export type PublicContractRecord = {
@@ -87,6 +83,26 @@ const TABS: { id: LicTab; label: string }[] = [
   { id: "fontes", label: "Saúde das fontes" },
   { id: "historico", label: "Histórico" },
 ];
+
+const TAB_GROUPS: { id: string; label: string; tabs: LicTab[] }[] = [
+  { id: "radar", label: "Radar", tabs: ["radar"] },
+  { id: "documentos", label: "Documentos e habilitação", tabs: ["documentos", "checklist", "preflight", "capacidade"] },
+  { id: "disputa", label: "Proposta e lances", tabs: ["propostas", "lances"] },
+  { id: "acompanhamento", label: "Prazos e resultado", tabs: ["prazos", "resultado", "historico"] },
+  { id: "fontes", label: "Fontes", tabs: ["fontes"] },
+];
+
+const DOCUMENT_TAB_LABELS: Partial<Record<LicTab, string>> = {
+  documentos: "Dossiê documental",
+  checklist: "Matriz do edital",
+  preflight: "Auditoria pré-envio",
+  capacidade: "Capacidade técnica",
+  propostas: "Proposta",
+  lances: "Central de lances",
+  prazos: "Prazos",
+  resultado: "Resultado e pós-disputa",
+  historico: "Histórico",
+};
 
 const emptyForm = {
   orgao: "",
@@ -148,6 +164,9 @@ export function PublicContractsPanel({ canEdit = true }: { canEdit?: boolean }) 
   const [detailLoading, setDetailLoading] = useState(false);
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [documentForm, setDocumentForm] = useState({ tipo: "Certidão", empresa: "", cnpj: "", validade: "", arquivoNome: "", arquivoUrl: "", documentoAnteriorId: "" });
+  const [checklistForm, setChecklistForm] = useState({ categoria: "Habilitação", requisito: "", paginaClausula: "", documentoRelacionado: "", risco: "medio" });
+  const [savingDossierItem, setSavingDossierItem] = useState(false);
   const [sources, setSources] = useState<Source[]>([]);
   const [sourceHealth, setSourceHealth] = useState<SourceHealth | null>(null);
   const [bestMarket, setBestMarket] = useState("");
@@ -290,9 +309,83 @@ export function PublicContractsPanel({ canEdit = true }: { canEdit?: boolean }) 
     } finally { setDetailLoading(false); }
   }, [selectedPersistedId]);
 
+  const saveDocumentVersion = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selectedPersistedId) return;
+    setSavingDossierItem(true);
+    setError("");
+    try {
+      const previous = documents.find(document => document.id === Number(documentForm.documentoAnteriorId));
+      const previousVersion = Number(previous?.metadadosIa?.versao || 1);
+      const response = await fetch("/api/licitacoes-documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...documentForm, documentoAnteriorId: undefined, licitacaoId: selectedPersistedId, validade: documentForm.validade || null, situacao: "pendente_revisao", metadadosIa: { versao: previous ? previousVersion + 1 : 1, documentoAnteriorId: previous?.id || null, versaoRegistradaEm: new Date().toISOString() } }),
+      });
+      const json = await response.json();
+      if (!response.ok || !json.success) throw new Error(json.error || "Não foi possível vincular o documento.");
+      setDocumentForm({ tipo: "Certidão", empresa: "", cnpj: "", validade: "", arquivoNome: "", arquivoUrl: "", documentoAnteriorId: "" });
+      setNotice("Documento vinculado ao dossiê desta licitação.");
+      await loadDocuments();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível vincular o documento.");
+    } finally { setSavingDossierItem(false); }
+  };
+
+  const reviewDocument = async (document: DocumentItem, situacao: "aprovado" | "revisar") => {
+    setSavingDossierItem(true);
+    setError("");
+    try {
+      const response = await fetch("/api/licitacoes-documents", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: document.id, situacao, observacao: situacao === "aprovado" ? "Documento conferido para este dossiê." : "Documento devolvido para revisão." }),
+      });
+      const json = await response.json();
+      if (!response.ok || !json.success) throw new Error(json.error || "Não foi possível registrar a revisão.");
+      setNotice(situacao === "aprovado" ? "Revisão aprovada e registrada." : "Documento marcado para revisão.");
+      await loadDocuments();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível registrar a revisão.");
+    } finally { setSavingDossierItem(false); }
+  };
+
+  const addChecklistRequirement = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selectedPersistedId) return;
+    setSavingDossierItem(true);
+    setError("");
+    try {
+      const response = await fetch("/api/licitacoes-checklist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...checklistForm, licitacaoId: selectedPersistedId, status: "pendente" }),
+      });
+      const json = await response.json();
+      if (!response.ok || !json.success) throw new Error(json.error || "Não foi possível incluir a exigência.");
+      setChecklistForm({ categoria: "Habilitação", requisito: "", paginaClausula: "", documentoRelacionado: "", risco: "medio" });
+      setNotice("Exigência adicionada à matriz do edital.");
+      await loadChecklist();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível incluir a exigência.");
+    } finally { setSavingDossierItem(false); }
+  };
+
+  const updateChecklistStatus = async (item: ChecklistItem, nextStatus: string) => {
+    try {
+      const response = await fetch("/api/licitacoes-checklist", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: item.id, status: nextStatus }) });
+      const json = await response.json();
+      if (!response.ok || !json.success) throw new Error(json.error || "Não foi possível atualizar a exigência.");
+      await loadChecklist();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível atualizar a exigência.");
+    }
+  };
+
   useEffect(() => {
     if (activeTab === "preflight" && selectedPersistedId && !preflight) void runPreflight();
     if (activeTab === "checklist" && selectedPersistedId && !checklist.length) void loadChecklist();
+    if (activeTab === "checklist" && selectedPersistedId && !documents.length) void loadDocuments();
     if (activeTab === "documentos" && selectedPersistedId && !documents.length) void loadDocuments();
   }, [activeTab, selectedPersistedId, preflight, checklist.length, documents.length, runPreflight, loadChecklist, loadDocuments]);
 
@@ -350,10 +443,9 @@ export function PublicContractsPanel({ canEdit = true }: { canEdit?: boolean }) 
     return {
       total: currentRows.length,
       next48h,
-      ready: 0,
-      blockers: preflight?.summary.blockers ?? "—",
     };
-  }, [currentRows, preflight]);
+  }, [currentRows]);
+  const activeGroup = TAB_GROUPS.find(group => group.tabs.includes(activeTab)) ?? TAB_GROUPS[0];
 
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-label="Workspace de licitações públicas">
@@ -365,7 +457,7 @@ export function PublicContractsPanel({ canEdit = true }: { canEdit?: boolean }) 
               <span className="rounded-full border border-emerald-300/40 bg-emerald-400/10 px-2 py-1 text-emerald-200">Fontes externas somente leitura</span>
             </div>
             <h2 className="flex items-center gap-2 text-2xl font-black"><Landmark className="h-7 w-7 text-indigo-300" /> Licitações públicas</h2>
-            <p className="mt-1 max-w-3xl text-sm text-slate-300">RADAR → EDITAL → CHECKLIST → PROPOSTA → AUDITORIA → LANCES → RESULTADO → CONTRATO/ARP → EMPENHO → OS → FINANCEIRO</p>
+            <p className="mt-1 max-w-3xl text-sm text-slate-300">Encontre oportunidades, prepare a habilitação e acompanhe cada disputa.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             {canEdit && <button type="button" onClick={() => setShowNewModal(true)} className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-bold text-slate-950 hover:bg-slate-100"><Plus className="h-4 w-4" /> Nova licitação</button>}
@@ -374,11 +466,17 @@ export function PublicContractsPanel({ canEdit = true }: { canEdit?: boolean }) 
           </div>
         </div>
 
-        <form onSubmit={event => { event.preventDefault(); void loadPersisted(); }} className="mt-5 grid gap-2 sm:grid-cols-[minmax(240px,1fr)_100px_150px_auto]">
-          <label className="relative"><span className="sr-only">Buscar licitações</span><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Objeto, órgão, processo, pregão ou termo HVAC" className="w-full rounded-lg border border-white/15 bg-white px-9 py-2 text-sm text-slate-900 outline-none ring-indigo-400 focus:ring-2" /></label>
-          <label><span className="sr-only">UF</span><select value={uf} onChange={event => setUf(event.target.value)} className="w-full rounded-lg border border-white/15 bg-white px-3 py-2 text-sm text-slate-900"><option value="">Todas UF</option><option value="SP">SP</option><option value="MG">MG</option><option value="PR">PR</option><option value="RJ">RJ</option><option value="MS">MS</option></select></label>
-          <label><span className="sr-only">Status</span><select value={status} onChange={event => setStatus(event.target.value)} className="w-full rounded-lg border border-white/15 bg-white px-3 py-2 text-sm text-slate-900"><option value="todas">Todos os status</option><option value="rascunho">Rascunho</option><option value="oportunidade">Oportunidade</option><option value="em_andamento">Em andamento</option><option value="em_disputa">Em disputa</option><option value="vencedora">Vencedora</option><option value="cancelada">Cancelada</option><option value="abertas">Abertas para participação</option><option value="encerradas">Encerradas / canceladas</option></select></label>
-          <button type="submit" className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-bold hover:bg-slate-600">Buscar no ProAR</button>
+        <form onSubmit={event => { event.preventDefault(); void loadPersisted(); }} className="mt-5 flex flex-col gap-2 sm:flex-row">
+          <label className="relative min-w-0 flex-1"><span className="sr-only">Buscar licitações</span><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar por objeto, órgão, processo ou pregão" className="w-full rounded-lg border border-white/15 bg-white px-9 py-2 text-sm text-slate-900 outline-none ring-indigo-400 focus:ring-2" /></label>
+          <button type="submit" className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-bold hover:bg-slate-600">Buscar</button>
+          <details className="relative">
+            <summary className="cursor-pointer list-none rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-center text-sm font-bold hover:bg-white/20">Filtros</summary>
+            <div className="absolute right-0 z-20 mt-2 grid min-w-64 gap-3 rounded-xl border border-slate-200 bg-white p-4 text-slate-900 shadow-xl">
+              <label className="grid gap-1 text-xs font-bold">Estado<select value={uf} onChange={event => setUf(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="">Todas as UFs</option><option value="SP">SP</option><option value="MG">MG</option><option value="PR">PR</option><option value="RJ">RJ</option><option value="MS">MS</option></select></label>
+              <label className="grid gap-1 text-xs font-bold">Situação<select value={status} onChange={event => setStatus(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="todas">Todas</option><option value="rascunho">Rascunho</option><option value="oportunidade">Oportunidade</option><option value="em_andamento">Em andamento</option><option value="em_disputa">Em disputa</option><option value="vencedora">Vencedora</option><option value="cancelada">Cancelada</option><option value="abertas">Abertas</option><option value="encerradas">Encerradas / canceladas</option></select></label>
+              <button type="button" onClick={() => void loadPersisted()} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-bold text-white">Aplicar filtros</button>
+            </div>
+          </details>
         </form>
       </header>
 
@@ -386,17 +484,19 @@ export function PublicContractsPanel({ canEdit = true }: { canEdit?: boolean }) 
         {error && <div role="alert" className="mb-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"><Siren className="mt-0.5 h-4 w-4 shrink-0" /> {error}</div>}
         {notice && <div className="mb-3 flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900"><Bell className="mt-0.5 h-4 w-4 shrink-0" /> {notice}</div>}
         {preview && <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"><span><strong>Prévia PNCP:</strong> estes resultados não foram persistidos e não alteram dados reais.</span><button type="button" onClick={() => { setPreview(null); setSelected(null); }} className="font-bold underline">Voltar aos registros do ProAR</button></div>}
-        <nav role="tablist" aria-label="Etapas de licitações" className="flex gap-2 overflow-x-auto pb-1">
-          {TABS.map(tab => <button key={tab.id} type="button" role="tab" aria-selected={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-bold ${activeTab === tab.id ? "bg-indigo-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"}`}>{tab.label}</button>)}
+        <nav role="tablist" aria-label="Áreas de licitações" className="flex gap-2 overflow-x-auto pb-1">
+          {TAB_GROUPS.map(group => <button key={group.id} type="button" role="tab" aria-selected={activeGroup.id === group.id} onClick={() => setActiveTab(group.tabs[0])} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-bold ${activeGroup.id === group.id ? "bg-indigo-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"}`}>{group.label}</button>)}
         </nav>
+        {activeGroup.tabs.length > 1 && <div className="mt-2 flex flex-wrap gap-2" aria-label={`Opções de ${activeGroup.label}`}>
+          {activeGroup.tabs.map(tabId => <button key={tabId} type="button" onClick={() => setActiveTab(tabId)} className={`rounded-full px-3 py-1.5 text-[11px] font-bold ${activeTab === tabId ? "bg-indigo-100 text-indigo-800 ring-1 ring-indigo-200" : "text-slate-600 hover:bg-white"}`}>{DOCUMENT_TAB_LABELS[tabId] || TABS.find(tab => tab.id === tabId)?.label}</button>)}
+        </div>}
       </div>
 
       <div className="space-y-5 p-5">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Metric title={preview ? "Oportunidades na prévia" : "Registros no ProAR"} value={String(metrics.total)} icon={<Landmark className="h-4 w-4" />} />
-          <Metric title="Abertura em até 48h" value={String(metrics.next48h)} icon={<Clock3 className="h-4 w-4" />} />
-          <Metric title="Prontas para envio" value={String(metrics.ready)} icon={<ShieldCheck className="h-4 w-4" />} help="Calculado somente pelo backend" />
-          <Metric title="Bloqueadores do processo" value={String(metrics.blockers)} icon={<ShieldAlert className="h-4 w-4" />} help="Selecione e audite um processo" />
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+          <span className="font-bold text-slate-800"><Landmark className="mr-2 inline h-4 w-4 text-indigo-600" />{preview ? "Oportunidades nesta consulta" : "Licitações encontradas"}: {metrics.total}</span>
+          <span className="text-slate-600"><Clock3 className="mr-2 inline h-4 w-4 text-amber-600" />Sessões nas próximas 48h: <strong>{metrics.next48h}</strong></span>
+          {selected && <span className="truncate text-slate-500">Em análise: <strong className="text-slate-700">{selected.numeroPregao || selected.titulo}</strong></span>}
         </div>
 
         {activeTab === "radar" && (
@@ -445,9 +545,56 @@ export function PublicContractsPanel({ canEdit = true }: { canEdit?: boolean }) 
           </div>
         )}
 
-        {activeTab === "checklist" && selected && (detailLoading && !checklist.length ? <LoadingBlock /> : checklist.length ? <div className="overflow-hidden rounded-xl border border-slate-200"><table className="w-full min-w-[720px] text-left text-xs"><thead className="bg-slate-50 text-slate-500"><tr><th className="px-4 py-3">Categoria</th><th className="px-4 py-3">Exigência</th><th className="px-4 py-3">Página/seção</th><th className="px-4 py-3">Risco</th><th className="px-4 py-3">Resultado</th></tr></thead><tbody className="divide-y divide-slate-100">{checklist.map(item => <tr key={item.id}><td className="px-4 py-3 font-bold">{item.categoria}</td><td className="px-4 py-3">{item.requisito}</td><td className="px-4 py-3">{item.paginaClausula || "Não confirmado"}</td><td className="px-4 py-3">{item.risco || "Não confirmado"}</td><td className="px-4 py-3"><StatusPill value={item.status} /></td></tr>)}</tbody></table></div> : <HonestLimit title="Checklist não estruturado" text="Sem itens revisados. A auditoria pré-envio manterá este processo bloqueado." />)}
+        {activeTab === "checklist" && selected && (
+          <div className="space-y-4">
+            {!selectedPersistedId ? <HonestLimit title="Matriz disponível após salvar o processo" text="Salve a oportunidade no ProAR para vincular exigências e evidências com segurança." /> : <>
+              <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div><h3 className="font-black text-slate-900">Matriz de atendimento do edital</h3><p className="text-xs text-slate-600">Relacione cada exigência a uma evidência e acompanhe a revisão.</p></div>
+                <div className="flex gap-3 text-xs font-bold"><span className="text-emerald-700">{checklist.filter(item => item.status === "atendido").length} atendidas</span><span className="text-amber-700">{checklist.filter(item => item.status === "pendente" || item.status === "revisar").length} pendentes</span><span className="text-red-700">{checklist.filter(item => item.status === "nao_atendido" || item.status === "critico").length} riscos</span></div>
+              </div>
+              {canEdit && <form onSubmit={addChecklistRequirement} className="grid gap-2 rounded-xl border border-slate-200 p-4 md:grid-cols-6">
+                <label className="grid gap-1 text-[11px] font-bold text-slate-600 md:col-span-1">Grupo<select value={checklistForm.categoria} onChange={event => setChecklistForm(state => ({ ...state, categoria: event.target.value }))} className="rounded-lg border border-slate-300 px-2 py-2 text-sm"><option>Habilitação</option><option>Fiscal</option><option>Técnica</option><option>Econômico-financeira</option><option>Proposta</option><option>Visita técnica</option><option>Prazo</option></select></label>
+                <label className="grid gap-1 text-[11px] font-bold text-slate-600 md:col-span-2">Exigência do edital<input required value={checklistForm.requisito} onChange={event => setChecklistForm(state => ({ ...state, requisito: event.target.value }))} placeholder="Descreva o requisito" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" /></label>
+                <label className="grid gap-1 text-[11px] font-bold text-slate-600">Página / cláusula<input value={checklistForm.paginaClausula} onChange={event => setChecklistForm(state => ({ ...state, paginaClausula: event.target.value }))} placeholder="Ex.: 7.2" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" /></label>
+                <label className="grid gap-1 text-[11px] font-bold text-slate-600">Evidência relacionada<select value={checklistForm.documentoRelacionado} onChange={event => setChecklistForm(state => ({ ...state, documentoRelacionado: event.target.value }))} className="rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="">Selecionar documento</option>{documents.map(document => <option key={document.id} value={String(document.id)}>{document.tipo} · {document.empresa}</option>)}</select></label>
+                <button disabled={savingDossierItem} className="self-end rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"><Plus className="mr-1 inline h-4 w-4" />Adicionar exigência</button>
+              </form>}
+              {detailLoading && !checklist.length ? <LoadingBlock /> : checklist.length ? <div className="overflow-x-auto rounded-xl border border-slate-200"><table className="w-full min-w-[760px] text-left text-xs"><thead className="bg-slate-50 text-slate-500"><tr><th className="px-4 py-3">Exigência / referência</th><th className="px-4 py-3">Evidência</th><th className="px-4 py-3">Risco</th><th className="px-4 py-3">Atendimento</th></tr></thead><tbody className="divide-y divide-slate-100">{checklist.map(item => { const linkedDocument = documents.find(document => String(document.id) === item.documentoRelacionado); return <tr key={item.id}><td className="px-4 py-3"><strong className="block text-slate-800">{item.requisito}</strong><span className="text-slate-500">{item.categoria} · {item.paginaClausula || "Cláusula não indicada"}</span></td><td className="px-4 py-3">{linkedDocument ? `${linkedDocument.tipo} · ${linkedDocument.empresa}` : item.documentoRelacionado || "Vincular evidência"}</td><td className="px-4 py-3"><StatusPill value={item.risco || "médio"} /></td><td className="px-4 py-3">{canEdit ? <select aria-label={`Atendimento: ${item.requisito}`} value={item.status} onChange={event => void updateChecklistStatus(item, event.target.value)} className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 font-bold"><option value="pendente">Pendente</option><option value="atendido">Atendido</option><option value="revisar">Revisar</option><option value="nao_atendido">Não atendido</option><option value="critico">Crítico</option></select> : <StatusPill value={item.status} />}</td></tr>; })}</tbody></table></div> : <HonestLimit title="Comece pela matriz do edital" text="Adicione as exigências mais importantes e associe cada uma à evidência correspondente." />}
+            </>}
+          </div>
+        )}
 
-        {activeTab === "documentos" && selected && (detailLoading && !documents.length ? <LoadingBlock /> : documents.length ? <div className="grid gap-3 md:grid-cols-2">{documents.map(document => <div key={document.id} className="rounded-xl border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><div><strong className="text-sm text-slate-900">{document.tipo}</strong><p className="text-xs text-slate-500">{document.empresa}</p></div><StatusPill value={document.computedStatus || "não confirmado"} /></div><p className="mt-3 text-xs text-slate-600">Validade: {formatDate(document.validade)}{typeof document.expiresInDays === "number" ? ` • ${document.expiresInDays} dia(s)` : ""}</p>{document.arquivoUrl ? <a href={document.arquivoUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-indigo-700">Abrir evidência <ExternalLink className="h-3 w-3" /></a> : <p className="mt-2 text-xs font-bold text-red-700">Sem evidência de arquivo</p>}</div>)}</div> : <HonestLimit title="Cofre sem evidências vinculadas" text="Documentos ausentes ou sem validade impedem a liberação para envio." />)}
+        {activeTab === "documentos" && selected && (
+          <div className="space-y-4">
+            {!selectedPersistedId ? <HonestLimit title="Dossiê disponível após salvar o processo" text="Salve a oportunidade no ProAR para criar o dossiê documental vinculado." /> : <>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4"><div><h3 className="font-black text-slate-900">Dossiê desta licitação</h3><p className="text-xs text-slate-600">Documentos, validade, versões e revisão ficam vinculados ao processo.</p></div><div className="flex flex-wrap gap-2 text-xs font-bold"><span className="rounded-full bg-amber-100 px-3 py-1 text-amber-900">{documents.filter(document => document.situacao !== "aprovado").length} para revisar</span><span className="rounded-full bg-slate-200 px-3 py-1 text-slate-700">{documents.length} evidência(s)</span></div></div>
+              {canEdit && <details className="rounded-xl border border-slate-200 p-4">
+                <summary className="cursor-pointer text-sm font-bold text-indigo-700">Vincular documento ou nova versão</summary>
+                <form onSubmit={saveDocumentVersion} className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <Field label="Tipo de documento"><input required value={documentForm.tipo} onChange={event => setDocumentForm(state => ({ ...state, tipo: event.target.value }))} placeholder="Ex.: CND Federal" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" /></Field>
+                  <Field label="Empresa"><input required value={documentForm.empresa} onChange={event => setDocumentForm(state => ({ ...state, empresa: event.target.value }))} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" /></Field>
+                  <Field label="CNPJ"><input required value={documentForm.cnpj} onChange={event => setDocumentForm(state => ({ ...state, cnpj: event.target.value }))} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" /></Field>
+                  <Field label="Validade"><input type="date" value={documentForm.validade} onChange={event => setDocumentForm(state => ({ ...state, validade: event.target.value }))} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" /></Field>
+                  <Field label="Nome do arquivo"><input value={documentForm.arquivoNome} onChange={event => setDocumentForm(state => ({ ...state, arquivoNome: event.target.value }))} placeholder="arquivo.pdf" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" /></Field>
+                  <Field label="Link da evidência"><input type="url" value={documentForm.arquivoUrl} onChange={event => setDocumentForm(state => ({ ...state, arquivoUrl: event.target.value }))} placeholder="https://..." className="rounded-lg border border-slate-300 px-3 py-2 text-sm" /></Field>
+                  <Field label="Substitui versão anterior" className="sm:col-span-2 lg:col-span-2"><select value={documentForm.documentoAnteriorId} onChange={event => setDocumentForm(state => ({ ...state, documentoAnteriorId: event.target.value }))} className="rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="">Novo documento</option>{documents.map(document => <option key={document.id} value={document.id}>{document.tipo} · {document.empresa} · v{Number(document.metadadosIa?.versao || 1)}</option>)}</select></Field>
+                  <button disabled={savingDossierItem} className="self-end rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-60">{savingDossierItem ? "Salvando..." : "Vincular ao dossiê"}</button>
+                  <p className="sm:col-span-2 lg:col-span-3 text-[11px] text-slate-500">O arquivo precisa estar em um endereço acessível; o ProAR registra o vínculo, a versão e a revisão.</p>
+                </form>
+              </details>}
+              {detailLoading && !documents.length ? <LoadingBlock /> : documents.length ? <div className="grid gap-3 md:grid-cols-2">{documents.map(document => {
+                const expiresAt = document.validade ? new Date(document.validade) : null;
+                const days = expiresAt && !Number.isNaN(expiresAt.getTime()) ? Math.ceil((expiresAt.getTime() - Date.now()) / 86400000) : null;
+                const validity = days === null ? "Validade não informada" : days < 0 ? "Vencido" : days <= 30 ? `Vence em ${days} dia(s)` : "Vigente";
+                const reviewHistory = Array.isArray(document.metadadosIa?.historicoRevisao) ? document.metadadosIa?.historicoRevisao as { data?: string; usuario?: string; situacao?: string }[] : [];
+                const version = Number(document.metadadosIa?.versao || 1);
+                return <article key={document.id} className="rounded-xl border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><div><strong className="text-sm text-slate-900">{document.tipo} <span className="text-xs font-normal text-slate-500">v{version}</span></strong><p className="text-xs text-slate-500">{document.empresa} · {document.cnpj}</p></div><StatusPill value={document.situacao || "pendente_revisao"} /></div><div className="mt-3 flex flex-wrap gap-2 text-xs"><span className={`rounded-full px-2 py-1 font-bold ${days !== null && days < 0 ? "bg-red-100 text-red-800" : days !== null && days <= 30 ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>{validity}</span><span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">Validade: {formatDate(document.validade)}</span></div>{document.arquivoUrl ? <a href={document.arquivoUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-indigo-700">{document.arquivoNome || "Abrir evidência"} <ExternalLink className="h-3 w-3" /></a> : <p className="mt-3 text-xs font-bold text-amber-800">Sem evidência vinculada</p>}{document.metadadosIa?.documentoAnteriorId && <p className="mt-1 text-[11px] text-slate-500">Nova versão do documento #{String(document.metadadosIa.documentoAnteriorId)}</p>}{reviewHistory.length > 0 && <p className="mt-2 text-[11px] text-slate-500">Última revisão: {reviewHistory[reviewHistory.length - 1]?.usuario || "usuário"} · {reviewHistory[reviewHistory.length - 1]?.data ? formatDate(reviewHistory[reviewHistory.length - 1]?.data) : "data não informada"}</p>}{canEdit && <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3"><button type="button" disabled={savingDossierItem || document.situacao === "aprovado"} onClick={() => void reviewDocument(document, "aprovado")} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"><CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />Aprovar</button><button type="button" disabled={savingDossierItem} onClick={() => void reviewDocument(document, "revisar")} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50">Solicitar revisão</button></div>}</article>;
+              })}</div> : <HonestLimit title="Dossiê ainda vazio" text="Vincule as evidências exigidas e registre validade e revisão antes da auditoria pré-envio." />}
+              {documents.length > 1 && new Set(documents.map(document => document.cnpj.replace(/\D/g, ""))).size > 1 && <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"><AlertTriangle className="mr-2 inline h-4 w-4" />Há CNPJs diferentes entre as evidências deste dossiê. Confira se pertencem à mesma empresa licitante.</div>}
+              {documents.some(document => document.validade && new Date(document.validade).getTime() < Date.now()) && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"><AlertTriangle className="mr-2 inline h-4 w-4" />Há documento vencido. Revise a validade antes de preparar o envio.</div>}
+            </>}
+          </div>
+        )}
 
         {activeTab === "capacidade" && selected && <HonestLimit title="Capacidade técnica — bloqueador obrigatório" text="O schema atual ainda não estrutura atestados, quantitativos e matriz Exigência × Comprovado. O sistema não presumirá atendimento." />}
         {activeTab === "propostas" && selected && <HonestLimit title="Proposta — bloqueador obrigatório" text="Itens, lotes, custos, tributos, margens e totais ainda não possuem modelo estruturado. Nenhuma proposta incompleta será marcada como pronta." />}
@@ -459,7 +606,7 @@ export function PublicContractsPanel({ canEdit = true }: { canEdit?: boolean }) 
           </div>
         )}
 
-        {activeTab === "prazos" && selected && <div className="grid gap-3 sm:grid-cols-2"><DataCard icon={<Clock3 className="h-5 w-5" />} title="Abertura / sessão" value={formatDate(selected.dataAbertura)} /><DataCard icon={<Bell className="h-5 w-5" />} title="Fim para propostas" value={formatDate(selected.dataFimProposta)} /></div>}
+        {activeTab === "prazos" && selected && <div className="space-y-3"><p className="text-xs text-slate-500">Prazos importados ou cadastrados no processo. Confirme retificações no portal oficial.</p><div className="grid gap-3 sm:grid-cols-2"><DataCard icon={<Clock3 className="h-5 w-5" />} title="Abertura / sessão" value={formatDate(selected.dataAbertura)} deadline={selected.dataAbertura} /><DataCard icon={<Bell className="h-5 w-5" />} title="Limite para propostas" value={formatDate(selected.dataFimProposta)} deadline={selected.dataFimProposta} /></div></div>}
         {activeTab === "resultado" && selected && <div className="rounded-xl border border-slate-200 p-4"><h3 className="font-black text-slate-900">Fluxo pós-resultado</h3><div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-700">{["Licitação", "Contrato / ARP", "Saldo do certame", "Empenho", "OS", "Financeiro"].map((step, index) => <React.Fragment key={step}><span className={`rounded-full px-3 py-2 ${index === 0 ? "bg-indigo-600 text-white" : "bg-slate-100"}`}>{step}</span>{index < 5 && <span>→</span>}</React.Fragment>)}</div><p className="mt-3 text-xs text-slate-500">Saldo do certame é administrativo/contratual e permanece separado do estoque físico.</p></div>}
 
         {activeTab === "fontes" && <div className="grid gap-3 lg:grid-cols-2">{sources.map(source => <div key={source.id} className="rounded-xl border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-black text-slate-900">{source.name}</h3><p className="mt-1 text-xs text-slate-500">{source.note}</p></div><StatusPill value={source.status} /></div><div className="mt-3 flex flex-wrap gap-3 text-xs font-bold"><a href={source.officialUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-indigo-700"><Link2 className="h-3 w-3" /> Site oficial</a>{source.docsUrl && <a href={source.docsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-indigo-700"><ExternalLink className="h-3 w-3" /> Documentação</a>}</div></div>)}</div>}
@@ -521,4 +668,10 @@ function LoadingBlock() { return <div className="rounded-xl border border-slate-
 function StatusPill({ value }: { value: string }) { const normalized = value.toLowerCase(); const good = ["pass", "atendido", "vigente", "active", "healthy"].some(part => normalized.includes(part)); const bad = ["block", "critico", "vencido", "indisponivel", "authorization"].some(part => normalized.includes(part)); return <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${good ? "bg-emerald-100 text-emerald-800" : bad ? "bg-red-100 text-red-800" : "bg-slate-100 text-slate-700"}`}>{value.replaceAll("_", " ")}</span>; }
 function Field({ label, className = "", children }: { label: string; className?: string; children: React.ReactNode }) { return <label className={`grid gap-1 font-bold text-slate-700 ${className}`}><span>{label}</span>{children}</label>; }
 function DataPoint({ label, value }: { label: string; value: string }) { return <div><div className="text-slate-500">{label}</div><div className="mt-1 font-black text-slate-900">{value}</div></div>; }
-function DataCard({ icon, title, value }: { icon: React.ReactNode; title: string; value: string }) { return <div className="rounded-xl border border-slate-200 p-4"><div className="flex items-center gap-2 text-slate-500">{icon}<span className="text-xs font-bold">{title}</span></div><p className="mt-2 font-black text-slate-900">{value}</p></div>; }
+function DataCard({ icon, title, value, deadline }: { icon: React.ReactNode; title: string; value: string; deadline?: string | null }) {
+  const timestamp = deadline ? new Date(deadline).getTime() : NaN;
+  const days = Number.isFinite(timestamp) ? Math.ceil((timestamp - Date.now()) / 86400000) : null;
+  const urgency = days === null ? "Data não informada" : days < 0 ? "Prazo encerrado" : days === 0 ? "Hoje" : days === 1 ? "Amanhã" : `Em ${days} dias`;
+  const tone = days !== null && days < 0 ? "text-slate-500" : days !== null && days <= 2 ? "text-red-700" : days !== null && days <= 7 ? "text-amber-700" : "text-emerald-700";
+  return <div className="rounded-xl border border-slate-200 p-4"><div className="flex items-center gap-2 text-slate-500">{icon}<span className="text-xs font-bold">{title}</span></div><p className="mt-2 font-black text-slate-900">{value}</p><p className={`mt-1 text-xs font-bold ${tone}`}>{urgency}</p></div>;
+}
