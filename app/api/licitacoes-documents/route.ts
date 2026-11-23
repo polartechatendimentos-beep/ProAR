@@ -5,6 +5,8 @@ import { licitacaoDocuments } from "@/db/schema";
 import { readSession } from "@/lib/proar-auth";
 import { assertCompanyAccess, getEffectiveCompanyId } from "@/lib/company-access";
 
+const DOCUMENT_APPROVER_ROLES = new Set(["Administrador", "Gerência", "superadmin", "manager"]);
+
 export async function GET(request: Request) {
   try {
     const session = await readSession(request);
@@ -73,6 +75,9 @@ export async function PATCH(request: Request) {
     const action = String(body.situacao || existing.situacao);
     if (!["aprovado", "revisar", "pendente_revisao"].includes(action)) {
       return NextResponse.json({ success: false, error: "Situação de revisão inválida." }, { status: 400 });
+    }
+    if (action === "aprovado" && !DOCUMENT_APPROVER_ROLES.has(session.role)) {
+      return NextResponse.json({ success: false, error: "Apenas responsáveis autorizados podem aprovar documentos." }, { status: 403 });
     }
     const nextMetadata = {
       ...oldMetadata,

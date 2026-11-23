@@ -49,7 +49,7 @@ export async function POST(request: Request) {
         : { code: "DOCUMENT_EVIDENCE", status: "BLOCKER", origin: "Dossiê documental", message: `${missingEvidence.length} documento(s) sem link de evidência.`, correctiveAction: "Vincule o arquivo correspondente a cada documento." });
 
       const now = Date.now();
-      const invalid = documents.filter(document => !document.validade || new Date(document.validade).getTime() < now);
+      const invalid = documents.filter(document => !document.validade || document.validade.getTime() < now);
       checks.push(invalid.length === 0
         ? { code: "DOCUMENT_VALIDITY", status: "PASS", origin: "Validade cadastrada", message: "As validades informadas estão dentro do prazo.", correctiveAction: "Confira se as datas correspondem aos documentos originais." }
         : { code: "DOCUMENT_VALIDITY", status: "BLOCKER", origin: "Validade cadastrada", message: `${invalid.length} documento(s) vencido(s) ou sem data de validade.`, correctiveAction: "Renove os documentos vencidos e informe a validade dos demais." });
@@ -65,12 +65,28 @@ export async function POST(request: Request) {
         : { code: "CNPJ_CONSISTENCY", status: "PASS", origin: "Dados dos documentos", message: "Os CNPJs cadastrados não apresentam divergência entre si.", correctiveAction: "Nenhuma ação necessária." });
     }
 
-    const proposalDeadline = licitacao.dataFimProposta ? new Date(licitacao.dataFimProposta).getTime() : null;
+    const dossierApproval = licitacao.aprovacaoDossie && typeof licitacao.aprovacaoDossie === "object"
+      ? licitacao.aprovacaoDossie as { status?: string }
+      : {};
+    checks.push(dossierApproval.status === "aprovado"
+      ? { code: "DOSSIER_APPROVAL", status: "PASS", origin: "Aprovação gerencial", message: "O dossiê foi aprovado por um responsável autorizado.", correctiveAction: "Nenhuma ação necessária." }
+      : { code: "DOSSIER_APPROVAL", status: "BLOCKER", origin: "Aprovação gerencial", message: "O dossiê ainda não tem aprovação final registrada.", correctiveAction: "Conclua a matriz e a revisão dos documentos, depois solicite a aprovação gerencial." });
+
+    const proposalDeadline = licitacao.dataFimProposta ? licitacao.dataFimProposta.getTime() : null;
     checks.push(proposalDeadline === null
       ? { code: "PROPOSAL_DEADLINE", status: "WARNING", origin: "Cadastro da licitação", message: "O encerramento do prazo para propostas não foi informado.", correctiveAction: "Confira o edital e cadastre a data e hora limite." }
       : proposalDeadline < Date.now()
         ? { code: "PROPOSAL_DEADLINE", status: "BLOCKER", origin: "Cadastro da licitação", message: "O prazo final de propostas já passou.", correctiveAction: "Confirme no portal oficial se houve prorrogação ou nova sessão." }
         : { code: "PROPOSAL_DEADLINE", status: "PASS", origin: "Cadastro da licitação", message: "O prazo final de propostas ainda não passou.", correctiveAction: "Acompanhe eventuais retificações no portal oficial." });
+
+    const tenderDeadlines = Array.isArray(licitacao.prazosEdital) ? licitacao.prazosEdital as { tipo?: string; data?: string }[] : [];
+    const upcomingDeadlines = tenderDeadlines.filter(item => {
+      const date = item.data ? new Date(item.data).getTime() : NaN;
+      return Number.isFinite(date) && date >= Date.now() && date <= Date.now() + 7 * 86400000;
+    });
+    checks.push(upcomingDeadlines.length
+      ? { code: "UPCOMING_EDITAL_DEADLINES", status: "WARNING", origin: "Agenda do edital", message: `${upcomingDeadlines.length} prazo(s) adicional(is) nos próximos sete dias: ${upcomingDeadlines.map(item => item.tipo || "Outro").join(", ")}.`, correctiveAction: "Confirme os responsáveis e cumpra os prazos no portal oficial." }
+      : { code: "UPCOMING_EDITAL_DEADLINES", status: "PASS", origin: "Agenda do edital", message: "Nenhum prazo adicional nos próximos sete dias.", correctiveAction: "Continue acompanhando o edital e eventuais retificações." });
 
     checks.push({ code: "PROPOSAL_STRUCTURE", status: "BLOCKER", origin: "Módulo de propostas", message: "A proposta comercial ainda não possui itens, custos e totais estruturados neste processo.", correctiveAction: "Conclua a conferência comercial fora deste módulo e só considere o envio após revisão da proposta." });
 
