@@ -1,3 +1,38 @@
+-- Estrutura base da licitação. Algumas instalações anteriores guardavam apenas o estado JSON.
+-- Criar esta tabela antes do ALTER seguinte torna a migração aplicável a bancos novos.
+CREATE TABLE IF NOT EXISTS licitacoes (
+  id serial PRIMARY KEY,
+  company_id integer NOT NULL DEFAULT 1,
+  numero_controle_pncp text,
+  numero_pregao text,
+  numero_processo text,
+  titulo text NOT NULL,
+  descricao text,
+  orgao text NOT NULL,
+  plataforma text,
+  uf text DEFAULT 'SP',
+  modalidade text DEFAULT 'Pregão Eletrônico',
+  tipo_julgamento text DEFAULT 'menor_preco_global',
+  modo_disputa text DEFAULT 'aberto',
+  valor_estimado text,
+  data_abertura timestamp,
+  hora_sessao text,
+  data_fim_proposta timestamp,
+  responsavel_interno text,
+  piso_tecnico text,
+  piso_absoluto text,
+  margem_minima text,
+  habilitacao_percentual integer NOT NULL DEFAULT 0,
+  checklist_resumo jsonb DEFAULT '{}'::jsonb,
+  ai_analise jsonb DEFAULT '{}'::jsonb,
+  link_edital text,
+  categoria text,
+  status text NOT NULL DEFAULT 'em_andamento',
+  notificado_whatsapp boolean NOT NULL DEFAULT false,
+  criado_em timestamp NOT NULL DEFAULT now(),
+  atualizado_em timestamp NOT NULL DEFAULT now()
+);
+
 -- ProAR Licitações IA + Bid Agent — migração aditiva e sem perda de dados
 -- Executar no banco Vercel Postgres/Neon vinculado ao projeto antes de habilitar os fluxos reais.
 
