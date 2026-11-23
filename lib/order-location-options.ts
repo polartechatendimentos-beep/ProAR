@@ -12,7 +12,7 @@ export function orderSectorLocationOptions(customer:HierarchyCustomer,records:Hi
  const nodes=customerHierarchy(customer,records,customers).filter(node=>!node.issue);
  const sectors=nodes.filter(node=>node.kind==="sector");
  const sector=sectors.find(node=>node.id===sectorId);
- const units=nodes.filter(node=>node.kind==="unit"&&Boolean(sector&&(node.path.includes(sector.id)||sector.path.includes(node.id))));
+ const units=nodes.filter(node=>node.kind==="unit"&&(sector?(node.path.includes(sector.id)||sector.path.includes(node.id)):!node.path.some(id=>nodes.find(parent=>parent.id===id)?.kind==="sector")));
  const rooms=nodes.filter(node=>node.kind==="room").filter(node=>{const selection=hierarchySelection(customer,nodes,node.id);return selection.sectorId===sectorId&&(selection.unitId||"")===unitId;});
  return {nodes,sectors,units,rooms};
 }
