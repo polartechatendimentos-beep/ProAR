@@ -5,7 +5,7 @@ export function CustomerAddressFields({value,onChange}:{value:CustomerAddress;on
  const [cepLookup,setCepLookup]=useState('');
  const change=(field:keyof CustomerAddress,text:string)=>onChange(updateCustomerAddress(value,{[field]:text}));
  const lookupCep=async()=>{
-  const cep=String(value.zipCode||'').replace(/\\D/g,'');
+  const cep=String(value.zipCode||'').replace(/\D/g,'');
   if(cep.length!==8)return;
   setCepLookup('Consultando CEP…');
   try{
@@ -17,7 +17,7 @@ export function CustomerAddressFields({value,onChange}:{value:CustomerAddress;on
   }catch(error){setCepLookup(error instanceof Error?error.message:'Não foi possível consultar o CEP.');}
  };
  return <>
-  <label>CEP<input autoComplete="postal-code" inputMode="numeric" maxLength={9} value={value.zipCode||''} onChange={e=>{setCepLookup('');change('zipCode',e.target.value.replace(/\\D/g,'').slice(0,8).replace(/^(\\d{5})(\\d)/,'$1-$2'));}} onBlur={()=>void lookupCep()} placeholder="00000-000"/><small role="status">{cepLookup||'Preencha o CEP para localizar rua, bairro e cidade.'}</small></label>
+  <label>CEP<input autoComplete="postal-code" inputMode="numeric" maxLength={9} value={value.zipCode||''} onChange={e=>{setCepLookup('');change('zipCode',e.target.value.replace(/\D/g,'').slice(0,8).replace(/^(\d{5})(\d)/,'$1-$2'));}} onBlur={()=>void lookupCep()} placeholder="00000-000"/><small role="status">{cepLookup||'Preencha o CEP para localizar rua, bairro e cidade.'}</small></label>
   <label>Rua / Logradouro<input autoComplete="address-line1" value={value.street||''} onChange={e=>change('street',e.target.value)} placeholder="Rua, avenida ou estrada"/></label>
   <label>Número<input value={value.addressNumber||''} onChange={e=>change('addressNumber',e.target.value)} placeholder="Número ou S/N"/></label>
   <label>Complemento<input autoComplete="address-line2" value={value.complement||''} onChange={e=>change('complement',e.target.value)} placeholder="Apartamento, bloco, lote…"/></label>
