@@ -53,6 +53,7 @@ export async function POST(request:NextRequest){
   const actor=access.session.username,now=new Date().toISOString();
   let next:Stored;
   if(body.action==="submit"){
+   if(!old)return json({error:"Salve primeiro as exigências deste edital."},404);
    if(!hasPermission(access.session,"licitacoes.editar"))return json({error:"Sem permissão para enviar o dossiê."},403);
    if(!old.requirements.length)return json({error:"Inclua ao menos uma exigência antes de enviar o dossiê."},422);
    for(const req of old.requirements){
@@ -62,6 +63,7 @@ export async function POST(request:NextRequest){
    }
    next={...old,_revision:revision+1,updatedAt:now,updatedBy:actor,approval:{status:"pending",submittedAt:now,submittedBy:actor}};
   }else if(body.action==="decision"){
+   if(!old)return json({error:"Salve primeiro as exigências deste edital."},404);
    if(!hasPermission(access.session,"aprovacoes.aprovar"))return json({error:"A aprovação gerencial exige a permissão Aprovações → Aprovar."},403);
    if(!old.approval||old.approval.status!=="pending")return json({error:"Este dossiê não está aguardando aprovação gerencial."},409);
    if(old.approval.submittedBy===actor)return json({error:"A pessoa que enviou o dossiê não pode aprová-lo."},403);
