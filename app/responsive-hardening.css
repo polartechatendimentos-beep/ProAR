@@ -793,3 +793,11 @@ html[data-proar-experience="mobile"] .orders-panel tbody td:nth-child(n+5):not(:
     justify-content:center!important;
   }
 }
+
+
+/* ProAR mobile dashboard: preserve readable KPI notes and keep the detail arrow clear. */
+@media (max-width: 480px) {
+  .app-shell .stat-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 12px !important; }
+  .app-shell .stat-card { min-width: 0; }
+  .app-shell .stat-card > small { display: block; padding-right: 48px; line-height: 1.45; overflow-wrap: anywhere; }
+}
