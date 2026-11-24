@@ -12,6 +12,7 @@ interface BudgetItem {
   id: string;
   tipo: "PRODUTO" | "SERVIÇO";
   descricao: string;
+  unidade: string;
   quantidade: number;
   valorUnitario: number;
   desconto: number;
@@ -34,6 +35,7 @@ export function OrcamentoPanel({ onConvert }: OrcamentoPanelProps) {
       id: "1",
       tipo: "SERVIÇO",
       descricao: "Higienização profunda com laudo PMOC (Aparelhos Split 12.000 BTUs)",
+      unidade: "SV",
       quantidade: 6,
       valorUnitario: 190.0,
       desconto: 0,
@@ -43,6 +45,7 @@ export function OrcamentoPanel({ onConvert }: OrcamentoPanelProps) {
       id: "2",
       tipo: "PRODUTO",
       descricao: "Carga de Fluído Refrigerante R410A Ecológico com teste de estanqueidade",
+      unidade: "UN",
       quantidade: 2,
       valorUnitario: 240.0,
       desconto: 30.0,
@@ -52,6 +55,7 @@ export function OrcamentoPanel({ onConvert }: OrcamentoPanelProps) {
       id: "3",
       tipo: "SERVIÇO",
       descricao: "Manutenção Preventiva em Unidade Condensadora e revisão de quadro elétrico",
+      unidade: "SV",
       quantidade: 1,
       valorUnitario: 350.0,
       desconto: 0,
@@ -83,6 +87,7 @@ export function OrcamentoPanel({ onConvert }: OrcamentoPanelProps) {
       id: Date.now().toString(),
       tipo,
       descricao: tipo === "PRODUTO" ? "Peça / Filtro / Tubulação de Cobre" : "Mão de Obra Técnica Especializada",
+      unidade: tipo === "PRODUTO" ? "UN" : "SV",
       quantidade: 1,
       valorUnitario: 150.0,
       desconto: 0,
@@ -117,7 +122,7 @@ export function OrcamentoPanel({ onConvert }: OrcamentoPanelProps) {
           </p>
         </div>
 
-        <div className="flex gap-2.5">
+          <div className="flex flex-wrap gap-2.5">
           <CopperWeightCalculator />
           <button
             onClick={() => setShowPrintModal(true)}
@@ -191,8 +196,8 @@ export function OrcamentoPanel({ onConvert }: OrcamentoPanelProps) {
         {onConvert && (
           <div className="flex flex-wrap items-center gap-2 rounded-xl border border-blue-100 bg-blue-50/60 p-3">
             <span className="mr-auto text-xs font-semibold text-slate-600">Aproveitar este orçamento:</span>
-            <button type="button" onClick={() => onConvert("venda", { id: `orc-${Date.now()}`, numero: "ORÇ-2026-089", cliente, cnpjCpf: cnpj, cidade: cidadeDestino, itens: items, valorTotal: totalGeral, createdAt: new Date().toISOString() })} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700">Converter em venda</button>
-            <button type="button" onClick={() => onConvert("os", { id: `orc-${Date.now()}`, numero: "ORÇ-2026-089", cliente, cnpjCpf: cnpj, cidade: cidadeDestino, itens: items, valorTotal: totalGeral, createdAt: new Date().toISOString() })} className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50">Gerar ordem de serviço</button>
+            <button type="button" onClick={() => onConvert("venda", { id: `orc-${Date.now()}`, numero: "ORÇ-2026-089", cliente, cnpjCpf: cnpj, cidade: cidadeDestino, itens, valorTotal: totalGeral, createdAt: new Date().toISOString() })} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700">Converter em venda</button>
+            <button type="button" onClick={() => onConvert("os", { id: `orc-${Date.now()}`, numero: "ORÇ-2026-089", cliente, cnpjCpf: cnpj, cidade: cidadeDestino, itens, valorTotal: totalGeral, createdAt: new Date().toISOString() })} className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50">Gerar ordem de serviço</button>
           </div>
         )}
 
@@ -202,7 +207,7 @@ export function OrcamentoPanel({ onConvert }: OrcamentoPanelProps) {
               <tr>
                 <th className="p-3">Tipo</th>
                 <th className="p-3">Descrição</th>
-                <th className="p-3 w-20">Qtd</th>
+                <th className="p-3 w-24">Qtd. / Un.</th>
                 <th className="p-3 w-28">Valor Unit.</th>
                 <th className="p-3 w-24">Desconto</th>
                 <th className="p-3 w-28 text-right">Total</th>
@@ -222,8 +227,8 @@ export function OrcamentoPanel({ onConvert }: OrcamentoPanelProps) {
                     </span>
                   </td>
                   <td className="p-3 font-medium text-slate-900">{item.descricao}</td>
-                  <td className="p-3 font-mono font-bold">{item.quantidade}</td>
-                  <td className="p-3 font-mono">R$ {item.valorUnitario.toFixed(2)}</td>
+                  <td className="p-3"><div className="flex items-center gap-1"><input aria-label={`Quantidade de ${item.descricao}`} type="number" min="0.01" step="0.01" value={item.quantidade} onChange={(event) => { const quantidade = Math.max(0, Number(event.target.value) || 0); setItems((current) => current.map((row) => row.id === item.id ? { ...row, quantidade, valorTotal: quantidade * row.valorUnitario - row.desconto } : row)); }} className="w-16 rounded border border-slate-300 px-1.5 py-1 font-mono font-bold" /><select aria-label={`Unidade de ${item.descricao}`} value={item.unidade} onChange={(event) => setItems((current) => current.map((row) => row.id === item.id ? { ...row, unidade: event.target.value } : row))} className="rounded border border-slate-300 bg-white px-1.5 py-1 text-[10px] font-bold"><option>UN</option><option>M</option><option>KG</option><option>L</option><option>SV</option><option>H</option></select></div></td>
+                  <td className="p-3"><input aria-label={`Preço unitário de ${item.descricao}`} type="number" min="0" step="0.01" value={item.valorUnitario} onChange={(event) => { const valorUnitario = Math.max(0, Number(event.target.value) || 0); setItems((current) => current.map((row) => row.id === item.id ? { ...row, valorUnitario, valorTotal: item.quantidade * valorUnitario - row.desconto } : row)); }} className="w-24 rounded border border-slate-300 px-1.5 py-1 font-mono" /></td>
                   <td className="p-3 font-mono text-slate-500">R$ {item.desconto.toFixed(2)}</td>
                   <td className="p-3 font-mono font-bold text-slate-900 text-right">
                     R$ {item.valorTotal.toFixed(2)}
@@ -301,7 +306,7 @@ export function OrcamentoPanel({ onConvert }: OrcamentoPanelProps) {
           itens={items.map((i, idx) => ({
             itemNum: String(idx + 1).padStart(2, "0"),
             equipamentoOuItem: i.descricao,
-            capacidadeOuDetalhes: i.tipo,
+            capacidadeOuDetalhes: `${i.tipo} · ${i.unidade}`,
             quantidade: i.quantidade,
             valorUnitario: i.valorUnitario,
             valorTotal: i.valorTotal,

@@ -100,7 +100,7 @@ export function ServiceOrdersSection({ conversionDraft, onConversionImported }: 
       clienteNome: conversionDraft.cliente,
       clienteCnpjCpf: conversionDraft.cnpjCpf,
       equipe: "A definir",
-      tipoTarefa: conversionDraft.itens.map((item) => `${item.quantidade}× ${item.descricao}`).join("; "),
+      tipoTarefa: conversionDraft.itens.map((item) => `${item.quantidade} ${item.unidade || (item.tipo === "SERVIÇO" ? "SV" : "UN")} × ${item.descricao}`).join("; "),
       endereco: `${conversionDraft.cidade} - SP`,
       status: "Aguardando Agendamento",
       proximaAcao: "Confirmar endereço, equipe e agendamento",

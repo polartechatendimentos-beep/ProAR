@@ -2,6 +2,7 @@ export interface QuoteConversionItem {
   id: string;
   tipo: "PRODUTO" | "SERVIÇO";
   descricao: string;
+  unidade?: string;
   quantidade: number;
   valorUnitario: number;
   desconto: number;
