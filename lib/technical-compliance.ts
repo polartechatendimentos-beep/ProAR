@@ -2,7 +2,7 @@ export type PmocPlan = {
   id: string; client: string; name?: string; unit?: string; sector?: string; technicalResponsible?: string;
   professionalRegistration?: string; responsibilityDocument?: string; startsAt?: string;
   expiresAt?: string; lastServiceAt?: string; periodicity: "Mensal"|"Bimestral"|"Trimestral"|"Semestral"|"Anual"|"Personalizada";
-  customDays?: number; equipmentIds: string[]; notes?: string; documents?: TechnicalDocument[];
+  customDays?: number; equipmentIds: string[]; notes?: string; documents?: TechnicalDocument[]; maintenanceHistory?: {id:string;date:string;recordedAt:string;equipmentIds:string[]}[];
 };
 export type TechnicalDocument = { id:string; category:string; name:string; issuedAt?:string; expiresAt?:string; responsible?:string; fileName?:string; notes?:string };
 export type RefrigerantMovement = { id:string; refrigerantId:string; type:"Entrada"|"Carga"|"Complemento"|"Recuperação"|"Retirada"|"Perda"|"Descarte"|"Ajuste"; quantity:number; occurredAt:string; technician?:string; serviceOrderId?:string; equipmentId?:string; reason?:string };
