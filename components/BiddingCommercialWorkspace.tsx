@@ -11,7 +11,7 @@ const money=(n:number)=>Number(n||0).toLocaleString("pt-BR",{style:"currency",cu
 const today=()=>new Date().toISOString().slice(0,10);
 function dayDelta(value:string){const target=new Date(value+"T12:00:00").getTime(),now=new Date();now.setHours(12,0,0,0);return Math.ceil((target-now.getTime())/86400000);}
 export function BiddingCommercialWorkspace({tender,onStatusChange,documents=[]}:{tender:BiddingTender;onStatusChange:(status:string)=>void;documents?:{name:string;status:string;category:string}[]}){
- const key=tender.numeroControlePNCP||tender.canonicalKey||(tender.orgaoEntidade?.razaoSocial||"certame")+"-"+(tender.objetoCompra||"sem-objeto");
+ const key=tender.numeroControlePNCP||(tender.orgaoEntidade?.razaoSocial||"certame")+"-"+(tender.objetoCompra||"sem-objeto");
  const [records,setRecords]=useState<Record<string,RecordValue>>({}),[revision,setRevision]=useState(0),[busy,setBusy]=useState(false),[notice,setNotice]=useState(""),[loaded,setLoaded]=useState(false);
  const [draftLines,setDraftLines]=useState<CostLine[]>([]),[draftTax,setDraftTax]=useState(0),[draftMargin,setDraftMargin]=useState(0);
  const [previousPdf,setPreviousPdf]=useState<File|null>(null),[currentPdf,setCurrentPdf]=useState<File|null>(null),[diffBusy,setDiffBusy]=useState(false),[diff,setDiff]=useState<{added:string[];removed:string[]}|null>(null);
