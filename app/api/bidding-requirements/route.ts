@@ -47,8 +47,8 @@ export async function POST(request:NextRequest){
   if(!existingResult.ok)throw new Error("Consulta indisponível");
   const old=(await existingResult.json())[0]?.payload as Stored|undefined;
   if(old&&(old.companyId!==c.company||old.tenderId!==tenderId))return json({error:"Vínculo de empresa inválido."},403);
-  if(!old)return json({error:"Salve primeiro as exigências deste edital."},404);
-  const revision=Number(old._revision||0);
+  if(!old&&(body.action==="submit"||body.action==="decision"))return json({error:"Salve primeiro as exigências deste edital."},404);
+  const revision=Number(old?._revision||0);
   if(Number(body.expectedRevision||0)!==revision)return json({error:"As exigências foram alteradas em outra sessão. Atualize antes de salvar."},409);
   const actor=access.session.username,now=new Date().toISOString();
   let next:Stored;
