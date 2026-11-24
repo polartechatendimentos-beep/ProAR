@@ -18,6 +18,7 @@ export function BiddingCommercialWorkspace({tender,onStatusChange,documents=[]}:
  const [eventKind,setEventKind]=useState("Lance"),[eventDate,setEventDate]=useState(today()),[eventValue,setEventValue]=useState(""),[eventNote,setEventNote]=useState("");
  useEffect(()=>{let active=true;(async()=>{try{const r=await fetch("/api/bidding-workflow",{cache:"no-store"}),p=await r.json();if(!r.ok)throw Error(p.error||"Falha ao carregar.");if(active){const data=p.records||{};setRecords(data);setRevision(Number(p.revision)||0);const saved=data[key]||{};setDraftLines(saved.costLines||[]);setDraftTax(saved.taxRate||0);setDraftMargin(saved.targetMargin||0);}}catch(e){if(active)setNotice(e instanceof Error?e.message:"Falha ao carregar o fluxo.");}finally{if(active)setLoaded(true);}})();return()=>{active=false;};},[]);
  const rec=records[key]||{};
+ useEffect(()=>{if(loaded){const saved=records[key]||{};setDraftLines(saved.costLines||[]);setDraftTax(saved.taxRate||0);setDraftMargin(saved.targetMargin||0);}},[key,loaded,records]);
  const lines=draftLines;
  const subtotal=lines.reduce((s,l)=>s+(Number(l.quantity)||0)*(Number(l.unitCost)||0),0);
  const divisor=1-(Number(draftTax||0)+Number(draftMargin||0))/100;
