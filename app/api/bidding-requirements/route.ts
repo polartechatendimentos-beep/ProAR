@@ -9,6 +9,7 @@ import {DOCUMENT_CATEGORIES} from "@/lib/bidding-documents";
 import {getOpenAiCredential,safeCompanyId} from "@/lib/openai-credential";
 import {calculateBiddingFinancialRatios,type FinancialInputs,type FinancialRatio} from "@/lib/bidding-financial-audit";
 export const runtime="nodejs";
+export const maxDuration=60;
 const json=(body:unknown,status=200)=>NextResponse.json(body,{status,headers:{"Cache-Control":"private, no-store","X-Robots-Tag":"noindex"}});
 type Requirement={id:string;category:string;description:string;threshold:string;unit:string;documentId:string;sourcePage?:number;sourceQuote?:string;phase?:string;dueDate?:string;technicalEvidence?:{issuer:string;service:string;quantity:string;unit:string;startDate:string;endDate:string;professionalRecord:string}};
 type Approval={status:"pending"|"approved"|"rejected";submittedAt:string;submittedBy:string;reviewedAt?:string;reviewedBy?:string;note?:string};
@@ -39,7 +40,7 @@ export async function GET(request:NextRequest){
    if(!hasPermission(access.session,"licitacoes.editar"))return json({error:"Sem permissão para analisar edital."},403);
    const text=String(body.text||"");if(text.length<100||text.length>250000)return json({error:"Texto do edital inválido ou fora do limite de leitura."},422);
    const credential=await getOpenAiCredential(safeCompanyId(c.company));if(!credential)return json({error:"Configure a IA em Configurações → Inteligência Artificial."},503);
-   const prompt="Extraia somente exigências obrigatórias de habilitação técnica, jurídica, fiscal, trabalhista e econômico-financeira. Use só o texto fornecido. Para cada item, retorne category, description, threshold, unit, page, quote, phase e dueDate. page deve usar o marcador [Página N]; quote deve ser curto e literal. Não invente requisito, quantidade, índice ou data. Use campo vazio quando ausente. phase só pode ser Impugnação, Esclarecimentos, Proposta, Sessão, Validade documental ou Outro. dueDate em AAAA-MM-DD só quando inequívoca. JSON: {requirements:[...]}.\n"+text;
+   const prompt="Extraia somente exigências obrigatórias de habilitação técnica, jurídica, fiscal, trabalhista e econômico-financeira. Use só o texto fornecido. Para cada item, retorne category, description, threshold, unit, page, quote, phase e dueDate. Categorias permitidas: "+DOCUMENT_CATEGORIES.join(", ")+". page deve usar o marcador [Página N]; quote deve ser curto e literal. Não invente requisito, quantidade, índice ou data. Use campo vazio quando ausente. phase só pode ser Impugnação, Esclarecimentos, Proposta, Sessão, Validade documental ou Outro. dueDate em AAAA-MM-DD só quando inequívoca. JSON: {requirements:[...]}.\n"+text;
    const upstream=await fetch("https://api.openai.com/v1/responses",{method:"POST",headers:{Authorization:"Bearer "+credential.apiKey,"Content-Type":"application/json"},body:JSON.stringify({model:"gpt-4.1-mini",instructions:"Extraia dados do edital sem concluir habilitação e sem inventar informação.",input:prompt,max_output_tokens:4000,text:{format:{type:"json_object"}},store:false})});
    const payload=await upstream.json();if(!upstream.ok)return json({error:"A IA não conseguiu analisar o edital. Confira a configuração e tente novamente."},502);
    const output=payload.output_text||payload.output?.flatMap((item:{content?:{text?:string}[]})=>item.content||[]).map((item:{text?:string})=>item.text||"").join("")||"{}";
@@ -73,11 +74,12 @@ export async function POST(request:NextRequest){
     if(!old)return json({error:"Salve primeiro a matriz deste edital."},404);
     if(!hasPermission(access.session,"licitacoes.editar"))return json({error:"Sem permissão para auditar índices."},403);
     const rawInput=(body.financial||{}) as Record<string,unknown>;
-    const numeric=(key:string)=>{const rawValue=String(rawInput[key]??"").trim();if(!rawValue)throw new Error("Preencha todos os valores do balanço.");const value=Number(rawValue.replace(",", "."));if(!Number.isFinite(value)||value<0||value>1e15)throw new Error("Valor financeiro inválido: "+key);return value;};
-    const minimum=(key:string)=>{const value=String(rawInput[key]||"").trim();if(!value)return "";const parsed=Number(value.replace(",", "."));if(!Number.isFinite(parsed)||parsed<0||parsed>1e6)throw new Error("Índice mínimo inválido: "+key);return String(parsed);};
+    const parseNumber=(rawValue:string)=>Number(rawValue.includes(",")?rawValue.replace(/\\./g,"").replace(",", "."):rawValue);
+    const numeric=(key:string)=>{const rawValue=String(rawInput[key]??"").trim();if(!rawValue)throw new Error("Preencha todos os valores do balanço.");const value=parseNumber(rawValue);if(!Number.isFinite(value)||value<0||value>1e15)throw new Error("Valor financeiro inválido: "+key);return value;};
+    const minimum=(key:string)=>{const value=String(rawInput[key]||"").trim();if(!value)return "";const parsed=parseNumber(value);if(!Number.isFinite(parsed)||parsed<0||parsed>1e6)throw new Error("Índice mínimo inválido: "+key);return String(parsed);};
     const documentIds=Array.isArray(rawInput.documentIds)?rawInput.documentIds.slice(0,20).map(String):[];
     if(!documentIds.length)return json({error:"Vincule ao menos um balanço ou DRE antes de salvar a auditoria."},422);
-    for(const id of documentIds){const doc=await loadBiddingDocument(c.db,c.company,id);if(!doc||!doc.uploaded||doc.tenderId&&doc.tenderId!==tenderId)return json({error:"Documento financeiro não pertence a esta empresa ou edital."},422);}
+    for(const id of documentIds){const doc=await loadBiddingDocument(c.db,c.company,id);if(!doc||!doc.uploaded||doc.tenderId&&doc.tenderId!==tenderId||!["Balanço Patrimonial","DRE","Índices econômico-financeiros"].includes(doc.category))return json({error:"Vincule balanço/DRE real desta empresa e edital."},422);}
     const input:FinancialInputs={currentAssets:numeric("currentAssets"),currentLiabilities:numeric("currentLiabilities"),realizableLongTerm:numeric("realizableLongTerm"),longTermLiabilities:numeric("longTermLiabilities"),totalAssets:numeric("totalAssets"),minimumCurrent:minimum("minimumCurrent"),minimumGeneral:minimum("minimumGeneral"),minimumSolvency:minimum("minimumSolvency"),sourceNote:String(rawInput.sourceNote||"").trim().slice(0,1000),documentIds};
     const financialAudit={...input,ratios:calculateBiddingFinancialRatios(input),updatedAt:now,updatedBy:actor};
     next={...old,_revision:revision+1,updatedAt:now,updatedBy:actor,financialAudit,approval:undefined};
@@ -88,6 +90,7 @@ export async function POST(request:NextRequest){
    const requiresFinancial=old.requirements.some(req=>["Balanço Patrimonial","DRE","Índices econômico-financeiros"].includes(req.category));
    if(requiresFinancial&&!old.financialAudit)return json({error:"Complete a auditoria econômico-financeira exigida nesta matriz antes de enviar."},422);
    if(old.financialAudit?.ratios.some(ratio=>ratio.status==="below"||ratio.status==="undefined"))return json({error:"Há índice abaixo do mínimo informado ou sem denominador válido. Revise o balanço e o edital."},422);
+   if(requiresFinancial)for(const id of old.financialAudit?.documentIds||[]){const doc=await loadBiddingDocument(c.db,c.company,id);if(!doc||!doc.uploaded||doc.review!=="approved"||doc.validUntil&&doc.validUntil<now.slice(0,10))return json({error:"A auditoria financeira tem documento pendente ou vencido."},422);}
    for(const req of old.requirements){
     if(!req.documentId)return json({error:"Vincule uma evidência para cada exigência antes de enviar à aprovação gerencial."},422);
     const doc=await loadBiddingDocument(c.db,c.company,req.documentId);
