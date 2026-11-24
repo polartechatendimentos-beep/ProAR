@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Printer, X, Download, Check, ShieldCheck, Wrench, Building2, Phone, Mail, Globe, MapPin } from "lucide-react";
+import { Printer, X, Check } from "lucide-react";
 
 export interface ReportItem {
   itemNum: string;
@@ -94,21 +94,21 @@ export function StandardDocumentReport({
   onClose,
 }: StandardDocumentProps) {
   const [empresa, setEmpresa] = useState<CompanyData>({
-    razaoSocial: "PolarTech Mirassol Ar Condicionado Ltda.",
-    nomeFantasia: "POLARTECH AR CONDICIONADO",
-    cnpj: "44.378.865/0001-61",
-    inscricaoEstadual: "451.467.248.110",
-    endereco: "Rua São Pedro, 2184",
-    bairro: "Centro",
-    cidade: "Mirassol",
-    uf: "SP",
-    cep: "15130-000",
-    telefone: "(17) 2122-2806",
-    whatsapp: "(17) 99156-7798",
-    email: "contato@polartechsolucoes.com.br",
-    site: "polartechsolucoes.com.br",
-    slogan: "Mais conforto, mais qualidade de vida!",
-    responsavelTecnico: "Engenheiro Mecânico Responsável Técnico (CREA-SP)",
+    razaoSocial: "",
+    nomeFantasia: "",
+    cnpj: "",
+    inscricaoEstadual: "",
+    endereco: "",
+    bairro: "",
+    cidade: "",
+    uf: "",
+    cep: "",
+    telefone: "",
+    whatsapp: "",
+    email: "",
+    site: "",
+    slogan: "",
+    responsavelTecnico: "",
     ...empresaProp,
   });
 
@@ -150,13 +150,13 @@ export function StandardDocumentReport({
 
   const defaultDescricao = descricaoServico || (
     tipo === "ORCAMENTO"
-      ? "Execução de serviço especializado de higienização, manutenção preventiva e adequação de sistemas de ar-condicionado, visando garantir a eficiência térmica, conservação dos compressores e a qualidade do ar conforme as normas vigentes."
+      ? "Serviços e produtos conforme itens discriminados neste orçamento."
       : tipo === "ORDEM_SERVICO"
-      ? "Atendimento técnico presencial executado conforme checklist PMOC, com aplicação de produtos bactericidas biodegradáveis registrados no Ministério da Saúde e testes operacionais de rendimento e estanqueidade."
+      ? "Atendimento técnico conforme os serviços efetivamente registrados nesta ordem de serviço."
       : "Fornecimento de equipamentos, peças e insumos com garantia de fábrica e procedência técnica para sistemas de climatização."
   );
 
-  const defaultEscopo = escopoCards || [
+  const defaultEscopo = escopoCards || (tipo === "ORCAMENTO" ? [
     {
       titulo: "SERPENTINA (UNIDADE INTERNA)",
       itens: ["Limpeza e higienização química profunda da serpentina e aletas."],
@@ -180,29 +180,29 @@ export function StandardDocumentReport({
         "Higienização conforme Portaria 3.523 e ANVISA RE nº 09.",
       ],
     },
-  ];
+  ] : []);
 
-  const defaultInclusos = itensInclusos || [
+  const defaultInclusos = itensInclusos || (tipo === "ORCAMENTO" ? [
     "Mão de obra técnica especializada com EPIs e ferramentas certificadas;",
     "Produtos de higienização bactericida com laudo do Ministério da Saúde;",
     "Limpeza completa de serpentina, bandeja de condensado, turbina e dreno;",
     "Emissão de relatório / checklist técnico do serviço;",
     "Deslocamento da equipe técnica.",
-  ];
+  ] : []);
 
-  const defaultNaoInclusos = itensNaoInclusos || [
+  const defaultNaoInclusos = itensNaoInclusos || (tipo === "ORCAMENTO" ? [
     "Recarga de gás refrigerante (caso não contratada nesta proposta);",
     "Reparo de vazamentos ocultos na tubulação estrutural;",
     "Troca de peças, placas eletrônicas e compressores;",
     "Infraestrutura de ponto elétrico e disjuntores da edificação;",
     "Serviços de alvenaria, pintura ou gesso civil;",
     "Outros serviços não discriminados formalmente nesta proposta.",
-  ];
+  ] : []);
 
   const dataAtualFormatada = data || new Date().toLocaleDateString("pt-BR");
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm overflow-y-auto flex justify-center p-2 sm:p-4 print:p-0 print:static print:bg-white">
+    <div className="proar-report-overlay fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm overflow-y-auto flex justify-center p-2 sm:p-4 print:p-0 print:static print:bg-white">
       {/* Botões de Ação Flutuantes */}
       <div className="fixed top-4 right-4 z-50 flex items-center gap-2 print:hidden">
         <button
@@ -223,7 +223,7 @@ export function StandardDocumentReport({
       </div>
 
       {/* Folha A4 Padronizada */}
-      <div className="bg-white w-full max-w-[210mm] min-h-[297mm] p-6 sm:p-8 rounded-2xl shadow-2xl print:shadow-none print:rounded-none print:p-6 text-slate-900 font-sans text-xs flex flex-col justify-between my-4 print:my-0 border border-slate-200 print:border-none">
+      <div className="proar-report-sheet bg-white w-full max-w-[210mm] min-h-[297mm] p-6 sm:p-8 rounded-2xl shadow-2xl print:shadow-none print:rounded-none print:p-6 text-slate-900 font-sans text-xs flex flex-col justify-between my-4 print:my-0 border border-slate-200 print:border-none">
         
         <div className="space-y-4">
           {/* ============================================================== */}
@@ -233,7 +233,7 @@ export function StandardDocumentReport({
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               
               {/* Lado Esquerdo: Logo e Especialidades da Empresa */}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 min-w-0">
                 {empresa.logoUrl ? (
                   <img src={empresa.logoUrl} alt={empresa.nomeFantasia} className="h-16 w-auto object-contain" />
                 ) : (
@@ -244,36 +244,32 @@ export function StandardDocumentReport({
                     </div>
                     <div>
                       <div className="text-xl font-black tracking-tight text-blue-900 uppercase font-sans">
-                        {empresa.nomeFantasia || "POLARTECH"}
+                        {empresa.nomeFantasia || empresa.razaoSocial || "Empresa"}
                       </div>
                       <div className="text-[10px] tracking-widest text-sky-700 font-bold uppercase font-mono">
-                        AR CONDICIONADO & CLIMATIZAÇÃO
+                        DOCUMENTO INSTITUCIONAL
                       </div>
                       <div className="text-[9px] text-slate-500 font-medium tracking-tight">
-                        MANUTENÇÃO PREVENTIVA E CORRETIVA • HIGIENIZAÇÃO • PMOC • INSTALAÇÃO
+                        {empresa.site || ""}
                       </div>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Lado Direito: Box de Identificação e Número do Documento */}
-              <div className="border border-blue-900 bg-blue-50/40 rounded-xl p-3 text-right shrink-0 min-w-[200px]">
-                <span className="text-[10px] font-bold text-blue-900 uppercase tracking-wider block">
-                  {documentNumberLabel}
-                </span>
-                <span className="text-lg font-black text-blue-950 font-mono block">
-                  {numero}
-                </span>
-                <span className="text-[10px] text-slate-600 font-bold block mt-0.5">
-                  DATA: {dataAtualFormatada}
-                </span>
+              {/* Identificação institucional da empresa ativa, sem dados fiscais fictícios. */}
+              <div className="text-left sm:text-right min-w-0 sm:max-w-[48%] text-[10px] leading-relaxed">
+                <strong className="block text-blue-950 text-[12px]">{empresa.razaoSocial || empresa.nomeFantasia}</strong>
+                {empresa.cnpj && <span className="block">CNPJ: {empresa.cnpj}</span>}
+                {empresa.endereco && <span className="block">{[empresa.endereco, empresa.bairro, empresa.cidade, empresa.uf].filter(Boolean).join(" • ")}</span>}
+                {empresa.telefone && <span className="block">Telefone: {empresa.telefone}</span>}
+                {empresa.email && <span className="block break-all">{empresa.email}</span>}
               </div>
             </div>
 
-            {/* Faixa com Título do Documento */}
+            {/* Título e identificação do documento */}
             <div className="mt-3 bg-blue-900 text-white font-bold text-xs uppercase px-3 py-1.5 rounded-lg tracking-wider text-center">
-              {documentTitle}
+              {documentTitle} • {documentNumberLabel} {numero} • {dataAtualFormatada}
             </div>
 
             {/* Dados do Cliente e Local de Atendimento */}
@@ -295,7 +291,7 @@ export function StandardDocumentReport({
                 <span className="font-bold text-blue-950 block text-[10px] uppercase">ENDEREÇO DE ATENDIMENTO:</span>
                 <span className="text-slate-800 font-medium block leading-snug">{cliente.endereco}</span>
                 <span className="text-slate-600 block">
-                  {cliente.cidade || "Mirassol"} - {cliente.uf || "SP"} {cliente.cep ? `• CEP ${cliente.cep}` : ""}
+                  {[cliente.cidade, cliente.uf].filter(Boolean).join(" - ")} {cliente.cep ? `• CEP ${cliente.cep}` : ""}
                 </span>
               </div>
             </div>
@@ -368,10 +364,10 @@ export function StandardDocumentReport({
           {/* ============================================================== */}
           {/* 3. ESCOPO DA HIGIENIZAÇÃO / CHECKLIST TÉCNICO (5 CARDS)         */}
           {/* ============================================================== */}
-          <section>
+          {defaultEscopo.length > 0 && <section>
             <h3 className="text-xs font-black text-blue-900 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
               <span className="w-4 h-4 rounded bg-blue-900 text-white flex items-center justify-center text-[10px]">3</span>
-              ESCOPO DA HIGIENIZAÇÃO & PROCEDIMENTOS TÉCNICOS
+              ESCOPO E PROCEDIMENTOS TÉCNICOS
             </h3>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
               {defaultEscopo.map((c, i) => (
@@ -392,7 +388,7 @@ export function StandardDocumentReport({
                 </div>
               ))}
             </div>
-          </section>
+          </section>}
 
           {/* ============================================================== */}
           {/* 4. INVESTIMENTO / VALOR GLOBAL                                 */}
@@ -403,7 +399,7 @@ export function StandardDocumentReport({
                 4. INVESTIMENTO — VALOR GLOBAL DO SERVIÇO
               </span>
               <p className="text-[11px] text-slate-700 leading-snug">
-                Utilizamos produtos de alta performance com ação bactericida e fungicida registrados no Ministério da Saúde, garantindo máxima eficiência térmica e qualidade do ar de interiores.
+                Valores correspondentes aos produtos e serviços discriminados neste documento.
               </p>
             </div>
             <div className="bg-white border-2 border-blue-900 rounded-xl p-3 text-center min-w-[210px] shadow-sm shrink-0">
@@ -421,7 +417,7 @@ export function StandardDocumentReport({
           {/* ============================================================== */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* 6. O que está incluso */}
-            <section className="border border-slate-200 rounded-xl p-3 bg-slate-50/50">
+            {defaultInclusos.length > 0 && <section className="border border-slate-200 rounded-xl p-3 bg-slate-50/50">
               <h4 className="text-[11px] font-black text-blue-950 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                 <span className="w-3.5 h-3.5 rounded bg-blue-900 text-white flex items-center justify-center text-[9px]">5</span>
                 O QUE ESTÁ INCLUSO NO VALOR
@@ -434,7 +430,7 @@ export function StandardDocumentReport({
                   </li>
                 ))}
               </ul>
-            </section>
+            </section>}
 
             {/* 5. Condições comerciais */}
             <section className="border border-slate-200 rounded-xl p-3 bg-slate-50/50">
@@ -454,7 +450,7 @@ export function StandardDocumentReport({
           {/* ============================================================== */}
           {/* 7. IMPORTANTE / NÃO CONTEMPLA                                  */}
           {/* ============================================================== */}
-          <section className="border border-rose-200 bg-rose-50/30 rounded-xl p-2.5 text-[10px]">
+          {defaultNaoInclusos.length > 0 && <section className="border border-rose-200 bg-rose-50/30 rounded-xl p-2.5 text-[10px]">
             <span className="font-bold text-rose-900 uppercase block text-[9px] mb-1">
               7. IMPORTANTE — ESTE SERVIÇO NÃO CONTEMPLA:
             </span>
@@ -466,7 +462,7 @@ export function StandardDocumentReport({
                 </div>
               ))}
             </div>
-          </section>
+          </section>}
 
           {/* ============================================================== */}
           {/* 8. ACEITE DO CLIENTE & 9. RESPONSÁVEL TÉCNICO (ASSINATURAS)    */}
@@ -494,13 +490,13 @@ export function StandardDocumentReport({
                 9. RESPONSABILIDADE TÉCNICA (EMPRESA)
               </span>
               <p className="text-[9px] text-slate-500 leading-tight">
-                Serviços inspecionados em estrita conformidade com as normas ABNT NBR 13971 e legislação sanitária vigente.
+                Responsabilidade técnica sujeita à identificação e validação do profissional habilitado.
               </p>
               <div className="pt-4 text-center">
                 <div className="border-t border-slate-400 w-3/4 mx-auto mb-1"></div>
                 <span className="font-bold text-slate-800 text-[10px] block">{empresa.razaoSocial}</span>
                 <span className="text-[9px] text-slate-500 block">
-                  {empresa.responsavelTecnico || "Engenheiro Responsável Técnico • CREA-SP Ativo"}
+                  {empresa.responsavelTecnico || "Responsável técnico não informado"}
                 </span>
                 <span className="text-[9px] text-slate-400 block mt-1">Data: ____/____/________</span>
               </div>
@@ -530,7 +526,7 @@ export function StandardDocumentReport({
           </div>
 
           <div className="mt-2 text-center text-blue-950 font-bold italic tracking-wide text-[10px] border-t border-slate-100 pt-1">
-            "{empresa.slogan || "Mais conforto, mais qualidade de vida!"}"
+            {empresa.slogan || ""}
           </div>
         </footer>
 
