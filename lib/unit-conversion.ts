@@ -1,5 +1,5 @@
 export type UnitConversionProduct={unitOfMeasure?:string;purchaseUnitOfMeasure?:string;purchaseToStockFactor?:number};
-const normalizeUnit=(value:unknown)=>String(value??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase();
+const normalizeUnit=(value:unknown)=>{const unit=String(value??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase();return ({kgm:"kg",quilo:"kg",quilograma:"kg",mts:"m",mt:"m",metro:"m",metros:"m",unid:"un",unidade:"un",unidades:"un"} as Record<string,string>)[unit]||unit;};
 const roundQuantity=(value:number)=>Math.round(value*1000)/1000;
 /** Converts a purchase quantity into the product stock/sale unit. The factor is stock units per purchase unit, for example meters per kg. */
 export function purchaseQuantityToStock(quantity:number,inputUnit:unknown,product:UnitConversionProduct){
