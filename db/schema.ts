@@ -1,4 +1,52 @@
-import { pgTable, serial, text, timestamp, boolean, jsonb, integer, numeric } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, boolean, jsonb, integer, numeric, index, uniqueIndex } from "drizzle-orm/pg-core";
+
+// Cadastros comerciais compartilhados entre Vendas, Orçamentos e Ordens de Serviço.
+export const customers = pgTable("proar_customers", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull(),
+  tipoPessoa: text("tipo_pessoa").default("PF").notNull(),
+  nome: text("nome").notNull(),
+  nomeFantasia: text("nome_fantasia"),
+  documento: text("documento"),
+  email: text("email"),
+  telefone: text("telefone"),
+  whatsapp: text("whatsapp"),
+  cep: text("cep"),
+  logradouro: text("logradouro"),
+  numero: text("numero"),
+  complemento: text("complemento"),
+  bairro: text("bairro"),
+  cidade: text("cidade"),
+  uf: text("uf"),
+  observacoes: text("observacoes"),
+  ativo: boolean("ativo").default(true).notNull(),
+  criadoEm: timestamp("criado_em").defaultNow().notNull(),
+  atualizadoEm: timestamp("atualizado_em").defaultNow().notNull(),
+}, (table) => ({
+  companyNameIdx: index("proar_customers_company_name_idx").on(table.companyId, table.nome),
+  companyDocumentIdx: uniqueIndex("proar_customers_company_document_uidx").on(table.companyId, table.documento),
+}));
+
+export const products = pgTable("proar_products", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull(),
+  codigo: text("codigo").notNull(),
+  codigoBarras: text("codigo_barras"),
+  descricao: text("descricao").notNull(),
+  tipo: text("tipo").default("PRODUTO").notNull(),
+  unidade: text("unidade").default("UN").notNull(),
+  ncm: text("ncm"),
+  custo: numeric("custo", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  precoVenda: numeric("preco_venda", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  estoqueAtual: numeric("estoque_atual", { precision: 12, scale: 3 }).default("0.000").notNull(),
+  estoqueMinimo: numeric("estoque_minimo", { precision: 12, scale: 3 }).default("0.000").notNull(),
+  ativo: boolean("ativo").default(true).notNull(),
+  criadoEm: timestamp("criado_em").defaultNow().notNull(),
+  atualizadoEm: timestamp("atualizado_em").defaultNow().notNull(),
+}, (table) => ({
+  companyCodeIdx: uniqueIndex("proar_products_company_code_uidx").on(table.companyId, table.codigo),
+  companyDescriptionIdx: index("proar_products_company_description_idx").on(table.companyId, table.descricao),
+}));
 
 // 1. Licitações e Monitoramento PNCP
 export const licitacoes = pgTable("licitacoes", {
