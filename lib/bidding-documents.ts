@@ -1,7 +1,7 @@
 import type {DocumentAuditReport} from "./bidding-document-audit";
 export const DOCUMENT_LIMIT=10*1024*1024;
 export const DOCUMENT_TYPES={"application/pdf":"pdf","image/png":"png","image/jpeg":"jpg"} as const;
-export const DOCUMENT_CATEGORIES=["CND Federal","CND Estadual","CND Municipal","FGTS","Trabalhista","CREA / CFT","ART","Atestado técnico","Outros"] as const;
+export const DOCUMENT_CATEGORIES=["CND Federal","CND Estadual","CND Municipal","FGTS","Trabalhista","CREA / CFT","ART","Atestado técnico","Balanço Patrimonial","DRE","Índices econômico-financeiros","Outros"] as const;
 export type DocumentCategory=typeof DOCUMENT_CATEGORIES[number];
 export type ReviewState="received"|"approved"|"rejected";
 export type DocumentAudit={at:string;actor:string;action:string;note:string};
