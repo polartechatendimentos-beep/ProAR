@@ -1,3 +1,4 @@
+import { purchaseQuantityToStock } from "./unit-conversion.ts";
 import { calculateCatalogPrice } from "./catalog-cost-engine.ts";
 import { validateTracking, pipelineRecordId } from "./tender-pipeline.ts";
 import { nextPmocDate, type PmocPlan } from "./technical-compliance.ts";
@@ -436,7 +437,11 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
         if (!item || !Number.isFinite(quantity) || quantity <= 0 || total > Number(item.quantity) + 0.000001 || !products.some(product => product.id === productId)) throw new OperationError("Recebimento inválido: vincule cada item a um produto e respeite a quantidade pendente.");
         if (isNew && item.productId && productId !== item.productId) throw new OperationError("Produto recebido difere do produto do pedido.");
         totals.set(line.itemId, total);
-        addMovement({ id: `PUR-${purchase.id}-${receipt.id}-${line.itemId}`, productId, quantity, purchaseId: purchase.id, itemId: line.itemId, receiptId: receipt.id, kind: "Entrada", createdAt: receipt.createdAt, user: receipt.user || actor.username, reason: "Recebimento de compra" }, stock);
+        const product=products.find(row=>row.id===productId)!;
+        let converted;
+        try{converted=purchaseQuantityToStock(quantity,item.unitOfMeasure||product.purchaseUnitOfMeasure||product.unitOfMeasure,product);}
+        catch(error){throw new OperationError(`Não foi possível converter o item ${item.description||item.id}: ${error instanceof Error?error.message:"unidade inválida"}`);}
+        addMovement({ id: `PUR-${purchase.id}-${receipt.id}-${line.itemId}`, productId, quantity:converted.quantity, purchaseQuantity:quantity, purchaseUnit:converted.purchaseUnit, stockUnit:converted.stockUnit, conversionFactor:converted.factor, purchaseId: purchase.id, itemId: line.itemId, receiptId: receipt.id, kind: "Entrada", createdAt: receipt.createdAt, user: receipt.user || actor.username, reason: converted.purchaseUnit===converted.stockUnit ? "Recebimento de compra" : `Recebimento convertido: ${quantity} ${converted.purchaseUnit} → ${converted.quantity} ${converted.stockUnit}` }, stock);
       }
       const receiptKeys = list(receipt.items).map(line => line.itemId);
       if (new Set(receiptKeys).size !== receiptKeys.length) throw new OperationError("Item repetido no recebimento.");
