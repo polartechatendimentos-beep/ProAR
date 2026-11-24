@@ -231,3 +231,14 @@ html[data-proar-system-theme="light"] .proar-full-system .company-context small 
   min-width: 0;
   padding-right: clamp(14px, 2vw, 32px);
 }
+
+
+/* Mobile: keep the appearance control clear of the company context and dashboard content. */
+@media (max-width: 767px) {
+  .proar-full-system .proar-appearance-toolbar {
+    top: auto !important;
+    right: 10px !important;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
+    left: auto !important;
+  }
+}
