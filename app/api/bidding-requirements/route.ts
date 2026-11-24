@@ -36,7 +36,7 @@ export async function GET(request:NextRequest){
 }
 export async function POST(request:NextRequest){
  const access=procurementAccess(request);if(!access.ok)return json({error:access.error},access.status);
- if(!hasPermission(access.session,"licitacoes.editar"))return json({error:"Sem permissão para editar exigências."},403);
+ if(!hasPermission(access.session,"licitacoes.editar")&&!hasPermission(access.session,"aprovacoes.aprovar"))return json({error:"Sem permissão para editar ou aprovar exigências."},403);
  if(request.headers.get("origin")!==request.nextUrl.origin)return json({error:"Origem não autorizada."},403);
  try{
   const raw=await request.text();if(raw.length>80000)return json({error:"Solicitação muito grande."},413);
@@ -52,6 +52,7 @@ export async function POST(request:NextRequest){
   const actor=access.session.username,now=new Date().toISOString();
   let next:Stored;
   if(body.action==="submit"){
+   if(!hasPermission(access.session,"licitacoes.editar"))return json({error:"Sem permissão para enviar o dossiê."},403);
    if(!old.requirements.length)return json({error:"Inclua ao menos uma exigência antes de enviar o dossiê."},422);
    for(const req of old.requirements){
     if(!req.documentId)return json({error:"Vincule uma evidência para cada exigência antes de enviar à aprovação gerencial."},422);
