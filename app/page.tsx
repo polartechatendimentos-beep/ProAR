@@ -4997,7 +4997,7 @@ export default function Home() {
           const existing = [...currentProducts, ...newProducts].find(product => normalize(product.name) === normalize(item.description));
           if (existing) item.productId = existing.id;
           else {
-            const product: ModuleRecord = { id: `PRO-${Date.now().toString().slice(-5)}-${index + 1}`, name: item.description, client: data.client, description: `Produto cadastrado automaticamente pela compra ${record.id}`, createdAt: new Date().toLocaleString("pt-BR"), kind: "Produto", status: "Ativo", value: item.unitValue, category: data.category || "Produto importado por XML" };
+            const product: ModuleRecord = { id: `PRO-${Date.now().toString().slice(-5)}-${index + 1}`, name: item.description, client: data.client, description: `Produto cadastrado automaticamente pela compra ${record.id}`, createdAt: new Date().toLocaleString("pt-BR"), kind: "Produto", status: "Ativo", value: item.unitValue, unitOfMeasure:item.unitOfMeasure||"un", purchaseUnitOfMeasure:item.unitOfMeasure||undefined, category: data.category || "Produto importado por XML" };
             item.productId = product.id;
             newProducts.push(product);
           }
