@@ -12,7 +12,7 @@ const stages=["Novas","Para analisar","Interessantes","Participaremos","Descarta
 const trackKinds=["Sessão","Lance","Habilitação","Recurso","Adjudicação","Homologação","Empenho","Contrato","Outro"] as const;
 type CostLine={id:string;label:string;quantity:number;unitCost:number};
 type TrackEvent={id:string;kind:typeof trackKinds[number];date:string;value:number|null;note:string};
-type RecordValue={status?:typeof stages[number];deadlines?:Record<string,string>;costLines?:CostLine[];taxRate?:number;targetMargin?:number;checklist?:Record<string,boolean>;tracking?:TrackEvent[];proposalNote?:string;updatedAt?:string};
+type RecordValue={title?:string;status?:typeof stages[number];deadlines?:Record<string,string>;costLines?:CostLine[];taxRate?:number;targetMargin?:number;checklist?:Record<string,boolean>;tracking?:TrackEvent[];proposalNote?:string;updatedAt?:string};
 type Stored={companyId:string;_revision:number;updatedAt:string;updatedBy:string;records:Record<string,RecordValue>};
 const dateOK=(v:string)=>!v||(/^\d{4}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(v)));
 function sanitizeRecords(value:unknown):Record<string,RecordValue>{
@@ -23,6 +23,7 @@ function sanitizeRecords(value:unknown):Record<string,RecordValue>{
  for(const [id,raw] of entries){
   if(!/^[a-zA-Z0-9._:/-]{1,160}$/.test(id)||!raw||typeof raw!=="object"||Array.isArray(raw))throw new Error("Certame inválido.");
   const x=raw as Record<string,unknown>,record:RecordValue={};
+  if(x.title!==undefined)record.title=String(x.title||"").slice(0,500);
   if(x.status!==undefined){if(!stages.includes(x.status as typeof stages[number]))throw new Error("Etapa inválida.");record.status=x.status as typeof stages[number];}
   if(x.deadlines!==undefined){if(!x.deadlines||typeof x.deadlines!=="object"||Array.isArray(x.deadlines))throw new Error("Prazos inválidos.");const deadlines:Record<string,string>={};for(const [name,d] of Object.entries(x.deadlines as Record<string,unknown>).slice(0,12)){const v=String(d||"");if(name.length>60||!dateOK(v))throw new Error("Data de prazo inválida.");deadlines[name]=v;}record.deadlines=deadlines;}
   if(x.costLines!==undefined){if(!Array.isArray(x.costLines)||x.costLines.length>30)throw new Error("Informe até 30 componentes de custo.");record.costLines=x.costLines.map((rawLine,index)=>{const line=rawLine as Record<string,unknown>,quantity=Number(line.quantity),unitCost=Number(line.unitCost),label=String(line.label||"").trim().slice(0,120);if(!label||!Number.isFinite(quantity)||quantity<0||quantity>1e8||!Number.isFinite(unitCost)||unitCost<0||unitCost>1e12)throw new Error("Componente de custo inválido.");return{id:String(line.id||index).slice(0,80),label,quantity,unitCost};});}
@@ -34,7 +35,7 @@ function sanitizeRecords(value:unknown):Record<string,RecordValue>{
  }
  return out;
 }
-async function read(c:{company:string;db:{url:string}}){
+async function read(c:Awaited<ReturnType<typeof routeContext>>){
  const key=keyFor(c.company),result=await routeRest(c.db,"proar_state?id=eq."+encodeURIComponent(key)+"&select=payload&limit=1");
  if(!result.ok)throw new Error("Consulta indisponível");
  const stored=(await result.json())[0]?.payload as Stored|undefined;
