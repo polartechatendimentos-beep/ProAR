@@ -3,13 +3,14 @@ import {NextRequest,NextResponse} from "next/server";
 import {procurementAccess} from "@/lib/procurement/access";
 import {hasPermission} from "@/lib/permissions";
 import {routeContext,routeRest} from "@/lib/work-route-store";
+import {commitNeonOperationalState,PRIMARY_DATABASE_URL} from "@/lib/supabase-rest";
 import {loadBiddingDocument,biddingTenderOptions} from "@/lib/bidding-document-store";
 import {DOCUMENT_CATEGORIES} from "@/lib/bidding-documents";
 export const runtime="nodejs";
 const json=(body:unknown,status=200)=>NextResponse.json(body,{status,headers:{"Cache-Control":"private, no-store","X-Robots-Tag":"noindex"}});
 type Requirement={id:string;category:string;description:string;threshold:string;unit:string;documentId:string};
 type Approval={status:"pending"|"approved"|"rejected";submittedAt:string;submittedBy:string;reviewedAt?:string;reviewedBy?:string;note?:string};
-type Stored={companyId:string;tenderId:string;revision:number;updatedAt:string;updatedBy:string;requirements:Requirement[];approval?:Approval};
+type Stored={companyId:string;tenderId:string;_revision:number;updatedAt:string;updatedBy:string;requirements:Requirement[];approval?:Approval};
 const keyFor=(company:string,tenderId:string)=>"bidding-requirements-v1:"+createHash("sha256").update(company+":"+tenderId).digest("hex");
 const readList=(value:unknown):Requirement[]=>{
  if(!Array.isArray(value)||value.length>100)throw new Error("Informe até 100 exigências do edital.");
@@ -31,7 +32,7 @@ export async function GET(request:NextRequest){
   if(!result.ok)throw new Error("Consulta indisponível");
   const stored=(await result.json())[0]?.payload as Stored|undefined;
   if(stored&&(stored.companyId!==c.company||stored.tenderId!==tenderId))return json({error:"Vínculo de empresa inválido."},403);
-  return json({requirements:stored?.requirements||[],revision:stored?.revision||0,approval:stored?.approval||null,canEdit:hasPermission(access.session,"licitacoes.editar"),canApprove:hasPermission(access.session,"aprovacoes.aprovar")});
+  return json({requirements:stored?.requirements||[],revision:stored?._revision||0,approval:stored?.approval||null,canEdit:hasPermission(access.session,"licitacoes.editar"),canApprove:hasPermission(access.session,"aprovacoes.aprovar")});
  }catch{return json({error:"Não foi possível carregar as exigências do edital."},503);}
 }
 export async function POST(request:NextRequest){
@@ -47,7 +48,7 @@ export async function POST(request:NextRequest){
   const old=(await existingResult.json())[0]?.payload as Stored|undefined;
   if(old&&(old.companyId!==c.company||old.tenderId!==tenderId))return json({error:"Vínculo de empresa inválido."},403);
   if(!old)return json({error:"Salve primeiro as exigências deste edital."},404);
-  const revision=Number(old.revision||0);
+  const revision=Number(old._revision||0);
   if(Number(body.expectedRevision||0)!==revision)return json({error:"As exigências foram alteradas em outra sessão. Atualize antes de salvar."},409);
   const actor=access.session.username,now=new Date().toISOString();
   let next:Stored;
@@ -59,7 +60,7 @@ export async function POST(request:NextRequest){
     const doc=await loadBiddingDocument(c.db,c.company,req.documentId);
     if(!doc||!doc.uploaded||doc.tenderId&&doc.tenderId!==tenderId||doc.review!=="approved"||doc.validUntil&&doc.validUntil<now.slice(0,10))return json({error:"Há evidência ausente, não aprovada, vencida ou vinculada a outro edital."},422);
    }
-   next={...old,revision:revision+1,updatedAt:now,updatedBy:actor,approval:{status:"pending",submittedAt:now,submittedBy:actor}};
+   next={...old,__revision:revision+1,updatedAt:now,updatedBy:actor,approval:{status:"pending",submittedAt:now,submittedBy:actor}};
   }else if(body.action==="decision"){
    if(!hasPermission(access.session,"aprovacoes.aprovar"))return json({error:"A aprovação gerencial exige a permissão Aprovações → Aprovar."},403);
    if(!old.approval||old.approval.status!=="pending")return json({error:"Este dossiê não está aguardando aprovação gerencial."},409);
@@ -81,8 +82,10 @@ export async function POST(request:NextRequest){
    next={companyId:c.company,tenderId,revision:revision+1,updatedAt:now,updatedBy:actor,requirements};
   }
 
-  const result=await routeRest(c.db,old?"proar_state?id=eq."+encodeURIComponent(key)+"&payload->>revision=eq."+revision+"&select=payload":"proar_state?on_conflict=id&select=payload",{method:old?"PATCH":"POST",headers:{Prefer:old?"return=representation":"resolution=ignore-duplicates,return=representation"},body:JSON.stringify(old?{payload:next,updated_at:next.updatedAt}:{id:key,payload:next,updated_at:next.updatedAt})});
-  if(!result.ok||!(await result.json()).length)return json({error:"Exigências não salvas. Atualize e tente novamente."},409);
-  return json({saved:true,revision:next.revision,requirements:next.requirements,approval:next.approval||null});
+  let saved=false;
+  if(c.db.url===PRIMARY_DATABASE_URL)saved=Boolean(await commitNeonOperationalState(key,old?revision:null,next,[]));
+  else{const result=await routeRest(c.db,old?"proar_state?id=eq."+encodeURIComponent(key)+"&payload->>_revision=eq."+revision+"&select=payload":"proar_state?on_conflict=id&select=payload",{method:old?"PATCH":"POST",headers:{Prefer:old?"return=representation":"resolution=ignore-duplicates,return=representation"},body:JSON.stringify(old?{payload:next,updated_at:next.updatedAt}:{id:key,payload:next,updated_at:next.updatedAt})});saved=result.ok&&(await result.json()).length>0;}
+  if(!saved)return json({error:"Exigências não salvas. Atualize e tente novamente."},409);
+  return json({saved:true,revision:next._revision,requirements:next.requirements,approval:next.approval||null});
  }catch(error){return json({error:error instanceof Error&&/Exigência|exigência|Categoria|Limite|quantidade|Documento|edital|Vínculo/.test(error.message)?error.message:"Não foi possível salvar as exigências. Os dados anteriores foram preservados."},422);}
 }
