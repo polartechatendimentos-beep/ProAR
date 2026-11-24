@@ -72,6 +72,7 @@ export async function POST(request:NextRequest){
    }
    next={...old,revision:revision+1,updatedAt:now,updatedBy:actor,approval:{...old.approval,status:decision,reviewedAt:now,reviewedBy:actor,note}};
   }else{
+   if(!hasPermission(access.session,"licitacoes.editar"))return json({error:"Sem permissão para editar exigências."},403);
    const requirements=readList(body.requirements);
    for(const req of requirements)if(req.documentId){
     const doc=await loadBiddingDocument(c.db,c.company,req.documentId);
