@@ -5,6 +5,8 @@ import { StandardDocumentReport } from "@/components/StandardDocumentReport";
 import React, { useState } from "react";
 import { FileText, Plus, Trash2, Calculator, Send, Printer, MapPin, CheckCircle2 } from "lucide-react";
 import { getDistanceToMunicipality, calculateDisplacementFee } from "@/lib/municipality-distances";
+import { CopperWeightCalculator } from "@/components/CopperWeightCalculator";
+import type { QuoteConversionDraft } from "@/lib/commercial-document";
 
 interface BudgetItem {
   id: string;
@@ -16,7 +18,11 @@ interface BudgetItem {
   valorTotal: number;
 }
 
-export function OrcamentoPanel() {
+interface OrcamentoPanelProps {
+  onConvert?: (destination: "venda" | "os", draft: QuoteConversionDraft) => void;
+}
+
+export function OrcamentoPanel({ onConvert }: OrcamentoPanelProps) {
   const [cliente, setCliente] = useState("Hospital e Maternidade São Judas - Barretos/SP");
   const [cnpj, setCnpj] = useState("45.123.890/0001-22");
   const [cidadeDestino, setCidadeDestino] = useState("Barretos");
@@ -112,6 +118,7 @@ export function OrcamentoPanel() {
         </div>
 
         <div className="flex gap-2.5">
+          <CopperWeightCalculator />
           <button
             onClick={() => setShowPrintModal(true)}
             className="px-3.5 py-2 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition flex items-center gap-1.5 shadow-sm"
@@ -180,6 +187,14 @@ export function OrcamentoPanel() {
             </button>
           </div>
         </div>
+
+        {onConvert && (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-blue-100 bg-blue-50/60 p-3">
+            <span className="mr-auto text-xs font-semibold text-slate-600">Aproveitar este orçamento:</span>
+            <button type="button" onClick={() => onConvert("venda", { id: `orc-${Date.now()}`, numero: "ORÇ-2026-089", cliente, cnpjCpf: cnpj, cidade: cidadeDestino, itens: items, valorTotal: totalGeral, createdAt: new Date().toISOString() })} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700">Converter em venda</button>
+            <button type="button" onClick={() => onConvert("os", { id: `orc-${Date.now()}`, numero: "ORÇ-2026-089", cliente, cnpjCpf: cnpj, cidade: cidadeDestino, itens: items, valorTotal: totalGeral, createdAt: new Date().toISOString() })} className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50">Gerar ordem de serviço</button>
+          </div>
+        )}
 
         <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
           <table className="w-full text-left text-xs">

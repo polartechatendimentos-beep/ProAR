@@ -2,12 +2,14 @@
 
 import { StandardDocumentReport } from "@/components/StandardDocumentReport";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   Wrench, Search, Plus, Filter, CheckCircle2, Clock, 
   MapPin, Copy, ExternalLink, Sparkles, Printer, Camera, Image as ImageIcon, Send
 } from "lucide-react";
 import { getDistanceToMunicipality, calculateDisplacementFee } from "@/lib/municipality-distances";
+import { CopperWeightCalculator } from "@/components/CopperWeightCalculator";
+import type { QuoteConversionDraft } from "@/lib/commercial-document";
 
 interface OSItem {
   id: number;
@@ -22,9 +24,16 @@ interface OSItem {
   relatoExecucao?: string;
   status: string;
   proximaAcao?: string;
+  numeroOrcamento?: string;
+  valorOrcamento?: number;
 }
 
-export function ServiceOrdersSection() {
+interface ServiceOrdersSectionProps {
+  conversionDraft?: QuoteConversionDraft | null;
+  onConversionImported?: () => void;
+}
+
+export function ServiceOrdersSection({ conversionDraft, onConversionImported }: ServiceOrdersSectionProps) {
   const [filter, setFilter] = useState<"em_aberto" | "hoje" | "todas" | "concluidas" | "canceladas">("em_aberto");
   const [searchQuery, setSearchQuery] = useState("");
   const [osList, setOsList] = useState<OSItem[]>([
@@ -79,6 +88,31 @@ export function ServiceOrdersSection() {
   const [generatingAi, setGeneratingAi] = useState(false);
   const [showOsReportModal, setShowOsReportModal] = useState(false);
   const [currentReportOs, setCurrentReportOs] = useState<OSItem | null>(null);
+  const [importedBudgetNumber, setImportedBudgetNumber] = useState<string | null>(null);
+  const lastImportedQuoteId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!conversionDraft || lastImportedQuoteId.current === conversionDraft.id) return;
+    lastImportedQuoteId.current = conversionDraft.id;
+    const newOs: OSItem = {
+      id: Date.now(),
+      numeroTarefa: `OS-${Date.now().toString().slice(-6)}`,
+      clienteNome: conversionDraft.cliente,
+      clienteCnpjCpf: conversionDraft.cnpjCpf,
+      equipe: "A definir",
+      tipoTarefa: conversionDraft.itens.map((item) => `${item.quantidade}× ${item.descricao}`).join("; "),
+      endereco: `${conversionDraft.cidade} - SP`,
+      status: "Aguardando Agendamento",
+      proximaAcao: "Confirmar endereço, equipe e agendamento",
+      numeroOrcamento: conversionDraft.numero,
+      valorOrcamento: conversionDraft.valorTotal,
+    };
+    setOsList((current) => [newOs, ...current]);
+    setFilter("em_aberto");
+    setSearchQuery(conversionDraft.cliente);
+    setImportedBudgetNumber(conversionDraft.numero);
+    onConversionImported?.();
+  }, [conversionDraft, onConversionImported]);
 
   // Filtro padrão de negócios: "Em aberto" oculta concluídas e canceladas
   const filteredList = osList.filter((os) => {
@@ -132,6 +166,7 @@ export function ServiceOrdersSection() {
 
         {/* Barra de Filtros */}
         <div className="flex flex-wrap items-center gap-2">
+          <CopperWeightCalculator />
           {(["em_aberto", "hoje", "todas", "concluidas", "canceladas"] as const).map((f) => (
             <button
               key={f}
@@ -147,6 +182,12 @@ export function ServiceOrdersSection() {
           ))}
         </div>
       </div>
+
+      {importedBudgetNumber && (
+        <div role="status" className="mx-6 mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
+          Orçamento {importedBudgetNumber} importado como nova OS. Confirme endereço, equipe e agendamento antes de encaminhar.
+        </div>
+      )}
 
       {/* Barra de Busca Abrangente */}
       <div className="p-4 border-b border-slate-100 bg-white">
@@ -191,6 +232,7 @@ export function ServiceOrdersSection() {
                 </div>
 
                 <h3 className="text-sm font-bold text-slate-900">{os.clienteNome}</h3>
+                {os.numeroOrcamento && <div className="text-[11px] font-semibold text-emerald-700">Origem: {os.numeroOrcamento} · R$ {(os.valorOrcamento ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>}
                 <div className="text-xs text-slate-500 flex flex-wrap items-center gap-3">
                   <span className="flex items-center gap-1">
                     <MapPin className="w-3.5 h-3.5 text-slate-400" /> {os.endereco}

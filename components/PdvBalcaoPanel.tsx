@@ -3,6 +3,8 @@
 import { StandardDocumentReport } from "@/components/StandardDocumentReport";
 
 import React, { useState, useEffect, useRef } from "react";
+import { CopperWeightCalculator } from "@/components/CopperWeightCalculator";
+import type { QuoteConversionDraft } from "@/lib/commercial-document";
 import { 
   ShoppingCart, Search, CreditCard, Banknote, QrCode, 
   Trash2, Plus, Minus, Check, AlertCircle, RefreshCw, X
@@ -19,7 +21,12 @@ interface CartItem {
   isRecent?: boolean;
 }
 
-export function PdvBalcaoPanel() {
+interface PdvBalcaoPanelProps {
+  conversionDraft?: QuoteConversionDraft | null;
+  onConversionImported?: () => void;
+}
+
+export function PdvBalcaoPanel({ conversionDraft, onConversionImported }: PdvBalcaoPanelProps) {
   const [items, setItems] = useState<CartItem[]>([
     {
       id: "1",
@@ -45,6 +52,7 @@ export function PdvBalcaoPanel() {
   const [selectedItemId, setSelectedItemId] = useState<string>("1");
   const [cliente, setCliente] = useState("Consumidor Final (Balcão)");
   const [vendedor, setVendedor] = useState("Técnico Balcão ProAR");
+  const [importedBudgetNumber, setImportedBudgetNumber] = useState<string | null>(null);
 
   // Modal de Pagamento (F4/F7)
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -58,6 +66,22 @@ export function PdvBalcaoPanel() {
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    if (!conversionDraft) return;
+    setImportedBudgetNumber(conversionDraft.numero);
+    setCliente(conversionDraft.cliente);
+    setItems(conversionDraft.itens.map((item) => ({
+      id: `${conversionDraft.id}-${item.id}`,
+      codigo: item.tipo === "PRODUTO" ? "ORCAMENTO" : "SERVICO",
+      descricao: item.descricao,
+      tipo: item.tipo,
+      quantidade: item.quantidade,
+      valorUnitario: item.valorUnitario,
+      valorTotal: item.valorTotal,
+    })));
+    onConversionImported?.();
+  }, [conversionDraft, onConversionImported]);
 
   // Atalhos de teclado F1-F12
   useEffect(() => {
@@ -165,6 +189,8 @@ export function PdvBalcaoPanel() {
           </div>
         </div>
 
+        <CopperWeightCalculator dark />
+
         {/* Total da Venda em Destaque */}
         <div className="bg-blue-950/80 border border-blue-800/60 px-5 py-2.5 rounded-xl text-right">
           <span className="text-[10px] font-bold tracking-wider text-blue-300 uppercase block">Total a Pagar</span>
@@ -173,6 +199,12 @@ export function PdvBalcaoPanel() {
           </span>
         </div>
       </div>
+
+      {importedBudgetNumber && (
+        <div role="status" className="rounded-lg border border-emerald-700/70 bg-emerald-950/50 px-3 py-2 text-xs font-semibold text-emerald-300">
+          Orçamento {importedBudgetNumber} importado para a venda. Revise os itens e valores antes de finalizar.
+        </div>
+      )}
 
       {/* Grid Principal do PDV */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

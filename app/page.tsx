@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { 
   Building2, Wrench, FileText, ShoppingCart, DollarSign, UsersRound,
   ShieldCheck, Landmark, Search, Bell, Settings, LogOut, CheckCircle2
@@ -15,12 +15,19 @@ import { FinanceiroPanel } from "@/components/FinanceiroPanel";
 import { PublicContractsPanel } from "@/components/PublicContractsPanel";
 import { TechnicalCompliancePanel } from "@/components/TechnicalCompliancePanel";
 import { CustomerProfileWorkspace } from "@/components/CustomerProfileWorkspace";
+import type { QuoteConversionDraft } from "@/lib/commercial-document";
 
 type TabType = "dashboard" | "clientes" | "os" | "obras" | "orcamento" | "pdv" | "financeiro" | "contratos" | "pmoc";
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
   const [globalSearch, setGlobalSearch] = useState("");
+  const [conversionDraft, setConversionDraft] = useState<QuoteConversionDraft | null>(null);
+  const clearConversionDraft = useCallback(() => setConversionDraft(null), []);
+  const convertQuote = (destination: "venda" | "os", draft: QuoteConversionDraft) => {
+    setConversionDraft(draft);
+    setActiveTab(destination === "venda" ? "pdv" : "os");
+  };
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col">
@@ -174,11 +181,11 @@ export default function HomePage() {
         )}
 
         {/* Abas Específicas */}
-        {activeTab === "os" && <ServiceOrdersSection />}
+        {activeTab === "os" && <ServiceOrdersSection conversionDraft={conversionDraft} onConversionImported={clearConversionDraft} />}
         {activeTab === "clientes" && <CustomerProfileWorkspace />}
         {activeTab === "obras" && <WorkOperationsPanel />}
-        {activeTab === "orcamento" && <OrcamentoPanel />}
-        {activeTab === "pdv" && <PdvBalcaoPanel />}
+        {activeTab === "orcamento" && <OrcamentoPanel onConvert={convertQuote} />}
+        {activeTab === "pdv" && <PdvBalcaoPanel conversionDraft={conversionDraft} onConversionImported={clearConversionDraft} />}
         {activeTab === "financeiro" && <FinanceiroPanel />}
         {activeTab === "contratos" && <PublicContractsPanel />}
         {activeTab === "pmoc" && <TechnicalCompliancePanel />}
