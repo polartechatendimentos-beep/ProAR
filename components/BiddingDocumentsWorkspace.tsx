@@ -141,6 +141,19 @@ export function BiddingDocumentsWorkspace({companyName}:{companyName:string}){
      </div>;})}
      <button type="button" className="outline-btn" disabled={requirementBusy||!canEdit||requirements.length>=100} onClick={()=>setRequirements(current=>[...current,{id:crypto.randomUUID(),category:"Atestado técnico",description:"",threshold:"",unit:"",documentId:""}])}>Adicionar exigência</button>{" "}
      <button type="button" className="primary-btn" disabled={requirementBusy||!canEdit} onClick={()=>void saveRequirements()}>{requirementBusy?"Salvando…":"Salvar matriz do edital"}</button>
+     <div style={{padding:12,marginTop:12,border:"1px solid #36536a",borderRadius:10}}>
+      <strong>Riscos e aprovação do dossiê</strong>
+      <p>{requirements.filter(item=>{const doc=documents.find(value=>value.id===item.documentId);return !doc||doc.status!=="Aprovado";}).length} exigência(s) sem evidência aprovada vinculada.</p>
+      <p>Situação gerencial: {approval?.status==="pending"?"Aguardando aprovação de outra pessoa":approval?.status==="approved"?"Aprovado pela gestão":approval?.status==="rejected"?"Devolvido para ajustes":"Em elaboração"}{approval?.submittedAt?" • enviado em "+new Date(approval.submittedAt).toLocaleString("pt-BR"):""}{approval?.reviewedAt?" • decisão em "+new Date(approval.reviewedAt).toLocaleString("pt-BR"):""}</p>
+      {approval?.note&&<p>Justificativa gerencial: {approval.note}</p>}
+      <button type="button" className="outline-btn" disabled={!requirements.length} onClick={exportDossier}>Exportar dossiê preliminar</button>{" "}
+      <button type="button" className="primary-btn" disabled={!canEdit||requirementBusy||!requirements.length||approval?.status==="pending"||approval?.status==="approved"} onClick={()=>void submitDossier()}>{requirementBusy?"Processando…":"Enviar para aprovação gerencial"}</button>
+      {approval?.status==="pending"&&canApprove&&<div style={{marginTop:10}}>
+       <label>Justificativa da decisão<textarea value={managerNote} maxLength={1000} onChange={event=>setManagerNote(event.target.value)} placeholder="Registre a revisão gerencial, com ao menos 5 caracteres."/></label>
+       <button type="button" className="primary-btn" disabled={requirementBusy||managerNote.trim().length<5} onClick={()=>void decideDossier("approved")}>Aprovar dossiê</button>{" "}
+       <button type="button" className="outline-btn" disabled={requirementBusy||managerNote.trim().length<5} onClick={()=>void decideDossier("rejected")}>Devolver para ajustes</button>
+      </div>}
+     </div>
      <small style={{display:"block",marginTop:8}}>Versão {requirementRevision}. A matriz é separada por empresa e edital; apenas arquivos aprovados aparecem como evidência atendida.</small>
     </>}
    </section>
