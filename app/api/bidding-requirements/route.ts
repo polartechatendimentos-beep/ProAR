@@ -71,7 +71,7 @@ export async function POST(request:NextRequest){
     const doc=req.documentId?await loadBiddingDocument(c.db,c.company,req.documentId):null;
     if(!doc||doc.review!=="approved"||!doc.uploaded||doc.validUntil&&doc.validUntil<now.slice(0,10))return json({error:"O dossiê tem evidência pendente ou vencida. Reenvie para análise após corrigir."},422);
    }
-   next={...old,revision:revision+1,updatedAt:now,updatedBy:actor,approval:{...old.approval,status:decision,reviewedAt:now,reviewedBy:actor,note}};
+   next={...old,_revision:revision+1,updatedAt:now,updatedBy:actor,approval:{...old.approval,status:decision,reviewedAt:now,reviewedBy:actor,note}};
   }else{
    if(!hasPermission(access.session,"licitacoes.editar"))return json({error:"Sem permissão para editar exigências."},403);
    const requirements=readList(body.requirements);
@@ -79,7 +79,7 @@ export async function POST(request:NextRequest){
     const doc=await loadBiddingDocument(c.db,c.company,req.documentId);
     if(!doc||!doc.uploaded||doc.tenderId&&doc.tenderId!==tenderId)return json({error:"Documento vinculado não pertence a esta empresa ou a este edital."},422);
    }
-   next={companyId:c.company,tenderId,revision:revision+1,updatedAt:now,updatedBy:actor,requirements};
+   next={companyId:c.company,tenderId,_revision:revision+1,updatedAt:now,updatedBy:actor,requirements};
   }
 
   let saved=false;
