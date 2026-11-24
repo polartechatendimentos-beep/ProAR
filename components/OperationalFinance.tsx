@@ -63,7 +63,7 @@ export function OperationalFinance({ records, modules, onOpen, onOperation, onIs
   }).reduce((sum,record)=>sum+outstanding(record),0)}));
   const forecastItems = records.filter(record=>!/cancelad/i.test(record.status || "") && outstanding(record)>0).map(record=>({id:String(record.id),date:String(record.dueDate||record.date||today).slice(0,10),amount:outstanding(record),direction:(payable(record)?"out":"in") as "in"|"out",status:"confirmed" as const,source:String(record.originKey||record.id)}));
   const forecast = cashFlowForecast(forecastItems,today);
-  const profitability=useMemo(()=>profitabilityPortfolio(...[["Ordens de serviço",modules["Ordens de serviço"]||[]],["Obras",modules.Obras||[]],["Vendas",modules.Vendas||[]]].flatMap(([source,rows])=>(rows as ErpRecord[]).map(record=>({...record,_profitabilitySource:source})))),[modules]);
+  const profitability=useMemo(()=>profitabilityPortfolio([["Ordens de serviço",modules["Ordens de serviço"]||[]],["Obras",modules.Obras||[]],["Vendas",modules.Vendas||[]]].flatMap(([source,rows])=>(rows as ErpRecord[]).map(record=>({...record,_profitabilitySource:source})))),[modules]);
   const kpis: [string, number, LucideIcon, string][] = [
     ["A RECEBER", openTotal(false), ArrowDownLeft, "receivable"],
     ["VENCE HOJE", dueTodayTotal, Clock3, "due-today"],
