@@ -48,4 +48,3 @@ CREATE TABLE IF NOT EXISTS proar_products (
 
 CREATE UNIQUE INDEX IF NOT EXISTS proar_products_company_code_uidx ON proar_products (company_id, codigo);
 CREATE INDEX IF NOT EXISTS proar_products_company_description_idx ON proar_products (company_id, descricao);
-
