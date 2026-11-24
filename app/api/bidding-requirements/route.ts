@@ -64,12 +64,24 @@ export async function POST(request:NextRequest){
   if(!existingResult.ok)throw new Error("Consulta indisponível");
   const old=(await existingResult.json())[0]?.payload as Stored|undefined;
   if(old&&(old.companyId!==c.company||old.tenderId!==tenderId))return json({error:"Vínculo de empresa inválido."},403);
-  if(!old&&(body.action==="submit"||body.action==="decision"))return json({error:"Salve primeiro as exigências deste edital."},404);
+  if(!old&&(body.action==="submit"||body.action==="decision"||body.action==="financial-audit"))return json({error:"Salve primeiro as exigências deste edital."},404);
   const revision=Number(old?._revision||0);
   if(Number(body.expectedRevision||0)!==revision)return json({error:"As exigências foram alteradas em outra sessão. Atualize antes de salvar."},409);
   const actor=access.session.username,now=new Date().toISOString();
   let next:Stored;
-  if(body.action==="submit"){
+  if(body.action==="financial-audit"){
+    if(!old)return json({error:"Salve primeiro a matriz deste edital."},404);
+    if(!hasPermission(access.session,"licitacoes.editar"))return json({error:"Sem permissão para auditar índices."},403);
+    const rawInput=(body.financial||{}) as Record<string,unknown>;
+    const numeric=(key:string)=>{const rawValue=String(rawInput[key]??"").trim();if(!rawValue)throw new Error("Preencha todos os valores do balanço.");const value=Number(rawValue.replace(",", "."));if(!Number.isFinite(value)||value<0||value>1e15)throw new Error("Valor financeiro inválido: "+key);return value;};
+    const minimum=(key:string)=>{const value=String(rawInput[key]||"").trim();if(!value)return "";const parsed=Number(value.replace(",", "."));if(!Number.isFinite(parsed)||parsed<0||parsed>1e6)throw new Error("Índice mínimo inválido: "+key);return String(parsed);};
+    const documentIds=Array.isArray(rawInput.documentIds)?rawInput.documentIds.slice(0,20).map(String):[];
+    if(!documentIds.length)return json({error:"Vincule ao menos um balanço ou DRE antes de salvar a auditoria."},422);
+    for(const id of documentIds){const doc=await loadBiddingDocument(c.db,c.company,id);if(!doc||!doc.uploaded||doc.tenderId&&doc.tenderId!==tenderId)return json({error:"Documento financeiro não pertence a esta empresa ou edital."},422);}
+    const input:FinancialInputs={currentAssets:numeric("currentAssets"),currentLiabilities:numeric("currentLiabilities"),realizableLongTerm:numeric("realizableLongTerm"),longTermLiabilities:numeric("longTermLiabilities"),totalAssets:numeric("totalAssets"),minimumCurrent:minimum("minimumCurrent"),minimumGeneral:minimum("minimumGeneral"),minimumSolvency:minimum("minimumSolvency"),sourceNote:String(rawInput.sourceNote||"").trim().slice(0,1000),documentIds};
+    const financialAudit={...input,ratios:calculateBiddingFinancialRatios(input),updatedAt:now,updatedBy:actor};
+    next={...old,_revision:revision+1,updatedAt:now,updatedBy:actor,financialAudit,approval:undefined};
+   }else if(body.action==="submit"){
    if(!old)return json({error:"Salve primeiro as exigências deste edital."},404);
    if(!hasPermission(access.session,"licitacoes.editar"))return json({error:"Sem permissão para enviar o dossiê."},403);
    if(!old.requirements.length)return json({error:"Inclua ao menos uma exigência antes de enviar o dossiê."},422);
@@ -98,13 +110,13 @@ export async function POST(request:NextRequest){
     const doc=await loadBiddingDocument(c.db,c.company,req.documentId);
     if(!doc||!doc.uploaded||doc.tenderId&&doc.tenderId!==tenderId)return json({error:"Documento vinculado não pertence a esta empresa ou a este edital."},422);
    }
-   next={companyId:c.company,tenderId,_revision:revision+1,updatedAt:now,updatedBy:actor,requirements};
+   next={companyId:c.company,tenderId,_revision:revision+1,updatedAt:now,updatedBy:actor,requirements,approval:undefined,financialAudit:undefined};
   }
 
   let saved=false;
   if(c.db.url===PRIMARY_DATABASE_URL)saved=Boolean(await commitNeonOperationalState(key,old?revision:null,next,[]));
   else{const result=await routeRest(c.db,old?"proar_state?id=eq."+encodeURIComponent(key)+"&payload->>_revision=eq."+revision+"&select=payload":"proar_state?on_conflict=id&select=payload",{method:old?"PATCH":"POST",headers:{Prefer:old?"return=representation":"resolution=ignore-duplicates,return=representation"},body:JSON.stringify(old?{payload:next,updated_at:next.updatedAt}:{id:key,payload:next,updated_at:next.updatedAt})});saved=result.ok&&(await result.json()).length>0;}
   if(!saved)return json({error:"Exigências não salvas. Atualize e tente novamente."},409);
-  return json({saved:true,revision:next._revision,requirements:next.requirements,approval:next.approval||null});
+  return json({saved:true,revision:next._revision,requirements:next.requirements,approval:next.approval||null,financialAudit:next.financialAudit||null});
  }catch(error){return json({error:error instanceof Error&&/Exigência|exigência|Categoria|Limite|quantidade|Documento|edital|Vínculo/.test(error.message)?error.message:"Não foi possível salvar as exigências. Os dados anteriores foram preservados."},422);}
 }
