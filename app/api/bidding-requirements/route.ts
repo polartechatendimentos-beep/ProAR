@@ -36,6 +36,21 @@ export async function GET(request:NextRequest){
  try{
   const c=await routeContext(access.session),tenderId=String(request.nextUrl.searchParams.get("tenderId")||"");
   if(!tenderId||!biddingTenderOptions(c.state).some(item=>item.id===tenderId))return json({error:"Salve e selecione um edital desta empresa."},422);
+  const result=await routeRest(c.db,"proar_state?id=eq."+encodeURIComponent(keyFor(c.company,tenderId))+"&select=payload&limit=1");
+  if(!result.ok)throw new Error("Consulta indisponível");
+  const stored=(await result.json())[0]?.payload as Stored|undefined;
+  if(stored&&(stored.companyId!==c.company||stored.tenderId!==tenderId))return json({error:"Vínculo de empresa inválido."},403);
+  return json({requirements:stored?.requirements||[],revision:stored?._revision||0,approval:stored?.approval||null,financialAudit:stored?.financialAudit||null,canEdit:hasPermission(access.session,"licitacoes.editar"),canApprove:hasPermission(access.session,"aprovacoes.aprovar")});
+ }catch{return json({error:"Não foi possível carregar as exigências do edital."},503);}
+}
+export async function POST(request:NextRequest){
+ const access=procurementAccess(request);if(!access.ok)return json({error:access.error},access.status);
+ if(!hasPermission(access.session,"licitacoes.editar")&&!hasPermission(access.session,"aprovacoes.aprovar"))return json({error:"Sem permissão para editar ou aprovar exigências."},403);
+ if(request.headers.get("origin")!==request.nextUrl.origin)return json({error:"Origem não autorizada."},403);
+ try{
+  const raw=await request.text();if(raw.length>320000)return json({error:"Solicitação muito grande."},413);
+  const body=JSON.parse(raw),c=await routeContext(access.session),tenderId=String(body.tenderId||"");
+  if(!tenderId||!biddingTenderOptions(c.state).some(item=>item.id===tenderId))return json({error:"Salve e selecione um edital desta empresa."},422);
   if(body.action==="extract-technical"){
    if(!hasPermission(access.session,"licitacoes.editar"))return json({error:"Sem permissão para analisar atestado."},403);
    const text=String(body.text||"");if(text.length<40||text.length>250000)return json({error:"Texto do atestado inválido ou fora do limite."},422);
@@ -66,21 +81,6 @@ export async function GET(request:NextRequest){
    const output=payload.output_text||payload.output?.flatMap((item:{content?:{text?:string}[]})=>item.content||[]).map((item:{text?:string})=>item.text||"").join("")||"{}";
    try{const parsed=JSON.parse(output) as {requirements?:Record<string,unknown>[]};const requirements=(Array.isArray(parsed.requirements)?parsed.requirements:[]).slice(0,100).map(item=>{const category=String(item.category||"Outros");return {id:randomUUID(),category:DOCUMENT_CATEGORIES.includes(category as typeof DOCUMENT_CATEGORIES[number])?category:"Outros",description:String(item.description||"").trim().slice(0,500),threshold:String(item.threshold||"").trim().slice(0,80),unit:String(item.unit||"").trim().slice(0,40),documentId:"",sourcePage:Number(item.page)||undefined,sourceQuote:String(item.quote||"").trim().slice(0,500),phase:String(item.phase||"").slice(0,60),dueDate:String(item.dueDate||"").slice(0,10)};}).filter(item=>item.description.length>=4);return json({requirements,requiresHumanReview:true,source:"openai"});}catch{return json({error:"A resposta da IA não veio em formato válido. Nenhuma matriz foi alterada."},502);}
   }
-  const result=await routeRest(c.db,"proar_state?id=eq."+encodeURIComponent(keyFor(c.company,tenderId))+"&select=payload&limit=1");
-  if(!result.ok)throw new Error("Consulta indisponível");
-  const stored=(await result.json())[0]?.payload as Stored|undefined;
-  if(stored&&(stored.companyId!==c.company||stored.tenderId!==tenderId))return json({error:"Vínculo de empresa inválido."},403);
-  return json({requirements:stored?.requirements||[],revision:stored?._revision||0,approval:stored?.approval||null,financialAudit:stored?.financialAudit||null,canEdit:hasPermission(access.session,"licitacoes.editar"),canApprove:hasPermission(access.session,"aprovacoes.aprovar")});
- }catch{return json({error:"Não foi possível carregar as exigências do edital."},503);}
-}
-export async function POST(request:NextRequest){
- const access=procurementAccess(request);if(!access.ok)return json({error:access.error},access.status);
- if(!hasPermission(access.session,"licitacoes.editar")&&!hasPermission(access.session,"aprovacoes.aprovar"))return json({error:"Sem permissão para editar ou aprovar exigências."},403);
- if(request.headers.get("origin")!==request.nextUrl.origin)return json({error:"Origem não autorizada."},403);
- try{
-  const raw=await request.text();if(raw.length>320000)return json({error:"Solicitação muito grande."},413);
-  const body=JSON.parse(raw),c=await routeContext(access.session),tenderId=String(body.tenderId||"");
-  if(!tenderId||!biddingTenderOptions(c.state).some(item=>item.id===tenderId))return json({error:"Salve e selecione um edital desta empresa."},422);
   const key=keyFor(c.company,tenderId),existingResult=await routeRest(c.db,"proar_state?id=eq."+encodeURIComponent(key)+"&select=payload&limit=1");
   if(!existingResult.ok)throw new Error("Consulta indisponível");
   const old=(await existingResult.json())[0]?.payload as Stored|undefined;
