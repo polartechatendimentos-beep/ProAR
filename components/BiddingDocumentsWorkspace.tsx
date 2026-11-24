@@ -178,7 +178,43 @@ export function BiddingDocumentsWorkspace({companyName}:{companyName:string}){
      </div>;})}
      <button type="button" className="outline-btn" disabled={requirementBusy||!canEdit||requirements.length>=100} onClick={()=>setRequirements(current=>[...current,{id:crypto.randomUUID(),category:"Atestado técnico",description:"",threshold:"",unit:"",documentId:""}])}>Adicionar exigência</button>{" "}
      <button type="button" className="primary-btn" disabled={requirementBusy||!canEdit} onClick={()=>void saveRequirements()}>{requirementBusy?"Salvando…":"Salvar matriz do edital"}</button>
-     <div style={{padding:12,marginTop:12,border:"1px solid #36536a",borderRadius:10}}>
+     <section className="panel" aria-label="Auditoria econômico-financeira" style={{padding:14,marginTop:12,border:"1px solid #36536a",borderRadius:10}}>
+       <h4>Auditoria econômico-financeira</h4>
+       <p>Informe os valores do balanço e os mínimos exigidos no edital. O cálculo mostra as fórmulas; confira os demonstrativos originais e a regra do edital.</p>
+       {["Balanço Patrimonial","DRE","Índices econômico-financeiros"].map(category=>documents.filter(doc=>doc.category===category&&(!doc.tenderId||doc.tenderId===tenderId)).map(doc=><label key={doc.id} style={{display:"block"}}><input type="checkbox" checked={financialDocumentIds.includes(doc.id)} onChange={event=>setFinancialDocumentIds(current=>event.target.checked?[...current,doc.id]:current.filter(id=>id!==doc.id))}/> {doc.name} • {doc.status}</label>))}
+       <div className="form-grid">
+        <label>Ativo circulante<input inputMode="decimal" value={financialInputs.currentAssets} onChange={event=>setFinancialInputs(v=>({...v,currentAssets:event.target.value}))}/></label>
+        <label>Passivo circulante<input inputMode="decimal" value={financialInputs.currentLiabilities} onChange={event=>setFinancialInputs(v=>({...v,currentLiabilities:event.target.value}))}/></label>
+        <label>Realizável a longo prazo<input inputMode="decimal" value={financialInputs.realizableLongTerm} onChange={event=>setFinancialInputs(v=>({...v,realizableLongTerm:event.target.value}))}/></label>
+        <label>Exigível a longo prazo<input inputMode="decimal" value={financialInputs.longTermLiabilities} onChange={event=>setFinancialInputs(v=>({...v,longTermLiabilities:event.target.value}))}/></label>
+        <label>Ativo total<input inputMode="decimal" value={financialInputs.totalAssets} onChange={event=>setFinancialInputs(v=>({...v,totalAssets:event.target.value}))}/></label>
+        <label>Liquidez Corrente mínima<input inputMode="decimal" value={financialInputs.minimumCurrent} onChange={event=>setFinancialInputs(v=>({...v,minimumCurrent:event.target.value}))}/></label>
+        <label>Liquidez Geral mínima<input inputMode="decimal" value={financialInputs.minimumGeneral} onChange={event=>setFinancialInputs(v=>({...v,minimumGeneral:event.target.value}))}/></label>
+        <label>Solvência Geral mínima<input inputMode="decimal" value={financialInputs.minimumSolvency} onChange={event=>setFinancialInputs(v=>({...v,minimumSolvency:event.target.value}))}/></label>
+        <label className="wide">Observação e referência do edital<input maxLength={1000} value={financialInputs.sourceNote} onChange={event=>setFinancialInputs(v=>({...v,sourceNote:event.target.value}))}/></label>
+       </div>
+       <button type="button" className="primary-btn" disabled={financialBusy||!canEdit} onClick={()=>void saveFinancialAudit()}>{financialBusy?"Calculando…":"Calcular e salvar auditoria"}</button>
+       {financialAudit&&<div><p>Auditoria registrada em {new Date(financialAudit.updatedAt).toLocaleString("pt-BR")} • responsável {financialAudit.updatedBy}</p><ul>{financialAudit.ratios.map(ratio=><li key={ratio.name}><strong>{ratio.name}:</strong> {ratio.value===null?"Indefinido":ratio.value.toFixed(3)} • mínimo {ratio.minimum===null?"não informado":ratio.minimum.toFixed(3)} • {ratio.status==="ok"?"Atende ao índice numérico":ratio.status==="below"?"Abaixo do mínimo informado":ratio.status==="undefined"?"Denominador zero; revisar":"Sem mínimo para comparar"}</li>)}</ul><small>Resultado matemático auxiliar; não certifica balanço, autenticidade, enquadramento legal ou habilitação.</small></div>}
+      </section>
+      <section className="panel" aria-label="Agenda de prazos da licitação" style={{padding:14,marginTop:12,border:"1px solid #36536a",borderRadius:10}}>
+       <h4>Agenda de prazos da licitação</h4>
+       {requirements.filter(item=>item.dueDate).sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate))).length?requirements.filter(item=>item.dueDate).sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate))).map(item=><p key={item.id}><strong>{new Date(item.dueDate+"T12:00:00").toLocaleDateString("pt-BR")}</strong> • {item.phase||"Prazo do edital"} • {item.description}</p>):<p>Use os campos de etapa e data em cada requisito para formar a agenda deste edital.</p>}
+      </section>
+      <section className="panel" aria-label="Simulador de preço de lance" style={{padding:14,marginTop:12,border:"1px solid #36536a",borderRadius:10}}>
+       <h4>Simulador de preço mínimo de lance</h4>
+       <p>Preencha os custos estimados do lote. A simulação considera tributos e margem como percentuais do preço de venda.</p>
+       <div className="form-grid">
+        <label>Materiais (R$)<input inputMode="decimal" value={priceInputs.materials} onChange={event=>setPriceInputs(v=>({...v,materials:event.target.value}))}/></label>
+        <label>Mão de obra (R$)<input inputMode="decimal" value={priceInputs.labor} onChange={event=>setPriceInputs(v=>({...v,labor:event.target.value}))}/></label>
+        <label>Deslocamento (R$)<input inputMode="decimal" value={priceInputs.travel} onChange={event=>setPriceInputs(v=>({...v,travel:event.target.value}))}/></label>
+        <label>Outros custos (R$)<input inputMode="decimal" value={priceInputs.other} onChange={event=>setPriceInputs(v=>({...v,other:event.target.value}))}/></label>
+        <label>Tributos sobre venda (%)<input type="number" min="0" max="99" step="0.01" value={priceInputs.tax} onChange={event=>setPriceInputs(v=>({...v,tax:event.target.value}))}/></label>
+        <label>Margem desejada (%)<input type="number" min="0" max="99" step="0.01" value={priceInputs.margin} onChange={event=>setPriceInputs(v=>({...v,margin:event.target.value}))}/></label>
+       </div>
+       <p>Custo informado: <strong>{priceCost.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</strong> • Piso sem margem: <strong>{Number.isFinite(minimumBid)?minimumBid.toLocaleString("pt-BR",{style:"currency",currency:"BRL"}):"percentuais inválidos"}</strong> • Lance-alvo: <strong>{Number.isFinite(targetBid)?targetBid.toLocaleString("pt-BR",{style:"currency",currency:"BRL"}):"percentuais inválidos"}</strong></p>
+       <small>Simulação auxiliar. Confirme custos, regime tributário e regras de formação de preço antes do lance.</small>
+      </section>
+      <div style={{padding:12,marginTop:12,border:"1px solid #36536a",borderRadius:10}}>
       <strong>Riscos e aprovação do dossiê</strong>
       <p>{requirements.filter(item=>{const doc=documents.find(value=>value.id===item.documentId);return !doc||doc.status!=="Aprovado";}).length} exigência(s) sem evidência aprovada vinculada.</p>
       <p>Situação gerencial: {approval?.status==="pending"?"Aguardando aprovação de outra pessoa":approval?.status==="approved"?"Aprovado pela gestão":approval?.status==="rejected"?"Devolvido para ajustes":"Em elaboração"}{approval?.submittedAt?" • enviado em "+new Date(approval.submittedAt).toLocaleString("pt-BR"):""}{approval?.reviewedAt?" • decisão em "+new Date(approval.reviewedAt).toLocaleString("pt-BR"):""}</p>
