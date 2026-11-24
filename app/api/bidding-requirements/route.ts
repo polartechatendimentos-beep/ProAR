@@ -60,12 +60,12 @@ export async function POST(request:NextRequest){
     const doc=await loadBiddingDocument(c.db,c.company,req.documentId);
     if(!doc||!doc.uploaded||doc.tenderId&&doc.tenderId!==tenderId||doc.review!=="approved"||doc.validUntil&&doc.validUntil<now.slice(0,10))return json({error:"Há evidência ausente, não aprovada, vencida ou vinculada a outro edital."},422);
    }
-   next={...old,__revision:revision+1,updatedAt:now,updatedBy:actor,approval:{status:"pending",submittedAt:now,submittedBy:actor}};
+   next={...old,_revision:revision+1,updatedAt:now,updatedBy:actor,approval:{status:"pending",submittedAt:now,submittedBy:actor}};
   }else if(body.action==="decision"){
    if(!hasPermission(access.session,"aprovacoes.aprovar"))return json({error:"A aprovação gerencial exige a permissão Aprovações → Aprovar."},403);
    if(!old.approval||old.approval.status!=="pending")return json({error:"Este dossiê não está aguardando aprovação gerencial."},409);
    if(old.approval.submittedBy===actor)return json({error:"A pessoa que enviou o dossiê não pode aprová-lo."},403);
-   const decision=String(body.decision),note=String(body.note||"").trim();
+   const decision=String(body.decision) as Approval["status"],note=String(body.note||"").trim();
    if(!["approved","rejected"].includes(decision)||note.length<5||note.length>1000)return json({error:"Informe uma decisão e justificativa de 5 a 1000 caracteres."},422);
    if(decision==="approved")for(const req of old.requirements){
     const doc=req.documentId?await loadBiddingDocument(c.db,c.company,req.documentId):null;
