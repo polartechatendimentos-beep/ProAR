@@ -3302,6 +3302,8 @@ type ModalSave = {
   warrantyMonths: number;
   estimatedMinutes: number;
   unitOfMeasure: string;
+  purchaseUnitOfMeasure?: string;
+  purchaseToStockFactor?: number;
   ncm?: string;
   cest?: string;
   cfop?: string;
@@ -4997,7 +4999,9 @@ export default function Home() {
           const existing = [...currentProducts, ...newProducts].find(product => normalize(product.name) === normalize(item.description));
           if (existing) item.productId = existing.id;
           else {
-            const product: ModuleRecord = { id: `PRO-${Date.now().toString().slice(-5)}-${index + 1}`, name: item.description, client: data.client, description: `Produto cadastrado automaticamente pela compra ${record.id}`, createdAt: new Date().toLocaleString("pt-BR"), kind: "Produto", status: "Ativo", value: item.unitValue, unitOfMeasure:item.unitOfMeasure||"un", purchaseUnitOfMeasure:item.unitOfMeasure||undefined, category: data.category || "Produto importado por XML" };
+            const sourceUnit=String(item.unitOfMeasure||"un").trim().toLowerCase();
+            const purchaseUnit=/^(kg|kgm|quilo|quilograma)$/.test(sourceUnit)?"kg":/^(m|mt|mts|metro|metros)$/.test(sourceUnit)?"m":sourceUnit;
+            const product: ModuleRecord = { id: `PRO-${Date.now().toString().slice(-5)}-${index + 1}`, name: item.description, client: data.client, description: `Produto cadastrado automaticamente pela compra ${record.id}`, createdAt: new Date().toLocaleString("pt-BR"), kind: "Produto", status: "Ativo", value: item.unitValue, unitOfMeasure:purchaseUnit, purchaseUnitOfMeasure:purchaseUnit, category: data.category || "Produto importado por XML" };
             item.productId = product.id;
             newProducts.push(product);
           }
