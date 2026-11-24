@@ -40,7 +40,7 @@ export async function GET(request:NextRequest){
    const text=String(body.text||"");if(text.length<100||text.length>250000)return json({error:"Texto do edital inválido ou fora do limite de leitura."},422);
    const credential=await getOpenAiCredential(safeCompanyId(c.company));if(!credential)return json({error:"Configure a IA em Configurações → Inteligência Artificial."},503);
    const prompt="Extraia somente exigências obrigatórias de habilitação técnica, jurídica, fiscal, trabalhista e econômico-financeira. Use só o texto fornecido. Para cada item, retorne category, description, threshold, unit, page, quote, phase e dueDate. page deve usar o marcador [Página N]; quote deve ser curto e literal. Não invente requisito, quantidade, índice ou data. Use campo vazio quando ausente. phase só pode ser Impugnação, Esclarecimentos, Proposta, Sessão, Validade documental ou Outro. dueDate em AAAA-MM-DD só quando inequívoca. JSON: {requirements:[...]}.\n"+text;
-   const upstream=await fetch("https://api.openai.com/v1/responses",{method:"POST",headers:{Authorization:"Bearer "+credential.apiKey,"Content-Type":"application/json"},body:JSON.stringify({model:"gpt-4.1-mini",instructions:"Extraia dados do edital sem concluir habilitação e sem inventar informação.",input:prompt,max_output_tokens:4000,store:false})});
+   const upstream=await fetch("https://api.openai.com/v1/responses",{method:"POST",headers:{Authorization:"Bearer "+credential.apiKey,"Content-Type":"application/json"},body:JSON.stringify({model:"gpt-4.1-mini",instructions:"Extraia dados do edital sem concluir habilitação e sem inventar informação.",input:prompt,max_output_tokens:4000,text:{format:{type:"json_object"}},store:false})});
    const payload=await upstream.json();if(!upstream.ok)return json({error:"A IA não conseguiu analisar o edital. Confira a configuração e tente novamente."},502);
    const output=payload.output_text||payload.output?.flatMap((item:{content?:{text?:string}[]})=>item.content||[]).map((item:{text?:string})=>item.text||"").join("")||"{}";
    try{const parsed=JSON.parse(output) as {requirements?:Record<string,unknown>[]};const requirements=(Array.isArray(parsed.requirements)?parsed.requirements:[]).slice(0,100).map(item=>{const category=String(item.category||"Outros");return {id:randomUUID(),category:DOCUMENT_CATEGORIES.includes(category as typeof DOCUMENT_CATEGORIES[number])?category:"Outros",description:String(item.description||"").trim().slice(0,500),threshold:String(item.threshold||"").trim().slice(0,80),unit:String(item.unit||"").trim().slice(0,40),documentId:"",sourcePage:Number(item.page)||undefined,sourceQuote:String(item.quote||"").trim().slice(0,500),phase:String(item.phase||"").slice(0,60),dueDate:String(item.dueDate||"").slice(0,10)};}).filter(item=>item.description.length>=4);return json({requirements,requiresHumanReview:true,source:"openai"});}catch{return json({error:"A resposta da IA não veio em formato válido. Nenhuma matriz foi alterada."},502);}
@@ -85,10 +85,20 @@ export async function POST(request:NextRequest){
    if(!old)return json({error:"Salve primeiro as exigências deste edital."},404);
    if(!hasPermission(access.session,"licitacoes.editar"))return json({error:"Sem permissão para enviar o dossiê."},403);
    if(!old.requirements.length)return json({error:"Inclua ao menos uma exigência antes de enviar o dossiê."},422);
+   const requiresFinancial=old.requirements.some(req=>["Balanço Patrimonial","DRE","Índices econômico-financeiros"].includes(req.category));
+   if(requiresFinancial&&!old.financialAudit)return json({error:"Complete a auditoria econômico-financeira exigida nesta matriz antes de enviar."},422);
+   if(old.financialAudit?.ratios.some(ratio=>ratio.status==="below"||ratio.status==="undefined"))return json({error:"Há índice abaixo do mínimo informado ou sem denominador válido. Revise o balanço e o edital."},422);
    for(const req of old.requirements){
     if(!req.documentId)return json({error:"Vincule uma evidência para cada exigência antes de enviar à aprovação gerencial."},422);
     const doc=await loadBiddingDocument(c.db,c.company,req.documentId);
     if(!doc||!doc.uploaded||doc.tenderId&&doc.tenderId!==tenderId||doc.review!=="approved"||doc.validUntil&&doc.validUntil<now.slice(0,10))return json({error:"Há evidência ausente, não aprovada, vencida ou vinculada a outro edital."},422);
+    if(req.category==="Atestado técnico"){
+     const evidence=req.technicalEvidence,actual=Number(String(evidence?.quantity||"").replace(",", ".")),required=Number(String(req.threshold||"").replace(",", "."));
+     if(!evidence?.issuer||!evidence.service||!evidence.unit||!evidence.startDate||!evidence.endDate||!evidence.professionalRecord||!Number.isFinite(actual)||actual<=0)return json({error:"Complete emitente, serviço, quantidade, unidade, período e CREA/CFT ou ART/CAT/TRT do atestado."},422);
+     if(evidence.endDate<evidence.startDate)return json({error:"Período do atestado inválido."},422);
+     if(Number.isFinite(required)&&required>0&&req.unit&&evidence.unit.trim().toLocaleLowerCase("pt-BR")!==req.unit.trim().toLocaleLowerCase("pt-BR"))return json({error:"A unidade comprovada do atestado difere da unidade exigida."},422);
+     if(Number.isFinite(required)&&required>0&&actual<required)return json({error:"A quantidade registrada no atestado é menor que o mínimo digitado para este edital."},422);
+    }
    }
    next={...old,_revision:revision+1,updatedAt:now,updatedBy:actor,approval:{status:"pending",submittedAt:now,submittedBy:actor}};
   }else if(body.action==="decision"){
@@ -98,7 +108,13 @@ export async function POST(request:NextRequest){
    if(old.approval.submittedBy===actor)return json({error:"A pessoa que enviou o dossiê não pode aprová-lo."},403);
    const decision=String(body.decision) as Approval["status"],note=String(body.note||"").trim();
    if(!["approved","rejected"].includes(decision)||note.length<5||note.length>1000)return json({error:"Informe uma decisão e justificativa de 5 a 1000 caracteres."},422);
-   if(decision==="approved")for(const req of old.requirements){
+   if(decision==="approved"){
+     const requiresFinancial=old.requirements.some(req=>["Balanço Patrimonial","DRE","Índices econômico-financeiros"].includes(req.category));
+     if(requiresFinancial&&!old.financialAudit)return json({error:"Auditoria econômico-financeira ausente; a gestão não pode aprovar este dossiê."},422);
+     if(old.financialAudit?.ratios.some(ratio=>ratio.status==="below"||ratio.status==="undefined"))return json({error:"Revise os índices econômico-financeiros antes da aprovação."},422);
+     for(const id of old.financialAudit?.documentIds||[]){const doc=await loadBiddingDocument(c.db,c.company,id);if(!doc||!doc.uploaded||doc.review!=="approved"||doc.validUntil&&doc.validUntil<now.slice(0,10))return json({error:"Um documento financeiro do dossiê está pendente ou vencido."},422);}
+    }
+    if(decision==="approved")for(const req of old.requirements){
     const doc=req.documentId?await loadBiddingDocument(c.db,c.company,req.documentId):null;
     if(!doc||doc.review!=="approved"||!doc.uploaded||doc.validUntil&&doc.validUntil<now.slice(0,10))return json({error:"O dossiê tem evidência pendente ou vencida. Reenvie para análise após corrigir."},422);
    }
