@@ -36,6 +36,16 @@ export async function GET(request:NextRequest){
  try{
   const c=await routeContext(access.session),tenderId=String(request.nextUrl.searchParams.get("tenderId")||"");
   if(!tenderId||!biddingTenderOptions(c.state).some(item=>item.id===tenderId))return json({error:"Salve e selecione um edital desta empresa."},422);
+  if(body.action==="extract-financial"){
+   if(!hasPermission(access.session,"licitacoes.editar"))return json({error:"Sem permissão para analisar balanço."},403);
+   const text=String(body.text||"");if(text.length<40||text.length>250000)return json({error:"Texto contábil inválido ou fora do limite."},422);
+   const credential=await getOpenAiCredential(safeCompanyId(c.company));if(!credential)return json({error:"Configure a IA em Configurações → Inteligência Artificial."},503);
+   const prompt="Extraia somente valores claramente identificados em demonstrativo contábil. Retorne JSON com currentAssets, currentLiabilities, realizableLongTerm, longTermLiabilities, totalAssets, page, quote e warnings. Valores devem ser números sem separador de milhar e ponto decimal, copiando o valor literal e não calculando nem completando nada. Se não encontrar com segurança, use string vazia. page deve corresponder a [Página N]. quote deve ser uma citação literal curta. Não calcule índices e não conclua habilitação. Texto:\n"+text;
+   const upstream=await fetch("https://api.openai.com/v1/responses",{method:"POST",headers:{Authorization:"Bearer "+credential.apiKey,"Content-Type":"application/json"},body:JSON.stringify({model:"gpt-4.1-mini",instructions:"Leia valores contábeis com cautela. Nunca calcule, infira ou complete valores.",input:prompt,max_output_tokens:1200,text:{format:{type:"json_object"}},store:false})});
+   const payload=await upstream.json();if(!upstream.ok)return json({error:"A IA não conseguiu ler o demonstrativo. Tente novamente ou informe os valores manualmente."},502);
+   const output=payload.output_text||payload.output?.flatMap((item:{content?:{text?:string}[]})=>item.content||[]).map((item:{text?:string})=>item.text||"").join("")||"{}";
+   try{const parsed=JSON.parse(output) as Record<string,unknown>;const fields=Object.fromEntries(["currentAssets","currentLiabilities","realizableLongTerm","longTermLiabilities","totalAssets"].map(key=>[key,typeof parsed[key]==="string"||typeof parsed[key]==="number"?String(parsed[key]).slice(0,40):""]));return json({fields,page:Number(parsed.page)||undefined,quote:String(parsed.quote||"").slice(0,500),warnings:Array.isArray(parsed.warnings)?parsed.warnings.slice(0,8).map(String):[],requiresHumanReview:true});}catch{return json({error:"A leitura não retornou dados estruturados. Os campos não foram alterados."},502);}
+  }
   if(body.action==="extract-edital"){
    if(!hasPermission(access.session,"licitacoes.editar"))return json({error:"Sem permissão para analisar edital."},403);
    const text=String(body.text||"");if(text.length<100||text.length>250000)return json({error:"Texto do edital inválido ou fora do limite de leitura."},422);
