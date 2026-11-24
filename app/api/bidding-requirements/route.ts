@@ -36,6 +36,16 @@ export async function GET(request:NextRequest){
  try{
   const c=await routeContext(access.session),tenderId=String(request.nextUrl.searchParams.get("tenderId")||"");
   if(!tenderId||!biddingTenderOptions(c.state).some(item=>item.id===tenderId))return json({error:"Salve e selecione um edital desta empresa."},422);
+  if(body.action==="extract-technical"){
+   if(!hasPermission(access.session,"licitacoes.editar"))return json({error:"Sem permissão para analisar atestado."},403);
+   const text=String(body.text||"");if(text.length<40||text.length>250000)return json({error:"Texto do atestado inválido ou fora do limite."},422);
+   const credential=await getOpenAiCredential(safeCompanyId(c.company));if(!credential)return json({error:"Configure a IA em Configurações → Inteligência Artificial."},503);
+   const prompt="Extraia somente dados legíveis de atestado de capacidade técnica. Retorne JSON com issuer, service, quantity, unit, startDate, endDate, professionalRecord, page, quote, warnings. Não estime quantidade nem período; não transforme unidade. Datas em AAAA-MM-DD somente se explícitas. Referencie a página [Página N] e uma citação literal curta. Use string vazia quando não conseguir confirmar. Não conclua aderência ao edital. Texto:\n"+text;
+   const upstream=await fetch("https://api.openai.com/v1/responses",{method:"POST",headers:{Authorization:"Bearer "+credential.apiKey,"Content-Type":"application/json"},body:JSON.stringify({model:"gpt-4.1-mini",instructions:"Leia atestados com cautela. Não infira nem complete dados ausentes.",input:prompt,max_output_tokens:1200,text:{format:{type:"json_object"}},store:false})});
+   const payload=await upstream.json();if(!upstream.ok)return json({error:"A IA não conseguiu analisar o atestado."},502);
+   const output=payload.output_text||payload.output?.flatMap((item:{content?:{text?:string}[]})=>item.content||[]).map((item:{text?:string})=>item.text||"").join("")||"{}";
+   try{const parsed=JSON.parse(output) as Record<string,unknown>;const fields=Object.fromEntries(["issuer","service","quantity","unit","startDate","endDate","professionalRecord"].map(key=>[key,typeof parsed[key]==="string"||typeof parsed[key]==="number"?String(parsed[key]).slice(0,500):""]));return json({fields,page:Number(parsed.page)||undefined,quote:String(parsed.quote||"").slice(0,500),warnings:Array.isArray(parsed.warnings)?parsed.warnings.slice(0,8).map(String):[],requiresHumanReview:true});}catch{return json({error:"A leitura do atestado não retornou dados estruturados."},502);}
+  }
   if(body.action==="extract-financial"){
    if(!hasPermission(access.session,"licitacoes.editar"))return json({error:"Sem permissão para analisar balanço."},403);
    const text=String(body.text||"");if(text.length<40||text.length>250000)return json({error:"Texto contábil inválido ou fora do limite."},422);
