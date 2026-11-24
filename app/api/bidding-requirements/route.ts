@@ -8,7 +8,8 @@ import {DOCUMENT_CATEGORIES} from "@/lib/bidding-documents";
 export const runtime="nodejs";
 const json=(body:unknown,status=200)=>NextResponse.json(body,{status,headers:{"Cache-Control":"private, no-store","X-Robots-Tag":"noindex"}});
 type Requirement={id:string;category:string;description:string;threshold:string;unit:string;documentId:string};
-type Stored={companyId:string;tenderId:string;revision:number;updatedAt:string;updatedBy:string;requirements:Requirement[]};
+type Approval={status:"pending"|"approved"|"rejected";submittedAt:string;submittedBy:string;reviewedAt?:string;reviewedBy?:string;note?:string};
+type Stored={companyId:string;tenderId:string;revision:number;updatedAt:string;updatedBy:string;requirements:Requirement[];approval?:Approval};
 const keyFor=(company:string,tenderId:string)=>"bidding-requirements-v1:"+createHash("sha256").update(company+":"+tenderId).digest("hex");
 const readList=(value:unknown):Requirement[]=>{
  if(!Array.isArray(value)||value.length>100)throw new Error("Informe até 100 exigências do edital.");
@@ -30,7 +31,7 @@ export async function GET(request:NextRequest){
   if(!result.ok)throw new Error("Consulta indisponível");
   const stored=(await result.json())[0]?.payload as Stored|undefined;
   if(stored&&(stored.companyId!==c.company||stored.tenderId!==tenderId))return json({error:"Vínculo de empresa inválido."},403);
-  return json({requirements:stored?.requirements||[],revision:stored?.revision||0,canEdit:hasPermission(access.session,"licitacoes.editar")});
+  return json({requirements:stored?.requirements||[],revision:stored?.revision||0,approval:stored?.approval||null,canEdit:hasPermission(access.session,"licitacoes.editar"),canApprove:hasPermission(access.session,"aprovacoes.aprovar")});
  }catch{return json({error:"Não foi possível carregar as exigências do edital."},503);}
 }
 export async function POST(request:NextRequest){
@@ -41,20 +42,45 @@ export async function POST(request:NextRequest){
   const raw=await request.text();if(raw.length>80000)return json({error:"Solicitação muito grande."},413);
   const body=JSON.parse(raw),c=await routeContext(access.session),tenderId=String(body.tenderId||"");
   if(!tenderId||!biddingTenderOptions(c.state).some(item=>item.id===tenderId))return json({error:"Salve e selecione um edital desta empresa."},422);
-  const requirements=readList(body.requirements);
-  for(const req of requirements)if(req.documentId){
-   const doc=await loadBiddingDocument(c.db,c.company,req.documentId);
-   if(!doc||!doc.uploaded||doc.tenderId&&doc.tenderId!==tenderId)return json({error:"Documento vinculado não pertence a esta empresa ou a este edital."},422);
-  }
   const key=keyFor(c.company,tenderId),existingResult=await routeRest(c.db,"proar_state?id=eq."+encodeURIComponent(key)+"&select=payload&limit=1");
   if(!existingResult.ok)throw new Error("Consulta indisponível");
   const old=(await existingResult.json())[0]?.payload as Stored|undefined;
   if(old&&(old.companyId!==c.company||old.tenderId!==tenderId))return json({error:"Vínculo de empresa inválido."},403);
-  const revision=Number(old?.revision||0);
+  if(!old)return json({error:"Salve primeiro as exigências deste edital."},404);
+  const revision=Number(old.revision||0);
   if(Number(body.expectedRevision||0)!==revision)return json({error:"As exigências foram alteradas em outra sessão. Atualize antes de salvar."},409);
-  const next:Stored={companyId:c.company,tenderId,revision:revision+1,updatedAt:new Date().toISOString(),updatedBy:access.session.username,requirements};
+  const actor=access.session.username,now=new Date().toISOString();
+  let next:Stored;
+  if(body.action==="submit"){
+   if(!old.requirements.length)return json({error:"Inclua ao menos uma exigência antes de enviar o dossiê."},422);
+   for(const req of old.requirements){
+    if(!req.documentId)return json({error:"Vincule uma evidência para cada exigência antes de enviar à aprovação gerencial."},422);
+    const doc=await loadBiddingDocument(c.db,c.company,req.documentId);
+    if(!doc||!doc.uploaded||doc.tenderId&&doc.tenderId!==tenderId||doc.review!=="approved"||doc.validUntil&&doc.validUntil<now.slice(0,10))return json({error:"Há evidência ausente, não aprovada, vencida ou vinculada a outro edital."},422);
+   }
+   next={...old,revision:revision+1,updatedAt:now,updatedBy:actor,approval:{status:"pending",submittedAt:now,submittedBy:actor}};
+  }else if(body.action==="decision"){
+   if(!hasPermission(access.session,"aprovacoes.aprovar"))return json({error:"A aprovação gerencial exige a permissão Aprovações → Aprovar."},403);
+   if(!old.approval||old.approval.status!=="pending")return json({error:"Este dossiê não está aguardando aprovação gerencial."},409);
+   if(old.approval.submittedBy===actor)return json({error:"A pessoa que enviou o dossiê não pode aprová-lo."},403);
+   const decision=String(body.decision),note=String(body.note||"").trim();
+   if(!["approved","rejected"].includes(decision)||note.length<5||note.length>1000)return json({error:"Informe uma decisão e justificativa de 5 a 1000 caracteres."},422);
+   if(decision==="approved")for(const req of old.requirements){
+    const doc=req.documentId?await loadBiddingDocument(c.db,c.company,req.documentId):null;
+    if(!doc||doc.review!=="approved"||!doc.uploaded||doc.validUntil&&doc.validUntil<now.slice(0,10))return json({error:"O dossiê tem evidência pendente ou vencida. Reenvie para análise após corrigir."},422);
+   }
+   next={...old,revision:revision+1,updatedAt:now,updatedBy:actor,approval:{...old.approval,status:decision,reviewedAt:now,reviewedBy:actor,note}};
+  }else{
+   const requirements=readList(body.requirements);
+   for(const req of requirements)if(req.documentId){
+    const doc=await loadBiddingDocument(c.db,c.company,req.documentId);
+    if(!doc||!doc.uploaded||doc.tenderId&&doc.tenderId!==tenderId)return json({error:"Documento vinculado não pertence a esta empresa ou a este edital."},422);
+   }
+   next={companyId:c.company,tenderId,revision:revision+1,updatedAt:now,updatedBy:actor,requirements};
+  }
+
   const result=await routeRest(c.db,old?"proar_state?id=eq."+encodeURIComponent(key)+"&payload->>revision=eq."+revision+"&select=payload":"proar_state?on_conflict=id&select=payload",{method:old?"PATCH":"POST",headers:{Prefer:old?"return=representation":"resolution=ignore-duplicates,return=representation"},body:JSON.stringify(old?{payload:next,updated_at:next.updatedAt}:{id:key,payload:next,updated_at:next.updatedAt})});
   if(!result.ok||!(await result.json()).length)return json({error:"Exigências não salvas. Atualize e tente novamente."},409);
-  return json({saved:true,revision:next.revision,requirements:next.requirements});
+  return json({saved:true,revision:next.revision,requirements:next.requirements,approval:next.approval||null});
  }catch(error){return json({error:error instanceof Error&&/Exigência|exigência|Categoria|Limite|quantidade|Documento|edital|Vínculo/.test(error.message)?error.message:"Não foi possível salvar as exigências. Os dados anteriores foram preservados."},422);}
 }
