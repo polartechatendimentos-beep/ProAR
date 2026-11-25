@@ -25,23 +25,26 @@ export function parseEvolutionInbound(value: unknown, expectedInstance: string) 
     const reference = object(extendedText.contextInfo).stanzaId;
     const replyToId = typeof reference === "string" && /^[a-zA-Z0-9_-]{1,512}$/.test(reference) ? reference : undefined;
     const text = message.conversation || extendedText.text || object(message.imageMessage).caption || object(message.buttonsResponseMessage).selectedDisplayText;
+    const mediaKind = message.imageMessage ? "foto" as const : message.audioMessage ? "áudio" as const
+      : message.videoMessage ? "vídeo" as const : message.documentMessage ? "documento" as const : undefined;
     const timestamp = Number(row.messageTimestamp);
     const millis = timestamp > 1000000000000 ? timestamp : timestamp * 1000;
     if (!Number.isFinite(millis) || millis <= 0 || millis > Date.now() + 300000 || !Number.isFinite(new Date(millis).getTime())) return [];
-    return [{ id: key.id, ...(replyToId ? { replyToId } : {}), phone: jid.split("@")[0], name: typeof row.pushName === "string" ? row.pushName.slice(0, 100) : jid.split("@")[0], text: typeof text === "string" && text.trim() ? text.slice(0, 8000) : "Mensagem sem texto. Consulte o anexo no WhatsApp.", at: new Date(millis).toISOString() }];
+    return [{ id: key.id, ...(replyToId ? { replyToId } : {}), ...(mediaKind ? { mediaKind } : {}), phone: jid.split("@")[0], name: typeof row.pushName === "string" ? row.pushName.slice(0, 100) : jid.split("@")[0], text: typeof text === "string" && text.trim() ? text.slice(0, 8000) : "Mensagem sem texto. Consulte o anexo no WhatsApp.", at: new Date(millis).toISOString() }];
   });
 }
 
 // Separate the tenant's first-response setting from its background reminder
 // setting. The platform kill switch remains in force for both paths.
 export function canReplyToNewInbound(
-  input: { activatedAt: string; testPhone?: string; eventAt: string; phone: string; text: string },
+  input: { activatedAt: string; testPhone?: string; eventAt: string; phone: string; text: string; acceptNewTurns?: boolean },
   now = Date.now(),
 ): boolean {
   const since = Date.parse(input.activatedAt), at = Date.parse(input.eventAt);
   if (!Number.isFinite(since) || !Number.isFinite(at) || at <= since || at > now || now - at > 300_000) return false;
   if (input.testPhone && input.phone !== input.testPhone) return false;
   const text = input.text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  if (input.acceptNewTurns) return Boolean(text);
   if (!text || text === "mensagem sem texto. consulte o anexo no whatsapp.") return false;
   return !/^(?:ok|certo|entendi|beleza|(?:muito )?obrigad[oa]|valeu)[.!\s]*$/.test(text);
 }

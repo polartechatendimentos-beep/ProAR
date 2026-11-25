@@ -4,16 +4,30 @@ export const chatSectors = ["Geral", "Técnico", "Financeiro", "Comercial", "PMO
 export type ChatSector = typeof chatSectors[number];
 export const chatStages = ["Novo contato", "Em atendimento", "Orçamento", "Aguardando cliente", "Concluído"] as const;
 export type ChatStage = typeof chatStages[number];
-export type ChatMessage = { id: string; direction: "in" | "out" | "note" | "event"; text: string; at: string; actor?: string; status?: string; providerMessageId?: string; assistantReplyKey?: string; assistantNudge?: boolean; replyToId?: string; deliveryStatus?: DeliveryStatus };
-export type ChatConversation = { companyId: string; phone: string; name: string; sector: ChatSector; stage: ChatStage; assignee: string; revision: number; botPaused: boolean; optOut: boolean; messages: ChatMessage[]; requests: string[]; updatedAt: string; orderId?: string; assistantHandoffAt?: string; pendingDeliveryReceipts?: PendingDeliveryReceipt[]; queueActivity?: { incoming?: ChatMessage; humanReplyAt?: string; lastOutbound?: Pick<ChatMessage, "at" | "status" | "deliveryStatus"> } };
+export type ServiceIntake = {
+  updatedAt: string;
+  symptom?: string;
+  since?: string;
+  city?: string;
+  district?: string;
+  site?: string;
+  address?: string;
+  room?: string;
+  appliance?: string;
+  preference?: string;
+  media?: string;
+  pending: string[];
+};
+export type ChatMessage = { id: string; direction: "in" | "out" | "note" | "event"; text: string; at: string; actor?: string; status?: string; providerMessageId?: string; assistantReplyKey?: string; assistantNudge?: boolean; pilotTurn?: boolean; replyToId?: string; mediaKind?: "foto" | "áudio" | "vídeo" | "documento"; deliveryStatus?: DeliveryStatus };
+export type ChatConversation = { companyId: string; phone: string; name: string; sector: ChatSector; stage: ChatStage; assignee: string; revision: number; botPaused: boolean; optOut: boolean; messages: ChatMessage[]; requests: string[]; updatedAt: string; orderId?: string; assistantHandoffAt?: string; intake?: ServiceIntake; pendingDeliveryReceipts?: PendingDeliveryReceipt[]; queueActivity?: { incoming?: ChatMessage; humanReplyAt?: string; lastOutbound?: Pick<ChatMessage, "at" | "status" | "deliveryStatus"> } };
 export type ChatActor = { username: string; displayName: string; role: string; sectors: ChatSector[]; writeSectors: ChatSector[]; canWrite: boolean; admin: boolean };
 export type LocalChatSettings = { companyId: string; revision: number; botEnabled: boolean; botActivatedAt?: string; botTestPhone?: string; companyName: string; greeting: string; quickReplies?: ChatQuickReply[] };
 const normalized = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 const isNudge = (text: string) => /^[.…]+$/u.test(text.trim());
-const leakIntent = /\b(?:ping(?:a|ando|ou)|gotej(?:a|ando|ou)|vazando(?: agua)?|vazamento de agua|(?:cai|caindo|escorre|escorrendo) agua)\b/;
+const leakIntent = /\b(?:ping(?:a|ando|ano|andu|ou)|gotej(?:a|ando|ou)|vazando(?: agua)?|vazamento de agua|(?:cai|caindo|escorre|escorrendo) agua)\b/;
 export function localTriage(text: string) {
   const value = normalized(text);
-  const urgent = /(?:cheiro de queimad|fumaca|faisca|choque eletric|curto.circuito|fio(?:s)? (?:esta(?:o)? )?derretend|disjuntor (?:esta )?(?:desarmand|caind)|tomada (?:esta )?(?:esquentand|derretend))/.test(value);
+  const urgent = /(?:agua\s+(?:perto|proxima|caindo)\s+(?:d[oa]s?\s+|n[ao]s?\s+)?(?:tomada|fiacao|componentes? eletricos?|partes? eletricas?)|cheiro de queimad|fumaca|faisca|choque eletric|curto.circuito|fio(?:s)? (?:esta(?:o)? )?derretend|disjuntor (?:esta )?(?:desarmand|caind)|tomada (?:esta )?(?:esquentand|derretend))/.test(value);
   const optOut = /(?:nao (?:quero|desejo) (?:mais )?receber|nao (?:me )?(?:mande|envie) mais mensagens|pare de (?:me )?enviar|pare de mandar mensagens|retire meu (?:numero|contato)|cancelar (?:as )?mensagens|remover meu (?:numero|contato))/.test(value) || /^(?:sair|parar|stop|cancelar)[.!\s]*$/.test(value.trim());
   const matches: [ChatSector, RegExp][] = [["Financeiro", /boleto|\bpix\b|nota fiscal|cobranca|pagamento|financeiro/], ["PMOC", /\bpmoc\b|contrato|laudo|preventiva|certificado/], ["Comercial", /orcamento|preco|comprar|venda|instalacao/], ["Técnico", /nao gela|pingando|pinga\b|gotejando|goteja\b|caindo agua|escorrendo agua|vazando|vazamento|erro|defeito|barulho|manutencao|higienizacao|limpeza do ar|parou de gelar/]];
   const found = matches.filter(([, expression]) => expression.test(value)).map(([sector]) => sector);
@@ -36,7 +50,7 @@ const equipmentDetail = /\b(?:marca|modelo|etiqueta|fujitsu|carrier|gree|elgin|s
 const applianceIdentity = /\b(?:fujitsu|carrier|gree|elgin|samsung|midea|daikin|philco|tcl|lg|agratto|consul|electrolux|springer|hitachi|komeco|panasonic)\b|\bmodelo\s*[:−-]?\s*[a-z]{1,7}[- ]?\d{2,}[a-z0-9-]*\b/;
 const placeDetail = /\b(?:(?:moro|sou|estou|fica) (?:em|de|no|na)\s+[a-z]{2,}|(?:cidade(?: de)?|bairro|rua|avenida)\s+[a-z]{2,}|mirassol|rio preto|balsamo|jaci|olimpia|tanabi|bady bassitt)\b/;
 const serviceSite = /\b(?:escola(?: municipal| estadual)?|creche|emei|emef|colegio|clinica|unidade de saude|ubs|prefeitura|empresa)\b/;
-const siteNameKnown = /\blocal de atendimento identificado\b|\b(?:escola(?: municipal| estadual)?|creche|emei|emef|colegio|clinica|ubs)\s+(?!municipal\b|estadual\b|no\b|na\b|em\b|do\b|da\b|de\b|aqui\b|centro\b|bairro\b|que\b|esta\b|fica\b)[a-z]{2,}(?:\s+[-a-z]+)?/;
+const siteNameKnown = /\b(?:rua|avenida|av\.|travessa|alameda)\s+[^\n,;!?]{3,90}[, ]+\d{1,6}\b|\blocal de atendimento identificado\b|\b(?:escola(?: municipal| estadual)?|creche|emei|emef|colegio|clinica|ubs)\s+(?!municipal\b|estadual\b|no\b|na\b|em\b|do\b|da\b|de\b|aqui\b|centro\b|bairro\b|que\b|esta\b|fica\b)[a-z]{2,}(?:\s+[-a-z]+)?/;
 const serviceRoom = /\b(?:sala de aula|sala\s+(?:[0-9]{1,3}[a-z]?|d[ao]s?\s+[a-z]+)|secretaria|recepcao|diretoria|biblioteca|cozinha|refeitorio|laboratorio|setor de atendimento)\b/;
 const localCity = /\b(?:mirassol|[a-z ]{0,13}rio preto|balsamo|jaci|olimpia|tanabi|bady bassitt|neves paulista|sao jose do rio preto)\b|\b(?:cidade(?: de)?|(?:sou|moro) (?:de|em)|estou em)\s+(?!(?:casa|na|no|uma?|escola|bairro|centro|atendimento)\b)[a-z]{2,}/;
 const localNeighborhood = /\b(?:bairro\s+[a-z]{2,}|centro|bairro informado)\b/;
@@ -223,6 +237,125 @@ export function eventReplyPlan(messages: ChatMessage[], eventId: string, activat
   if (recent.length && !triage.urgent && !leakTopic && !installationTopic && recent.some(message => !message.assistantReplyKey)) return null;
   const handoff = key === "leak:complete" || key === "installation:111";
   return { key, reply: handoff ? "Obrigado! Deixei seu atendimento para a equipe conferir e dar continuidade." : bots.length ? reply.replace(/^Olá!\s*/, "") : reply, first: bots.length === 0, handoff, nudge };
+}
+
+const intakeLocalCities = /\b(?:são josé do rio preto|rio preto|mirassol|bálsamo|balsamo|jaci|olímpia|olimpia|tanabi|bady bassitt|neves paulista)\b/iu;
+const compact = (value?: string) => value?.trim().replace(/[\s.,!?]+$/u, "").slice(0, 200) || undefined;
+
+/** Evidence for staff review, not an address lookup or a confirmed diagnosis. */
+export function updateServiceIntake(previous: ServiceIntake | undefined, messages: ChatMessage[], eventId: string): ServiceIntake | undefined {
+  const index = messages.findIndex(message => message.direction === "in" && message.id === eventId);
+  if (index < 0) return previous;
+  const event = messages[index];
+  if (previous && Date.parse(event.at) < Date.parse(previous.updatedAt)) return previous;
+  const chat = messages.slice(0, index);
+  const before = chat.findLast(message => message.direction === "out" && message.actor === "local-assistant"
+    && ["accepted", undefined].includes(message.status) && message.deliveryStatus !== "failed");
+  const facts: ServiceIntake = previous && Date.parse(event.at) - Date.parse(previous.updatedAt) <= 24 * 60 * 60_000
+    ? {...previous, pending: []} : {updatedAt: event.at, pending: []};
+  const value = event.text.trim();
+  const clue = normalized(value);
+  const prompt = before?.assistantReplyKey;
+  const recentPrompt = before && Math.abs(Date.parse(event.at) - Date.parse(before.at)) < 30 * 60_000;
+  const standalone = /^[\p{L}\p{N}][\p{L}\p{N} .'-]{0,70}$/u.test(value) && !/^(?:oi|sim|não|nao|ok|obrigad[oa]|não sei|nao sei)$/iu.test(value);
+  if (leakIntent.test(clue) || /\b(?:nao gela|nao esta gelando|parou de gelar|nao liga|barulho|cheiro de queimado|agua perto|falha|erro|higienizacao|limpeza do ar|manutencao)\b/.test(clue)) facts.symptom = compact(value);
+  else if (!facts.symptom && installationIntent.test(clue)) facts.symptom = "Instalação de ar-condicionado";
+  const namedCity = value.match(/(?:sou de|moro em|cidade de)\s+([\p{L}][\p{L} '’-]{1,55}?)(?=\s*(?:,|\bbairro\b|\/|[.!?]|$))/iu)?.[1];
+  const namedDistrict = value.match(/\bbairro\s+([\p{L}][\p{L} '’-]{1,55})(?=[,.!?/]|$)/iu)?.[1];
+  const namedSite = value.match(/\b(?:escola|creche|emei|emef|colégio|clínica|ubs|prefeitura)\b[^,;!?\n]{0,90}/iu)?.[0];
+  const knownCity = !namedSite || namedCity ? value.match(intakeLocalCities)?.[0] : undefined;
+  const namedRoom = value.match(/\b(?:sala\s+(?:de aula|[0-9]{1,3}[a-z]?|d[ao]s?\s+[\p{L}]+)|secretaria|recepção|diretoria|biblioteca|cozinha|refeitório|laboratório)\b/iu)?.[0];
+  const address = value.match(/\b(?:rua|avenida|av\.|estrada|travessa|alameda)\s+[^\n!?;]{3,125}/iu)?.[0];
+  if (knownCity || namedCity) facts.city = compact(knownCity || namedCity);
+  if (namedDistrict || /^centro[.!]?$/i.test(value)) facts.district = compact(namedDistrict || "Centro");
+  if (namedSite || (recentPrompt && /^(?:leak:school|leak:site-name)$/.test(prompt || "") && standalone)) facts.site = compact(namedSite || value);
+  if (address) facts.address = compact(address);
+  if (namedRoom || (recentPrompt && prompt === "leak:site-room" && standalone)) facts.room = compact(namedRoom || value);
+  const appliance = clue.match(applianceIdentity)?.[0] || clue.match(capacityDetail)?.[0];
+  if (appliance) facts.appliance = compact(appliance);
+  const since = value.match(/\b(?:desde\s+[^,;.!?\n]{2,48}|h[áa]\s+(?:\d{1,3}|um[aa]?|dois|três)\s+(?:dias?|semanas?|meses?|horas?))/iu)?.[0];
+  if (since) facts.since = compact(since);
+  const preference = value.match(/\b(?:de manhã|à tarde|à noite|amanhã|segunda-feira|terça-feira|quarta-feira|quinta-feira|sexta-feira|sábado|domingo)\b(?:\s+(?:de manhã|à tarde|à noite))?/iu)?.[0];
+  if (preference && !since) facts.preference = compact(preference);
+  if (event.mediaKind) facts.media = event.mediaKind;
+  facts.updatedAt = event.at;
+  facts.pending = [
+    !facts.symptom && "serviço ou problema",
+    facts.symptom && !facts.since && !installationIntent.test(normalized(facts.symptom)) && "quando começou",
+    !facts.city && "município", !facts.district && "bairro", !facts.address && (!facts.site || /^(?:escola|creche)(?: municipal| estadual)?$/i.test(facts.site)) && "endereço ou nome da unidade",
+    facts.site && !facts.room && "sala ou setor", !facts.appliance && "marca/modelo ou etiqueta (se disponível)",
+  ].filter((item): item is string => typeof item === "string");
+  return facts;
+}
+
+// New turns in the pilot must either advance, ask one useful question, or be
+// routed to a person. Distinct exception paths prevent fake send confirmations.
+export function pilotReplyPlan(messages: ChatMessage[], eventId: string, activatedAt: string, now = Date.now(), agendaFailed = false, appointmentHandled = false, intake?: ServiceIntake) {
+  const event = messages.find(message => message.id === eventId && message.direction === "in");
+  if (!event || localTriage(event.text).optOut || Date.parse(event.at) <= Date.parse(activatedAt)) return null;
+  const earlier = messages.slice(0, messages.indexOf(event));
+  const recent = earlier.filter(message => Date.parse(message.at) >= now - 30 * 60_000);
+  const bots = recent.filter(message => message.direction === "out" && message.actor === "local-assistant");
+  const first = !bots.length;
+  const safeHandoff = "Já registrei as informações e encaminhei para nossa equipe. Assim que confirmarem, seguimos por aqui.";
+  const handoff = (key: string, reply = safeHandoff) => ({key, reply, first, handoff: true});
+  const value = normalized(event.text.trim());
+  const triage = localTriage(event.text);
+  const plan = eventReplyPlan(messages, eventId, activatedAt, now);
+  if (triage.urgent) return handoff("urgent", "Por segurança, desligue o aparelho apenas se puder fazer isso sem contato com água ou partes elétricas. Evite tocar no equipamento. Registrei o caso para avaliação da equipe técnica.");
+  if (appointmentHandled) return {key:"agenda:recorded",reply:"Registrei sua resposta sobre o agendamento. Se precisar ajustar algum detalhe, me avise por aqui.",first,handoff:false};
+  if (agendaFailed) return handoff("agenda:failure", "Não consegui concluir a confirmação na agenda. Deixei a conversa para nossa equipe verificar. Seguimos por aqui.");
+  if (/\b(?:agendar|marcar (?:uma? |o )?(?:visita|atendimento)|horario (?:disponivel|para)|(?:podem|conseguem|tem como) vir)\b/.test(value)) {
+    return handoff("agenda:review", "Vou pedir à equipe que confira a agenda antes de oferecer um horário. Nenhum horário foi reservado; seguimos por aqui.");
+  }
+  if (/\b(?:quanto (?:custa|fica)|qual (?:e )?o (?:valor|preco|prazo)|garantia|preco|faz por)\b/.test(value)) return handoff("informacao:review", "Preciso confirmar essa informação com a equipe para te passar a orientação certa. Seguimos por aqui.");
+  const pendingTechnical = bots.some(message => message.assistantReplyKey === "piloto:detalhes-tecnicos");
+  if (pendingTechnical && (intake?.since || intake?.appliance || event.mediaKind === "foto" || /\b(?:nao sei|nao tenho|nao consigo)\b/.test(value))) return handoff("leak:complete");
+  if (plan?.key === "leak:complete" && !pendingTechnical && intake && (!intake.since || !intake.appliance)) {
+    const time = !intake.since ? "Desde quando isso está acontecendo?" : "";
+    const label = !intake.appliance ? "Se souber, qual é a marca ou o modelo? Pode mandar uma foto da etiqueta também." : "";
+    return {key:"piloto:detalhes-tecnicos",reply:[time,label].filter(Boolean).join(" "),first,handoff:false};
+  }
+  if (plan?.key === "leak:school") return {...plan, reply:"Entendi, é uma escola. Qual é o nome da escola ou o endereço?"};
+  if (plan?.handoff) return {...plan, reply: safeHandoff};
+  if (plan && !plan.key.startsWith("sector:")) return plan;
+  // Never treat a placeholder as a verified image, transcription or symptom.
+  if (event.mediaKind && value.startsWith("mensagem sem texto.")) {
+    const key = "anexo:" + event.mediaKind;
+    if (bots.some(message => message.assistantReplyKey === key)) return handoff("anexo:review", "Recebi os anexos e deixei a conversa para a equipe conferir. Seguimos por aqui.");
+    const reply = event.mediaKind === "áudio" ? "Recebi o áudio, mas não consegui ouvir por aqui. Pode me contar por texto o que está acontecendo?"
+      : event.mediaKind === "foto" ? "Recebi a foto. Pode me dizer se ela mostra a etiqueta ou o problema do aparelho?"
+      : "Recebi o anexo. Pode me dizer por texto o que devo considerar nele?";
+    return {key, reply, first, handoff: false};
+  }
+  if (isNudge(value)) return plan; // The nudge guard owns blank/repeated references.
+  if (intake?.symptom && !leakIntent.test(normalized(intake.symptom)) && !installationIntent.test(normalized(intake.symptom))
+    && ["Técnico", "Geral"].includes(triage.sector) && !customerFollowUp.test(value)) {
+    const steps: [string, string, boolean][] = [
+      ["inicio", "Desde quando isso começou?", Boolean(intake.since)],
+      ["local", !intake.city && !intake.district ? "Em qual cidade e bairro fica o aparelho?"
+        : !intake.city ? "Em qual cidade fica o aparelho?" : "Em qual bairro fica o aparelho?", Boolean(intake.city && intake.district)],
+      ["unidade", "Pode me dizer o endereço ou o nome da unidade?", Boolean(intake.address || (intake.site && !/^(?:escola|creche)(?: municipal| estadual)?$/i.test(intake.site)))],
+      ["etiqueta", "Se souber, qual é a marca ou o modelo? Pode mandar uma foto da etiqueta também.", Boolean(intake.appliance)],
+    ];
+    const step = steps.find(([, , done]) => !done);
+    if (step) {
+      const key = "tecnico:" + step[0];
+      if (!bots.some(message => message.assistantReplyKey === key)) return {key,reply:step[1],first,handoff:false};
+      if (/\b(?:nao sei|nao lembro|nao tenho|nao consigo)\b/.test(value)) return handoff("tecnico:review");
+    } else return handoff("tecnico:complete");
+  }
+  const prevCustomer = recent.findLast(message => message.direction === "in" && !isNudge(message.text));
+  if (prevCustomer && normalized(prevCustomer.text.trim()) === value && !customerFollowUp.test(value)) return null;
+  if (/^(?:ok|t[aá]|beleza|certo|entendi|(?:muito )?obrigad[oa]|valeu)[.!\s]*$/i.test(value)) {
+    if (bots.some(message => message.assistantReplyKey === "cortesia")) return null;
+    const pending = bots.at(-1)?.text.includes("?");
+    if (pending) return {key:"cortesia",reply:"Tudo bem. Quando puder, me mande essa informação para eu continuar.",first,handoff:false};
+    return {key:"cortesia",reply:"Por nada! Se precisar de mais alguma coisa, me avise por aqui.",first,handoff:false};
+  }
+  if (plan && (plan.key !== "sector:Geral" || /^(?:oi+|ola|bom dia|boa tarde|boa noite)\b/.test(value))) return plan;
+  if (customerFollowUp.test(value) || bots.some(message => message.assistantReplyKey === "esclarecer")) return handoff("handoff");
+  return {key:"esclarecer",reply:"Pode me contar um pouco mais sobre o que você precisa? Assim eu encaminho da forma certa.",first,handoff:false};
 }
 
 export function chatSignature(actor: ChatActor) {

@@ -93,3 +93,15 @@ test("digest integration exposes only the tenant-authenticated production GET an
   assert.match(page, /!hasItems && data\.complete/);
   assert.match(home, /queue\?\.actor\.admin && <Link href="\/atendimento\/pendencias"/);
 });
+
+test("an attachment-only turn explicitly left for staff is actionable without revealing its text", () => {
+  const raw=inMsg("photo","Mensagem sem texto. Consulte o anexo no WhatsApp.");
+  const d=create({chats:[
+    chat("0011",[{...raw,mediaKind:"foto"}],{assistantHandoffAt:raw.at}),
+    chat("0012",[{...raw,mediaKind:"foto"}]),
+    chat("0013",[raw],{assistantHandoffAt:raw.at}),
+  ]});
+  assert.equal(d.conversations.total,1);
+  assert.match(d.conversations.items[0].detail,/equipe precisa continuar/);
+  assert.doesNotMatch(JSON.stringify(d),/Mensagem sem texto/);
+});

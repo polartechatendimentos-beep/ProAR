@@ -57,7 +57,8 @@ export function dailyActionableDigest(input: { chats: ChatConversation[]; quotes
     const inbound = messages.findLast((message, index) => {
       const body = normal(message.text).replace(/[\p{Emoji_Presentation}\uFE0F]/gu, "").trim();
       return message.direction === "in" && index > latestReplyIndex && agendaToday(new Date(message.epoch)) === today
-        && body.length > 0 && !courtesyOnly.test(body) && !attachmentOnly.test(body) && !localTriage(body).optOut;
+        && body.length > 0 && !localTriage(body).optOut
+        && ((!courtesyOnly.test(body) && !attachmentOnly.test(body)) || Boolean(chat.assistantHandoffAt && message.mediaKind));
     });
     if (!inbound) return [];
     const urgent = localTriage(inbound.text).urgent;
