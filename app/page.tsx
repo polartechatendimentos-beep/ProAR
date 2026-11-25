@@ -1165,7 +1165,7 @@ function OrderDetail({ order, customerPhone, company, catalog, contracts, close,
   const linkedCustomer = currentOrder.customerId ? customers.find(customer => customer.id === currentOrder.customerId) : undefined;
   const matchedCustomer = linkedCustomer || customers.find(customer => [customer.name, customer.legalName, customer.tradeName].some(name => normalizeRelation(name) === normalizeRelation(currentOrder.client)));
   const displayCustomerName = matchedCustomer?.name || currentOrder.client || "Cliente não informado";
-  const isPlaceholderLocation = (value:unknown) => /^(unidade principal|cliente principal|endereço principal|local não informado|local de atendimento não selecionado|sala\s*\/\s*ambiente não informado|sala ou ambiente)$/i.test(String(value||"").trim());
+  const isPlaceholderLocation = (value:unknown) => value == null || /^(undefined|null|unidade principal|cliente principal|endereço principal|local não informado|local de atendimento não selecionado|sala\s*\/\s*ambiente não informado|sala ou ambiente)$/i.test(String(value).trim());
   const displayOrderLocation = !isPlaceholderLocation(currentOrder.unit) ? currentOrder.unit : !isPlaceholderLocation(currentOrder.room) ? String(currentOrder.room) : "Local de atendimento não selecionado";
   const [confirmedBase,setConfirmedBase]=useState(order);
   const [detailTab,setDetailTab]=useState("Ordem");
