@@ -89,7 +89,8 @@ async function processCustomerReminders() {
 async function runTenderMonitor() {
   const store = await loadStore();
   // O cron faz a coleta pesada; a interface consome somente esta base consolidada.
-  const result = await searchAutomaticTenders({ radius: 1000 });
+  const tenderRadiusKm = 200;
+  const result = await searchAutomaticTenders({ radius: tenderRadiusKm });
   const previousByKey=new Map(store.items.map(item=>[canonicalTenderKey(item),item]));
   const discoveredAt = new Date().toISOString();
   const indexed:IndexedTender[]=result.data.map(item=>{
@@ -97,7 +98,7 @@ async function runTenderMonitor() {
     return {...previous,...item,canonicalKey:key,discoveredAt:previous?.discoveredAt||discoveredAt,updatedAt:discoveredAt,score:scored.score,scoreReasons:scored.reasons,changeHistory:changed?[{at:discoveredAt,summary:changed},...(previous?.changeHistory||[])].slice(0,20):(previous?.changeHistory||[])};
   });
   const currentKeys=new Set(indexed.map(canonicalTenderKey));
-  const retained=store.items.filter(item=>!currentKeys.has(canonicalTenderKey(item))&&(!item.dataEncerramentoProposta||new Date(item.dataEncerramentoProposta).getTime()>Date.now()-90*86400000));
+  const retained=store.items.filter(item=>item.distanciaMirassol!==undefined&&item.distanciaMirassol<=tenderRadiusKm&&!currentKeys.has(canonicalTenderKey(item))&&(!item.dataEncerramentoProposta||new Date(item.dataEncerramentoProposta).getTime()>Date.now()-90*86400000));
   const items=[...indexed,...retained].sort((a,b)=>(b.score||0)-(a.score||0)).slice(0,5000);
   const known=new Set(store.items.map(canonicalTenderKey).filter(Boolean));
   const newItems=indexed.filter(item=>isAlertableTender(item)&&!known.has(canonicalTenderKey(item)));
