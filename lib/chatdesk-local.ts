@@ -5,7 +5,7 @@ export type ChatStage = typeof chatStages[number];
 export type ChatMessage = { id: string; direction: "in" | "out" | "note" | "event"; text: string; at: string; actor?: string; status?: string; providerMessageId?: string };
 export type ChatConversation = { companyId: string; phone: string; name: string; sector: ChatSector; stage: ChatStage; assignee: string; revision: number; botPaused: boolean; optOut: boolean; messages: ChatMessage[]; requests: string[]; updatedAt: string; orderId?: string; queueActivity?: { incoming?: ChatMessage; humanReplyAt?: string } };
 export type ChatActor = { username: string; displayName: string; role: string; sectors: ChatSector[]; writeSectors: ChatSector[]; canWrite: boolean; admin: boolean };
-export type LocalChatSettings = { companyId: string; revision: number; botEnabled: boolean; companyName: string; greeting: string; quickReplies?: ChatQuickReply[] };
+export type LocalChatSettings = { companyId: string; revision: number; botEnabled: boolean; botActivatedAt?: string; botTestPhone?: string; companyName: string; greeting: string; quickReplies?: ChatQuickReply[] };
 const normalized = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 export function localTriage(text: string) {
   const value = normalized(text);

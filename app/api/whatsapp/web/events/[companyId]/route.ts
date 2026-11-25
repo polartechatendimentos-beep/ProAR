@@ -1,6 +1,6 @@
 import { recordAppointmentReply } from "../../../../../../lib/chatdesk-appointment-reply";
 import { NextRequest, NextResponse } from "next/server";
-import { validChatWebhookToken, parseEvolutionInbound } from "../../../../../../lib/chatdesk-events";
+import { validChatWebhookToken, parseEvolutionInbound, canReplyToNewInbound } from "../../../../../../lib/chatdesk-events";
 import { requiredSecret } from "../../../../../../lib/security-env";
 import { assertActiveWhatsAppCompany, evolutionConnection, tenantEvolutionAutomationEnabled } from "../../../../../../lib/evolution-tenant";
 import { changeChat, chatSettings } from "../../../../../../lib/chatdesk-store";
@@ -39,7 +39,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ co
       const appointmentHandled = !triage.optOut && await recordAppointmentReply(companyId, event);
       const chat = result.chat;
       const recentBot = chat?.messages.some(message => message.actor === "local-assistant" && Date.now() - Date.parse(message.at) < 300000);
-      if (appointmentHandled || !result.changed || !chat || !settings.botEnabled || chat.optOut || chat.botPaused || chat.assignee || recentBot || !await tenantEvolutionAutomationEnabled(companyId)) continue;
+      if (appointmentHandled || !result.changed || !chat || !settings.botEnabled || chat.optOut || chat.botPaused || chat.assignee || recentBot) continue;
+      if (settings.botActivatedAt) {
+        if (process.env.PROAR_EVOLUTION_AUTOMATION_ENABLED !== "true" || !canReplyToNewInbound({
+          activatedAt: settings.botActivatedAt, testPhone: settings.botTestPhone,
+          eventAt: event.at, phone: event.phone, text: event.text,
+        })) continue;
+      } else if (!await tenantEvolutionAutomationEnabled(companyId)) continue;
       const botId = `local:${event.id}`;
       const text = `*Assistente automático${settings.companyName ? ` — ${settings.companyName}` : ""}:*\n${settings.greeting ? settings.greeting + "\n\n" : ""}${triage.reply}`;
       // Reserve ownership in the conversation as well as in the outbox. A human
