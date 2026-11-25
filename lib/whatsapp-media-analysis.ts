@@ -7,7 +7,7 @@ type Result = { state: "review"; source: Kind; text: string } | {
   reason: "disabled" | "not-pilot" | "stale" | "invalid-event" | "tenant-credential" | "provider" | "unsupported-media" | "model" | "unclear";
 };
 type Event = { id: string; phone: string; instance: string; kind: Kind; at: string };
-type MediaGate = { companyId: string; mediaProcessingEnabled?: boolean; pilotPhone?: string; activatedAt?: string };
+type MediaGate = { companyId: string; mediaProcessingEnabled?: boolean; pilotPhone?: string; activatedAt?: string; manualReviewWindowMs?: number };
 type Dependencies = {
   fetch?: typeof fetch;
   /** Must resolve credentials from the same company as the verified webhook. */
@@ -82,7 +82,7 @@ export async function readWhatsAppMediaForReview(gate: MediaGate, event: Event, 
   if (gate.mediaProcessingEnabled !== true) return { state: "skipped", reason: "disabled" };
   if (!gate.pilotPhone || !isPhone(gate.pilotPhone) || event.phone !== gate.pilotPhone) return { state: "skipped", reason: "not-pilot" };
   const activated = Date.parse(gate.activatedAt || ""), received = Date.parse(event.at);
-  if (!Number.isFinite(activated) || !Number.isFinite(received) || received <= activated || received > now || now-received > 300_000) return { state: "skipped", reason: "stale" };
+  if (!Number.isFinite(activated) || !Number.isFinite(received) || received <= activated || received > now || now-received > Math.min(gate.manualReviewWindowMs ?? 300_000, 2*60*60_000)) return { state: "skipped", reason: "stale" };
   if (!/^[a-zA-Z0-9_-]{1,80}$/.test(gate.companyId) || !isMessageId(event.id) || !["foto","áudio"].includes(event.kind) ||
       event.instance !== config.instance || !/^[A-Za-z0-9_-]+$/.test(config.instance) ||
       config.base.protocol !== "https:" || config.base.username || config.base.password || config.base.search || config.base.hash || !config.key) return { state: "skipped", reason: "invalid-event" };
