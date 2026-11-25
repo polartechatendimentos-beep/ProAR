@@ -38,8 +38,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ co
       // Runs on redelivery too: if the chat write succeeded but the agenda failed, retry safely.
       const appointmentHandled = !triage.optOut && await recordAppointmentReply(companyId, event);
       const chat = result.chat;
-      const recentBot = chat?.messages.some(message => message.actor === "local-assistant" && Date.now() - Date.parse(message.at) < 300000);
-      if (appointmentHandled || !result.changed || !chat || !settings.botEnabled || chat.optOut || chat.botPaused || chat.assignee || recentBot) continue;
+      if (appointmentHandled || !result.changed || !chat || !settings.botEnabled || chat.optOut || chat.botPaused || chat.assignee) continue;
       if (settings.botActivatedAt) {
         if (process.env.PROAR_EVOLUTION_AUTOMATION_ENABLED !== "true" || !canReplyToNewInbound({
           activatedAt: settings.botActivatedAt, testPhone: settings.botTestPhone,
@@ -51,7 +50,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ co
       // Reserve ownership in the conversation as well as in the outbox. A human
       // claim that wins the optimistic write prevents this automatic response.
       const reserved = await changeChat(companyId, event.phone, current => {
-        if (!current || current.assignee || current.botPaused || current.optOut || current.messages.some(message => message.id === botId || (message.actor === "local-assistant" && Date.now() - Date.parse(message.at) < 300000))) return null;
+        if (!current || current.assignee || current.botPaused || current.optOut || current.messages.some(message => message.id === botId)) return null;
         const next = structuredClone(current);
         next.messages.push({ id: botId, direction: "out", text, actor: "local-assistant", at: new Date().toISOString(), status: "processing" });
         return next;
