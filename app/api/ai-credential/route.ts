@@ -71,19 +71,24 @@ export async function POST(request: NextRequest) {
   if (!credential) return NextResponse.json({ error: "Configure a IA em Configurações → Inteligência Artificial.", validationStatus: "pending" }, { status: 503 });
 
   let connected = false;
+  let failure = "O ProAR não conseguiu chegar à OpenAI. A chave não foi validada.";
   try {
     const response = await fetch("https://api.openai.com/v1/models", {
       headers: { Authorization: `Bearer ${credential.apiKey}` },
       cache: "no-store", signal: AbortSignal.timeout(10000)
     });
     connected = response.ok;
+    if (response.status === 401) failure = "A OpenAI recusou a autenticação (401). Confira se a chave do projeto ainda está ativa e, se necessário, substitua-a no ProAR.";
+    else if (response.status === 403) failure = "A OpenAI não autorizou esta verificação (403). Confira as permissões e restrições da chave no projeto da empresa.";
+    else if (response.status === 429) failure = "A OpenAI limitou a verificação (429). Confira créditos, limites e faturamento do projeto.";
+    else if (!connected) failure = `A OpenAI respondeu com HTTP ${response.status}. A chave não foi validada.`;
   } catch {}
 
   const validatedAt = connected ? new Date().toISOString() : null;
   const validationStatus = connected ? "valid" : "failed";
   const validationMessage = connected
     ? "Conexão validada. A credencial foi aceita pela OpenAI."
-    : "A OpenAI recusou a credencial ou não foi possível alcançar o serviço. Confira a chave, o projeto e a conexão.";
+    : failure;
   const stored = await readStoredOpenAiIntegration(context.companyId);
   if (existing?.encrypted_api_key !== stored?.encrypted_api_key) return NextResponse.json({ error:"A credencial mudou durante o teste. Atualize a tela e teste novamente." }, { status: 409 });
   const persisted = await save(context.companyId, {
