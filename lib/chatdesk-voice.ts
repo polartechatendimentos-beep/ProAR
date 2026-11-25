@@ -9,6 +9,16 @@ function shiftDay(date: string, amount: number) {
   value.setUTCDate(value.getUTCDate() + amount);
   return new Date(value.getTime()).toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
 }
+/** This guided form only previews one visit; never discard a second date or time silently. */
+export function mentionsMultipleVisitSlots(input: string) {
+  const text = input.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+  const dates = text.match(/\b(?:hoje|amanha|segunda(?:-feira)?|terca(?:-feira)?|quarta(?:-feira)?|quinta(?:-feira)?|sexta(?:-feira)?|sabado|domingo|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\b/g) || [];
+  const times = text.match(/\b(?:as\s+\d{1,2}(?::\d{2}|h\d{0,2})?|\d{1,2}h\d{0,2}|(?:[01]?\d|2[0-3]):[0-5]\d)\b/g) || [];
+  return new Set(dates.map(date=>date.replace("-feira", ""))).size > 1 || new Set(times.map(time=> {
+     const match = /(\d{1,2})(?::|h)?(\d{2})?/.exec(time);
+     return match ? Number(match[1])*60+Number(match[2] || 0) : time;
+  })).size > 1 || /\b(?:duas visitas|separadamente|em dias diferentes)\b/.test(text);
+}
 export function parseAppointmentVoice(input: string, now = Date.now()): AppointmentVoiceDraft {
   const text = input.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 1500);
   const street = /\b(?:rua|r\.?|avenida|av\.?|alameda|travessa|estrada|rodovia|praça|praca)\b/i.exec(text);

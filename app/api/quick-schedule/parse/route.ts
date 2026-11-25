@@ -1,4 +1,5 @@
 import {NextRequest,NextResponse} from "next/server";
+import {mentionsMultipleVisitSlots} from "../../../../lib/chatdesk-voice";
 import {requirePermission} from "../../../../lib/permissions";
 import {getOpenAiCredential,safeCompanyId} from "../../../../lib/openai-credential";
 export const runtime="nodejs";
@@ -9,6 +10,8 @@ export async function POST(request:NextRequest){
  let body:Record<string,unknown>;try{body=JSON.parse(raw)}catch{return reply({error:"Solicitação inválida."},400)}
  const text=typeof body.text==="string"?body.text.trim():"";
  if(!text||text.length>3000)return reply({error:"Digite ou transcreva a solicitação (máximo de 3.000 caracteres)."},400);
+ if(mentionsMultipleVisitSlots(text))return reply({error:"Separe a solicitação em uma visita por vez. Revise cada ordem de serviço antes de salvar."},422);
+ if(/\b(?:reagend\w+|remarc\w+|alterar (?:a )?data d[ae] (?:ordem de serviço|os)|OS-\d+)\b/i.test(text))return reply({error:"Para mudar a programação, abra a OS existente na Agenda. O agendamento rápido prepara apenas novas OS."},422);
  const credential=await getOpenAiCredential(safeCompanyId(access.session.companyId));
  if(!credential)return reply({error:"IA não configurada. Configure em Configurações → Inteligência Artificial."},503);
  const timezone="America/Sao_Paulo";
@@ -18,8 +21,9 @@ export async function POST(request:NextRequest){
  "Retorne somente JSON no formato especificado; não invente campos ausentes, use null.",
  "Resolva datas relativas com a data/hora informada, considerando fuso America/Sao_Paulo.",
  "Não trate uma data passada como futura; se a fala for ambígua, deixe data_iso null.",
+ "Se houver duas visitas distintas, defina multiplas_visitas como true. Se houver pedido de alterar uma OS existente, defina reagendamento como true.",
  "Não conclua diagnóstico nem complete endereço ou telefone que não foram informados.",
- "JSON: {cliente:{nome_citado:string|null,telefone:string|null},endereco:{logradouro:string|null,numero:string|null,bairro:string|null,cidade:string|null,complemento:string|null},atendimento:{tipo_servico:string|null,equipamento:string|null,data_iso:string|null,hora_inicio:string|null,tecnico_citado:string|null,urgencia:string|null,observacoes:string|null}}.",
+ "JSON: {multiplas_visitas:boolean,reagendamento:boolean,cliente:{nome_citado:string|null,telefone:string|null},endereco:{logradouro:string|null,numero:string|null,bairro:string|null,cidade:string|null,complemento:string|null},atendimento:{tipo_servico:string|null,equipamento:string|null,data_iso:string|null,hora_inicio:string|null,tecnico_citado:string|null,urgencia:string|null,observacoes:string|null}}.",
  "Agora: "+now+"; fuso: "+timezone+".",
  "Texto recebido: "+text
  ].join("\n");
@@ -29,6 +33,8 @@ export async function POST(request:NextRequest){
   if(!response.ok)return reply({error:payload?.error?.message||"A IA não conseguiu interpretar o agendamento."},502);
   const output=payload.output_text||payload.output?.flatMap((entry:{content?:{text?:string}[]})=>entry.content||[]).map((item:{text?:string})=>item.text||"").join("")||"{}";
   const parsed=JSON.parse(output) as Record<string,any>;
+  if(parsed.multiplas_visitas===true)return reply({error:"Separe a solicitação em uma visita por vez e revise cada OS."},422);
+  if(parsed.reagendamento===true)return reply({error:"Abra a OS existente na Agenda para alterar a programação."},422);
   const client=parsed.cliente||{},address=parsed.endereco||{},appointment=parsed.atendimento||{};
   const clean=(value:unknown,max=180)=>typeof value==="string"&&value.trim()?value.trim().slice(0,max):null;
   const date=clean(appointment.data_iso,10),time=clean(appointment.hora_inicio,5);

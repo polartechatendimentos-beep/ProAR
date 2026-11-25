@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { chatAccess, listChats, readChat, changeChat, chatSettings, saveChatSettings, chatDb } from "../../../lib/chatdesk-store";
 import { applyChatCommand, canReadChat, localTriage, localOrderDraft } from "../../../lib/chatdesk-local";
 import { assertActiveWhatsAppCompany } from "../../../lib/evolution-tenant";
+import { completeChatSend } from "../../../lib/chatdesk-delivery";
 import { dispatchEvolutionJob, evolutionSendHistory } from "../../../lib/evolution-jobs";
 import { hasPermission } from "../../../lib/permissions";
 import { databaseFetch } from "../../../lib/supabase-rest";
@@ -18,7 +19,8 @@ export async function GET(request: NextRequest) {
     if (phone) {
       const chat = await readChat(access.companyId, phone);
       if (!chat || !canReadChat(access.actor, chat)) return reply({ error: "Atendimento indisponível para este usuário." }, 404);
-      return reply({ chat: { ...chat, requests: [] }, assistant: localTriage(chat.messages.filter(message => message.direction === "in").at(-1)?.text || ""), orderDraft: localOrderDraft(chat) });
+      const { pendingDeliveryReceipts: _pending, ...visibleChat } = chat;
+      return reply({ chat: { ...visibleChat, requests: [] }, assistant: localTriage(chat.messages.filter(message => message.direction === "in").at(-1)?.text || ""), orderDraft: localOrderDraft(chat) });
     }
     const offset = Number(request.nextUrl.searchParams.get("offset") || 0);
     if (!Number.isSafeInteger(offset) || offset < 0 || offset > 100000) return reply({ error: "Página inválida." }, 400);
@@ -68,13 +70,7 @@ export async function POST(request: NextRequest) {
         status = result.status;
         if (result.status === "accepted") providerMessageId = result.messageId;
       } catch { /* Persist uncertain result; never retry an ambiguous send automatically. */ }
-      await changeChat(access.companyId, phone, previous => {
-        if (!previous) return null;
-        const next = structuredClone(previous);
-        const message = next.messages.find(item => item.id === command.requestId);
-        if (message) { message.status = status; message.providerMessageId = providerMessageId; }
-        return next;
-      });
+      await changeChat(access.companyId, phone, previous => completeChatSend(previous, command.requestId, status, providerMessageId));
       return reply({ status, message: status === "accepted" ? "Mensagem aceita pelo servidor. A entrega depende da confirmação do WhatsApp." : "Envio sem confirmação. Confira o WhatsApp e o histórico antes de reenviar." });
     }
     return reply({ saved: true });

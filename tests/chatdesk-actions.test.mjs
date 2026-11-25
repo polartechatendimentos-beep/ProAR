@@ -4,7 +4,8 @@ import { readFile } from 'node:fs/promises';
 import { stripTypeScriptTypes } from 'node:module';
 import vm from 'node:vm';
 import {createHash,createHmac,randomUUID,timingSafeEqual} from 'node:crypto';
-import {parseDeskAction,prepareDeskAction,actionPhone,parseAppointmentReply,appointmentReplyAllowed,appointmentSource} from '../lib/chatdesk-actions.ts';
+import {parseDeskAction,prepareDeskAction,actionPhone,parseAppointmentReply,appointmentReplyAllowed,appointmentSource,savedDeskAction} from '../lib/chatdesk-actions.ts';
+import {mentionsMultipleVisitSlots} from '../lib/chatdesk-voice.ts';
 const requestId='00000000-0000-4000-a000-000000000001';
 const now=new Date('2026-11-12T10:00:00Z');
 const state=()=>({customers:[{id:'C1',name:'Maria',phone:'17999990000',address:'Rua A',status:'Ativo'}],serviceOrders:[],moduleRecords:{'Funcionários':[{id:'T1',name:'Lucas',status:'Ativo'}]},_revision:4});
@@ -36,6 +37,10 @@ test('confirmation uses actual linked customer and requires explicit reply, acce
  assert.equal(message.phone,'5517999990000');assert.match(message.summary,/CONFIRMAR OS-/);assert.equal(order.appointmentConfirmation,'Pendente');
  assert.equal(parseAppointmentReply(`Confirmar ${order.id}`).status,'Confirmado');
  assert.equal(parseAppointmentReply(`REAGENDAR ${order.id}`).status,'Reagendamento solicitado');
+ assert.equal(parseAppointmentReply('CONFIRMAR #OS-15531').orderId,'#OS-15531');
+ const ambiguous=structuredClone(prepared.next);
+ ambiguous.customers.push({id:'C2',name:'Outro cliente',whatsapp:'5517999990000'});
+ assert.throws(()=>prepareDeskAction(ambiguous,parseDeskAction(`confirmar | ${order.id}`),requestId,now),/Mais de um cliente usa/);
  for(const text of ['sim','CONFIRMAR OS-1 e excluir tudo','confirmar','sim cancelar'])assert.equal(parseAppointmentReply(text),null);
  const job={status:'accepted',sourceId:appointmentSource(order),createdAt:'2026-11-12T09:00:00Z'};
  const allowed=(o=order,c=prepared.next.customers[0],p='5517999990000',at='2026-11-12T09:30:00Z',j=job)=>appointmentReplyAllowed(o,c,p,at,j,now);
@@ -47,7 +52,7 @@ const source=stripTypeScriptTypes(await readFile(new URL('../app/api/atendimento
 function routeHarness(){
  let current=state(),username='admin',companyId='A',writable=true,puts=0,sends=0;
  class Request{constructor(url,init={}){this.url=url;this.headers=new Headers(init.headers);this.body=init.body;this.nextUrl=new URL(url);}async text(){return this.body;}async json(){return JSON.parse(this.body);}}
- const sandbox={createHash,createHmac,randomUUID,timingSafeEqual,Buffer,Headers,URL,Date,JSON,NextRequest:Request,NextResponse:{json:(data,init={})=>({status:init.status||200,ok:!init.status||init.status<400,json:async()=>data})},chatAccess:()=>({companyId,session:{username,role:'Administrador'},actor:{displayName:'Admin',role:'Administrador'}}),hasPermission:()=>writable,requiredSecret:()=> 'x'.repeat(64),assertActiveWhatsAppCompany:async()=>{},parseDeskAction,prepareDeskAction,appointmentSource,getState:async()=>({ok:true,json:async()=>({state:structuredClone(current)})}),putState:async request=>{puts++;const payload=await request.json();assert.equal(payload._baseRevision,current._revision);current={...payload,_revision:current._revision+1};return{ok:true,status:200,json:async()=>({saved:true,state:current})}},dispatchEvolutionJob:async()=>{sends++;return{status:'accepted'}}};
+ const sandbox={createHash,createHmac,randomUUID,timingSafeEqual,Buffer,Headers,URL,Date,JSON,NextRequest:Request,NextResponse:{json:(data,init={})=>({status:init.status||200,ok:!init.status||init.status<400,json:async()=>data})},chatAccess:()=>({companyId,session:{username,role:'Administrador'},actor:{displayName:'Admin',role:'Administrador'}}),hasPermission:()=>writable,requiredSecret:()=> 'x'.repeat(64),assertActiveWhatsAppCompany:async()=>{},parseDeskAction,prepareDeskAction,appointmentSource,savedDeskAction,getState:async()=>({ok:true,json:async()=>({state:structuredClone(current)})}),putState:async request=>{puts++;const payload=await request.json();assert.equal(payload._baseRevision,current._revision);current={...payload,_revision:current._revision+1};return{ok:true,status:200,json:async()=>({saved:true,state:current})}},dispatchEvolutionJob:async()=>{sends++;return{status:'accepted'}}};
  vm.runInNewContext(source,sandbox);
  return{call:async body=>{const r=await sandbox.POST(new Request('https://a.proar.online/api/atendimento/acoes',{headers:{origin:'https://a.proar.online','sec-fetch-site':'same-origin'},body:JSON.stringify(body)}));return{status:r.status,...await r.json()};},setUser:v=>username=v,setCompany:v=>companyId=v,deny:()=>writable=false,bump:()=>current._revision++,counts:()=>({puts,sends})};
 }
@@ -79,4 +84,46 @@ function replyHarness({wrongCompany=false,conflict=false,wrongPhone=false}={}){
 test('verified appointment reply updates only confirmation with audited CAS, retries conflicts and ignores replays',async()=>{
  const h=replyHarness({conflict:true});assert.equal(await h.run(),true);assert.equal(h.current.serviceOrders[0].appointmentConfirmation,'Confirmado');assert.equal(h.current.serviceOrders[0].status,'Cliente confirmado');assert.equal(h.current.serviceOrders[0].timeline.length,1);assert.equal(h.counts().commits,2);assert.equal(await h.run(),false);assert.equal(h.counts().commits,2);
  for(const options of [{wrongCompany:true},{wrongPhone:true}]){const denied=replyHarness(options);assert.equal(await denied.run(),false);assert.equal(denied.counts().commits,0);}
+});
+
+const editId='00000000-0000-4000-a000-000000000002';
+test('a duplicate request with a fresh review must not create a second OS; a separate visit can be reviewed',()=>{
+ const original=prepareDeskAction(state(),parseDeskAction(schedule),requestId,now);
+ assert.throws(()=>prepareDeskAction(original.next,parseDeskAction(schedule.replace('Higienização','higienizacao')),editId,now),/Já existe uma OS/);
+ assert.doesNotThrow(()=>prepareDeskAction(original.next,parseDeskAction(schedule.replace('2026-11-20','2026-11-21').replace('Higienização','Instalação')),editId,now));
+ assert.equal(mentionsMultipleVisitSlots('Retirada hoje às 16:00 e instalação sexta-feira às 08:30'),true);
+ assert.equal(mentionsMultipleVisitSlots('Rua 7 de setembro, retirada às 16h'),false);
+ assert.equal(mentionsMultipleVisitSlots('Instalação às 14h, confirmar 14:00'),false);
+});
+test('rescheduling preserves OS, customer, location and service; rejects conflicts and resets former customer confirmation',()=>{
+ const original=prepareDeskAction(state(),parseDeskAction(schedule),requestId,now);
+ Object.assign(original.record,{status:'Cliente confirmado',appointmentConfirmation:'Confirmado',appointmentReplyMessageId:'old',appointmentConfirmedAt:now.toISOString(),technicalNote:'Preservar'});
+ const reschedule=parseDeskAction(`reagendar | ${original.record.id} | 2026-11-20 | 10:30 | 60 | T1`);
+ const changed=prepareDeskAction(original.next,reschedule,editId,now);
+ assert.equal(changed.next.serviceOrders.length,1);
+ for(const key of ['id','customerId','address','service','technicalNote'])assert.equal(changed.record[key],original.record[key]);
+ assert.equal(changed.record.status,'Reagendada');
+ assert.equal(changed.record.appointmentConfirmation,'Pendente');
+ assert.equal(changed.record.appointmentReplyMessageId,null);
+ assert.equal(original.record.time,'10:00');
+ assert.equal(prepareDeskAction(changed.next,reschedule,editId,now).replay,true);
+ const movedBack=prepareDeskAction(changed.next,parseDeskAction(`reagendar | ${original.record.id} | 2026-11-20 | 10:00 | 60 | T1`),'00000000-0000-4000-a000-000000000003',now);
+ assert.notEqual(appointmentSource(movedBack.record),appointmentSource(original.record));
+ const clash=structuredClone(original.next);
+ clash.serviceOrders.push({id:'OS-clash',date:'2026-11-20',time:'11:00',tech:'LUCAS ',status:'Agendada'});
+ assert.throws(()=>prepareDeskAction(clash,reschedule,editId,now),/Conflito de agenda/);
+ original.record.status='Concluída';
+ assert.throws(()=>prepareDeskAction(original.next,reschedule,editId,now),/Selecione uma OS/);
+});
+test('reviewed Atendimento route updates the same ID once and never sends WhatsApp for scheduling or rescheduling',async()=>{
+ const h=routeHarness();
+ const future=new Date(Date.now()+48*3600*1000).toISOString().slice(0,10);
+ const create=schedule.replace('2026-11-20',future);
+ const preview=await h.call({command:create});
+ const saved=await h.call({command:create,review:preview.review});assert.equal(saved.saved,true);
+ const command=`reagendar | ${saved.recordId} | ${future} | 11:00 | 90 | T1`;
+ const review=await h.call({command});assert.equal(review.kind,'reschedule');assert.equal(h.counts().puts,1);
+ const moved=await h.call({command,review:review.review});assert.equal(moved.saved,true);assert.equal(moved.recordId,saved.recordId);
+ assert.equal((await h.call({command,review:review.review})).replay,true);
+ assert.deepEqual(h.counts(),{puts:2,sends:0});
 });

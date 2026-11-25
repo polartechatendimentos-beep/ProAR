@@ -1,9 +1,11 @@
+import type { DeliveryStatus, PendingDeliveryReceipt } from "./chatdesk-delivery";
+
 export const chatSectors = ["Geral", "Técnico", "Financeiro", "Comercial", "PMOC"] as const;
 export type ChatSector = typeof chatSectors[number];
 export const chatStages = ["Novo contato", "Em atendimento", "Orçamento", "Aguardando cliente", "Concluído"] as const;
 export type ChatStage = typeof chatStages[number];
-export type ChatMessage = { id: string; direction: "in" | "out" | "note" | "event"; text: string; at: string; actor?: string; status?: string; providerMessageId?: string; assistantReplyKey?: string };
-export type ChatConversation = { companyId: string; phone: string; name: string; sector: ChatSector; stage: ChatStage; assignee: string; revision: number; botPaused: boolean; optOut: boolean; messages: ChatMessage[]; requests: string[]; updatedAt: string; orderId?: string; queueActivity?: { incoming?: ChatMessage; humanReplyAt?: string } };
+export type ChatMessage = { id: string; direction: "in" | "out" | "note" | "event"; text: string; at: string; actor?: string; status?: string; providerMessageId?: string; assistantReplyKey?: string; deliveryStatus?: DeliveryStatus };
+export type ChatConversation = { companyId: string; phone: string; name: string; sector: ChatSector; stage: ChatStage; assignee: string; revision: number; botPaused: boolean; optOut: boolean; messages: ChatMessage[]; requests: string[]; updatedAt: string; orderId?: string; pendingDeliveryReceipts?: PendingDeliveryReceipt[]; queueActivity?: { incoming?: ChatMessage; humanReplyAt?: string; lastOutbound?: Pick<ChatMessage, "at" | "status" | "deliveryStatus"> } };
 export type ChatActor = { username: string; displayName: string; role: string; sectors: ChatSector[]; writeSectors: ChatSector[]; canWrite: boolean; admin: boolean };
 export type LocalChatSettings = { companyId: string; revision: number; botEnabled: boolean; botActivatedAt?: string; botTestPhone?: string; companyName: string; greeting: string; quickReplies?: ChatQuickReply[] };
 const normalized = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -26,8 +28,8 @@ export function localTriage(text: string) {
   return { sector, urgent, optOut, mixed: found.length > 1, reason: urgent ? "Relato de possível risco elétrico." : found.length ? `Termos relacionados a ${found.join(" e ")}.` : "Mensagem sem categoria identificada.", reply, mode: "local-rules" as const };
 }
 
-const leakInside = /\b(?:evaporadora|unidade interna|aparelho interno|por dentro|parte interna|dentro do (?:quarto|imovel|ambiente|apartamento)|dentro de casa)\b/;
-const leakOutside = /\b(?:condensadora|unidade externa|aparelho externo|por fora|parte externa|lado de fora|fora de casa)\b/;
+const leakInside = /\b(?:evaporadora|unidade interna|unidade de dentro|parte de dentro|aparelho interno|por dentro|parte interna|dentro do (?:quarto|imovel|ambiente|apartamento)|dentro de casa)\b/;
+const leakOutside = /\b(?:condensadora|unidade externa|unidade de fora|parte de fora|aparelho externo|por fora|parte externa|lado de fora|fora de casa)\b/;
 const leakWhen = /\b(?:quando (?:liga|desliga)|so (?:quando|a noite|de manha)|o tempo todo|direto|desde (?:ontem|hoje)|a noite|de manha)\b/;
 const equipmentDetail = /\b(?:marca|modelo|etiqueta|fujitsu|carrier|gree|elgin|samsung|midea|daikin|philco|tcl|lg|agr[aá]tto|[0-9]{1,3}(?:[. ][0-9]{3})?\s*btus?)\b/;
 const placeDetail = /\b(?:moro em|cidade(?: de)?|bairro|rua|avenida|mirassol|rio preto|balsamo|jaci|olimpia|tanabi|bady bassitt)\b/;
@@ -55,6 +57,7 @@ export function eventReplyPlan(messages: ChatMessage[], eventId: string, activat
   if (triage.optOut) return null;
   if (recent.length >= 4 && !triage.urgent) return null;
   const value = normalized(event.text);
+  if (!triage.urgent && triage.sector === "Geral" && customerFollowUp.test(value) && !leakInside.test(value) && !leakOutside.test(value) && !equipmentDetail.test(value) && !placeDetail.test(value)) return null;
   const inbound = active.filter(message => message.direction === "in" && Date.parse(message.at) <= Date.parse(event.at));
   const idx = inbound.findIndex(message => leakIntent.test(normalized(message.text)));
   const leakTopic = leakIntent.test(value) || (idx >= 0 && (leakInside.test(value) || leakOutside.test(value) || leakWhen.test(value) || equipmentDetail.test(value) || placeDetail.test(value)));
@@ -163,21 +166,38 @@ export function validateChatQuickReplies(value: unknown): ChatQuickReply[] {
     return {shortcut,text,sector:sector as ChatQuickReply["sector"]};
   });
 }
+const customerFollowUp = /\b(?:no aguardo|aguardando (?:um |o )?(?:retorno|resposta)|(?:sem|nenhum) retorno|(?:nao|ainda nao) (?:respondeu|responderam|retornou|retornaram)|nao esqueca (?:de mim|do meu)|algum(?:a)? (?:retorno|novidade|posicao)|(?:ninguem|nada) (?:ainda|apareceu|retornou)|(?:faz|tem) .{1,24}que (?:estou esperando|estou aguardando))\b/;
+const lastHumanReplyAt = (chat: ChatConversation) => chat.messages.findLast(message =>
+  message.direction === "out" && message.actor !== "local-assistant" && message.deliveryStatus !== "failed" && (!message.status || message.status === "accepted")
+)?.at;
+const recentDay = (at: number, now: number) => Number.isFinite(at) && Number.isFinite(now) && now >= at && now - at < 24 * 60 * 60_000;
+
 export function chatQueuePriority(chat: ChatConversation, nowMs: number) {
-  const lastCustomer = chat.queueActivity?.incoming || chat.messages.filter(message=>message.direction==="in").at(-1);
-  const humanReplyAt = chat.queueActivity?.humanReplyAt || chat.messages.filter(message=>message.direction==="out" && message.actor!=="local-assistant" && (!message.status || message.status==="accepted")).at(-1)?.at;
+  const lastCustomer = chat.queueActivity?.incoming || chat.messages.findLast(message => message.direction === "in");
+  const humanReplyAt = chat.queueActivity ? chat.queueActivity.humanReplyAt : lastHumanReplyAt(chat);
+  const lastOutbound = chat.queueActivity ? chat.queueActivity.lastOutbound : chat.messages.findLast(message => message.direction === "out");
   const customerAt = Date.parse(lastCustomer?.at || "");
-  const waiting = chat.stage!=="Concluído" && Number.isFinite(customerAt) && (!humanReplyAt || customerAt > Date.parse(humanReplyAt));
-  const elapsed = waiting && Number.isFinite(nowMs) ? Math.max(0,nowMs-customerAt) : 0;
+  const open = chat.stage !== "Concluído";
+  const waiting = open && Number.isFinite(customerAt) && (!humanReplyAt || customerAt > Date.parse(humanReplyAt));
+  const elapsed = waiting && Number.isFinite(nowMs) ? Math.max(0, nowMs - customerAt) : 0;
   const urgent = Boolean(waiting && lastCustomer && localTriage(lastCustomer.text).urgent);
-  return {waiting,urgent,waitingMinutes:Math.floor(elapsed/60000),band:chat.stage==="Concluído"?4:urgent?0:waiting?1:2};
+  const followUp = Boolean(waiting && lastCustomer && recentDay(customerAt, nowMs) && customerFollowUp.test(normalized(lastCustomer.text)));
+  const outboundAt = Date.parse(lastOutbound?.at || "");
+  const deliveryIssue = open && recentDay(outboundAt, nowMs) && lastOutbound
+    ? lastOutbound.deliveryStatus === "failed" || lastOutbound.status === "disconnected" ? "failed"
+      : !lastOutbound.deliveryStatus && (lastOutbound.status === "unknown" || (lastOutbound.status === "processing" && nowMs - outboundAt >= 2 * 60_000)) ? "uncertain"
+        : null
+    : null;
+  return { waiting, urgent, followUp, deliveryIssue, waitingMinutes: Math.floor(elapsed / 60000), band: !open ? 4 : urgent ? 0 : followUp || deliveryIssue ? 1 : waiting ? 2 : 3 };
 }
 export function sortChatQueue(items: ChatConversation[], nowMs: number) {
   return [...items].sort((a,b)=>{const first=chatQueuePriority(a,nowMs),second=chatQueuePriority(b,nowMs);return first.band-second.band || second.waitingMinutes-first.waitingMinutes || Date.parse(b.updatedAt)-Date.parse(a.updatedAt);});
 }
-export function chatQueueSummary(chat: ChatConversation) {
-  // Internal notes never replace the latest customer request or count as a public reply.
-  const incoming = chat.messages.filter(message=>message.direction==="in").at(-1);
-  const humanReplyAt = chat.messages.filter(message=>message.direction==="out" && message.actor!=="local-assistant" && (!message.status || message.status==="accepted")).at(-1)?.at;
-  return { ...chat, messages:chat.messages.filter(message=>message.direction==="in"||message.direction==="out").slice(-1),requests:[],queueActivity:{incoming,humanReplyAt} };
+export function chatQueueSummary(chat: ChatConversation): ChatConversation {
+  // Internal notes and receipt buffering never leave the summary or count as a public reply.
+  const { pendingDeliveryReceipts: _pending, ...visible } = chat;
+  const incoming = chat.messages.findLast(message => message.direction === "in");
+  const outbound = chat.messages.findLast(message => message.direction === "out");
+  const lastOutbound = outbound && { at: outbound.at, status: outbound.status, deliveryStatus: outbound.deliveryStatus };
+  return { ...visible, messages: chat.messages.filter(message=>message.direction==="in"||message.direction==="out").slice(-1), requests: [], queueActivity: { incoming, humanReplyAt: lastHumanReplyAt(chat), lastOutbound } };
 }

@@ -44,13 +44,14 @@ export function QuickScheduleAssistant({customers,technicians,onCreate}:Props){
    setFields(extracted);
    const ranked=rankScheduleCustomers({name:extracted.client.name||"",phone:extracted.client.phone,street:extracted.address.street,number:extracted.address.number},customers,10);
    setCandidates(ranked);
-   const strong=ranked.find(item=>item.kind==="strong");if(strong)setSelectedId(strong.customer.id);
+   const strongMatches=ranked.filter(item=>item.kind==="strong");const strong=strongMatches.length===1?strongMatches[0]:null;if(strong)setSelectedId(strong.customer.id);
    setNotice(strong?"Encontramos um vínculo forte. Confira o endereço e os dados antes de abrir a OS.":"Confira os possíveis cadastros; o ProAR não criará nem vinculará um cliente sem sua confirmação.");
   }catch(reason){setError(reason instanceof Error?reason.message:"Não foi possível interpretar. Preencha manualmente.");}
   finally{setBusy(false)}
  };
  const confirm=()=>{
   if(!fields)return;
+  if(candidates.length&&!selected){setError("Selecione o cadastro correto. Se for uma pessoa diferente, use o cadastro de clientes antes de agendar.");return}
   if(selected?.kind==="homonym"&&!homonymChoice){setError("Escolha se este é o mesmo cliente em outro endereço ou um cadastro novo.");return}
   const useExisting=Boolean(selected&&!(selected.kind==="homonym"&&homonymChoice==="new"));
   const clientName=useExisting?selected!.customer.name:titleCase(fields.client.name||"");
