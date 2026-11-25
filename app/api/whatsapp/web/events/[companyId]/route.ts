@@ -4,7 +4,7 @@ import { validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery, c
 import { requiredSecret } from "../../../../../../lib/security-env";
 import { assertActiveWhatsAppCompany, evolutionConnection, tenantEvolutionAutomationEnabled } from "../../../../../../lib/evolution-tenant";
 import { changeChat, chatSettings } from "../../../../../../lib/chatdesk-store";
-import { localTriage, eventReplyPlan, pilotReplyPlan, handoffSupplementPlan, recordIntakeReply, updateServiceIntake, type ChatConversation } from "../../../../../../lib/chatdesk-local";
+import { localTriage, eventReplyPlan, pilotReplyPlan, handoffSupplementPlan, businessHoursNotice, recordIntakeReply, updateServiceIntake, type ChatConversation } from "../../../../../../lib/chatdesk-local";
 import { applyChatDeliveryReceipt, completeChatSend } from "../../../../../../lib/chatdesk-delivery";
 import { dispatchEvolutionJob } from "../../../../../../lib/evolution-jobs";
 export const runtime = "nodejs";
@@ -84,14 +84,17 @@ export async function POST(request: NextRequest, context: { params: Promise<{ co
         const introduction = settings.botActivatedAt
           ? `Assistente virtual${settings.companyName ? ` da ${settings.companyName}` : ""}.\n`
           : `*Assistente automático${settings.companyName ? ` — ${settings.companyName}` : ""}:*\n`;
-        const text = plan.first ? introduction + (settings.greeting ? settings.greeting + "\n\n" : "") + plan.reply : plan.reply;
+        const notice = freshPilot && !triage.urgent ? businessHoursNotice(settings.businessHours) : null;
+        const showNotice = notice && !current.messages.some(message=>message.hoursNoticeFor===notice.key);
+        const text = (plan.first ? introduction + (settings.greeting ? settings.greeting + "\n\n" : "") : "")
+          + (showNotice ? notice.text + "\n\n" : "") + plan.reply;
         const next = structuredClone(current);
         const at = new Date().toISOString();
         if (plan.handoff) {
           next.assistantHandoffAt = at;
           next.botPaused = true;
         }
-        next.messages.push({ id: botId, direction: "out", text, actor: "local-assistant", at, status: "processing", assistantReplyKey: plan.key, ...("nudge" in plan && plan.nudge ? { assistantNudge: true } : {}) });
+        next.messages.push({ id: botId, direction: "out", text, actor: "local-assistant", at, status: "processing", assistantReplyKey: plan.key, ...(showNotice ? {hoursNoticeFor:notice.key} : {}), ...("nudge" in plan && plan.nudge ? { assistantNudge: true } : {}) });
         return next;
       });
       const reservedMessage = reserved.chat?.messages.find(message => message.id === botId);

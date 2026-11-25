@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { stripTypeScriptTypes } from 'node:module';
 import vm from 'node:vm';
 import {createHash,createHmac,randomUUID,timingSafeEqual} from 'node:crypto';
-import {parseDeskAction,prepareDeskAction,actionPhone,parseAppointmentReply,appointmentReplyAllowed,appointmentSource,savedDeskAction} from '../lib/chatdesk-actions.ts';
+import {parseDeskAction,prepareDeskAction,actionPhone,parseAppointmentReply,appointmentReplyAllowed,appointmentSource,savedDeskAction,uniqueAppointmentCustomer} from '../lib/chatdesk-actions.ts';
 import {mentionsMultipleVisitSlots} from '../lib/chatdesk-voice.ts';
 const requestId='00000000-0000-4000-a000-000000000001';
 const now=new Date('2026-11-12T10:00:00Z');
@@ -71,19 +71,20 @@ test('API rejects stale review, forged signature and permission changes before w
  h.deny();assert.match((await h.call({command})).error,/perfil/);assert.equal(h.counts().puts,0);
 });
 const replySource=stripTypeScriptTypes(await readFile(new URL('../lib/chatdesk-appointment-reply.ts',import.meta.url),'utf8')).replace(/^import .*;$/gm,'').replace(/^export /gm,'');
-function replyHarness({wrongCompany=false,conflict=false,wrongPhone=false}={}){
+function replyHarness({wrongCompany=false,conflict=false,wrongPhone=false,ambiguousPhone=false,status="Agendada"}={}){
  const clock=new Date(),future=new Date(clock.getTime()+86400000*2).toISOString().slice(0,10);
- const current=state();current._companyId=wrongCompany?'B':'A';current.serviceOrders.push({id:'OS-12',customerId:'C1',client:'Maria',date:future,time:'12:00',status:'Agendada',tech:'Lucas'});
+ const current=state();current._companyId=wrongCompany?'B':'A';current.serviceOrders.push({id:'OS-12',customerId:'C1',client:'Maria',date:future,time:'12:00',status,tech:'Lucas'});
+ if(ambiguousPhone)current.customers.push({id:'C2',name:'Outra pessoa',phone:'5517999990000'});
  let commits=0,audits=0;
  const job={companyId:'A',status:'accepted',createdAt:new Date(clock.getTime()-60000).toISOString(),sourceId:appointmentSource(current.serviceOrders[0])};
- const sandbox={parseAppointmentReply,appointmentSource,appointmentReplyAllowed,Date,JSON,encodeURIComponent,structuredClone,resolveTenantDb:async()=>({url:'https://db',key:'server',dedicated:true}),tenantHeaders:()=>({}),evolutionJobId:()=> 'job',databaseFetch:async url=>({ok:true,json:async()=>[{payload:url.includes('id=eq.job')?job:structuredClone(current)}]}),prepareOperationalState:(before,next,actor)=>{audits++;assert.equal(actor.can('os.editar'),true);assert.equal(actor.can('financeiro.editar'),false);assert.deepEqual(next.customers,before.customers);assert.equal(next.serviceOrders[0].date,before.serviceOrders[0].date);return next;},PRIMARY_DATABASE_URL:'https://db',independentOperationalRows:()=>[],commitNeonOperationalState:async(id,revision,payload)=>{commits++;assert.equal(id,'main');assert.equal(revision,current._revision);if(conflict&&commits===1){current._revision++;return null;}Object.assign(current,payload);return payload;}};
+ const sandbox={parseAppointmentReply,uniqueAppointmentCustomer,appointmentSource,appointmentReplyAllowed,Date,JSON,encodeURIComponent,structuredClone,resolveTenantDb:async()=>({url:'https://db',key:'server',dedicated:true}),tenantHeaders:()=>({}),evolutionJobId:()=> 'job',databaseFetch:async url=>({ok:true,json:async()=>[{payload:url.includes('id=eq.job')?job:structuredClone(current)}]}),prepareOperationalState:(before,next,actor)=>{audits++;assert.equal(actor.can('os.editar'),true);assert.equal(actor.can('financeiro.editar'),false);assert.deepEqual(next.customers,before.customers);assert.equal(next.serviceOrders[0].date,before.serviceOrders[0].date);return next;},PRIMARY_DATABASE_URL:'https://db',independentOperationalRows:()=>[],commitNeonOperationalState:async(id,revision,payload)=>{commits++;assert.equal(id,'main');assert.equal(revision,current._revision);if(conflict&&commits===1){current._revision++;return null;}Object.assign(current,payload);return payload;}};
  vm.runInNewContext(replySource,sandbox);
  const event={id:'event-1',phone:wrongPhone?'5517999999999':'5517999990000',text:'CONFIRMAR OS-12',at:new Date(clock.getTime()-1000).toISOString()};
  return{run:()=>sandbox.recordAppointmentReply('A',event),current,counts:()=>({commits,audits})};
 }
 test('verified appointment reply updates only confirmation with audited CAS, retries conflicts and ignores replays',async()=>{
  const h=replyHarness({conflict:true});assert.equal(await h.run(),true);assert.equal(h.current.serviceOrders[0].appointmentConfirmation,'Confirmado');assert.equal(h.current.serviceOrders[0].status,'Cliente confirmado');assert.equal(h.current.serviceOrders[0].timeline.length,1);assert.equal(h.counts().commits,2);assert.equal(await h.run(),false);assert.equal(h.counts().commits,2);
- for(const options of [{wrongCompany:true},{wrongPhone:true}]){const denied=replyHarness(options);assert.equal(await denied.run(),false);assert.equal(denied.counts().commits,0);}
+ for(const options of [{wrongCompany:true},{wrongPhone:true},{ambiguousPhone:true},{status:"Rascunho"},{status:"Em andamento"}]){const denied=replyHarness(options);assert.equal(await denied.run(),false);assert.equal(denied.counts().commits,0);}
 });
 
 const editId='00000000-0000-4000-a000-000000000002';
@@ -126,4 +127,26 @@ test('reviewed Atendimento route updates the same ID once and never sends WhatsA
  const moved=await h.call({command,review:review.review});assert.equal(moved.saved,true);assert.equal(moved.recordId,saved.recordId);
  assert.equal((await h.call({command,review:review.review})).replay,true);
  assert.deepEqual(h.counts(),{puts:2,sends:0});
+});
+
+test('only a saved future appointment with actionable pending confirmation can request WhatsApp confirmation',()=>{
+ const original=prepareDeskAction(state(),parseDeskAction(schedule),requestId,now);
+ const action=parseDeskAction(`confirmar | ${original.record.id}`);
+ const allowed = original.next;
+ assert.match(prepareDeskAction(allowed,action,editId,now).summary,/está agendado/);
+ assert.throws(()=>prepareDeskAction(state(),action,editId,now),/já agendada/);
+ for (const [fields,pattern] of [
+   [{status:'Rascunho'},/já agendada/],
+   [{status:'Em andamento'},/já agendada/],
+   [{startedAt:now.toISOString()},/já agendada/],
+   [{status:'Cliente confirmado'},/já confirmou/],
+   [{appointmentConfirmation:'Confirmado'},/já confirmou/],
+   [{appointmentConfirmation:'Reagendamento solicitado'},/pediu reagendamento/],
+   [{date:'2027-02-30'},/futuros válidos/],
+   [{service:''},/serviço e o endereço/],
+ ]) {
+   const modified=structuredClone(allowed);
+   Object.assign(modified.serviceOrders[0],fields);
+   assert.throws(()=>prepareDeskAction(modified,action,editId,now),pattern);
+ }
 });

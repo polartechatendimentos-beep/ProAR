@@ -20,6 +20,13 @@ export function parseDeskAction(command: string): DeskAction {
   return { kind, fields };
 }
 const normalize = (value: unknown) => String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").replace(/[^a-z0-9]+/g, " ").trim();
+const confirmableStatus = (row: ActionRow) => !row.startedAt && !row.checkInAt && ["agendada", "reagendada", "cliente confirmado"].includes(normalize(row.status));
+function futureSlot(row: ActionRow, now: Date) {
+  const date = String(row.date || ""), time = String(row.time || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return false;
+  const start = new Date(`${date}T${time}:00-03:00`);
+  return start > now && new Date(`${date}T12:00:00Z`).toISOString().slice(0,10) === date;
+}
 const closedOrder = (row: ActionRow) => /cancelad|concluid|finalizad|encerrad|faturad/.test(normalize(row.status));
 export function savedDeskAction(state: ActionState, action: DeskAction, requestId: string) {
   if (action.kind === "customer") return state.customers.find(row => row.id === `CLI-CHAT-${requestId}`);
@@ -44,13 +51,17 @@ export function prepareDeskAction(state: ActionState, action: DeskAction, reques
   }
   if (action.kind === "confirmation") {
     const order = next.serviceOrders.find(row => row.id === action.fields[0]);
-    if (!order || closedOrder(order)) throw new Error("Agendamento ativo não encontrado.");
+    if (!order || !confirmableStatus(order)) throw new Error("Selecione uma OS já agendada ou reagendada e ainda não iniciada.");
+    if (normalize(order.status) === "cliente confirmado" || normalize(order.appointmentConfirmation) === "confirmado") throw new Error("O cliente já confirmou este horário. Não envie outro pedido.");
+    if (normalize(order.appointmentConfirmation) === "reagendamento solicitado") throw new Error("O cliente pediu reagendamento. Atualize o horário da mesma OS antes de solicitar confirmação.");
     const customer = next.customers.find(row => row.id === order.customerId);
-    if (!customer) throw new Error("Agendamento sem cliente vinculado. Corrija a OS antes do envio.");
+    if (!customer || /inativ/i.test(String(customer.status))) throw new Error("Agendamento sem cliente ativo vinculado. Corrija a OS antes do envio.");
     const phone = actionPhone(customer.whatsapp || customer.phone);
-    if(next.customers.filter(row => [row.whatsapp,row.phone].some(value=>actionPhoneSafe(value)===phone)).length !== 1) throw new Error("Mais de um cliente usa este WhatsApp. Confira o cadastro antes de solicitar a confirmação.");
-    if (!order.date || !order.time || !(new Date(`${order.date}T${order.time}:00-03:00`) > now)) throw new Error("A OS precisa ter data e horário futuros definidos.");
-    const message = `Olá, ${customer.name}! Seu atendimento de ${order.service} está agendado para ${String(order.date).split("-").reverse().join("/")} às ${order.time}, em ${order.address || customer.address}. Podemos confirmar sua presença? Responda CONFIRMAR ${order.id} ou REAGENDAR ${order.id}. Para não receber mensagens, responda SAIR.`;
+    if(uniqueAppointmentCustomer(next.customers,phone)?.id !== customer.id) throw new Error("Mais de um cliente usa este WhatsApp. Confira o cadastro antes de solicitar a confirmação.");
+    if (!futureSlot(order, now)) throw new Error("A OS precisa ter data e horário futuros válidos.");
+    const service = String(order.service || "").trim(), address = String(order.address || customer.address || "").trim();
+    if (!service || !address) throw new Error("Preencha o serviço e o endereço na OS antes de solicitar confirmação.");
+    const message = `Olá, ${customer.name}! Seu atendimento de ${service} está agendado para ${String(order.date).split("-").reverse().join("/")} às ${order.time}, em ${address}. Podemos confirmar sua presença? Responda CONFIRMAR ${order.id} ou REAGENDAR ${order.id}. Para não receber mensagens, responda SAIR.`;
     return { next, record: order, replay: false, summary: message, phone };
   }
   const moving = action.kind === "reschedule";
@@ -100,6 +111,13 @@ export function prepareDeskAction(state: ActionState, action: DeskAction, reques
   return { next, record, replay: false, summary: `Agendar ${customer.name} • ${service} • ${date.split("-").reverse().join("/")} às ${time} (${durationMinutes} min) • ${techName} • ${address}. Confirmação do cliente pendente.` };
 }
 function actionPhoneSafe(value: unknown) { try { return actionPhone(value); } catch { return ""; } }
+function customersByPhone(customers: readonly ActionRow[], phone: string) {
+  return phone ? customers.filter(row => [row.whatsapp,row.phone].some(value=>actionPhoneSafe(value)===phone)) : [];
+}
+export function uniqueAppointmentCustomer(customers: readonly ActionRow[], phone: string) {
+  const matches = customersByPhone(customers,actionPhoneSafe(phone));
+  return matches.length === 1 && matches[0].id ? matches[0] : undefined;
+}
 export function parseAppointmentReply(text: string) {
   const match = /^(CONFIRMAR|REAGENDAR)\s+(#?OS-[A-Z0-9-]{1,90})$/i.exec(text.trim());
   return match ? { orderId: match[2].toUpperCase(), status: match[1].toUpperCase() === "CONFIRMAR" ? "Confirmado" : "Reagendamento solicitado" } : null;
@@ -107,12 +125,12 @@ export function parseAppointmentReply(text: string) {
 export function appointmentSource(order: ActionRow) { return `appointment:${order.id}:${order.date}:${order.time}${order.appointmentScheduleRevision ? `:${order.appointmentScheduleRevision}` : ""}`; }
 export function appointmentReplyAllowed(order: ActionRow, customer: ActionRow | undefined, phone: string, eventAt: string, job: ActionRow | undefined, now = new Date()) {
   const event = Date.parse(eventAt), sent = Date.parse(String(job?.createdAt || ""));
-  return Boolean(customer && customer.id === order.customerId && actionPhoneSafe(customer.whatsapp || customer.phone) === phone && !closedOrder(order) && job?.status === "accepted" && job.sourceId === appointmentSource(order) && Number.isFinite(event) && Number.isFinite(sent) && event >= sent && event <= now.getTime()+300000 && now.getTime()-event < 86400000 && new Date(`${order.date}T${order.time}:00-03:00`) > now);
+  return Boolean(customer && customer.id === order.customerId && !/inativ/i.test(String(customer.status)) && actionPhoneSafe(customer.whatsapp || customer.phone) === phone && confirmableStatus(order) && job?.status === "accepted" && job.sourceId === appointmentSource(order) && Number.isFinite(event) && Number.isFinite(sent) && event >= sent && event <= now.getTime()+300000 && now.getTime()-event < 86400000 && futureSlot(order, now));
 }
 
 export function chatCustomerContext(state: ActionState, rawPhone: string) {
   const phone = actionPhone(rawPhone);
-  const matches = state.customers.filter(customer=>[customer.whatsapp,customer.phone].some(value=>actionPhoneSafe(value)===phone));
+  const matches = customersByPhone(state.customers,phone);
   if (matches.length !== 1) return {customer:null,ambiguous:matches.length>1,orders:[],equipment:[],orderCount:0,equipmentCount:0};
   const customer = matches[0];
   const uniqueName = state.customers.filter(row=>row.name===customer.name).length===1;

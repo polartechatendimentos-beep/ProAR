@@ -5,7 +5,7 @@ import {stripTypeScriptTypes} from 'node:module';
 import {runInNewContext} from 'node:vm';
 import {canReplyToNewInbound, chatWebhookToken, validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery} from '../lib/chatdesk-events.ts';
 import {applyChatDeliveryReceipt, completeChatSend} from "../lib/chatdesk-delivery.ts";
-import {localTriage, eventReplyPlan, pilotReplyPlan, handoffSupplementPlan, recordIntakeReply, updateServiceIntake, chatQueuePriority, chatQueueSummary} from '../lib/chatdesk-local.ts';
+import {localTriage, eventReplyPlan, pilotReplyPlan, businessHoursNotice, detectChatIntents, validateBusinessHours, handoffSupplementPlan, recordIntakeReply, updateServiceIntake, chatQueuePriority, chatQueueSummary} from '../lib/chatdesk-local.ts';
 import {tenantSlugFromHost} from "../lib/tenant-host.ts";
 
 test('first-response eligibility excludes old, future, media-only, and courtesy messages', () => {
@@ -36,7 +36,7 @@ test('authenticated arrival can answer immediately with the reminders switch off
   const env = {PROAR_EVOLUTION_AUTOMATION_ENABLED:'true'};
   const handle = runInNewContext(source+'\nPOST', {
     NextResponse:{json:(body, init)=>({body,status:init?.status??200})},
-    process:{env}, structuredClone, validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery, applyChatDeliveryReceipt, completeChatSend, canReplyToNewInbound, localTriage, eventReplyPlan, pilotReplyPlan, handoffSupplementPlan, recordIntakeReply, updateServiceIntake,
+    process:{env}, structuredClone, validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery, applyChatDeliveryReceipt, completeChatSend, canReplyToNewInbound, localTriage, eventReplyPlan, pilotReplyPlan, businessHoursNotice, handoffSupplementPlan, recordIntakeReply, updateServiceIntake,
     requiredSecret:()=>secret, assertActiveWhatsAppCompany:async id=>assert.equal(id,tenant),
     evolutionConnection:async()=>({config:{instance}}), chatSettings:async()=>settings,
     recordAppointmentReply:async()=>{if(bookingFailure)throw new Error("Sem agenda");return appointmentHandled;}, tenantEvolutionAutomationEnabled:async()=>false,
@@ -491,4 +491,26 @@ test('pilot installation collects separate turns instead of treating the city as
   assert.equal(run("Não").handoff,true);
   assert.equal(intake.capacity,"12 mil");
   assert.equal(intake.infrastructure,"Não informada como existente");
+});
+
+test('triage separates licitação, maintenance and scheduling with no promises', () => {
+  const text="Meu ar está pingando e quero agendar. Vocês participam de licitação?";
+  assert.deepEqual(detectChatIntents(text),["Licitação","Agendamento","Manutenção"]);
+  const now=Date.parse("2026-11-25T23:05:30Z");
+  const messages=[{id:"mixed-pilot",text,at:new Date(now-1000).toISOString(),direction:"in"}];
+  const intake=updateServiceIntake(undefined,messages,"mixed-pilot");
+  assert.deepEqual(intake.intents,detectChatIntents(text));
+  const plan=pilotReplyPlan(messages,"mixed-pilot","2026-11-25T23:00:00Z",now,false,false,intake);
+  assert.match(plan.reply,/licitação.*agenda.*vazamento.*visita técnica/);
+  assert.match(plan.reply,/Nenhuma visita foi reservada/);
+  assert.equal(plan.handoff,true);
+});
+
+test('after-hours reply uses saved Brasília hours and never assumes an unconfigured schedule', () => {
+  const hours = validateBusinessHours([{day:3,opens:"08:00",closes:"18:00"},{day:6,opens:"08:00",closes:"12:00"}]);
+  assert.equal(businessHoursNotice(undefined,new Date("2026-11-25T23:00:00Z")),null);
+  assert.equal(businessHoursNotice(hours,new Date("2026-11-25T17:00:00Z")),null);
+  assert.match(businessHoursNotice(hours,new Date("2026-11-25T23:00:00Z")).text,/sábado às 08:00/);
+  assert.match(businessHoursNotice(hours,new Date("2026-11-25T10:00:00Z")).text,/hoje às 08:00/);
+  assert.throws(()=>validateBusinessHours([{day:2,opens:"21:00",closes:"08:00"}]),/Horário inválido/);
 });

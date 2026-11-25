@@ -5,6 +5,8 @@ export type ChatSector = typeof chatSectors[number];
 export const chatStages = ["Novo contato", "Em atendimento", "Orçamento", "Aguardando cliente", "Concluído"] as const;
 export type ChatStage = typeof chatStages[number];
 export type ServiceIntake = {
+  intents?: ChatIntent[];
+  urgent?: boolean;
   updatedAt: string;
   service?: string;
   symptom?: string;
@@ -23,11 +25,54 @@ export type ServiceIntake = {
   lastQuestion?: string;
   responses?: {key:string; text:string; at:string}[];
 };
-export type ChatMessage = { id: string; direction: "in" | "out" | "note" | "event"; text: string; at: string; actor?: string; status?: string; providerMessageId?: string; assistantReplyKey?: string; assistantNudge?: boolean; pilotTurn?: boolean; replyToId?: string; mediaKind?: "foto" | "áudio" | "vídeo" | "documento"; deliveryStatus?: DeliveryStatus };
-export type ChatConversation = { companyId: string; phone: string; name: string; sector: ChatSector; stage: ChatStage; assignee: string; revision: number; botPaused: boolean; optOut: boolean; messages: ChatMessage[]; requests: string[]; updatedAt: string; orderId?: string; assistantHandoffAt?: string; intake?: ServiceIntake; pendingDeliveryReceipts?: PendingDeliveryReceipt[]; queueActivity?: { incoming?: ChatMessage; humanReplyAt?: string; lastOutbound?: Pick<ChatMessage, "at" | "status" | "deliveryStatus"> } };
+export type ChatMessage = { id: string; direction: "in" | "out" | "note" | "event"; text: string; at: string; actor?: string; status?: string; providerMessageId?: string; assistantReplyKey?: string; assistantNudge?: boolean; hoursNoticeFor?: string; pilotTurn?: boolean; replyToId?: string; mediaKind?: "foto" | "áudio" | "vídeo" | "documento"; deliveryStatus?: DeliveryStatus };
+export type ChatConversation = { companyId: string; phone: string; name: string; sector: ChatSector; stage: ChatStage; assignee: string; revision: number; botPaused: boolean; optOut: boolean; messages: ChatMessage[]; requests: string[]; updatedAt: string; orderId?: string; assistantHandoffAt?: string; intake?: ServiceIntake; pendingDeliveryReceipts?: PendingDeliveryReceipt[]; queueActivity?: { urgent?: boolean; incoming?: ChatMessage; humanReplyAt?: string; lastOutbound?: Pick<ChatMessage, "at" | "status" | "deliveryStatus"> } };
 export type ChatActor = { username: string; displayName: string; role: string; sectors: ChatSector[]; writeSectors: ChatSector[]; canWrite: boolean; admin: boolean };
-export type LocalChatSettings = { companyId: string; revision: number; botEnabled: boolean; botActivatedAt?: string; botTestPhone?: string; companyName: string; greeting: string; quickReplies?: ChatQuickReply[] };
+export type LocalChatSettings = { companyId: string; revision: number; botEnabled: boolean; botActivatedAt?: string; botTestPhone?: string; companyName: string; greeting: string; quickReplies?: ChatQuickReply[]; businessHours?: BusinessDay[]; followUp?: {enabled:boolean;delayMinutes:number;enabledAt:string} };
 const normalized = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+export type ChatIntent = "Orçamento" | "Manutenção" | "Instalação" | "Agendamento" | "Licitação" | "Dúvida geral";
+export type BusinessDay = { day:number; opens:string; closes:string };
+export function detectChatIntents(text:string):ChatIntent[] {
+  const value=normalized(text);
+  const patterns:[ChatIntent,RegExp][] = [
+    ["Licitação",/\b(?:licitacao|licitacoes|edital|pregao|pncp|compras publicas)\b/],
+    ["Agendamento",/\b(?:agendar|agendamento|reagendar|remarcar|cancelar (?:a |o )?(?:visita|horario)|(?:podem|conseguem) vi(?:r|m)|tem como vir)\b/],
+    ["Instalação",/\b(?:instalacao|instalam|instalar|desinstalacao|remocao|retirada do aparelho)\b/],
+    ["Manutenção",/\b(?:manutencao|higienizacao|pmoc|nao gela|nao liga|barulho|defeito|esta pingando|pingando|pinga|vazamento|gotejando|limpeza do ar|parou de gelar)\b/],
+    ["Orçamento",/\b(?:orcamento|preco|quanto (?:custa|fica)|qual (?:e )?o valor|cotacao)\b/],
+  ];
+  const found=patterns.filter(([,pattern])=>pattern.test(value)).map(([label])=>label);
+  return found.length ? found : ["Dúvida geral"];
+}
+export function validateBusinessHours(raw:unknown):BusinessDay[] {
+  if (!Array.isArray(raw) || raw.length>7) throw new Error("Informe até sete dias de expediente.");
+  const days = new Set<number>();
+  return raw.map((row:BusinessDay)=>{
+    const time = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+    if(!row || !Number.isInteger(row.day)||row.day<0||row.day>6||days.has(row.day)||typeof row.opens!=="string"||typeof row.closes!=="string"
+      || !time.test(row.opens)|| !time.test(row.closes)||row.opens>=row.closes) throw new Error("Horário inválido: informe abertura e fechamento no mesmo dia.");
+    days.add(row.day);
+    return {day:row.day,opens:row.opens,closes:row.closes};
+  });
+}
+const weekdayLabel=["domingo","segunda-feira","terça-feira","quarta-feira","quinta-feira","sexta-feira","sábado"];
+export function businessHoursNotice(hours:BusinessDay[]|undefined, now=new Date()) {
+  if (!hours?.length || !Number.isFinite(now.getTime())) return null;
+  const fmt=new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"});
+  for(let offset=0;offset<=7;offset++){
+    const parts=Object.fromEntries(fmt.formatToParts(new Date(now.getTime()+offset*86400000)).map(p=>[p.type,p.value]));
+    const date=parts.year+"-"+parts.month+"-"+parts.day;
+    const day=new Date(date+"T12:00:00Z").getUTCDay();
+    const time=parts.hour+":"+parts.minute;
+    const window=hours.find(row=>row.day===day);
+    if(!window)continue;
+    if(offset===0 && time>=window.opens && time<window.closes)return null;
+    if(offset===0 && time>=window.opens)continue;
+    return {key:date+"T"+window.opens,text:"A equipe está fora do expediente. O próximo expediente começa "+(offset===0?"hoje":weekdayLabel[day])+" às "+window.opens+". Sua solicitação fica registrada por aqui."};
+  }
+  return null;
+}
+
 const isNudge = (text: string) => /^[.…]+$/u.test(text.trim());
 const leakIntent = /\b(?:ping(?:a|ando|ano|andu|ou)|gotej(?:a|ando|ou)|vazando(?: agua)?|vazamento de agua|(?:cai|caindo|escorre|escorrendo) agua)\b/;
 export function localTriage(text: string) {
@@ -284,6 +329,9 @@ export function updateServiceIntake(previous: ServiceIntake | undefined, message
   const prompt = before?.assistantReplyKey;
   const recentPrompt = before && Math.abs(Date.parse(event.at) - Date.parse(before.at)) < 30 * 60_000;
   const correcting = detailCorrection.test(clue);
+  const labels=detectChatIntents(value).filter(label=>label!=="Dúvida geral");
+  if(labels.length) facts.intents=Array.from(new Set([...(facts.intents || []),...labels]));
+  facts.urgent ||= localTriage(value).urgent;
   const aside = Boolean((facts.symptom || facts.service) && (serviceAside(clue) || visitAside(clue)));
   const standalone = /^[\p{L}\p{N}][\p{L}\p{N} .'-]{0,70}$/u.test(value) && !/^(?:oi|sim|não|nao|ok|obrigad[oa]|não sei|nao sei)$/iu.test(value);
   if (!aside && (leakIntent.test(clue) || /\b(?:nao gela|nao esta gelando|parou de gelar|nao liga|barulho|cheiro de queimado|agua perto|falha|erro|higienizacao|limpeza do ar|manutencao)\b/.test(clue))) {
@@ -374,6 +422,21 @@ export function pilotReplyPlan(messages: ChatMessage[], eventId: string, activat
   if (triage.urgent) return handoff("urgent", "Por segurança, desligue o aparelho apenas se puder fazer isso sem contato com água ou partes elétricas. Evite tocar no equipamento. Registrei o caso para avaliação da equipe técnica.");
   if (appointmentHandled) return {key:"agenda:recorded",reply:"Registrei sua resposta sobre o agendamento. Se precisar ajustar algum detalhe, me avise por aqui.",first,handoff:false};
   if (agendaFailed) return handoff("agenda:failure", "Não consegui concluir a confirmação na agenda. Deixei a conversa para nossa equipe verificar. Seguimos por aqui.");
+  const intents = detectChatIntents(value);
+  if (intents.includes("Licitação") || (intents.includes("Manutenção") && (intents.includes("Instalação") || intents.includes("Agendamento") || intents.includes("Orçamento")) && !serviceAside(value))) {
+    const lines = intents.map(intent=>({
+      Licitação:"Sobre a licitação, a equipe pode conferir o edital ou o número do pregão.",
+      Instalação:"Para a instalação, a equipe vai separar os dados do aparelho e do local.",
+      Manutenção:leakIntent.test(value) ? "Para o vazamento, recomendo uma visita técnica: pode haver várias causas." : "Para a manutenção, a equipe vai verificar o problema relatado.",
+      Agendamento:"Para marcar horário, a equipe precisa conferir a agenda. Nenhuma visita foi reservada.",
+      "Orçamento":"O orçamento depende dos dados de cada serviço; não vou te passar um valor sem confirmação.",
+      "Dúvida geral":"Sua dúvida ficou registrada.",
+    })[intent]);
+    return handoff("triagem:equipe",lines.join(" ")+" Separei os assuntos para a equipe continuar por aqui.");
+  }
+  if (intents.includes("Orçamento") && !intents.includes("Instalação") && !intents.includes("Manutenção") && !/quanto|valor|preco/.test(value)) {
+    return {key:"orcamento:servico",reply:"Para preparar o orçamento, qual serviço você precisa?",first,handoff:false};
+  }
   if (/\b(?:podem|conseguem|da para) vi(?:r|m) (?:ver|olhar)\b/.test(value) && !intake?.symptom) {
     return {key:"tecnico:visita-triagem",reply:"Podemos verificar uma visita técnica. O que está acontecendo com o aparelho?",first,handoff:false};
   }
@@ -616,7 +679,7 @@ export function chatQueuePriority(chat: ChatConversation, nowMs: number) {
   const open = chat.stage !== "Concluído";
   const waiting = open && Number.isFinite(customerAt) && (!humanReplyAt || customerAt > Date.parse(humanReplyAt));
   const elapsed = waiting && Number.isFinite(nowMs) ? Math.max(0, nowMs - customerAt) : 0;
-  const urgent = Boolean(waiting && lastCustomer && localTriage(lastCustomer.text).urgent);
+  const urgent = Boolean(waiting && (chat.intake?.urgent || chat.queueActivity?.urgent || (lastCustomer && localTriage(lastCustomer.text).urgent)));
   const followUp = Boolean(waiting && lastCustomer && recentDay(customerAt, nowMs) && customerFollowUp.test(normalized(lastCustomer.text)));
   const handoff = Boolean(waiting && !chat.assignee && chat.assistantHandoffAt && !chat.optOut);
   const outboundAt = Date.parse(lastOutbound?.at || "");
@@ -632,9 +695,9 @@ export function sortChatQueue(items: ChatConversation[], nowMs: number) {
 }
 export function chatQueueSummary(chat: ChatConversation): ChatConversation {
   // Internal notes and receipt buffering never leave the summary or count as a public reply.
-  const { pendingDeliveryReceipts: _pending, ...visible } = chat;
+  const { pendingDeliveryReceipts: _pending, intake, ...visible } = chat;
   const incoming = chat.messages.findLast(message => message.direction === "in");
   const outbound = chat.messages.findLast(message => message.direction === "out");
   const lastOutbound = outbound && { at: outbound.at, status: outbound.status, deliveryStatus: outbound.deliveryStatus };
-  return { ...visible, messages: chat.messages.filter(message=>message.direction==="in"||message.direction==="out").slice(-1), requests: [], queueActivity: { incoming, humanReplyAt: lastHumanReplyAt(chat), lastOutbound } };
+  return { ...visible, messages: chat.messages.filter(message=>message.direction==="in"||message.direction==="out").slice(-1), requests: [], queueActivity: { urgent:intake?.urgent, incoming, humanReplyAt: lastHumanReplyAt(chat), lastOutbound } };
 }
