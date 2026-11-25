@@ -32,18 +32,30 @@ const leakInside = /\b(?:evaporadora|unidade interna|unidade de dentro|parte de 
 const leakOutside = /\b(?:condensadora|unidade externa|unidade de fora|parte de fora|aparelho externo|por fora|parte externa|lado de fora|fora de casa)\b/;
 const leakWhen = /\b(?:quando (?:liga|desliga)|so (?:quando|a noite|de manha)|o tempo todo|direto|desde (?:ontem|hoje)|a noite|de manha)\b/;
 const equipmentDetail = /\b(?:marca|modelo|etiqueta|fujitsu|carrier|gree|elgin|samsung|midea|daikin|philco|tcl|lg|agr[aá]tto|[0-9]{1,3}(?:[. ][0-9]{3})?\s*btus?)\b/;
-const placeDetail = /\b(?:moro em|cidade(?: de)?|bairro|rua|avenida|mirassol|rio preto|balsamo|jaci|olimpia|tanabi|bady bassitt)\b/;
+const applianceIdentity = /\b(?:fujitsu|carrier|gree|elgin|samsung|midea|daikin|philco|tcl|lg|agratto|consul|electrolux|springer|hitachi|komeco|panasonic)\b|\bmodelo\s*[:−-]?\s*[a-z]{1,7}[- ]?\d{2,}[a-z0-9-]*\b/;
+const placeDetail = /\b(?:(?:moro|sou|estou|fica) (?:em|de|no|na)\s+[a-z]{2,}|(?:cidade(?: de)?|bairro|rua|avenida)\s+[a-z]{2,}|mirassol|rio preto|balsamo|jaci|olimpia|tanabi|bady bassitt)\b/;
+const serviceSite = /\b(?:escola(?: municipal| estadual)?|creche|emei|emef|colegio|clinica|unidade de saude|ubs|prefeitura|empresa)\b/;
+const siteNameKnown = /\blocal de atendimento identificado\b|\b(?:escola(?: municipal| estadual)?|creche|emei|emef|colegio|clinica|ubs)\s+(?!municipal\b|estadual\b|no\b|na\b|em\b|do\b|da\b|de\b|aqui\b|centro\b|bairro\b|que\b|esta\b|fica\b)[a-z]{2,}(?:\s+[-a-z]+)?/;
+const serviceRoom = /\b(?:sala de aula|sala\s+(?:[0-9]{1,3}[a-z]?|d[ao]s?\s+[a-z]+)|secretaria|recepcao|diretoria|biblioteca|cozinha|refeitorio|laboratorio|setor de atendimento)\b/;
+const localCity = /\b(?:mirassol|[a-z ]{0,13}rio preto|balsamo|jaci|olimpia|tanabi|bady bassitt|neves paulista|sao jose do rio preto)\b|\b(?:cidade(?: de)?|(?:sou|moro) (?:de|em)|estou em)\s+(?!(?:casa|na|no|uma?|escola|bairro|centro|atendimento)\b)[a-z]{2,}/;
+const localNeighborhood = /\b(?:bairro\s+[a-z]{2,}|centro|bairro informado)\b/;
 const installationIntent = /\b(?:instalacao|instalar|instalam)\b/;
 const capacityDetail = /\b(?:[0-9]{1,3}(?:[. ][0-9]{3})?\s*btus?|[0-9]{1,2}\s*(?:mil|k))\b/;
 const infrastructureDetail = /\b(?:tubulacao|infraestrutura|cobre|ponto eletrico|nao tem nada|sem infra)\b/;
 const leakingReplies = {
-  where: "Entendi que o ar-condicionado está pingando. A água sai da unidade de dentro ou da unidade de fora?",
+  where: "A água está saindo da unidade de dentro ou da unidade de fora?",
   clarify: "Só para confirmar: é na unidade de dentro, na de fora ou nas duas?",
-  inside: "Entendi, a água está saindo da unidade de dentro. Pode me informar a marca ou o modelo e a cidade e o bairro do atendimento? Se puder, mande uma foto da etiqueta.",
-  outside: "Entendi, a água está saindo do lado de fora. Isso acontece enquanto o aparelho está ligado ou só depois de desligar? Pode informar também a cidade e o bairro?",
-  both: "Entendi, você percebeu água nas duas unidades. Pode me dizer se isso acontece com o aparelho ligado ou depois que desliga, e em qual cidade e bairro ele está?",
-  details: "Obrigado pelos detalhes. Eles ajudam a equipe técnica a avaliar o vazamento. Se puder, mande uma foto de onde a água está saindo.",
-  complete: "Obrigado, já tenho as informações para a equipe técnica avaliar o relato. O diagnóstico depende da avaliação do equipamento.",
+  inside: "Certo, está pingando pela unidade de dentro. Em qual cidade e bairro fica o aparelho?",
+  outside: "Entendi, está saindo do lado de fora. Acontece com o aparelho ligado ou só depois de desligar?",
+  both: "Entendi, está saindo água nas duas unidades. Isso acontece com o aparelho ligado ou depois que desliga?",
+  place: "Em qual cidade e bairro fica o aparelho?",
+  city: "E em qual cidade fica o aparelho?",
+  neighborhood: "E em qual bairro fica o aparelho?",
+  "site-name": "Qual é o nome da unidade onde fica o aparelho?",
+  school: "Qual é o nome da escola?",
+  "site-room": "Em qual sala ou setor fica o aparelho?",
+  brand: "Você sabe a marca ou o modelo do aparelho? Se for mais fácil, pode mandar uma foto da etiqueta.",
+  complete: "Obrigado! Com essas informações, a equipe técnica pode avaliar o próximo passo.",
 } as const;
 
 /** Expand a short answer only when a prior, related question gives it meaning. */
@@ -74,6 +86,18 @@ function interpretChatAnswers(active: ChatMessage[], eventPosition: number) {
     } else if (timely && /^installation:[01]{2}0$/.test(key || "")) {
       if (/^(?:sim|ja tem|tem sim|ja existe)$/.test(answer)) value = "ja tem tubulacao de cobre";
       else if (/^(?:nao|nao tem|nao tenho|ainda nao)$/.test(answer)) value = "nao tem tubulacao de cobre";
+    } else if (timely && (key === "leak:school" || key === "leak:site-name")
+      && /^(?:[a-z][a-z0-9.'’-]*\s+){1,8}[a-z0-9.'’-]+$/.test(answer)
+      && !/^(?:(?:escola|creche|colegio) (?:municipal|estadual)|nao sei|nao lembro|qual escola)$/.test(answer)
+      && localTriage(answer).sector === "Geral" && !localTriage(answer).optOut
+      && !placeDetail.test(answer) && !customerFollowUp.test(answer) && !equipmentDetail.test(answer)) {
+      // Remember that the requested name was provided without reprinting it.
+      value = "local de atendimento identificado";
+    } else if (timely && key === "leak:site-room" && /^(?:sala\s+)?[0-9]{1,3}[a-z]?$/.test(answer)) {
+      value = "setor de atendimento";
+    } else if (timely && key === "leak:neighborhood"
+      && /^(?:jardim|vila|parque|residencial|loteamento)\s+[a-z]/.test(answer)) {
+      value = "bairro informado";
     }
     revised.set(message.id, { value, clarifyLocation });
     // A question is bound to the next inbound turn, not an arbitrary later text.
@@ -94,7 +118,6 @@ export function eventReplyPlan(messages: ChatMessage[], eventId: string, activat
   const recent = bots.filter(message => now - Date.parse(message.at) < 5 * 60_000);
   const triage = localTriage(event.text);
   if (triage.optOut) return null;
-  if (recent.length >= 4 && !triage.urgent) return null;
   const interpreted = interpretChatAnswers(active, eventPosition);
   const read = (message: ChatMessage) => interpreted.get(message.id)?.value ?? normalized(message.text);
   const value = read(event);
@@ -104,11 +127,14 @@ export function eventReplyPlan(messages: ChatMessage[], eventId: string, activat
   const inbound = active.slice(0, eventPosition + 1).filter(message => message.direction === "in" && Date.parse(message.at) <= Date.parse(event.at));
   const idx = inbound.findIndex(message => leakIntent.test(normalized(message.text)));
   const clarifyLocation = interpreted.get(event.id)?.clarifyLocation === true;
-  const leakTopic = leakIntent.test(value) || (idx >= 0 && (clarifyLocation || leakInside.test(value) || leakOutside.test(value) || leakWhen.test(value) || equipmentDetail.test(value) || placeDetail.test(value)));
+  const leakTopic = leakIntent.test(value) || (idx >= 0 && (clarifyLocation || leakInside.test(value) || leakOutside.test(value) || leakWhen.test(value) || equipmentDetail.test(value) || applianceIdentity.test(value) || placeDetail.test(value) || localNeighborhood.test(value) || serviceSite.test(value) || siteNameKnown.test(value) || serviceRoom.test(value)));
   const installationIndex = inbound.reduce((last, message, index) => installationIntent.test(normalized(message.text)) ? index : last, -1);
   const installationTopic = installationIntent.test(value) || (installationIndex >= 0
     && (capacityDetail.test(value) || placeDetail.test(value) || infrastructureDetail.test(value))
     && (idx < 0 || installationIndex > idx));
+  // Give material, deduplicated steps room to progress without making
+  // generic replies more frequent or replaying a question.
+  if (recent.length >= (leakTopic || installationTopic ? 8 : 4) && !triage.urgent) return null;
   let key = "sector:" + triage.sector, reply = triage.reply;
   if (triage.urgent) key = "urgent";
   else if (leakTopic && triage.sector !== "Financeiro" && triage.sector !== "PMOC") {
@@ -116,11 +142,20 @@ export function eventReplyPlan(messages: ChatMessage[], eventId: string, activat
     const inside = leakInside.test(facts), outside = leakOutside.test(facts);
     const locationKnown = inside || outside;
     const situationKnown = leakWhen.test(facts);
-    const applianceKnown = equipmentDetail.test(facts);
-    const placeKnown = placeDetail.test(facts);
-    const step = !locationKnown && clarifyLocation ? "clarify" : locationKnown && applianceKnown && placeKnown ? "complete"
-      : applianceKnown || placeKnown || situationKnown ? "details"
-      : inside && outside ? "both" : inside ? "inside" : outside ? "outside" : "where";
+    const applianceKnown = applianceIdentity.test(facts);
+    const cityKnown = localCity.test(facts);
+    const neighborhoodKnown = localNeighborhood.test(facts);
+    const institution = serviceSite.test(facts);
+    const school = /\b(?:escola|creche|emei|emef|colegio)\b/.test(facts);
+    const step = !locationKnown ? (clarifyLocation ? "clarify" : "where")
+      : institution && !siteNameKnown.test(facts) ? (school ? "school" : "site-name")
+      : institution && !serviceRoom.test(facts) ? "site-room"
+      : !cityKnown && !neighborhoodKnown && inside && !outside ? "inside"
+      : outside && !situationKnown && !cityKnown && !neighborhoodKnown ? (inside ? "both" : "outside")
+      : !cityKnown && !neighborhoodKnown ? "place"
+      : !cityKnown ? "city"
+      : !neighborhoodKnown ? "neighborhood"
+      : !institution && !applianceKnown ? "brand" : "complete";
     key = "leak:" + step;
     reply = leakingReplies[step];
     if (bots.some(message => message.assistantReplyKey === key)) return null;
@@ -140,6 +175,9 @@ export function eventReplyPlan(messages: ChatMessage[], eventId: string, activat
       : "Obrigado pelos detalhes da instalação. A equipe pode usar esses dados para avaliar o orçamento. O valor depende da conferência do local e dos materiais necessários.";
     if (bots.some(message => message.assistantReplyKey === key)) return null;
   } else if (triage.sector === "Geral" && bots.length) return null;
+  else if (triage.sector === "Geral" && /^(?:oi+|ola|bom dia|boa tarde|boa noite)(?:[!.?,\s]*(?:tudo bem|tudo bom))?[!.?,\s]*$/.test(value.trim())) {
+    reply = "Oi! Como posso ajudar com seu ar-condicionado?";
+  }
   if (recent.some(message => message.assistantReplyKey === key || message.text.endsWith(reply))) return null;
   if (recent.length && !triage.urgent && !leakTopic && !installationTopic && recent.some(message => !message.assistantReplyKey)) return null;
   return { key, reply: bots.length ? reply.replace(/^Olá!\s*/, "") : reply, first: bots.length === 0 };
