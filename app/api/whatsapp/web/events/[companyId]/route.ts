@@ -4,7 +4,7 @@ import { validChatWebhookToken, parseEvolutionInbound, canReplyToNewInbound } fr
 import { requiredSecret } from "../../../../../../lib/security-env";
 import { assertActiveWhatsAppCompany, evolutionConnection, tenantEvolutionAutomationEnabled } from "../../../../../../lib/evolution-tenant";
 import { changeChat, chatSettings } from "../../../../../../lib/chatdesk-store";
-import { localTriage, type ChatConversation } from "../../../../../../lib/chatdesk-local";
+import { localTriage, eventReplyPlan, type ChatConversation } from "../../../../../../lib/chatdesk-local";
 import { dispatchEvolutionJob } from "../../../../../../lib/evolution-jobs";
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -39,26 +39,32 @@ export async function POST(request: NextRequest, context: { params: Promise<{ co
       const appointmentHandled = !triage.optOut && await recordAppointmentReply(companyId, event);
       const chat = result.chat;
       const recentBot = chat?.messages.some(message => message.actor === "local-assistant" && Date.now() - Date.parse(message.at) < 300000);
-      if (appointmentHandled || !result.changed || !chat || !settings.botEnabled || chat.optOut || chat.botPaused || chat.assignee || recentBot) continue;
+      if (appointmentHandled || !result.changed || !chat || !settings.botEnabled || chat.optOut || chat.botPaused || chat.assignee) continue;
       if (settings.botActivatedAt) {
         if (process.env.PROAR_EVOLUTION_AUTOMATION_ENABLED !== "true" || !canReplyToNewInbound({
           activatedAt: settings.botActivatedAt, testPhone: settings.botTestPhone,
           eventAt: event.at, phone: event.phone, text: event.text,
         })) continue;
-      } else if (!await tenantEvolutionAutomationEnabled(companyId)) continue;
+      } else if (recentBot || !await tenantEvolutionAutomationEnabled(companyId)) continue;
       const botId = `local:${event.id}`;
-      const text = `*Assistente automático${settings.companyName ? ` — ${settings.companyName}` : ""}:*\n${settings.greeting ? settings.greeting + "\n\n" : ""}${triage.reply}`;
       // Reserve ownership in the conversation as well as in the outbox. A human
       // claim that wins the optimistic write prevents this automatic response.
       const reserved = await changeChat(companyId, event.phone, current => {
-        if (!current || current.assignee || current.botPaused || current.optOut || current.messages.some(message => message.id === botId || (message.actor === "local-assistant" && Date.now() - Date.parse(message.at) < 300000))) return null;
+        if (!current || current.assignee || current.botPaused || current.optOut || current.messages.some(message => message.id === botId)) return null;
+        const plan = settings.botActivatedAt
+          ? eventReplyPlan(current.messages, event.id, settings.botActivatedAt)
+          : current.messages.some(message => message.actor === "local-assistant" && Date.now() - Date.parse(message.at) < 300000)
+            ? null : {key: "", reply: triage.reply, first: true};
+        if (!plan) return null;
+        const text = `*Assistente automático${settings.companyName ? ` — ${settings.companyName}` : ""}:*\n${plan.first && settings.greeting ? settings.greeting + "\n\n" : ""}${plan.reply}`;
         const next = structuredClone(current);
-        next.messages.push({ id: botId, direction: "out", text, actor: "local-assistant", at: new Date().toISOString(), status: "processing" });
+        next.messages.push({ id: botId, direction: "out", text, actor: "local-assistant", at: new Date().toISOString(), status: "processing", assistantReplyKey: plan.key });
         return next;
       });
-      if (!reserved.changed) continue;
+      const reservedMessage = reserved.chat?.messages.find(message => message.id === botId);
+      if (!reserved.changed || !reservedMessage) continue;
       let status = "unknown", providerMessageId: string | undefined;
-      try { const sent = await dispatchEvolutionJob(companyId, `chatbot:${event.phone}:${event.id}`, event.phone, text); status = sent.status; if (sent.status === "accepted") providerMessageId = sent.messageId; } catch { /* Keep an auditable uncertain result. */ }
+      try { const sent = await dispatchEvolutionJob(companyId, `chatbot:${event.phone}:${event.id}`, event.phone, reservedMessage.text); status = sent.status; if (sent.status === "accepted") providerMessageId = sent.messageId; } catch { /* Keep an auditable uncertain result. */ }
       await changeChat(companyId, event.phone, current => {
         if (!current) return null;
         const next = structuredClone(current); const message = next.messages.find(item => item.id === botId);

@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 import {stripTypeScriptTypes} from 'node:module';
 import {runInNewContext} from 'node:vm';
 import {canReplyToNewInbound, chatWebhookToken, validChatWebhookToken, parseEvolutionInbound} from '../lib/chatdesk-events.ts';
-import {localTriage} from '../lib/chatdesk-local.ts';
+import {localTriage, eventReplyPlan} from '../lib/chatdesk-local.ts';
 import {tenantSlugFromHost} from "../lib/tenant-host.ts";
 
 test('first-response eligibility excludes old, future, media-only, and courtesy messages', () => {
@@ -34,7 +34,7 @@ test('authenticated arrival can answer immediately with the reminders switch off
   const env = {PROAR_EVOLUTION_AUTOMATION_ENABLED:'true'};
   const handle = runInNewContext(source+'\nPOST', {
     NextResponse:{json:(body, init)=>({body,status:init?.status??200})},
-    process:{env}, structuredClone, validChatWebhookToken, parseEvolutionInbound, canReplyToNewInbound, localTriage,
+    process:{env}, structuredClone, validChatWebhookToken, parseEvolutionInbound, canReplyToNewInbound, localTriage, eventReplyPlan,
     requiredSecret:()=>secret, assertActiveWhatsAppCompany:async id=>assert.equal(id,tenant),
     evolutionConnection:async()=>({config:{instance}}), chatSettings:async()=>settings,
     recordAppointmentReply:async()=>false, tenantEvolutionAutomationEnabled:async()=>false,
@@ -64,14 +64,20 @@ test('authenticated arrival can answer immediately with the reminders switch off
   assert.equal(jobs[0][2],pilotPhone);
   assert.match(jobs[0][3],/preparar seu orçamento/);
   assert.equal(chats.get(pilotPhone).messages.at(-1).status,'accepted');
+  await inbound('context',pilotPhone,now+1,'22 mil');
+  assert.equal(jobs.length,2);
+  assert.match(jobs[1][3],/cidade e o bairro/);
+  assert.doesNotMatch(jobs[1][3],/BTUs/);
+  await inbound('repeated-context',pilotPhone,now+2,'22 mil');
+  assert.equal(jobs.length,2);
   settings = {...settings,botTestPhone:''};
   chats.get(otherPhone).assignee = 'tecnico';
   await inbound('claimed',otherPhone,now,'Orçamento de instalação');
-  assert.equal(jobs.length,1);
+  assert.equal(jobs.length,2);
   chats.get(otherPhone).assignee = '';
   env.PROAR_EVOLUTION_AUTOMATION_ENABLED = 'false';
   await inbound('globally-disabled',otherPhone,now,'Orçamento de instalação');
-  assert.equal(jobs.length,1);
+  assert.equal(jobs.length,2);
 });
 
 test('provisioning verifies the tenant origin and leaves other provider instances unchanged', async () => {
@@ -100,4 +106,40 @@ test('provisioning verifies the tenant origin and leaves other provider instance
   assert.equal((await configure('https://proar.online')).status,200);
   assert.equal(lastWebhook.url,'https://proar.online/api/whatsapp/web/events/fixture-a');
   assert.equal(writeCount,2);
+});
+
+test('leak follow-up advances the conversation immediately without repeating the same response', () => {
+  const start = Date.parse("2026-11-25T15:00:00Z");
+  const now = start + 10_000, since = new Date(start).toISOString();
+  const at = n => new Date(start + n*1000).toISOString();
+  const incoming = (id,text,n) => ({id,text,direction:"in",at:at(n)});
+  const automated = (id,plan,n) => ({id,text:plan.reply,direction:"out",actor:"local-assistant",at:at(n),assistantReplyKey:plan.key});
+  const list = [incoming("a","Meu ar está pingando",1)];
+  const a = eventReplyPlan(list,"a",since,now);
+  assert.equal(localTriage(list[0].text).sector,"Técnico");
+  assert.match(a.reply,/unidade de dentro ou da unidade de fora/);
+  list.push(automated("reply-a",a,2),incoming("b","Preciso de ajuda, meu ar está pingando",3));
+  assert.equal(eventReplyPlan(list,"b",since,now),null);
+  list.push(incoming("c","É pela evaporadora",4));
+  const c = eventReplyPlan(list,"c",since,now);
+  assert.equal(c.first,false);
+  assert.match(c.reply,/saindo da unidade de dentro/);
+  assert.doesNotMatch(c.reply,/^Olá!|unidade de dentro ou/);
+  list.push(automated("reply-c",c,5),incoming("d","É um Elgin, estou em Mirassol",6));
+  const d = eventReplyPlan(list,"d",since,now);
+  assert.equal(d.key,"leak:complete");
+  assert.doesNotMatch(d.reply,/Elgin|Mirassol|horário/);
+  list.push(automated("reply-d",d,7),incoming("e","Tem cheiro de queimado",8));
+  assert.match(eventReplyPlan(list,"e",since,now).reply,/interrompa o uso/);
+});
+
+test('installation follow-up uses a new BTU detail instead of asking for it again', () => {
+  const since="2026-11-25T15:00:00Z", now=Date.parse("2026-11-25T15:01:00Z");
+  const initial={id:"i",direction:"in",at:"2026-11-25T15:00:05Z",text:"Vocês fazem instalação?"};
+  const first=eventReplyPlan([initial],"i",since,now);
+  assert.match(first.reply,/capacidade do aparelho em BTUs/);
+  const messages=[initial,{id:"out",direction:"out",actor:"local-assistant",text:first.reply,assistantReplyKey:first.key,at:"2026-11-25T15:00:06Z"},{id:"j",direction:"in",text:"22 mil",at:"2026-11-25T15:00:07Z"}];
+  const second=eventReplyPlan(messages,"j",since,now);
+  assert.match(second.reply,/cidade e o bairro/);
+  assert.doesNotMatch(second.reply,/BTUs|^Olá!/);
 });
