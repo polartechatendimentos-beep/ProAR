@@ -4,6 +4,7 @@ import { chatWebhookToken } from "../../../../lib/chatdesk-events";
 import { requiredSecret } from "../../../../lib/security-env";
 import { assertActiveWhatsAppCompany, evolutionConnection } from "../../../../lib/evolution-tenant";
 import { evolutionRequestWithConfig } from "../../../../lib/proar-evolution";
+import { tenantSlugFromHost } from "../../../../lib/tenant-host";
 export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
   if (request.headers.get("sec-fetch-site") !== "same-origin" || (request.headers.get("origin") && request.headers.get("origin") !== request.nextUrl.origin)) return NextResponse.json({ error: "Origem inválida." }, { status: 403 });
@@ -11,7 +12,15 @@ export async function POST(request: NextRequest) {
   if (!access?.actor.admin) return NextResponse.json({ error: "Acesso restrito ao administrador da empresa." }, { status: 403 });
   try {
     await assertActiveWhatsAppCompany(access.companyId);
-    const configured = process.env.PROAR_WHATSAPP_WEBHOOK_BASE_URL;
+    // Use a direct tenant origin only when the signed session belongs to that
+    // exact subdomain. The shared origin remains the default for other setups.
+    const tenantSlug = tenantSlugFromHost(request.nextUrl.hostname);
+    if (tenantSlug && access.session.companySlug && tenantSlug !== access.session.companySlug) {
+      return NextResponse.json({ error: "Sessão não pertence a esta empresa." }, { status: 403 });
+    }
+    const directTenant = tenantSlug && tenantSlug === access.session.companySlug
+      && request.nextUrl.protocol === "https:" && !request.nextUrl.port;
+    const configured = directTenant ? request.nextUrl.origin : process.env.PROAR_WHATSAPP_WEBHOOK_BASE_URL;
     if (!configured) return NextResponse.json({ error: "O recebimento aguarda a configuração do endereço público desta versão do ProAR." }, { status: 503 });
     const base = new URL(configured);
     if (base.protocol !== "https:" || base.username || base.password || base.search || base.hash || base.pathname !== "/" || !/(^|\.)(proar\.online|proar\.app)$/.test(base.hostname)) throw new Error("Endereço público inválido.");
