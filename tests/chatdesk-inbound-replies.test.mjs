@@ -5,7 +5,7 @@ import {stripTypeScriptTypes} from 'node:module';
 import {runInNewContext} from 'node:vm';
 import {canReplyToNewInbound, chatWebhookToken, validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery} from '../lib/chatdesk-events.ts';
 import {applyChatDeliveryReceipt, completeChatSend} from "../lib/chatdesk-delivery.ts";
-import {localTriage, eventReplyPlan, pilotReplyPlan, handoffSupplementPlan, updateServiceIntake, chatQueuePriority, chatQueueSummary} from '../lib/chatdesk-local.ts';
+import {localTriage, eventReplyPlan, pilotReplyPlan, handoffSupplementPlan, recordIntakeReply, updateServiceIntake, chatQueuePriority, chatQueueSummary} from '../lib/chatdesk-local.ts';
 import {tenantSlugFromHost} from "../lib/tenant-host.ts";
 
 test('first-response eligibility excludes old, future, media-only, and courtesy messages', () => {
@@ -36,7 +36,7 @@ test('authenticated arrival can answer immediately with the reminders switch off
   const env = {PROAR_EVOLUTION_AUTOMATION_ENABLED:'true'};
   const handle = runInNewContext(source+'\nPOST', {
     NextResponse:{json:(body, init)=>({body,status:init?.status??200})},
-    process:{env}, structuredClone, validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery, applyChatDeliveryReceipt, completeChatSend, canReplyToNewInbound, localTriage, eventReplyPlan, pilotReplyPlan, handoffSupplementPlan, updateServiceIntake,
+    process:{env}, structuredClone, validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery, applyChatDeliveryReceipt, completeChatSend, canReplyToNewInbound, localTriage, eventReplyPlan, pilotReplyPlan, handoffSupplementPlan, recordIntakeReply, updateServiceIntake,
     requiredSecret:()=>secret, assertActiveWhatsAppCompany:async id=>assert.equal(id,tenant),
     evolutionConnection:async()=>({config:{instance}}), chatSettings:async()=>settings,
     recordAppointmentReply:async()=>{if(bookingFailure)throw new Error("Sem agenda");return appointmentHandled;}, tenantEvolutionAutomationEnabled:async()=>false,
@@ -86,7 +86,7 @@ test('authenticated arrival can answer immediately with the reminders switch off
 
   await inbound('context',pilotPhone,now+1,'22 mil');
   assert.equal(jobs.length,2);
-  assert.match(jobs[1][3],/cidade e o bairro/);
+  assert.match(jobs[1][3],/qual cidade/);
   assert.doesNotMatch(jobs[1][3],/BTUs/);
   await inbound('repeated-context',pilotPhone,now+2,'22 mil');
   assert.equal(jobs.length,2);
@@ -387,7 +387,7 @@ test('technical intake advances terse turns without repeating collected location
     return plan;
   };
   assert.match(step("1","Meu ar não gela").reply,/Desde quando/);
-  assert.match(step("2","Desde ontem").reply,/cidade e bairro/);
+  assert.match(step("2","Desde ontem").reply,/qual cidade/);
   assert.match(step("3","Sou de Bálsamo, bairro Centro").reply,/endereço ou o nome da unidade/);
   assert.match(step("4","Rua Central, 171").reply,/marca ou o modelo/);
   assert.equal(step("5","É Elgin").handoff,true);
@@ -439,4 +439,56 @@ test('a follow-up acknowledgement is limited to a fresh, unclaimed transfer', ()
   const staff={id:"staff",direction:"out",actor:"staff",at:oldAt,text:"Estou acompanhando."};
   assert.equal(handoffSupplementPlan({...chat,messages:[chat.messages[0],staff,event]},event.id,now),null);
   assert.equal(handoffSupplementPlan({...chat,messages:[chat.messages[0],{...event,replyToId:"unknown"}]},event.id,now),null);
+});
+
+test('keeps the technical request through a side question and updates corrected customer facts', () => {
+  const now=Date.parse("2026-11-26T00:00:00Z"), activatedAt="2026-11-25T23:50:00Z";
+  const messages=[];
+  let intake;
+  const step=(id,text)=>{
+    const at=new Date(now-50_000+messages.length*1000).toISOString();
+    messages.push({id,text,at,direction:"in"});
+    intake=updateServiceIntake(intake,messages,id);
+    const plan=pilotReplyPlan(messages,id,activatedAt,now,false,false,intake);
+    if(plan){
+      messages.push({id:"r"+id,text:plan.reply,at,direction:"out",actor:"local-assistant",status:"accepted",assistantReplyKey:plan.key});
+      intake=recordIntakeReply(intake,plan.key,plan.reply,at,plan.handoff);
+    }
+    return plan;
+  };
+  assert.match(step("a","Meu ar está pingando").reply,/visita técnica/);
+  assert.equal(step("b","Dentro").reply.split("?").length-1,1);
+  const aside=step("c","Vocês também fazem instalação?");
+  assert.match(aside.reply,/fazemos instalação.*Voltando.*qual cidade/);
+  assert.equal(intake.service,"Avaliação técnica");
+  assert.match(intake.symptom,/pingando/);
+  assert.match(step("d","Bálsamo").reply,/qual bairro/);
+  step("e","Centro");
+  assert.match(step("f","Corrigindo, cidade de Mirassol").reply,/atualizei a cidade.*qual bairro/);
+  assert.equal(intake.city,"Mirassol");
+  assert.equal(intake.district,undefined);
+  assert.match(step("g","Estou preocupado").reply,/Entendo a sua preocupação.*qual bairro/);
+  assert.ok(intake.responses.map(row=>row.key).includes("assunto:retomar"));
+  assert.match(intake.lastQuestion,/qual bairro/i);
+});
+
+test('pilot installation collects separate turns instead of treating the city as a complete address', () => {
+  const now=Date.parse("2026-11-26T00:00:00Z"), activation="2026-11-25T23:50:00Z";
+  const history=[];
+  let intake;
+  const run=(text)=>{
+    const id="i"+history.length,at=new Date(now-30_000+history.length*1000).toISOString();
+    history.push({id,text,at,direction:"in"});
+    intake=updateServiceIntake(intake,history,id);
+    const p=pilotReplyPlan(history,id,activation,now,false,false,intake);
+    if(p)history.push({id:"out"+id,text:p.reply,at,direction:"out",actor:"local-assistant",assistantReplyKey:p.key,status:"accepted"});
+    return p;
+  };
+  assert.match(run("Preciso de orçamento de instalação").reply,/BTUs/);
+  assert.match(run("12 mil").reply,/cidade/);
+  assert.match(run("Bálsamo").reply,/bairro/);
+  assert.match(run("Centro").reply,/tubulação de cobre/);
+  assert.equal(run("Não").handoff,true);
+  assert.equal(intake.capacity,"12 mil");
+  assert.equal(intake.infrastructure,"Não informada como existente");
 });
