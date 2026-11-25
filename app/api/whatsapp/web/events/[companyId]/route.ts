@@ -60,7 +60,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ co
           : current.messages.some(message => message.actor === "local-assistant" && Date.now() - Date.parse(message.at) < 300000)
             ? null : {key: "", reply: triage.reply, first: true};
         if (!plan) return null;
-        const text = `*Assistente automático${settings.companyName ? ` — ${settings.companyName}` : ""}:*\n${plan.first && settings.greeting ? settings.greeting + "\n\n" : ""}${plan.reply}`;
+        const introduction = settings.botActivatedAt
+          ? `Assistente virtual${settings.companyName ? ` da ${settings.companyName}` : ""}.\n`
+          : `*Assistente automático${settings.companyName ? ` — ${settings.companyName}` : ""}:*\n`;
+        const text = plan.first ? introduction + (settings.greeting ? settings.greeting + "\n\n" : "") + plan.reply : plan.reply;
         const next = structuredClone(current);
         next.messages.push({ id: botId, direction: "out", text, actor: "local-assistant", at: new Date().toISOString(), status: "processing", assistantReplyKey: plan.key });
         return next;

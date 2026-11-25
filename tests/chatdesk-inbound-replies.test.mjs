@@ -107,7 +107,18 @@ test('authenticated arrival can answer immediately with the reminders switch off
   await inbound('short-location',pilotPhone,instant(),'Dentro');
   assert.equal(jobs.length,5);
   assert.match(jobs[3][3],/unidade de dentro ou da unidade de fora/);
-  assert.match(jobs[4][3],/saindo da unidade de dentro/);
+  assert.match(jobs[4][3],/pingando pela unidade de dentro/);
+  await inbound('town-and-neighborhood',pilotPhone,instant(),'Sou de Bálsamo bairro Centro');
+  await inbound('institution',pilotPhone,instant(),'Escola municipal');
+  await inbound('institution',pilotPhone,instant(),'Escola municipal');
+  await inbound('unit-name',pilotPhone,instant(),'Maria de Souza');
+  await inbound('room-number',pilotPhone,instant(),'3');
+  assert.equal(jobs.length,9);
+  assert.match(jobs[2][3],/^Assistente virtual/);
+  assert.doesNotMatch(jobs[5][3],/cidade|bairro|Assistente virtual/);
+  assert.equal(jobs[6][3],'Qual é o nome da escola?');
+  assert.equal(jobs[7][3],'Em qual sala ou setor fica o aparelho?');
+  assert.match(jobs[8][3],/avaliar o próximo passo/);
 });
 
 test('provisioning verifies the tenant origin and leaves other provider instances unchanged', async () => {
@@ -154,9 +165,9 @@ test('leak follow-up advances the conversation immediately without repeating the
   list.push(incoming("c","É pela unidade de dentro",4));
   const c = eventReplyPlan(list,"c",since,now);
   assert.equal(c.first,false);
-  assert.match(c.reply,/saindo da unidade de dentro/);
+  assert.match(c.reply,/pingando pela unidade de dentro/);
   assert.doesNotMatch(c.reply,/^Olá!|unidade de dentro ou/);
-  list.push(automated("reply-c",c,5),incoming("d","É um Elgin, estou em Mirassol",6));
+  list.push(automated("reply-c",c,5),incoming("d","É um Elgin, estou em Mirassol no bairro Centro",6));
   const d = eventReplyPlan(list,"d",since,now);
   assert.equal(d.key,"leak:complete");
   assert.doesNotMatch(d.reply,/Elgin|Mirassol|horário/);
@@ -193,14 +204,27 @@ test('short answers are grounded in the immediately preceding accepted assistant
   assert.equal(eventReplyPlan([a,{...where,deliveryStatus:"failed"},short],"short",since,now),null);
   assert.equal(eventReplyPlan([a,where,input("other","Vocês fazem instalação?",270),short],"short",since,now),null);
   assert.equal(eventReplyPlan([short],"short",since,now),null);
-  const done = input("place","É um Elgin, estou em Mirassol",400);
+  const done = input("place","É um Elgin, estou em Mirassol no bairro Centro",400);
   assert.equal(eventReplyPlan([a,where,short,prompt("leak:inside",300),done],"place",since,now).key,"leak:complete");
   const outside = {...short,text:"Fora"};
   const on = input("timing","Só ligado",400);
-  assert.equal(eventReplyPlan([a,where,outside,prompt("leak:outside",300),on],"timing",since,now).key,"leak:details");
+  assert.equal(eventReplyPlan([a,where,outside,prompt("leak:outside",300),on],"timing",since,now).key,"leak:place");
   const install = input("install","Instalação de 12 mil em Mirassol",1);
   const yes = input("yes","Sim",400);
   const plan = eventReplyPlan([install,prompt("installation:110",300),yes],"yes",since,now);
   assert.equal(plan.key,"installation:111");
   assert.doesNotMatch(plan.reply,/preço|horário confirmado/i);
+});
+
+test('town, neighborhood and site details progress separately in natural service messages', () => {
+  const since="2026-11-25T22:00:00Z", now=Date.parse("2026-11-25T22:01:00Z");
+  const m = (id,text,offset) => ({id,text,direction:"in",at:new Date(now-30000+offset*1000).toISOString()});
+  const a=m("symptom","Está pingando pela unidade interna",1), b=m("town","Bálsamo",2), c=m("district","Centro",3), d=m("school","Escola municipal",4), e=m("room","Sala 12",5);
+  const idea = (messages,turn) => eventReplyPlan(messages,turn.id,since,now);
+  assert.equal(idea([a,b],b).key,"leak:neighborhood");
+  assert.equal(idea([a,c],c).key,"leak:city");
+  assert.equal(idea([a,b,c],c).key,"leak:brand");
+  assert.equal(idea([a,b,c,d],d).reply,"Qual é o nome da escola?");
+  assert.equal(idea([a,b,c,{...d,text:"Escola Municipal Aurora"},e],e).key,"leak:complete");
+  assert.equal(idea([d],d).key,"sector:Geral");
 });
