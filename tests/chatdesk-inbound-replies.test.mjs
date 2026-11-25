@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {stripTypeScriptTypes} from 'node:module';
 import {runInNewContext} from 'node:vm';
-import {canReplyToNewInbound, chatWebhookToken, validChatWebhookToken, parseEvolutionInbound} from '../lib/chatdesk-events.ts';
+import {canReplyToNewInbound, chatWebhookToken, validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery} from '../lib/chatdesk-events.ts';
+import {applyChatDeliveryReceipt, completeChatSend} from "../lib/chatdesk-delivery.ts";
 import {localTriage, eventReplyPlan} from '../lib/chatdesk-local.ts';
 import {tenantSlugFromHost} from "../lib/tenant-host.ts";
 
@@ -34,7 +35,7 @@ test('authenticated arrival can answer immediately with the reminders switch off
   const env = {PROAR_EVOLUTION_AUTOMATION_ENABLED:'true'};
   const handle = runInNewContext(source+'\nPOST', {
     NextResponse:{json:(body, init)=>({body,status:init?.status??200})},
-    process:{env}, structuredClone, validChatWebhookToken, parseEvolutionInbound, canReplyToNewInbound, localTriage, eventReplyPlan,
+    process:{env}, structuredClone, validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery, applyChatDeliveryReceipt, completeChatSend, canReplyToNewInbound, localTriage, eventReplyPlan,
     requiredSecret:()=>secret, assertActiveWhatsAppCompany:async id=>assert.equal(id,tenant),
     evolutionConnection:async()=>({config:{instance}}), chatSettings:async()=>settings,
     recordAppointmentReply:async()=>false, tenantEvolutionAutomationEnabled:async()=>false,
@@ -43,14 +44,17 @@ test('authenticated arrival can answer immediately with the reminders switch off
       if(next) chats.set(phone,next);
       return {changed:!!next,chat:next??previous};
     },
-    dispatchEvolutionJob:async (...args)=>{jobs.push(args);return {status:'accepted',messageId:'fixture-accepted'};},
+    dispatchEvolutionJob:async (...args)=>{jobs.push(args);return {status:'accepted',messageId:`fixture-accepted-${jobs.length}`};},
   });
+  function webhook(body, token=chatWebhookToken(tenant,secret)) {
+    return handle({headers:new Headers({'x-proar-webhook-secret':token}), text:async()=>JSON.stringify(body)}, {params:Promise.resolve({companyId:tenant})});
+  }
   async function inbound(id, phone, messageTimestamp, text, token=chatWebhookToken(tenant,secret)) {
     const body = {event:'MESSAGES_UPSERT',instance,data:{
       key:{id,fromMe:false,remoteJid:phone+'@s.whatsapp.net'}, messageTimestamp,
       message:{conversation:text},
     }};
-    return handle({headers:new Headers({'x-proar-webhook-secret':token}), text:async()=>JSON.stringify(body)}, {params:Promise.resolve({companyId:tenant})});
+    return webhook(body, token);
   }
   assert.equal((await inbound('unsigned',pilotPhone,now,'Instalação','invalid')).status,401);
   await inbound('old',pilotPhone,now-200,'Orçamento de instalação');
@@ -64,6 +68,20 @@ test('authenticated arrival can answer immediately with the reminders switch off
   assert.equal(jobs[0][2],pilotPhone);
   assert.match(jobs[0][3],/preparar seu orçamento/);
   assert.equal(chats.get(pilotPhone).messages.at(-1).status,'accepted');
+  const receipt={event:'messages.update',instance,data:{keyId:'fixture-accepted-1',remoteJid:pilotPhone+'@s.whatsapp.net',fromMe:true,status:'DELIVERY_ACK'}};
+  assert.equal(chats.get(pilotPhone).messages.at(-1).deliveryStatus,undefined);
+  assert.equal((await webhook(receipt, chatWebhookToken("fixture-b",secret))).status,401);
+  assert.equal((await webhook({...receipt,instance:"wrong"})).status,403);
+  assert.equal((await webhook({...receipt,data:{...receipt.data,fromMe:false}})).body.receipts,0);
+  await webhook({...receipt,data:{...receipt.data,remoteJid:otherPhone+'@s.whatsapp.net'}});
+  await webhook({...receipt,data:{...receipt.data,status:'SERVER_ACK'}});
+  assert.equal(chats.get(pilotPhone).messages.at(-1).deliveryStatus,undefined);
+  assert.equal((await webhook(receipt)).body.receipts,1);
+  await webhook(receipt);
+  await webhook({...receipt,data:{...receipt.data,status:'ERROR'}});
+  assert.equal(chats.get(pilotPhone).messages.at(-1).deliveryStatus,'delivered');
+  assert.equal(jobs.length,1);
+
   await inbound('context',pilotPhone,now+1,'22 mil');
   assert.equal(jobs.length,2);
   assert.match(jobs[1][3],/cidade e o bairro/);
@@ -103,6 +121,7 @@ test('provisioning verifies the tenant origin and leaves other provider instance
   assert.equal(writeCount,0);
   assert.equal((await configure('https://empresa-a.proar.online')).status,200);
   assert.equal(lastWebhook.url,'https://empresa-a.proar.online/api/whatsapp/web/events/fixture-a');
+  assert.deepEqual(Array.from(lastWebhook.events),['MESSAGES_UPSERT','MESSAGES_UPDATE']);
   assert.equal((await configure('https://proar.online')).status,200);
   assert.equal(lastWebhook.url,'https://proar.online/api/whatsapp/web/events/fixture-a');
   assert.equal(writeCount,2);
@@ -120,7 +139,7 @@ test('leak follow-up advances the conversation immediately without repeating the
   assert.match(a.reply,/unidade de dentro ou da unidade de fora/);
   list.push(automated("reply-a",a,2),incoming("b","Preciso de ajuda, meu ar está pingando",3));
   assert.equal(eventReplyPlan(list,"b",since,now),null);
-  list.push(incoming("c","É pela evaporadora",4));
+  list.push(incoming("c","É pela unidade de dentro",4));
   const c = eventReplyPlan(list,"c",since,now);
   assert.equal(c.first,false);
   assert.match(c.reply,/saindo da unidade de dentro/);
@@ -131,6 +150,8 @@ test('leak follow-up advances the conversation immediately without repeating the
   assert.doesNotMatch(d.reply,/Elgin|Mirassol|horário/);
   list.push(automated("reply-d",d,7),incoming("e","Tem cheiro de queimado",8));
   assert.match(eventReplyPlan(list,"e",since,now).reply,/interrompa o uso/);
+  const chase = incoming("f", "Não esquece de mim! Algum retorno?", 9);
+  assert.equal(eventReplyPlan([chase], "f", since, now), null);
 });
 
 test('installation follow-up uses a new BTU detail instead of asking for it again', () => {

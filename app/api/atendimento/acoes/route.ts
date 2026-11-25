@@ -4,7 +4,7 @@ import { GET as getState, PUT as putState } from "../../state/route";
 import { chatAccess } from "../../../../lib/chatdesk-store";
 import { hasPermission } from "../../../../lib/permissions";
 import { requiredSecret } from "../../../../lib/security-env";
-import { parseDeskAction, prepareDeskAction, appointmentSource, chatCustomerContext, actionPhone as actionPhoneForSearch, type ActionState } from "../../../../lib/chatdesk-actions";
+import { parseDeskAction, prepareDeskAction, savedDeskAction, appointmentSource, chatCustomerContext, actionPhone as actionPhoneForSearch, type ActionState } from "../../../../lib/chatdesk-actions";
 import { assertActiveWhatsAppCompany } from "../../../../lib/evolution-tenant";
 import { dispatchEvolutionJob } from "../../../../lib/evolution-jobs";
 export const runtime = "nodejs";
@@ -21,7 +21,7 @@ function actionPermission(access: NonNullable<ReturnType<typeof chatAccess>>, ki
   const permissions = kind === "customer" ? ["clientes.visualizar", "clientes.editar"] as const : ["os.visualizar", "os.editar", "clientes.visualizar"] as const;
   if (!permissions.every(permission => hasPermission(access.session, permission))) throw new Error("Seu perfil não permite esta ação no sistema.");
   // Scoped technicians cannot check the complete team calendar for overlapping bookings.
-  if (kind === "schedule" && /^(técnico|tecnico|prestador)/i.test(access.session.role)) throw new Error("Peça ao responsável pela agenda para distribuir este atendimento.");
+  if (["schedule", "reschedule"].includes(kind) && /^(técnico|tecnico|prestador)/i.test(access.session.role)) throw new Error("Peça ao responsável pela agenda para distribuir este atendimento.");
 }
 export async function GET(request: NextRequest) {
   const access = chatAccess(request);
@@ -41,13 +41,15 @@ export async function GET(request: NextRequest) {
       const searchable = [row.id,row.name,row.client,row.phone,row.whatsapp,row.address,row.service,row.date].map(value => String(value || "").toLocaleLowerCase("pt-BR"));
       return searchable.some(value => value.includes(query) || queryTokens.some(token => value.includes(token)));
     };
-    const customers = state.customers.filter(matches).slice(0,30).map(row => ({ id: row.id, name: row.name, phone: row.phone, address: row.address }));
-    const orders = state.serviceOrders.filter(matches).slice(0,50).map(row => ({ id: row.id, client: row.client, service: row.service, date: row.date, time: row.time, tech: row.tech, status: row.status, confirmation: row.appointmentConfirmation || "Pendente" }));
+    const matchedCustomers = state.customers.filter(matches);
+    const matchedCustomerIds = new Set(matchedCustomers.map(row=>row.id));
+    const customers = matchedCustomers.slice(0,30).map(row => ({ id: row.id, name: row.name, phone: row.phone || row.whatsapp, whatsapp: row.whatsapp, address: row.address }));
+    const orders = state.serviceOrders.filter(row=>matches(row)||matchedCustomerIds.has(row.customerId)).slice(0,50).map(row => ({ id: row.id, client: row.client, service: row.service, address: row.address, duration: row.estimatedDurationMinutes || row.durationMinutes, technicianId: row.employeeId || row.techId, date: row.date, time: row.time, tech: row.tech, status: row.status, confirmation: row.appointmentConfirmation || "Pendente" }));
     const technicians = (state.moduleRecords["Funcionários"] || []).filter(row => !/inativ/i.test(String(row.status))).map(row => ({ id: row.id, name: row.name || row.employeeName || row.id }));
     const requestedModule = String(request.nextUrl.searchParams.get("module") || "");
     const moduleRows = requestedModule && Object.hasOwn(state.moduleRecords,requestedModule) ? state.moduleRecords[requestedModule] : [];
     const records = moduleRows.filter(row => !query || [row.id,row.name,row.client,row.description,row.status,row.date].some(value=>String(value||"").toLocaleLowerCase("pt-BR").includes(query))).slice(0,50).map(row=>({id:row.id,name:row.name||row.description||row.client||row.id,client:row.client,status:row.status,date:row.date}));
-    return reply({ modules, customers, orders, technicians, records, limited: true, mode: "local-guided", capabilities: { customer: hasPermission(access.session,"clientes.editar") && hasPermission(access.session,"clientes.visualizar"), schedule: hasPermission(access.session,"os.editar") && technicians.length > 0 && !/^(técnico|tecnico|prestador)/i.test(access.session.role), confirmation: hasPermission(access.session,"os.editar") } });
+    return reply({ modules, customers, orders, technicians, records, limited: true, mode: "local-guided", capabilities: { customer: hasPermission(access.session,"clientes.editar") && hasPermission(access.session,"clientes.visualizar"), schedule: hasPermission(access.session,"os.editar") && technicians.length > 0 && !/^(técnico|tecnico|prestador)/i.test(access.session.role), reschedule: hasPermission(access.session,"os.editar") && hasPermission(access.session,"os.visualizar") && hasPermission(access.session,"clientes.visualizar") && technicians.length > 0 && !/^(técnico|tecnico|prestador)/i.test(access.session.role), confirmation: hasPermission(access.session,"os.editar") } });
   } catch { return reply({ error: "Não foi possível consultar os dados da empresa. Atualize a sessão e tente novamente." }, 503); }
 }
 export async function POST(request: NextRequest) {
@@ -72,7 +74,7 @@ export async function POST(request: NextRequest) {
       if (review.company !== access.companyId || review.user !== access.session.username || review.command !== command || review.exp < Date.now()) throw new Error("Revisão expirada ou de outro usuário. Prepare novamente.");
       requestId = review.requestId;
       // Preserve idempotence on an HTTP retry even after the revision changed.
-      const prior = (action.kind === "customer" ? state.customers : state.serviceOrders).find(row => row.id === `${action.kind === "customer" ? "CLI" : "OS"}-CHAT-${requestId}`);
+      const prior = savedDeskAction(state, action, requestId);
       if (action.kind !== "confirmation" && prior) return reply({ saved: true, replay: true, recordId: prior.id, message: "Esta ação já foi registrada no sistema." });
       if (review.stateHash !== hash(state)) throw new Error("A base mudou desde a revisão. Prepare a ação novamente para conferir os dados atuais.");
     }
@@ -93,8 +95,8 @@ export async function POST(request: NextRequest) {
     const saved = await putState(new NextRequest(new URL("/api/state",request.url), { method: "PUT", headers, body: JSON.stringify({ ...prepared.next, _baseRevision: state._revision || 0 }) }));
     const result = await saved.json();
     if (!saved.ok || !result.saved) return reply({ error: result.error || "Não foi possível salvar a ação." },saved.status);
-    const rows = action.kind === "customer" ? result.state?.customers : result.state?.serviceOrders;
-    if (!rows?.some((row: {id:string}) => row.id === prepared.record.id)) return reply({error:"Gravação sem confirmação do registro. Consulte o sistema antes de repetir."},409);
-    return reply({ saved: true, recordId: prepared.record.id, message: action.kind === "customer" ? "Cliente cadastrado no ProAR." : "Agendamento criado na agenda do ProAR. A confirmação do cliente está pendente." });
+    const persisted = result.state && savedDeskAction(result.state, action, requestId);
+    if (!persisted || persisted.id !== prepared.record.id || (action.kind === "reschedule" && (persisted.date !== prepared.record.date || persisted.time !== prepared.record.time || persisted.tech !== prepared.record.tech))) return reply({error:"Gravação sem confirmação do registro. Consulte o sistema antes de repetir."},409);
+    return reply({ saved: true, recordId: prepared.record.id, message: action.kind === "customer" ? "Cliente cadastrado no ProAR." : action.kind === "reschedule" ? "Horário atualizado na mesma OS. Nenhuma mensagem foi enviada." : "Agendamento criado na agenda do ProAR. A confirmação do cliente está pendente." });
   } catch (error) { return reply({ error: error instanceof Error ? error.message : "Ação indisponível." },400); }
 }

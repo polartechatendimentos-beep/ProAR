@@ -14,7 +14,7 @@ export function normalizeScheduleText(value:unknown){
   .replace(/[^a-z0-9\s]/g," ").replace(/\s+/g," ").trim();
 }
 const nameTokens=(value:unknown)=>normalizeScheduleText(value).split(" ").filter(token=>token&&!stopWords.has(token));
-const phoneDigits=(value:unknown)=>String(value||"").replace(/\D/g,"");
+const phoneDigits=(value:unknown)=>String(value||"").replace(/\D/g,"").replace(/^55(?=\d{10,11}$)/,"");
 function similarity(a:string,b:string){
  if(!a||!b)return 0;
  if(a===b)return 1;
@@ -37,7 +37,7 @@ function customerAddress(customer:QuickScheduleCustomer){
 export function rankScheduleCustomers(target:QuickScheduleTarget,customers:QuickScheduleCustomer[],limit=10):CustomerCandidate[]{
  const targetPhone=phoneDigits(target.phone),targetStreet=normalizeScheduleText(target.street),targetNumber=normalizeScheduleText(target.number);
  return customers.map(customer=>{
-  const phoneMatch=Boolean(targetPhone&&targetPhone.length>=10&&phoneDigits(customer.phone||customer.whatsapp)===targetPhone);
+  const phoneMatch=Boolean(targetPhone&&targetPhone.length>=10&&[customer.phone,customer.whatsapp].some(value=>phoneDigits(value)===targetPhone));
   const saved=customerAddress(customer);
   const addressMatch=Boolean(targetStreet&&targetNumber&&saved.street&&saved.number===targetNumber&&similarity(targetStreet,saved.street)>=0.78);
   const nameScore=Math.round(100*similarity(normalizeScheduleText(target.name),normalizeScheduleText(customer.name||customer.legalName||customer.tradeName||"")));

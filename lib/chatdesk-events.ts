@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import type { DeliveryStatus } from "./chatdesk-delivery";
 export function chatWebhookToken(companyId: string, secret: string) {
   if (!companyId || secret.length < 32) throw new Error("Recebimento seguro indisponível.");
   return createHmac("sha256", secret).update(`proar-chatdesk-webhook:v1:${companyId}`).digest("hex");
@@ -40,4 +41,23 @@ export function canReplyToNewInbound(
   const text = input.text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
   if (!text || text === "mensagem sem texto. consulte o anexo no whatsapp.") return false;
   return !/^(?:ok|certo|entendi|beleza|(?:muito )?obrigad[oa]|valeu)[.!\s]*$/.test(text);
+}
+
+// Evolution's baileys provider emits a flat MESSAGES_UPDATE record. Accept
+// the nested event variant as well, but never infer delivery from SERVER_ACK.
+export function parseEvolutionDelivery(value: unknown, expectedInstance: string) {
+  const body = object(value);
+  if (body.instance !== expectedInstance || String(body.event).toUpperCase().replace(/\./g, "_") !== "MESSAGES_UPDATE") return [];
+  const data = Array.isArray(body.data) ? body.data : [body.data];
+  return data.slice(0, 50).flatMap(item => {
+    const row = object(item), key = object(row.key), providerMessageId = row.keyId || key.id;
+    if ((row.fromMe ?? key.fromMe) !== true || typeof providerMessageId !== "string" || !providerMessageId || providerMessageId.length > 512) return [];
+    const jid = [row.remoteJidAlt, key.remoteJidAlt, row.remoteJid, key.remoteJid].find(value => typeof value === "string" && /^[1-9]\d{9,14}@s\.whatsapp\.net$/.test(value));
+    if (typeof jid !== "string") return [];
+    const status = row.status ?? object(row.update).status;
+    const deliveryStatus: DeliveryStatus | null = status === "DELIVERY_ACK" || status === 3 ? "delivered"
+      : status === "READ" || status === "PLAYED" || status === 4 || status === 5 ? "read"
+        : status === "ERROR" || status === 0 ? "failed" : null;
+    return deliveryStatus ? [{ providerMessageId, phone: jid.split("@")[0], deliveryStatus }] : [];
+  });
 }

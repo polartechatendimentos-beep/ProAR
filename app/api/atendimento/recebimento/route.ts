@@ -28,10 +28,11 @@ export async function POST(request: NextRequest) {
     if (!connection) throw new Error("Conecte o WhatsApp da empresa primeiro.");
     const url = new URL(`api/whatsapp/web/events/${encodeURIComponent(access.companyId)}`, base).href;
     const token = chatWebhookToken(access.companyId, requiredSecret("PROAR_TENANT_MASTER_KEY"));
-    await evolutionRequestWithConfig(connection.config, "webhook/set", { webhook: { enabled: true, url, headers: { "x-proar-webhook-secret": token }, events: ["MESSAGES_UPSERT"], byEvents: false, base64: false } });
+    const events = ["MESSAGES_UPSERT", "MESSAGES_UPDATE"];
+    await evolutionRequestWithConfig(connection.config, "webhook/set", { webhook: { enabled: true, url, headers: { "x-proar-webhook-secret": token }, events, byEvents: false, base64: false } });
     const stored = await evolutionRequestWithConfig(connection.config, "webhook/find");
     const webhook = stored.webhook || stored;
-    if (webhook.enabled !== true || webhook.url !== url || webhook.headers?.["x-proar-webhook-secret"] !== token) throw new Error("O servidor não confirmou o recebimento seguro. Confira a configuração.");
+    if (webhook.enabled !== true || webhook.url !== url || webhook.headers?.["x-proar-webhook-secret"] !== token || !Array.isArray(webhook.events) || !events.every(event => webhook.events.includes(event))) throw new Error("O servidor não confirmou o recebimento seguro. Confira a configuração.");
     return NextResponse.json({ configured: true }, { headers: { "Cache-Control": "no-store, private" } });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Não foi possível ativar o recebimento." }, { status: 502 }); }
 }

@@ -1,10 +1,11 @@
 import { recordAppointmentReply } from "../../../../../../lib/chatdesk-appointment-reply";
 import { NextRequest, NextResponse } from "next/server";
-import { validChatWebhookToken, parseEvolutionInbound, canReplyToNewInbound } from "../../../../../../lib/chatdesk-events";
+import { validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery, canReplyToNewInbound } from "../../../../../../lib/chatdesk-events";
 import { requiredSecret } from "../../../../../../lib/security-env";
 import { assertActiveWhatsAppCompany, evolutionConnection, tenantEvolutionAutomationEnabled } from "../../../../../../lib/evolution-tenant";
 import { changeChat, chatSettings } from "../../../../../../lib/chatdesk-store";
 import { localTriage, eventReplyPlan, type ChatConversation } from "../../../../../../lib/chatdesk-local";
+import { applyChatDeliveryReceipt, completeChatSend } from "../../../../../../lib/chatdesk-delivery";
 import { dispatchEvolutionJob } from "../../../../../../lib/evolution-jobs";
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -21,6 +22,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ co
     if (!connection) return NextResponse.json({ error: "Instância indisponível." }, { status: 403 });
     if (body.instance !== connection.config.instance) return NextResponse.json({ error: "Instância inválida." }, { status: 403 });
     const events = parseEvolutionInbound(body, connection.config.instance);
+    const receipts = parseEvolutionDelivery(body, connection.config.instance);
+    for (const receipt of receipts) await changeChat(companyId, receipt.phone, current => applyChatDeliveryReceipt(current, receipt));
+    if (!events.length) return NextResponse.json({ received: 0, receipts: receipts.length });
     const settings = await chatSettings(companyId);
     for (const event of events) {
       const triage = localTriage(event.text);
@@ -65,12 +69,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ co
       if (!reserved.changed || !reservedMessage) continue;
       let status = "unknown", providerMessageId: string | undefined;
       try { const sent = await dispatchEvolutionJob(companyId, `chatbot:${event.phone}:${event.id}`, event.phone, reservedMessage.text); status = sent.status; if (sent.status === "accepted") providerMessageId = sent.messageId; } catch { /* Keep an auditable uncertain result. */ }
-      await changeChat(companyId, event.phone, current => {
-        if (!current) return null;
-        const next = structuredClone(current); const message = next.messages.find(item => item.id === botId);
-        if (message) { message.status = status; message.providerMessageId = providerMessageId; }
-        return next;
-      });
+      await changeChat(companyId, event.phone, current => completeChatSend(current, botId, status, providerMessageId));
     }
     return NextResponse.json({ received: events.length });
   } catch { return NextResponse.json({ error: "Não foi possível registrar o evento." }, { status: 503 }); }
