@@ -6,6 +6,7 @@ export const chatStages = ["Novo contato", "Em atendimento", "Orçamento", "Agua
 export type ChatStage = typeof chatStages[number];
 export type ServiceIntake = {
   updatedAt: string;
+  service?: string;
   symptom?: string;
   since?: string;
   city?: string;
@@ -14,9 +15,13 @@ export type ServiceIntake = {
   address?: string;
   room?: string;
   appliance?: string;
+  capacity?: string;
+  infrastructure?: string;
   preference?: string;
   media?: string;
   pending: string[];
+  lastQuestion?: string;
+  responses?: {key:string; text:string; at:string}[];
 };
 export type ChatMessage = { id: string; direction: "in" | "out" | "note" | "event"; text: string; at: string; actor?: string; status?: string; providerMessageId?: string; assistantReplyKey?: string; assistantNudge?: boolean; pilotTurn?: boolean; replyToId?: string; mediaKind?: "foto" | "áudio" | "vídeo" | "documento"; deliveryStatus?: DeliveryStatus };
 export type ChatConversation = { companyId: string; phone: string; name: string; sector: ChatSector; stage: ChatStage; assignee: string; revision: number; botPaused: boolean; optOut: boolean; messages: ChatMessage[]; requests: string[]; updatedAt: string; orderId?: string; assistantHandoffAt?: string; intake?: ServiceIntake; pendingDeliveryReceipts?: PendingDeliveryReceipt[]; queueActivity?: { incoming?: ChatMessage; humanReplyAt?: string; lastOutbound?: Pick<ChatMessage, "at" | "status" | "deliveryStatus"> } };
@@ -248,6 +253,19 @@ export function eventReplyPlan(messages: ChatMessage[], eventId: string, activat
   return { key, reply: handoff ? "Obrigado! Deixei seu atendimento para a equipe conferir e dar continuidade." : bots.length ? reply.replace(/^Olá!\s*/, "") : reply, first: bots.length === 0, handoff, nudge };
 }
 
+const serviceAside = (value:string) => /\b(?:voces (?:fazem|faz|atendem|trabalham com)|tambem (?:fazem|faz|atendem)|tem (?:servico|como fazer))\b|^(?:fazem|faz|e sobre|tambem tem)\b/.test(value)
+  && /\b(?:instalacao|instalam|higienizacao|limpeza|manutencao|pmoc)\b/.test(value);
+const visitAside = (value:string) => /\b(?:como funciona|o que e|para que serve|o que (?:fazem|e feito) na)\b.*\b(?:visita|avaliacao)\b|\b(?:na visita tecnica|na avaliacao tecnica)\b.*\b(?:o que|como)\b/.test(value);
+const detailCorrection = /\b(?:corrigindo|correcao|na verdade|retificando|mudei|o correto|endereco novo|novo endereco|endereco certo|troquei|e outro)\b/;
+const worried = (value:string) => /\b(?:estou|to|ficamos|fiquei|muito) (?:bem |muito )?(?:preocupad[oa]s?|irritad[oa]s?|chatead[oa]s?|nervos[oa]s?|indignad[oa]s?)\b|\b(?:estou com medo|to com medo|e urgente|muita urgencia|preciso urgente|nao posso esperar|ninguem me responde|ja falei (?:isso|duas vezes)|ja (?:mandei|passei) (?:isso|esses dados))\b/.test(value);
+const usefulQuestion = (text?:string) => text?.match(/(?:^|[.!?]\s+)([^.!?]+\?)\s*$/u)?.[1]?.trim();
+export function recordIntakeReply(intake:ServiceIntake|undefined,key:string,text:string,at:string,hold:boolean) {
+  if (!intake) return intake;
+  const question = usefulQuestion(text);
+  return {...intake,lastQuestion:hold ? undefined : question || intake.lastQuestion,
+    responses:[...(intake.responses || []).slice(-7),{key,text:text.slice(0,320),at}]};
+}
+
 const intakeLocalCities = /\b(?:são josé do rio preto|rio preto|mirassol|bálsamo|balsamo|jaci|olímpia|olimpia|tanabi|bady bassitt|neves paulista)\b/iu;
 const compact = (value?: string) => value?.trim().replace(/[\s.,!?]+$/u, "").slice(0, 200) || undefined;
 
@@ -265,9 +283,14 @@ export function updateServiceIntake(previous: ServiceIntake | undefined, message
   const clue = normalized(value);
   const prompt = before?.assistantReplyKey;
   const recentPrompt = before && Math.abs(Date.parse(event.at) - Date.parse(before.at)) < 30 * 60_000;
+  const correcting = detailCorrection.test(clue);
+  const aside = Boolean((facts.symptom || facts.service) && (serviceAside(clue) || visitAside(clue)));
   const standalone = /^[\p{L}\p{N}][\p{L}\p{N} .'-]{0,70}$/u.test(value) && !/^(?:oi|sim|não|nao|ok|obrigad[oa]|não sei|nao sei)$/iu.test(value);
-  if (leakIntent.test(clue) || /\b(?:nao gela|nao esta gelando|parou de gelar|nao liga|barulho|cheiro de queimado|agua perto|falha|erro|higienizacao|limpeza do ar|manutencao)\b/.test(clue)) facts.symptom = compact(value);
-  else if (!facts.symptom && installationIntent.test(clue)) facts.symptom = "Instalação de ar-condicionado";
+  if (!aside && (leakIntent.test(clue) || /\b(?:nao gela|nao esta gelando|parou de gelar|nao liga|barulho|cheiro de queimado|agua perto|falha|erro|higienizacao|limpeza do ar|manutencao)\b/.test(clue))) {
+    facts.symptom = compact(value);
+    facts.service = /\b(?:higienizacao|limpeza do ar)\b/.test(clue) ? "Higienização" : "Avaliação técnica";
+  }
+  else if (!aside && installationIntent.test(clue) && (!facts.symptom || correcting)) { facts.service = "Instalação"; facts.symptom = undefined; }
   const namedCity = value.match(/(?:sou de|moro em|cidade de)\s+([\p{L}][\p{L} '’-]{1,55}?)(?=\s*(?:,|\bbairro\b|\/|[.!?]|$))/iu)?.[1];
   const bareDistrict = value.replace(intakeLocalCities, "").trim();
   const namedDistrict = bareDistrict.match(/\bbairro\s+([\p{L}][\p{L} '’-]{1,55})(?=[,.!?/]|$)/iu)?.[1];
@@ -275,26 +298,61 @@ export function updateServiceIntake(previous: ServiceIntake | undefined, message
   const knownCity = !namedSite || namedCity ? value.match(intakeLocalCities)?.[0] : undefined;
   const namedRoom = value.match(/\b(?:sala\s+(?:de aula|(?:infantil\s+)?[0-9]{1,3}[a-z]?|d[ao]s?\s+[\p{L}]+)|secretaria|recepção|diretoria|biblioteca|cozinha|refeitório|laboratório)\b/iu)?.[0];
   const address = value.match(/\b(?:rua|avenida|av\.|estrada|travessa|alameda)\s+[^\n!?;]{3,125}/iu)?.[0];
-  if (knownCity || namedCity) facts.city = compact(knownCity || namedCity);
-  if (namedDistrict || /^centro[.!]?$/i.test(value)) facts.district = compact(namedDistrict || "Centro");
+  if (knownCity || namedCity) {
+    const city = compact(knownCity || namedCity);
+    if (facts.city && city && normalized(facts.city) !== normalized(city)) {
+      delete facts.district; delete facts.address; delete facts.site; delete facts.room;
+    }
+    facts.city = city;
+  }
+  if (namedDistrict || /^centro[.!]?$/i.test(value)) {
+    const district = compact(namedDistrict || "Centro");
+    if (correcting && facts.district && district && normalized(facts.district) !== normalized(district)) {
+      delete facts.address; delete facts.site; delete facts.room;
+    }
+    facts.district = district;
+  }
   if (namedSite && (!facts.site || genericSite(facts.site) || !genericSite(namedSite))) facts.site = compact(namedSite);
   else if (!namedSite && recentPrompt && schoolQuestion(prompt) && standalone && !mediaPlaceholder(event)
     && !namedRoom && !knownCity && !namedDistrict && !address && !equipmentDetail.test(clue) && !customerFollowUp.test(clue)) facts.site = compact(value);
-  if (address) facts.address = compact(address);
+  if (address) {
+    const nextAddress = compact(address);
+    if (correcting && facts.address && nextAddress && normalized(facts.address) !== normalized(nextAddress)) {
+      delete facts.site; delete facts.room;
+    }
+    facts.address = nextAddress;
+  }
   if (namedRoom || (recentPrompt && prompt === "leak:site-room" && standalone && !mediaPlaceholder(event) && !namedSite)) facts.room = compact(namedRoom || value);
   const appliance = clue.match(applianceIdentity)?.[0] || clue.match(capacityDetail)?.[0];
   if (appliance) facts.appliance = compact(appliance);
+  const capacity = clue.match(capacityDetail)?.[0];
+  if (capacity) facts.capacity = compact(capacity);
+  if (facts.service==="Instalação" && (infrastructureDetail.test(clue) || (recentPrompt && /^installation:110(?::clarify)?$/.test(prompt || "") && /^(?:sim|nao)[.!]?$/i.test(clue)))) {
+    facts.infrastructure = /\b(?:nao|sem)\b/.test(clue) ? "Não informada como existente" : /^(?:sim|ja tem|tem sim)|\b(?:ja tem|ja existe|tem tubulacao|tem infraestrutura)\b/.test(clue) ? "Existente segundo o cliente" : undefined;
+  }
   const since = value.match(/\b(?:desde\s+[^,;.!?\n]{2,48}|h[áa]\s+(?:\d{1,3}|um[aa]?|dois|três)\s+(?:dias?|semanas?|meses?|horas?))/iu)?.[0];
   if (since) facts.since = compact(since);
   const preference = value.match(/\b(?:de manhã|à tarde|à noite|amanhã|segunda-feira|terça-feira|quarta-feira|quinta-feira|sexta-feira|sábado|domingo)\b(?:\s+(?:de manhã|à tarde|à noite))?/iu)?.[0];
   if (preference && !since) facts.preference = compact(preference);
   if (event.mediaKind) facts.media = event.mediaKind;
+  if (before?.text && usefulQuestion(before.text) && !facts.lastQuestion) facts.lastQuestion = usefulQuestion(before.text);
+  if (facts.lastQuestion && (
+    (/cidade/i.test(facts.lastQuestion) && (knownCity || namedCity) && (!/bairro/i.test(facts.lastQuestion) || facts.district)) ||
+    (/bairro/i.test(facts.lastQuestion) && (namedDistrict || /^centro/i.test(value)) && (!/cidade/i.test(facts.lastQuestion) || facts.city)) ||
+    (/nome da escola|nome da unidade|endere[cç]o/i.test(facts.lastQuestion) && (address || (facts.site && !genericSite(facts.site)))) ||
+    (/sala ou setor/i.test(facts.lastQuestion) && facts.room) ||
+    (/desde quando|quando isso come[cç]ou/i.test(facts.lastQuestion) && facts.since) ||
+    (/marca|modelo/i.test(facts.lastQuestion) && appliance) ||
+    (/o que est[aá] acontecendo/i.test(facts.lastQuestion) && facts.symptom)
+  )) delete facts.lastQuestion;
   facts.updatedAt = event.at;
   facts.pending = [
-    !facts.symptom && "serviço ou problema",
+    !facts.service && !facts.symptom && "serviço ou problema",
     facts.symptom && !facts.since && !installationIntent.test(normalized(facts.symptom)) && "quando começou",
     !facts.city && "município", !facts.district && "bairro", !facts.address && (!facts.site || genericSite(facts.site)) && "endereço ou nome da unidade",
-    facts.site && !facts.room && "sala ou setor", !facts.appliance && "marca/modelo ou etiqueta (se disponível)",
+    facts.site && !facts.room && "sala ou setor", facts.service==="Instalação" && !facts.capacity && "capacidade em BTUs",
+    facts.service==="Instalação" && !facts.infrastructure && "tubulação de cobre",
+    facts.service!=="Instalação" && !facts.appliance && "marca/modelo ou etiqueta (se disponível)",
   ].filter((item): item is string => typeof item === "string");
   return facts;
 }
@@ -323,12 +381,49 @@ export function pilotReplyPlan(messages: ChatMessage[], eventId: string, activat
     return handoff("agenda:review", "Vou pedir à equipe que confira a agenda antes de oferecer um horário. Nenhum horário foi reservado; seguimos por aqui.");
   }
   if (/\b(?:quanto (?:custa|fica)|qual (?:e )?o (?:valor|preco|prazo)|garantia|preco|faz por)\b/.test(value)) return handoff("informacao:review", "Preciso confirmar essa informação com a equipe para te passar a orientação certa. Seguimos por aqui.");
+  if ((intake?.symptom || intake?.service) && (serviceAside(value) || visitAside(value))) {
+    const answer = visitAside(value) ? "Na visita, o técnico avalia o aparelho no local para identificar a causa e orientar o próximo passo."
+      : /\bpmoc\b/.test(value) ? "Sim, a PolarTech faz PMOC."
+      : /\b(?:instalacao|instalam)\b/.test(value) ? "Sim, também fazemos instalação."
+      : /\b(?:limpeza|higienizacao)\b/.test(value) ? "Sim, também fazemos higienização."
+      : "Sim, também fazemos manutenção.";
+    const question = intake.lastQuestion;
+    return {key:"assunto:retomar",reply:answer+(question ? " Voltando ao seu atendimento: "+question : " Podemos continuar com o problema do seu aparelho por aqui."),first,handoff:false};
+  }
+  if (intake && detailCorrection.test(value)) {
+    const changed = /\b(?:rua|avenida|estrada|travessa|alameda)\b/.test(value) && intake.address ? "o endereço"
+      : /\bbairro\b/.test(value) && intake.district ? "o bairro"
+      : /\bcidade\b/.test(value) && intake.city ? "a cidade"
+      : /\b(?:escola|unidade)\b/.test(value) && intake.site ? "a unidade"
+      : serviceRoom.test(value) && intake.room ? "a sala"
+      : (applianceIdentity.test(value) || capacityDetail.test(value)) && intake.appliance ? "os dados do aparelho"
+      : "";
+    if (changed) {
+      const next = !intake.city ? "Em qual cidade fica o aparelho?" : !intake.district ? "Em qual bairro fica o aparelho?"
+        : !intake.address && (!intake.site || genericSite(intake.site)) ? "Qual é o endereço ou o nome da unidade?"
+        : intake.site && !intake.room ? "Em qual sala ou setor fica o aparelho?"
+        : intake.symptom && !intake.since ? "Desde quando isso está acontecendo?"
+        : !intake.appliance ? "Você sabe a marca ou o modelo do aparelho?" : "";
+      if (next) return {key:"dados:corrigidos",reply:"Certo, atualizei "+changed+" na ficha. "+next,first,handoff:false};
+      return handoff("dados:corrigidos","Certo, atualizei "+changed+" na ficha. Deixei o atendimento para a equipe seguir por aqui.");
+    }
+  }
+  if (worried(value) && !leakIntent.test(value) && !triage.urgent) {
+    if (intake?.lastQuestion && !bots.some(message => message.assistantReplyKey === "acolhimento")) {
+      return {key:"acolhimento",reply:"Entendo a sua preocupação. Para seguir com o atendimento, só preciso confirmar uma coisa: "+intake.lastQuestion,first,handoff:false};
+    }
+    return handoff("acolhimento:equipe","Entendo a sua preocupação. Já deixei o caso para a equipe dar continuidade por aqui.");
+  }
   const pendingTechnical = bots.some(message => message.assistantReplyKey === "piloto:detalhes-tecnicos");
+  if (pendingTechnical && intake?.since && !intake.appliance && !event.mediaKind
+    && !bots.some(message => message.assistantReplyKey === "piloto:etiqueta") && !/\b(?:nao sei|nao tenho|nao consigo)\b/.test(value)) {
+    return {key:"piloto:etiqueta",reply:"Você sabe a marca ou o modelo do aparelho? Se preferir, pode mandar uma foto da etiqueta.",first,handoff:false};
+  }
   if (pendingTechnical && (intake?.since || intake?.appliance || event.mediaKind === "foto" || /\b(?:nao sei|nao tenho|nao consigo)\b/.test(value))) return handoff("leak:complete");
   if (plan?.key === "leak:complete" && !pendingTechnical && intake && (!intake.since || !intake.appliance)) {
     const time = !intake.since ? "Desde quando isso está acontecendo?" : "";
     const label = !intake.appliance ? "Se souber, qual é a marca ou o modelo? Pode mandar uma foto da etiqueta também." : "";
-    return {key:"piloto:detalhes-tecnicos",reply:[time,label].filter(Boolean).join(" "),first,handoff:false};
+    return {key:"piloto:detalhes-tecnicos",reply:time || label,first,handoff:false};
   }
   if (plan?.key === "leak:school") return {...plan, reply:"Entendi, é uma escola. Qual é o nome da escola ou o endereço?"};
   if (intake?.room && intake.site && genericSite(intake.site) && !intake.address
@@ -336,8 +431,30 @@ export function pilotReplyPlan(messages: ChatMessage[], eventId: string, activat
     && !bots.some(message => message.assistantReplyKey === "leak:school-after-room")) {
     return {key:"leak:school-after-room",reply:"Anotei a sala. Qual é o nome da escola ou o endereço?",first,handoff:false};
   }
+  if (intake?.service === "Instalação" && !isNudge(value) && !event.mediaKind
+    && !customerFollowUp.test(value) && (!plan?.handoff || plan.key==="installation:111")) {
+    const steps:[string,string,boolean][] = [
+      ["installation:btu","Para preparar seu orçamento, qual é a capacidade do aparelho em BTUs?",Boolean(intake.capacity)],
+      ["installation:cidade","Em qual cidade será a instalação?",Boolean(intake.city)],
+      ["installation:bairro","Em qual bairro será a instalação?",Boolean(intake.district)],
+      ["installation:110","O local já tem tubulação de cobre instalada?",Boolean(intake.infrastructure)],
+    ];
+    const step=steps.find(([, , complete])=>!complete);
+    if (!step) return handoff("installation:111");
+    const [key, reply] = step;
+    if (!bots.some(message=>message.assistantReplyKey===key)) return {key,reply,first,handoff:false};
+    const lastCustomer=recent.findLast(message=>message.direction==="in");
+    if (lastCustomer && normalized(lastCustomer.text.trim())===value) return null;
+    if (/\b(?:nao sei|nao tenho certeza|nao consigo)\b/.test(value)) return handoff("installation:review");
+    if (bots.some(message=>message.assistantReplyKey===key+":clarify")) return handoff("installation:review");
+    return {key:key+":clarify",reply:"Só para eu registrar certo: "+reply,first,handoff:false};
+  }
   if (plan?.handoff) return {...plan, reply: safeHandoff};
   if (plan && !plan.key.startsWith("sector:")) {
+    if (plan.key === "leak:inside" || plan.key === "leak:place") {
+      if (!intake?.city && intake?.district) return {...plan,key:"leak:city",reply:leakingReplies.city};
+      if (!intake?.city && !intake?.district) return {...plan,reply:(plan.key === "leak:inside" ? "Certo, está pingando pela unidade de dentro. " : "")+"Em qual cidade fica o aparelho?"};
+    }
     if (leakIntent.test(value) && plan.key.startsWith("leak:")
       && !bots.some(message => message.assistantReplyKey?.startsWith("leak:"))) {
       return {...plan, reply:"Pode haver várias causas para o vazamento. Recomendo uma visita técnica para avaliar. " + plan.reply};
@@ -358,8 +475,7 @@ export function pilotReplyPlan(messages: ChatMessage[], eventId: string, activat
     && ["Técnico", "Geral"].includes(triage.sector) && !customerFollowUp.test(value)) {
     const steps: [string, string, boolean][] = [
       ["inicio", "Desde quando isso começou?", Boolean(intake.since)],
-      ["local", !intake.city && !intake.district ? "Em qual cidade e bairro fica o aparelho?"
-        : !intake.city ? "Em qual cidade fica o aparelho?" : "Em qual bairro fica o aparelho?", Boolean(intake.city && intake.district)],
+      [!intake.city ? "cidade" : "bairro", !intake.city ? "Em qual cidade fica o aparelho?" : "Em qual bairro fica o aparelho?", Boolean(intake.city && intake.district)],
       ["unidade", "Pode me dizer o endereço ou o nome da unidade?", Boolean(intake.address || (intake.site && !genericSite(intake.site)))],
       ["etiqueta", "Se souber, qual é a marca ou o modelo? Pode mandar uma foto da etiqueta também.", Boolean(intake.appliance)],
     ];

@@ -4,7 +4,7 @@ import { validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery, c
 import { requiredSecret } from "../../../../../../lib/security-env";
 import { assertActiveWhatsAppCompany, evolutionConnection, tenantEvolutionAutomationEnabled } from "../../../../../../lib/evolution-tenant";
 import { changeChat, chatSettings } from "../../../../../../lib/chatdesk-store";
-import { localTriage, eventReplyPlan, pilotReplyPlan, handoffSupplementPlan, updateServiceIntake, type ChatConversation } from "../../../../../../lib/chatdesk-local";
+import { localTriage, eventReplyPlan, pilotReplyPlan, handoffSupplementPlan, recordIntakeReply, updateServiceIntake, type ChatConversation } from "../../../../../../lib/chatdesk-local";
 import { applyChatDeliveryReceipt, completeChatSend } from "../../../../../../lib/chatdesk-delivery";
 import { dispatchEvolutionJob } from "../../../../../../lib/evolution-jobs";
 export const runtime = "nodejs";
@@ -98,7 +98,17 @@ export async function POST(request: NextRequest, context: { params: Promise<{ co
       if (!reserved.changed || !reservedMessage) continue;
       let status = "unknown", providerMessageId: string | undefined;
       try { const sent = await dispatchEvolutionJob(companyId, `chatbot:${event.phone}:${event.id}`, event.phone, reservedMessage.text); status = sent.status; if (sent.status === "accepted") providerMessageId = sent.messageId; } catch { /* Keep an auditable uncertain result. */ }
-      await changeChat(companyId, event.phone, current => completeChatSend(current, botId, status, providerMessageId));
+      await changeChat(companyId, event.phone, current => {
+        const next = completeChatSend(current, botId, status, providerMessageId);
+        if (freshPilot && status === "accepted" && next) {
+          const newerTurn = next.messages.findLast(message => message.direction === "in")?.id !== event.id;
+          const updated = recordIntakeReply(next.intake, reservedMessage.assistantReplyKey || "", reservedMessage.text, reservedMessage.at,
+            Boolean(next.botPaused && !reservedMessage.assistantReplyKey?.startsWith("suplemento:")));
+          if (updated && newerTurn && next.intake) updated.lastQuestion = next.intake.lastQuestion;
+          next.intake = updated;
+        }
+        return next;
+      });
     }
     return NextResponse.json({ received: events.length });
   } catch { return NextResponse.json({ error: "Não foi possível registrar o evento." }, { status: 503 }); }
