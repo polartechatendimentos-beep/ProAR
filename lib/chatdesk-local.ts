@@ -2,18 +2,19 @@ export const chatSectors = ["Geral", "Técnico", "Financeiro", "Comercial", "PMO
 export type ChatSector = typeof chatSectors[number];
 export const chatStages = ["Novo contato", "Em atendimento", "Orçamento", "Aguardando cliente", "Concluído"] as const;
 export type ChatStage = typeof chatStages[number];
-export type ChatMessage = { id: string; direction: "in" | "out" | "note" | "event"; text: string; at: string; actor?: string; status?: string; providerMessageId?: string };
+export type ChatMessage = { id: string; direction: "in" | "out" | "note" | "event"; text: string; at: string; actor?: string; status?: string; providerMessageId?: string; assistantReplyKey?: string };
 export type ChatConversation = { companyId: string; phone: string; name: string; sector: ChatSector; stage: ChatStage; assignee: string; revision: number; botPaused: boolean; optOut: boolean; messages: ChatMessage[]; requests: string[]; updatedAt: string; orderId?: string; queueActivity?: { incoming?: ChatMessage; humanReplyAt?: string } };
 export type ChatActor = { username: string; displayName: string; role: string; sectors: ChatSector[]; writeSectors: ChatSector[]; canWrite: boolean; admin: boolean };
 export type LocalChatSettings = { companyId: string; revision: number; botEnabled: boolean; botActivatedAt?: string; botTestPhone?: string; companyName: string; greeting: string; quickReplies?: ChatQuickReply[] };
 const normalized = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const leakIntent = /\b(?:ping(?:a|ando|ou)|gotej(?:a|ando|ou)|vazando(?: agua)?|vazamento de agua|(?:cai|caindo|escorre|escorrendo) agua)\b/;
 export function localTriage(text: string) {
   const value = normalized(text);
   const urgent = /(?:cheiro de queimad|fumaca|faisca|choque eletric|curto.circuito|fio(?:s)? (?:esta(?:o)? )?derretend|disjuntor (?:esta )?(?:desarmand|caind)|tomada (?:esta )?(?:esquentand|derretend))/.test(value);
   const optOut = /(?:nao (?:quero|desejo) (?:mais )?receber|nao (?:me )?(?:mande|envie) mais mensagens|pare de (?:me )?enviar|pare de mandar mensagens|retire meu (?:numero|contato)|cancelar (?:as )?mensagens|remover meu (?:numero|contato))/.test(value) || /^(?:sair|parar|stop|cancelar)[.!\s]*$/.test(value.trim());
-  const matches: [ChatSector, RegExp][] = [["Financeiro", /boleto|\bpix\b|nota fiscal|cobranca|pagamento|financeiro/], ["PMOC", /\bpmoc\b|contrato|laudo|preventiva|certificado/], ["Comercial", /orcamento|preco|comprar|venda|instalacao/], ["Técnico", /nao gela|vazando|vazamento|erro|defeito|barulho|manutencao|higienizacao|limpeza do ar|parou de gelar/]];
+  const matches: [ChatSector, RegExp][] = [["Financeiro", /boleto|\bpix\b|nota fiscal|cobranca|pagamento|financeiro/], ["PMOC", /\bpmoc\b|contrato|laudo|preventiva|certificado/], ["Comercial", /orcamento|preco|comprar|venda|instalacao/], ["Técnico", /nao gela|pingando|pinga\b|gotejando|goteja\b|caindo agua|escorrendo agua|vazando|vazamento|erro|defeito|barulho|manutencao|higienizacao|limpeza do ar|parou de gelar/]];
   const found = matches.filter(([, expression]) => expression.test(value)).map(([sector]) => sector);
-  const sector: ChatSector = urgent ? "Técnico" : found[0] || "Geral";
+  const sector: ChatSector = urgent || leakIntent.test(value) ? "Técnico" : found[0] || "Geral";
   const suggestions: Record<ChatSector, string> = {
     Geral: "Olá! Para encaminhar seu atendimento, informe como podemos ajudar e o local do serviço.",
     Técnico: "Olá! Informe a marca, o modelo, o sintoma observado e o local do equipamento. Se possível, envie uma foto da etiqueta e do código exibido. Nossa equipe fará a avaliação técnica.",
@@ -24,6 +25,79 @@ export function localTriage(text: string) {
   const reply = optOut ? "Registramos sua solicitação para interromper as mensagens automáticas." : urgent ? "Por segurança, interrompa o uso do equipamento e aguarde a avaliação de um profissional qualificado. Vou encaminhar sua solicitação à equipe técnica." : suggestions[sector];
   return { sector, urgent, optOut, mixed: found.length > 1, reason: urgent ? "Relato de possível risco elétrico." : found.length ? `Termos relacionados a ${found.join(" e ")}.` : "Mensagem sem categoria identificada.", reply, mode: "local-rules" as const };
 }
+
+const leakInside = /\b(?:evaporadora|unidade interna|aparelho interno|por dentro|parte interna|dentro do (?:quarto|imovel|ambiente|apartamento)|dentro de casa)\b/;
+const leakOutside = /\b(?:condensadora|unidade externa|aparelho externo|por fora|parte externa|lado de fora|fora de casa)\b/;
+const leakWhen = /\b(?:quando (?:liga|desliga)|so (?:quando|a noite|de manha)|o tempo todo|direto|desde (?:ontem|hoje)|a noite|de manha)\b/;
+const equipmentDetail = /\b(?:marca|modelo|etiqueta|fujitsu|carrier|gree|elgin|samsung|midea|daikin|philco|tcl|lg|agr[aá]tto|[0-9]{1,3}(?:[. ][0-9]{3})?\s*btus?)\b/;
+const placeDetail = /\b(?:moro em|cidade(?: de)?|bairro|rua|avenida|mirassol|rio preto|balsamo|jaci|olimpia|tanabi|bady bassitt)\b/;
+const installationIntent = /\b(?:instalacao|instalar|instalam)\b/;
+const capacityDetail = /\b(?:[0-9]{1,3}(?:[. ][0-9]{3})?\s*btus?|[0-9]{1,2}\s*(?:mil|k))\b/;
+const infrastructureDetail = /\b(?:tubulacao|infraestrutura|cobre|ponto eletrico|nao tem nada|sem infra)\b/;
+const leakingReplies = {
+  where: "Entendi que o ar-condicionado está pingando. A água sai da unidade de dentro ou da unidade de fora?",
+  inside: "Entendi, a água está saindo da unidade de dentro. Pode me informar a marca ou o modelo e a cidade e o bairro do atendimento? Se puder, mande uma foto da etiqueta.",
+  outside: "Entendi, a água está saindo do lado de fora. Isso acontece enquanto o aparelho está ligado ou só depois de desligar? Pode informar também a cidade e o bairro?",
+  details: "Obrigado pelos detalhes. Eles ajudam a equipe técnica a avaliar o vazamento. Se puder, mande uma foto de onde a água está saindo.",
+  complete: "Obrigado, já tenho as informações para a equipe técnica avaliar o relato. O diagnóstico depende da avaliação do equipamento.",
+} as const;
+
+/** Select a reply only when it advances this conversation; never quote user input. */
+export function eventReplyPlan(messages: ChatMessage[], eventId: string, activatedAt: string, now = Date.now()) {
+  const activation = Date.parse(activatedAt);
+  const since = Math.max(activation, now - 30 * 60_000);
+  const active = messages.filter(message => Date.parse(message.at) >= since);
+  const event = active.find(message => message.id === eventId && message.direction === "in");
+  if (!event) return null;
+  const bots = active.filter(message => message.actor === "local-assistant" && message.direction === "out");
+  const recent = bots.filter(message => now - Date.parse(message.at) < 5 * 60_000);
+  const triage = localTriage(event.text);
+  if (triage.optOut) return null;
+  if (recent.length >= 4 && !triage.urgent) return null;
+  const value = normalized(event.text);
+  const inbound = active.filter(message => message.direction === "in" && Date.parse(message.at) <= Date.parse(event.at));
+  const idx = inbound.findIndex(message => leakIntent.test(normalized(message.text)));
+  const leakTopic = leakIntent.test(value) || (idx >= 0 && (leakInside.test(value) || leakOutside.test(value) || leakWhen.test(value) || equipmentDetail.test(value) || placeDetail.test(value)));
+  const installationIndex = inbound.reduce((last, message, index) => installationIntent.test(normalized(message.text)) ? index : last, -1);
+  const installationTopic = installationIntent.test(value) || (installationIndex >= 0
+    && (capacityDetail.test(value) || placeDetail.test(value) || infrastructureDetail.test(value))
+    && (idx < 0 || installationIndex > idx));
+  let key = "sector:" + triage.sector, reply = triage.reply;
+  if (triage.urgent) key = "urgent";
+  else if (leakTopic && triage.sector !== "Financeiro" && triage.sector !== "PMOC") {
+    const facts = (idx < 0 ? inbound : inbound.slice(idx)).map(message => normalized(message.text)).join("\n");
+    const inside = leakInside.test(facts), outside = leakOutside.test(facts);
+    const locationKnown = inside !== outside;
+    const situationKnown = leakWhen.test(facts);
+    const applianceKnown = equipmentDetail.test(facts);
+    const placeKnown = placeDetail.test(facts);
+    const step = locationKnown && applianceKnown && placeKnown ? "complete"
+      : applianceKnown || placeKnown || situationKnown ? "details"
+      : inside && !outside ? "inside" : outside && !inside ? "outside" : "where";
+    key = "leak:" + step;
+    reply = leakingReplies[step];
+    if (bots.some(message => message.assistantReplyKey === key)) return null;
+  } else if (installationTopic && ["Comercial", "Geral"].includes(triage.sector)) {
+    const facts = inbound.slice(Math.max(0, installationIndex)).map(message => normalized(message.text)).join("\n");
+    const capacityKnown = capacityDetail.test(facts);
+    const placeKnown = placeDetail.test(facts);
+    const infrastructureKnown = infrastructureDetail.test(facts);
+    key = `installation:${Number(capacityKnown)}${Number(placeKnown)}${Number(infrastructureKnown)}`;
+    const missing = [
+      !capacityKnown && "a capacidade do aparelho em BTUs",
+      !placeKnown && "a cidade e o bairro",
+      !infrastructureKnown && "se já há tubulação de cobre instalada",
+    ].filter(Boolean);
+    reply = missing.length
+      ? `Para preparar seu orçamento de instalação, pode informar ${missing.join(", ").replace(/, ([^,]+)$/, " e $1")}?`
+      : "Obrigado pelos detalhes da instalação. A equipe pode usar esses dados para avaliar o orçamento. O valor depende da conferência do local e dos materiais necessários.";
+    if (bots.some(message => message.assistantReplyKey === key)) return null;
+  } else if (triage.sector === "Geral" && bots.length) return null;
+  if (recent.some(message => message.assistantReplyKey === key || message.text.endsWith(reply))) return null;
+  if (recent.length && !triage.urgent && !leakTopic && !installationTopic && recent.some(message => !message.assistantReplyKey)) return null;
+  return { key, reply: bots.length ? reply.replace(/^Olá!\s*/, "") : reply, first: bots.length === 0 };
+}
+
 export function chatSignature(actor: ChatActor) {
   return `*${actor.displayName.slice(0, 100)} — ${actor.role.slice(0, 70)}:*`;
 }
