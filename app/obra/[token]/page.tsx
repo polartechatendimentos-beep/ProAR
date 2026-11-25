@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, use } from "react";
+import { getWorkMapProgress } from "@/lib/work-status";
 import { 
   Building2, MapPin, Calendar, Clock, CheckCircle2, AlertTriangle, 
   FileText, Printer, ShieldCheck, Lock, Unlock, Plus, Camera, 
@@ -22,8 +23,11 @@ interface Work {
   dataInicio: string;
   previsaoTermino: string;
   valorContrato?: string;
-  senhaApontamentos?: string;
+  dataConclusao?: string | null;
 }
+type PublicUnit = { id: string; quadra: string; casa: string; status: string; substatus?: string };
+type PublicWorkMap = { revision: number; title: string; houses: PublicUnit[]; updatedAt?: string };
+type HousePriorityPublic = { id: number; quadra: string; houseId: string; nivel: "normal" | "alta" | "urgente"; motivo: string; ativo: boolean };
 
 interface FindingItem {
   id: number;
@@ -86,6 +90,9 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
 
   const [work, setWork] = useState<Work | null>(null);
   const [findings, setFindings] = useState<FindingItem[]>([]);
+  const [workMap, setWorkMap] = useState<PublicWorkMap | null>(null);
+  const [housePriorities, setHousePriorities] = useState<HousePriorityPublic[]>([]);
+  const [loadError, setLoadError] = useState("");
   const [housePendencies, setHousePendencies] = useState<Record<string, { count: number; worstStatus: string }>>({});
   const [loading, setLoading] = useState(true);
 
@@ -118,65 +125,26 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
   const [motivoReprovacao, setMotivoReprovacao] = useState("");
   const [fiscalNome, setFiscalNome] = useState("Eng. Fiscal Responsável");
 
-  // Quadras da Obra (visão física)
-  const quadrasDemo = [
-    {
-      nome: "QUADRA 03",
-      progresso: 85,
-      totalCasas: 22,
-      casasConcluidas: 18,
-      casasEmExecucao: 4,
-      casas: [
-        { numero: "Casa 15", statusPolartech: "Serviço Concluído", pendenciasCount: 0 },
-        { numero: "Casa 16", statusPolartech: "Ag. Tampa Frigorígena", pendenciasCount: 0 },
-        { numero: "Casa 17", statusPolartech: "Ag. Acabamento", pendenciasCount: 1, worstStatus: "pendente" },
-        { numero: "Casa 18", statusPolartech: "Ag. Frigorígena", pendenciasCount: 0 },
-      ],
-    },
-    {
-      nome: "QUADRA 04",
-      progresso: 64,
-      totalCasas: 19,
-      casasConcluidas: 12,
-      casasEmExecucao: 7,
-      casas: [
-        { numero: "Casa 20", statusPolartech: "Ag. Tubulação Forçada", pendenciasCount: 0 },
-        { numero: "Casa 21", statusPolartech: "Ag. Tubulação Forçada", pendenciasCount: 1, worstStatus: "aguardando_conferencia" },
-        { numero: "Casa 22", statusPolartech: "Ag. Frigorígena", pendenciasCount: 0 },
-      ],
-    },
-  ];
-
   const loadData = async () => {
     try {
-      const res = await fetch(`/api/work-findings?token=${token}`);
-      const json = await res.json();
-      if (json.success) {
-        setFindings(json.data);
-        if (json.housePendencies) {
-          setHousePendencies(json.housePendencies);
-        }
+      const [workResponse, findingsResponse, mapResponse, prioritiesResponse] = await Promise.all([
+        fetch(`/api/work-projects?token=${encodeURIComponent(token)}`, { cache: "no-store" }),
+        fetch(`/api/work-findings?token=${encodeURIComponent(token)}`, { cache: "no-store" }),
+        fetch(`/api/public-work-map?token=${encodeURIComponent(token)}`, { cache: "no-store" }),
+        fetch(`/api/work-house-priorities?token=${encodeURIComponent(token)}`, { cache: "no-store" }),
+      ]);
+      const [workJson, findingsJson, mapJson, prioritiesJson] = await Promise.all([workResponse.json(), findingsResponse.json(), mapResponse.json(), prioritiesResponse.json()]);
+      if (!workResponse.ok || !workJson.success) throw new Error(workJson.error || "Obra não encontrada.");
+      setWork(workJson.data);
+      if (findingsResponse.ok && findingsJson.success) {
+        setFindings(findingsJson.data);
+        setHousePendencies(findingsJson.housePendencies || {});
       }
-
-      setWork({
-        id: 1,
-        codigo: "OBR-2026-042",
-        nome: "Retrofit e Climatização VRF - Bloco Hospitalar & Laboratórios",
-        descricao: "Substituição de evaporadoras antigas por unidades cassete de alta eficiência ecológica R410A com plano PMOC integrado.",
-        clienteNome: "Secretaria de Saúde / Hospital Regional",
-        endereco: "Av. Philadelpho Manoel Gouveia Neto, 1850",
-        cidade: "São José do Rio Preto",
-        progresso: 68,
-        status: "em_andamento",
-        engenheiroResponsavel: "Eng. Mecânico Responsável (CREA-SP Ativo)",
-        equipe: "TEAM 11 ProAR Climatização",
-        dataInicio: "2026-08-10",
-        previsaoTermino: "2026-09-30",
-        valorContrato: "185.000,00",
-        senhaApontamentos: "123456",
-      });
+      setWorkMap(mapResponse.ok ? mapJson.map ?? null : null);
+      setHousePriorities(prioritiesResponse.ok && prioritiesJson.success && Array.isArray(prioritiesJson.data) ? prioritiesJson.data.filter((priority: HousePriorityPublic) => priority.ativo) : []);
+      setLoadError("");
     } catch (e) {
-      console.error(e);
+      setLoadError(e instanceof Error ? e.message : "Não foi possível carregar a obra.");
     } finally {
       setLoading(false);
     }
@@ -184,6 +152,7 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
 
   useEffect(() => {
     loadData();
+    const refreshTimer = window.setInterval(() => { void loadData(); }, 30_000);
     // Recupera autenticação de sessão se já logado nesta obra
     const saved = sessionStorage.getItem(`proar_auth_obra_${token}`);
     const savedExternalToken = sessionStorage.getItem(`proar_external_token_${token}`) || "";
@@ -203,6 +172,7 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
     const query = new URLSearchParams(window.location.search);
     const accessParam = query.get("access");
     if (accessParam) setAccessTokenId(accessParam);
+    return () => window.clearInterval(refreshTimer);
   }, [token]);
 
   const handleLoginExterno = async (e: React.FormEvent) => {
@@ -346,7 +316,7 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
     } catch (e) {}
   };
 
-  if (loading || !work) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="text-slate-600 font-semibold flex items-center gap-2">
@@ -356,6 +326,18 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
       </div>
     );
   }
+
+  if (!work) {
+    return <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4"><div className="max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm"><Building2 className="mx-auto h-8 w-8 text-slate-400"/><h1 className="mt-3 text-lg font-bold text-slate-900">Acompanhamento indisponível</h1><p className="mt-2 text-sm text-slate-600">{loadError || "A obra não foi localizada."}</p><button onClick={() => { setLoading(true); void loadData(); }} className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white">Tentar novamente</button></div></div>;
+  }
+
+  const quadras = Array.from(new Set((workMap?.houses || []).map((unit) => unit.quadra))).map((name) => {
+    const houses = (workMap?.houses || []).filter((unit) => unit.quadra === name);
+    const closed = houses.filter((unit) => unit.status === "SERVIÇO CONCLUÍDO").length;
+    return { nome: name, progresso: getWorkMapProgress(houses), totalCasas: houses.length, casasConcluidas: closed, casasEmExecucao: houses.length - closed, casas: houses };
+  });
+  const visibleProgress = workMap?.houses.length ? getWorkMapProgress(workMap.houses) : work.progresso;
+  const statusLabel = work.status === "servico_concluido" || work.status === "SERVIÇO CONCLUÍDO" ? "Serviço concluído" : work.status === "em_andamento" ? "Execução em andamento" : work.status.replaceAll("_", " ");
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans pb-16">
@@ -427,8 +409,8 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
             <span className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-blue-100 text-blue-900">
               {work.codigo}
             </span>
-            <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Execução em Andamento (Normal)
+              <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5" /> {statusLabel}
             </span>
           </div>
 
@@ -446,7 +428,7 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
             </div>
             <div>
               <span className="text-slate-400 block font-medium">Previsão Término</span>
-              <span className="font-bold text-slate-900">{work.previsaoTermino}</span>
+              <span className="font-bold text-slate-900">{work.previsaoTermino ? new Date(work.previsaoTermino).toLocaleDateString("pt-BR") : "Não informada"}</span>
             </div>
             <div>
               <span className="text-slate-400 block font-medium">Equipe Técnica</span>
@@ -458,12 +440,12 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
           <div className="mt-6">
             <div className="flex justify-between items-center text-xs font-bold text-slate-700 mb-2">
               <span>Avanço Físico Operacional</span>
-              <span className="text-blue-600 text-base font-black">{work.progresso}%</span>
+              <span className="text-blue-600 text-base font-black">{visibleProgress}%</span>
             </div>
             <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
               <div
                 className="bg-blue-600 h-full rounded-full transition-all duration-500"
-                style={{ width: `${work.progresso}%` }}
+                style={{ width: `${visibleProgress}%` }}
               />
             </div>
           </div>
@@ -486,12 +468,11 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
           </div>
 
           <div className="space-y-6">
-            {quadrasDemo.map((q, qIndex) => {
-              // Contabiliza pendências da quadra
-              const pendenciasQuadra = q.casas.reduce((acc, c) => acc + c.pendenciasCount, 0);
+            {quadras.map((q) => {
+              const pendenciasQuadra = q.casas.reduce((acc, c) => acc + (housePendencies[`${q.nome}_${c.casa}`]?.count || 0), 0);
 
               return (
-                <div key={qIndex} className="border border-slate-200 rounded-xl p-5 bg-slate-50/50 space-y-4">
+                <div key={q.nome} className="border border-slate-200 rounded-xl p-5 bg-slate-50/50 space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
                     <div>
                       <h3 className="text-sm font-black text-slate-900">{q.nome} — {q.progresso}% executada</h3>
@@ -513,21 +494,22 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
 
                   {/* Grid de Casas com Marcação Visual Dupla */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {q.casas.map((c, cIndex) => {
-                      const hasPendency = c.pendenciasCount > 0;
+                    {q.casas.map((c) => {
+                      const pendency = housePendencies[`${q.nome}_${c.casa}`];
+                      const hasPendency = Boolean(pendency?.count);
+                      const priority = housePriorities.find((item) => item.ativo && item.quadra === q.nome && item.houseId === c.casa);
+                      const priorityColor = priority?.nivel === "urgente" ? "border-rose-400 bg-rose-50" : priority?.nivel === "alta" ? "border-amber-400 bg-amber-50" : hasPendency ? "border-rose-300 bg-rose-50/50" : "border-slate-200 bg-white";
                       return (
                         <div
-                          key={cIndex}
-                          className={`p-3.5 rounded-xl border transition flex flex-col justify-between ${
-                            hasPendency ? "bg-rose-50/50 border-rose-300" : "bg-white border-slate-200"
-                          }`}
+                          key={c.id}
+                          className={`p-3.5 rounded-xl border transition flex flex-col justify-between ${priorityColor}`}
                         >
                           <div>
                             <div className="flex justify-between items-center mb-1.5">
-                              <span className="font-black text-slate-900 text-xs">{c.numero}</span>
-                              {hasPendency ? (
+                              <span className="font-black text-slate-900 text-xs">{c.casa}</span>
+                              {priority ? <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${priority.nivel === "urgente" ? "bg-rose-200 text-rose-900" : "bg-amber-200 text-amber-900"}`}>★ PRIORIDADE {priority.nivel.toUpperCase()}</span> : hasPendency ? (
                                 <span className="text-[10px] font-black text-rose-700 bg-rose-200/70 px-2 py-0.5 rounded-md">
-                                  ⚠ {c.pendenciasCount} PENDÊNCIA
+                                  ⚠ {pendency?.count} PENDÊNCIA(S)
                                 </span>
                               ) : (
                                 <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">
@@ -539,16 +521,18 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
                             {/* Status Operacional da PolarTech */}
                             <div className="text-[11px] text-slate-600">
                               <span className="text-[10px] text-slate-400 block font-bold uppercase">Status PolarTech:</span>
-                              <span className="font-bold text-slate-800">{c.statusPolartech}</span>
+                              <span className="font-bold text-slate-800">{c.status}</span>
+                              {c.substatus && <span className="mt-1 block text-[10px] font-semibold text-blue-700">Substatus: {c.substatus}</span>}
                             </div>
                           </div>
 
                           {/* Badge de Fiscalização se houver */}
                           {hasPendency && (
                             <div className="mt-3 pt-2 border-t border-rose-200 text-[10px] font-bold text-rose-800 flex items-center gap-1">
-                              🔴 Fiscalização: {c.worstStatus === "aguardando_conferencia" ? "Aguardando conferência" : "Pendência aberta"}
+                              🔴 Fiscalização: {pendency?.worstStatus === "aguardando_conferencia" ? "Aguardando conferência" : "Pendência aberta"}
                             </div>
                           )}
+                          {priority?.motivo && <div className="mt-2 text-[10px] font-semibold text-slate-600">Entrega prioritária: {priority.motivo}</div>}
                         </div>
                       );
                     })}
@@ -556,6 +540,7 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
                 </div>
               );
             })}
+            {!quadras.length && <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center"><p className="font-semibold text-slate-700">Ainda não há quadras ou unidades cadastradas para esta obra.</p><p className="mt-1 text-xs text-slate-500">A equipe responsável pode preencher o mapa no módulo Obras.</p></div>}
           </div>
         </div>
 
@@ -628,7 +613,7 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
                       <div>
                         <h4 className="text-sm font-bold text-slate-900 mb-1">{f.titulo}</h4>
                         <p className="text-xs text-slate-700 leading-relaxed bg-white p-3 rounded-lg border border-slate-200 italic">
-                          "{f.descricao}"
+                          &quot;{f.descricao}&quot;
                         </p>
                       </div>
 
@@ -648,7 +633,7 @@ export default function PublicWorkPage({ params }: { params: Promise<{ token: st
                           <span className="font-bold text-purple-900 block flex items-center gap-1.5">
                             <CheckCircle2 className="w-3.5 h-3.5 text-purple-700" /> Resposta da PolarTech / Correção Realizada:
                           </span>
-                          <p className="text-slate-800 italic">"{f.observacaoPolartech}"</p>
+                          <p className="text-slate-800 italic">&quot;{f.observacaoPolartech}&quot;</p>
                           <span className="text-[10px] text-purple-700 block font-semibold">
                             Responsável: {f.responsavelCorrecao} {f.dataCorrecao && `• em ${new Date(f.dataCorrecao).toLocaleDateString("pt-BR")}`}
                           </span>

@@ -10,12 +10,17 @@ export async function GET(request: Request) {
   try {
     const session = await readSession(request);
     const { searchParams } = new URL(request.url);
-    const requestedCompanyId = searchParams.get("company_id") ? Number(searchParams.get("company_id")) : null;
-
-    let companyId = 1;
-    if (session) {
-      companyId = getEffectiveCompanyId(session, requestedCompanyId);
+    const publicToken = searchParams.get("token");
+    if (publicToken) {
+      if (publicToken.length < 20) return NextResponse.json({ success: false, error: "Link de acompanhamento inválido." }, { status: 400, headers: { "Cache-Control": "no-store" } });
+      const [work] = await db.select().from(works).where(eq(works.tokenPublico, publicToken)).limit(1);
+      if (!work) return NextResponse.json({ success: false, error: "Obra não encontrada." }, { status: 404, headers: { "Cache-Control": "no-store" } });
+      const { senhaApontamentos: _password, ...publicWork } = work;
+      return NextResponse.json({ success: true, data: publicWork }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
     }
+    if (!session) return NextResponse.json({ success: false, error: "Acesso não autorizado." }, { status: 401, headers: { "Cache-Control": "no-store" } });
+    const requestedCompanyId = searchParams.get("company_id") ? Number(searchParams.get("company_id")) : null;
+    const companyId = getEffectiveCompanyId(session, requestedCompanyId);
 
     const list = await db
       .select()

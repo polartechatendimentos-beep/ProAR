@@ -5,6 +5,7 @@ import { StandardDocumentReport } from "@/components/StandardDocumentReport";
 import React, { useState, useEffect, useRef } from "react";
 import { CopperWeightCalculator } from "@/components/CopperWeightCalculator";
 import type { QuoteConversionDraft } from "@/lib/commercial-document";
+import { useOfflineState } from "@/lib/use-offline-state";
 import { 
   ShoppingCart, Search, CreditCard, Trash2, Plus, Minus, Check, X
 } from "lucide-react";
@@ -35,14 +36,14 @@ interface PdvBalcaoPanelProps {
 }
 
 export function PdvBalcaoPanel({ conversionDraft, onConversionImported }: PdvBalcaoPanelProps) {
-  const [items, setItems] = useState<CartItem[]>([]);
-  const [catalog, setCatalog] = useState<CatalogItem[]>([]);
+  const [items, setItems] = useOfflineState<CartItem[]>("pdv-cart", []);
+  const [catalog, setCatalog] = useOfflineState<CatalogItem[]>("pdv-catalog", []);
 
   const [inputCode, setInputCode] = useState("");
   const [selectedItemId, setSelectedItemId] = useState<string>("");
-  const [cliente, setCliente] = useState("Consumidor Final (Balcão)");
-  const [vendedor, setVendedor] = useState("Técnico Balcão ProAR");
-  const [importedBudgetNumber, setImportedBudgetNumber] = useState<string | null>(null);
+  const [cliente, setCliente] = useOfflineState("pdv-customer", "Consumidor Final (Balcão)");
+  const [vendedor, setVendedor] = useOfflineState("pdv-seller", "Técnico Balcão ProAR");
+  const [importedBudgetNumber, setImportedBudgetNumber] = useOfflineState<string | null>("pdv-budget-number", null);
 
   // Modal de Pagamento (F4/F7)
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -51,15 +52,15 @@ export function PdvBalcaoPanel({ conversionDraft, onConversionImported }: PdvBal
   const [valorCartao, setValorCartao] = useState(0);
   const [parcelasCartao, setParcelasCartao] = useState(1);
   const [taxaCartao, setTaxaCartao] = useState(0);
-  const [recentSales, setRecentSales] = useState<Array<{ numero: string; cliente: string; total: number; forma: string; dinheiro: number }>>([]);
+  const [recentSales, setRecentSales] = useOfflineState<Array<{ numero: string; cliente: string; total: number; forma: string; dinheiro: number }>>("pdv-recent-sales", []);
   const [completedSale, setCompletedSale] = useState<{ numero: string; cliente: string; itens: CartItem[]; total: number; forma: string } | null>(null);
-  const [cashOpen, setCashOpen] = useState(false);
-  const [openingCash, setOpeningCash] = useState(0);
-  const [openingCashInput, setOpeningCashInput] = useState("");
-  const [countedCashInput, setCountedCashInput] = useState("");
+  const [cashOpen, setCashOpen] = useOfflineState("pdv-cash-open", false);
+  const [openingCash, setOpeningCash] = useOfflineState("pdv-opening-cash", 0);
+  const [openingCashInput, setOpeningCashInput] = useOfflineState("pdv-opening-cash-input", "");
+  const [countedCashInput, setCountedCashInput] = useOfflineState("pdv-counted-cash-input", "");
   const [showCashModal, setShowCashModal] = useState(false);
   const [cashModalAction, setCashModalAction] = useState<"open" | "close">("open");
-  const [lastCashDifference, setLastCashDifference] = useState<number | null>(null);
+  const [lastCashDifference, setLastCashDifference] = useOfflineState<number | null>("pdv-last-cash-difference", null);
   const [showOrderReportModal, setShowOrderReportModal] = useState(false);
   const [showQuickItemModal, setShowQuickItemModal] = useState(false);
   const [newItemType, setNewItemType] = useState<"PRODUTO" | "SERVIÇO">("PRODUTO");

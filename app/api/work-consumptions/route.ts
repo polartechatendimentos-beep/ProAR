@@ -27,7 +27,7 @@ export async function GET(request: Request) {
     const session = await readSession(request);
     const companyId = session ? getEffectiveCompanyId(session) : 1;
 
-    let conditions = [eq(workConsumptions.companyId, companyId)];
+    const conditions = [eq(workConsumptions.companyId, companyId)];
     if (workId) {
       conditions.push(eq(workConsumptions.workId, workId));
     }

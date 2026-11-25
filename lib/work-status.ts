@@ -19,4 +19,8 @@ const aliases: Record<string, WorkStatus> = {
 for (const status of WORK_STATUSES) aliases[statusKey(status)] = status;
 export function normalizeWorkStatus(value: unknown): WorkStatus | typeof UNKNOWN_WORK_STATUS { return aliases[statusKey(value)] ?? UNKNOWN_WORK_STATUS; }
 export function getWorkProgress(value: unknown) { const normalized=normalizeWorkStatus(value); if(normalized===UNKNOWN_WORK_STATUS)return 0; return Math.round(WORK_STATUSES.indexOf(normalized)/(WORK_STATUSES.length-1)*100); }
+export function getWorkMapProgress(houses: Array<{ status?: unknown; statusPolartech?: unknown }> = []) {
+  if (!houses.length) return 0;
+  return Math.round(houses.reduce((total, house) => total + getWorkProgress(house.status ?? house.statusPolartech), 0) / houses.length);
+}
 export function getWorkStatusColor(value: unknown) { const normalized=normalizeWorkStatus(value); return normalized===UNKNOWN_WORK_STATUS?"#64748b":colors[normalized]; }

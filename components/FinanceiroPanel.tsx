@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { DollarSign, CheckCircle2, AlertCircle, ArrowUpRight, ArrowDownLeft, Plus, X } from "lucide-react";
+import { useOfflineState } from "@/lib/use-offline-state";
 
 interface FinanceRecord {
   id: string;
@@ -16,7 +17,7 @@ interface FinanceRecord {
 }
 
 export function FinanceiroPanel() {
-  const [records, setRecords] = useState<FinanceRecord[]>([
+  const [records, setRecords] = useOfflineState<FinanceRecord[]>("finance-records", [
     {
       id: "FIN-001",
       descricao: "Compra de Tubos de Cobre e Isolamento (Obra Hospital)",

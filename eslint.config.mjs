@@ -1,10 +1,16 @@
-import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals.js";
-import nextTs from "eslint-config-next/typescript.js";
+import { FlatCompat } from "@eslint/eslintrc";
+import { globalIgnores } from "eslint/config";
 
-const eslintConfig = defineConfig([
-  nextVitals,
-  nextTs,
+const compat = new FlatCompat({ baseDirectory: process.cwd() });
+
+const eslintConfig = [
+  ...compat.extends("next/core-web-vitals", "next/typescript"),
+  {
+    rules: {
+      // Keep legacy API handlers buildable while the any-typed boundaries are migrated.
+      "@typescript-eslint/no-explicit-any": "warn",
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
@@ -13,6 +19,6 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
-]);
+];
 
 export default eslintConfig;

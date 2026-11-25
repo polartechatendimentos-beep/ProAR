@@ -1,15 +1,17 @@
 "use client";
 
 import { StandardDocumentReport } from "@/components/StandardDocumentReport";
+import Link from "next/link";
 
 import React, { useState, useEffect, useRef } from "react";
 import { 
   Wrench, Search, Plus, Filter, CheckCircle2, Clock, 
-  MapPin, Copy, ExternalLink, Sparkles, Printer, Camera, Image as ImageIcon, Send
+  MapPin, Copy, ExternalLink, Sparkles, Printer, Camera, Image as ImageIcon, Send, Smartphone
 } from "lucide-react";
 import { getDistanceToMunicipality, calculateDisplacementFee } from "@/lib/municipality-distances";
 import { CopperWeightCalculator } from "@/components/CopperWeightCalculator";
 import type { QuoteConversionDraft } from "@/lib/commercial-document";
+import { useOfflineState } from "@/lib/use-offline-state";
 
 interface OSItem {
   id: number;
@@ -36,7 +38,7 @@ interface ServiceOrdersSectionProps {
 export function ServiceOrdersSection({ conversionDraft, onConversionImported }: ServiceOrdersSectionProps) {
   const [filter, setFilter] = useState<"em_aberto" | "hoje" | "todas" | "concluidas" | "canceladas">("em_aberto");
   const [searchQuery, setSearchQuery] = useState("");
-  const [osList, setOsList] = useState<OSItem[]>([
+  const [osList, setOsList] = useOfflineState<OSItem[]>("service-orders", [
     {
       id: 1,
       numeroTarefa: "77756554",
@@ -163,6 +165,10 @@ export function ServiceOrdersSection({ conversionDraft, onConversionImported }: 
             Filtro padrão: <strong>Em aberto</strong> (concluídas e canceladas ocultas por padrão).
           </p>
         </div>
+
+        <Link href="/mobile" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-black text-blue-800 transition hover:bg-blue-100">
+          <Smartphone className="h-4 w-4" /> Abrir ProAR Mobile
+        </Link>
 
         {/* Barra de Filtros */}
         <div className="flex flex-wrap items-center gap-2">

@@ -14,7 +14,7 @@ import { PdvBalcaoPanel } from "@/components/PdvBalcaoPanel";
 import { FinanceiroPanel } from "@/components/FinanceiroPanel";
 import { PublicContractsPanel } from "@/components/PublicContractsPanel";
 import { TechnicalCompliancePanel } from "@/components/TechnicalCompliancePanel";
-import { CustomerProfileWorkspace } from "@/components/CustomerProfileWorkspace";
+import { CommercialRegistryWorkspace } from "@/components/CommercialRegistryWorkspace";
 import type { QuoteConversionDraft } from "@/lib/commercial-document";
 
 type TabType = "dashboard" | "clientes" | "os" | "obras" | "orcamento" | "pdv" | "financeiro" | "contratos" | "pmoc";
@@ -84,7 +84,7 @@ export default function HomePage() {
                 activeTab === "clientes" ? "bg-blue-600 text-white shadow-sm" : "text-slate-400 hover:text-white hover:bg-slate-900"
               }`}
             >
-              <UsersRound className="w-3.5 h-3.5" /> Clientes
+              <UsersRound className="w-3.5 h-3.5" /> Cadastros
             </button>
             <button
               onClick={() => setActiveTab("dashboard")}
@@ -161,13 +161,6 @@ export default function HomePage() {
           <div className="space-y-6">
             <DailyWorkCenter
               onNavigateTab={(t) => setActiveTab(t)}
-              osCount={3}
-              osAtrasadasCount={1}
-              obrasCount={2}
-              obrasGargaloCount={1}
-              orcamentosPendentesCount={4}
-              contasVencendoCount={2}
-              empenhosFaturarCount={1}
             />
 
             {/* Painéis operacionais em destaque */}
@@ -182,7 +175,7 @@ export default function HomePage() {
 
         {/* Abas Específicas */}
         {activeTab === "os" && <ServiceOrdersSection conversionDraft={conversionDraft} onConversionImported={clearConversionDraft} />}
-        {activeTab === "clientes" && <CustomerProfileWorkspace />}
+        {activeTab === "clientes" && <CommercialRegistryWorkspace />}
         {activeTab === "obras" && <WorkOperationsPanel />}
         {activeTab === "orcamento" && <OrcamentoPanel onConvert={convertQuote} />}
         {activeTab === "pdv" && <PdvBalcaoPanel conversionDraft={conversionDraft} onConversionImported={clearConversionDraft} />}

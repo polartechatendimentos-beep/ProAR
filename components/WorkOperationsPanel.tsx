@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { getWorkMapProgress, WORK_STATUSES } from "@/lib/work-status";
 import { 
   Building2, Plus, ExternalLink, MapPin, AlertTriangle, 
   CheckCircle2, Clock, Wrench, Layers, ChevronRight, Filter, 
@@ -44,6 +45,11 @@ interface WorkItem {
   engenheiroResponsavel?: string;
   equipe?: string;
 }
+interface WorkUnit { id: string; quadra: string; casa: string; status: string; substatus?: string }
+interface WorkMapRecord { revision: number; houses: WorkUnit[]; updatedAt?: string; title?: string }
+interface HousePriority { id?: number; nivel: "normal" | "alta" | "urgente"; motivo: string; ativo: boolean }
+interface WorkConsumption { id: number; workId: number; item: string; quantidade: string; unidade: string; valorUnitario: string; valorTotal: string; data: string; workStage?: string }
+interface WorkChange { id: number; workId: number; tipo: string; descricao: string; data: string; responsavel: string; impacto?: string }
 
 interface FindingRecord {
   id: number;
@@ -66,7 +72,11 @@ interface FindingRecord {
 
 export function WorkOperationsPanel() {
   const [works, setWorks] = useState<WorkItem[]>([]);
+  const [workMaps, setWorkMaps] = useState<Record<number, WorkMapRecord>>({});
+  const [consumptions, setConsumptions] = useState<WorkConsumption[]>([]);
+  const [workChanges, setWorkChanges] = useState<WorkChange[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [activeSubTab, setActiveSubTab] = useState<"lista" | "fiscalizacao" | "gargalos" | "materiais" | "medidas">("lista");
   const [showNewModal, setShowNewModal] = useState(false);
   const [editingWorkId, setEditingWorkId] = useState<number | null>(null);
@@ -88,61 +98,45 @@ export function WorkOperationsPanel() {
   const [senhaApontamentos, setSenhaApontamentos] = useState("123456");
   const [submitting, setSubmitting] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+  const [selectedMapWork, setSelectedMapWork] = useState<WorkItem | null>(null);
+  const [mapHouses, setMapHouses] = useState<WorkUnit[]>([]);
+  const [mapRevision, setMapRevision] = useState(0);
+  const [mapQuadra, setMapQuadra] = useState("");
+  const [mapCasa, setMapCasa] = useState("");
+  const [mapStatus, setMapStatus] = useState<string>(WORK_STATUSES[0]);
+  const [mapSubstatus, setMapSubstatus] = useState("");
+  const [mapSaving, setMapSaving] = useState(false);
+  const [housePriorities, setHousePriorities] = useState<Record<string, HousePriority>>({});
+  const [savingPriority, setSavingPriority] = useState("");
 
   const fetchWorksAndFindings = async () => {
     try {
       const [resWorks, resFindings] = await Promise.all([
-        fetch("/api/work-projects"),
-        fetch("/api/work-findings"),
+        fetch("/api/work-projects", { cache: "no-store" }),
+        fetch("/api/work-findings", { cache: "no-store" }),
       ]);
 
-      const jsonWorks = await resWorks.json();
-      const jsonFindings = await resFindings.json();
-
-      if (jsonWorks.success && jsonWorks.data.length > 0) {
-        setWorks(jsonWorks.data);
-      } else {
-        setWorks([
-          {
-            id: 1,
-            codigo: "OBR-2026-042",
-            nome: "Instalação VRF Central - Hospital Regional / Bloco Cirúrgico",
-            clienteNome: "Secretaria de Saúde do Estado de SP",
-            endereco: "Av. Philadelpho Manoel Gouveia Neto, 1850",
-            cidade: "São José do Rio Preto",
-            progresso: 65,
-            status: "ag_tubulacao_forcada",
-            tokenPublico: "obr-demo-token-proar-2026",
-            senhaApontamentos: "123456",
-            acessoApontamentosAtivo: true,
-            valorContrato: "185000.00",
-            engenheiroResponsavel: "Eng. Mecânico Responsável (CREA-SP)",
-            equipe: "TEAM 11 ProAR",
-          },
-          {
-            id: 2,
-            codigo: "OBR-2026-055",
-            nome: "Infraestrutura Frigorígena - Residencial Damha V (Lotes 12 a 24)",
-            clienteNome: "Construtora & Incorporadora Noroeste",
-            endereco: "Rodovia Washington Luís, KM 438",
-            cidade: "Mirassol",
-            progresso: 32,
-            status: "ag_frigorigena",
-            tokenPublico: "damha-v-proar-mirassol",
-            senhaApontamentos: "damha2026",
-            acessoApontamentosAtivo: true,
-            valorContrato: "94500.00",
-            engenheiroResponsavel: "Eng. Eletricista / CREA-SP Ativo",
-            equipe: "TEAM 02",
-          },
-        ]);
-      }
-
-      if (jsonFindings.success && jsonFindings.data) {
-        setFindings(jsonFindings.data);
-      }
+      const [jsonWorks, jsonFindings] = await Promise.all([resWorks.json(), resFindings.json()]);
+      if (!resWorks.ok || !jsonWorks.success) throw new Error(jsonWorks.error || "Não foi possível carregar as obras.");
+      const liveWorks = Array.isArray(jsonWorks.data) ? jsonWorks.data : [];
+      setWorks(liveWorks);
+      setFindings(jsonFindings.success && Array.isArray(jsonFindings.data) ? jsonFindings.data : []);
+      const [mapsResponse, consumptionsResponse, changesResponse] = await Promise.all([
+        Promise.all(liveWorks.map(async (work: WorkItem) => {
+          const response = await fetch(`/api/public-work-map?work=${work.id}`, { cache: "no-store" });
+          const payload = await response.json();
+          return [work.id, response.ok ? payload.map as WorkMapRecord | null : null] as const;
+        })),
+        fetch("/api/work-consumptions", { cache: "no-store" }),
+        fetch("/api/work-changes", { cache: "no-store" }),
+      ]);
+      setWorkMaps(Object.fromEntries(mapsResponse.filter(([, map]) => map).map(([id, map]) => [id, map as WorkMapRecord])));
+      const [consumptionJson, changesJson] = await Promise.all([consumptionsResponse.json(), changesResponse.json()]);
+      setConsumptions(consumptionJson.success && Array.isArray(consumptionJson.data) ? consumptionJson.data : []);
+      setWorkChanges(changesJson.success && Array.isArray(changesJson.data) ? changesJson.data : []);
+      setLoadError("");
     } catch (e) {
-      console.error(e);
+      setWorks([]); setFindings([]); setLoadError(e instanceof Error ? e.message : "Não foi possível carregar as obras.");
     } finally {
       setLoading(false);
     }
@@ -151,6 +145,112 @@ export function WorkOperationsPanel() {
   useEffect(() => {
     fetchWorksAndFindings();
   }, []);
+
+  const openMapEditor = async (work: WorkItem) => {
+    setSelectedMapWork(work);
+    setFeedbackMessage(null);
+    setMapQuadra(""); setMapCasa(""); setMapSubstatus(""); setMapStatus(WORK_STATUSES[0]);
+    setMapHouses([]); setHousePriorities({}); setMapRevision(0);
+    try {
+      const response = await fetch(`/api/public-work-map?work=${work.id}`, { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Não foi possível abrir o mapa da obra.");
+      const priorityResponse = await fetch(`/api/work-house-priorities?work_id=${work.id}`, { cache: "no-store" });
+      const prioritiesJson = priorityResponse.ok ? await priorityResponse.json() : null;
+      const priorityRecords = prioritiesJson?.success && Array.isArray(prioritiesJson.data) ? prioritiesJson.data : [];
+      const byHouse: Record<string, HousePriority> = {};
+      for (const record of priorityRecords) {
+        const key = `${record.quadra}::${record.houseId}`;
+        if (record.ativo && !byHouse[key]) byHouse[key] = { id: record.id, nivel: record.nivel, motivo: record.motivo || "Prioridade de entrega", ativo: true };
+      }
+      setHousePriorities(byHouse);
+      const map = payload.map as WorkMapRecord | null;
+      setMapHouses(map?.houses || []);
+      setMapRevision(Number(map?.revision || 0));
+    } catch (error) {
+      setSelectedMapWork(null);
+      setFeedbackMessage(error instanceof Error ? error.message : "Não foi possível abrir o mapa da obra.");
+    }
+  };
+
+  const addMapUnit = () => {
+    const quadra = mapQuadra.trim(); const casa = mapCasa.trim();
+    if (!quadra || !casa) { setFeedbackMessage("Informe quadra e identificação da casa/lote."); return; }
+    if (mapHouses.some((unit) => unit.quadra.toLocaleLowerCase("pt-BR") === quadra.toLocaleLowerCase("pt-BR") && unit.casa.toLocaleLowerCase("pt-BR") === casa.toLocaleLowerCase("pt-BR"))) {
+      setFeedbackMessage("Essa unidade já está cadastrada nesta quadra."); return;
+    }
+    setMapHouses((current) => [...current, { id: `${Date.now()}-${current.length + 1}`, quadra, casa, status: mapStatus, substatus: mapSubstatus.trim() }]);
+    setMapQuadra(""); setMapCasa(""); setMapSubstatus(""); setFeedbackMessage(null);
+  };
+
+  const saveHousePriority = async (unit: WorkUnit) => {
+    if (!selectedMapWork) return;
+    const key = `${unit.quadra}::${unit.casa}`;
+    const priority = housePriorities[key] || { nivel: "normal" as const, motivo: "Prioridade de entrega", ativo: false };
+    if (!priority.id && priority.nivel === "normal") {
+      setFeedbackMessage("A casa está sem prioridade especial.");
+      return;
+    }
+    const endpoint = "/api/work-house-priorities";
+    setSavingPriority(key);
+    try {
+      const updatingExisting = Boolean(priority.id);
+      const response = await fetch(endpoint, {
+        method: updatingExisting ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatingExisting
+          ? { id: priority.id, nivel: priority.nivel, motivo: priority.motivo, ativo: priority.nivel !== "normal" }
+          : { workId: selectedMapWork.id, quadra: unit.quadra, houseId: unit.casa, nivel: priority.nivel, motivo: priority.motivo || "Prioridade de entrega" }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.success) throw new Error(payload.error || "Não foi possível salvar a prioridade.");
+      const saved = payload.data;
+      setHousePriorities((current) => ({ ...current, [key]: { id: saved.id, nivel: saved.nivel, motivo: saved.motivo, ativo: Boolean(saved.ativo) } }));
+      setFeedbackMessage(saved.ativo ? "Prioridade de entrega salva." : "Prioridade especial removida; a casa voltou à cor normal.");
+    } catch (error) { setFeedbackMessage(error instanceof Error ? error.message : "Não foi possível salvar a prioridade."); }
+    finally { setSavingPriority(""); }
+  };
+
+  const removeMapUnit = (unit: WorkUnit) => {
+    setMapHouses((current) => current.filter((item) => item.id !== unit.id));
+    setFeedbackMessage("Unidade removida da edição. Salve o mapa para publicar a alteração.");
+  };
+
+  const saveMap = async () => {
+    if (!selectedMapWork) return;
+    setMapSaving(true);
+    try {
+      const response = await fetch("/api/public-work-map", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workId: selectedMapWork.id, baseRevision: mapRevision, title: "Acompanhamento da obra", houses: mapHouses }) });
+      const payload = await response.json();
+      if (!response.ok) {
+        if (payload.conflict) { setMapHouses(payload.map?.houses || []); setMapRevision(Number(payload.map?.revision || 0)); }
+        throw new Error(payload.error || "Não foi possível salvar o mapa.");
+      }
+      const map = payload.map as WorkMapRecord;
+      setMapHouses(map.houses); setMapRevision(map.revision);
+      setWorkMaps((current) => ({ ...current, [selectedMapWork.id]: map }));
+      if (payload.work?.progresso !== undefined) setWorks((current) => current.map((work) => work.id === selectedMapWork.id ? { ...work, progresso: payload.work.progresso } : work));
+      const currentUnitKeys = new Set(map.houses.map((unit) => `${unit.quadra}::${unit.casa}`));
+      const removedPriorities = Object.entries(housePriorities).filter(([key, priority]) => priority.ativo && priority.id && !currentUnitKeys.has(key));
+      const priorityResults = await Promise.all(removedPriorities.map(async ([, priority]) => {
+        const response = await fetch("/api/work-house-priorities", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: priority.id, ativo: false }) });
+        const result = await response.json();
+        return response.ok && result.success;
+      }));
+      if (removedPriorities.length && priorityResults.every(Boolean)) {
+        setHousePriorities((current) => {
+          const next = { ...current };
+          for (const [key, priority] of removedPriorities) next[key] = { ...priority, ativo: false };
+          return next;
+        });
+      }
+      setFeedbackMessage(removedPriorities.length && !priorityResults.every(Boolean)
+        ? "Mapa publicado, mas não foi possível arquivar todas as prioridades das unidades removidas. Atualize e confira as prioridades."
+        : "Quadras, unidades, substatus e progresso salvos. O acompanhamento público foi atualizado.");
+    } catch (error) {
+      setFeedbackMessage(error instanceof Error ? error.message : "Não foi possível salvar o mapa.");
+    } finally { setMapSaving(false); }
+  };
 
   const handleCreateWork = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -309,6 +409,8 @@ export function WorkOperationsPanel() {
     if (filterSituacao === "Resolvidas") return f.situacao === "aprovada";
     return true;
   });
+  const allUnits = Object.values(workMaps).flatMap((map) => map.houses);
+  const unitStageCounts = WORK_STATUSES.map((status) => ({ status, count: allUnits.filter((unit) => unit.status === status).length })).filter((item) => item.count > 0);
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -330,6 +432,7 @@ export function WorkOperationsPanel() {
         </div>
 
         <div className="flex items-center gap-3">
+          <button onClick={() => { setLoading(true); void fetchWorksAndFindings(); }} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700" title="Atualizar dados da obra"><RefreshCw className="h-4 w-4"/>Atualizar</button>
           <button
             onClick={() => {
               setEditingWorkId(null);
@@ -366,6 +469,11 @@ export function WorkOperationsPanel() {
       )}
 
       {/* Feedback Toast */}
+      {loadError && (
+        <div role="alert" className="border-b border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800">
+          {loadError} <button type="button" onClick={() => { setLoading(true); void fetchWorksAndFindings(); }} className="ml-2 underline">Tentar novamente</button>
+        </div>
+      )}
       {feedbackMessage && (
         <div className="bg-emerald-50 border-b border-emerald-200 p-3 text-emerald-800 text-xs font-bold flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-600" /> {feedbackMessage}
@@ -441,7 +549,7 @@ export function WorkOperationsPanel() {
         {activeSubTab === "lista" && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {works.map((w) => {
-              const currentStatusObj = OBRA_STATUS_LIST.find((s) => s.id === w.status) || OBRA_STATUS_LIST[1];
+              const currentStatusObj = OBRA_STATUS_LIST.find((s) => s.id === w.status) || { id: w.status, label: String(w.status || "em_andamento").replaceAll("_", " ").toUpperCase(), color: "bg-slate-100 text-slate-700 border-slate-300" };
               return (
                 <div
                   key={w.id}
@@ -543,6 +651,7 @@ export function WorkOperationsPanel() {
                       Equipe: <strong>{w.equipe}</strong>
                     </span>
                     <div className="flex items-center gap-3">
+                      <button onClick={() => void openMapEditor(w)} className="px-3 py-1 rounded-lg border border-emerald-200 text-emerald-800 font-bold">Quadras e casas</button>
                       <button
                         onClick={() => openEditWorkModal(w)}
                         className="px-3 py-1 rounded-lg border border-blue-200 text-blue-700 font-bold"
@@ -559,6 +668,7 @@ export function WorkOperationsPanel() {
                 </div>
               );
             })}
+            {!loading && works.length === 0 && <div className="md:col-span-2 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center"><Building2 className="mx-auto h-8 w-8 text-slate-400"/><h3 className="mt-3 font-bold text-slate-800">Nenhuma obra cadastrada</h3><p className="mt-1 text-sm text-slate-500">Cadastre uma obra para começar a acompanhar etapas, quadras e unidades.</p><button onClick={() => setShowNewModal(true)} className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white">Cadastrar obra</button></div>}
           </div>
         )}
 
@@ -688,81 +798,19 @@ export function WorkOperationsPanel() {
                 Painel: Onde a Obra Está Parada (Distribuição de Casas por Etapa)
               </h3>
               <p className="text-xs text-amber-700">
-                Mapeamento das casas paralisadas na esteira produtiva da PolarTech.
+                Contagem calculada pelas quadras e unidades cadastradas nas obras desta empresa.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
-                <span className="text-xs font-bold text-slate-500 uppercase">2. Ag. Frigorígena</span>
-                <div className="text-2xl font-black text-slate-900 mt-1">3 casas</div>
-                <p className="text-[11px] text-amber-600 font-bold mt-1">Aguardando cobre 1/4 e dreno</p>
-              </div>
-
-              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
-                <span className="text-xs font-bold text-slate-500 uppercase">3. Ag. Acabamento</span>
-                <div className="text-2xl font-black text-slate-900 mt-1">7 casas</div>
-                <p className="text-[11px] text-blue-600 font-bold mt-1">Gesso em execução</p>
-              </div>
-
-              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
-                <span className="text-xs font-bold text-slate-500 uppercase">4. Ag. Tubulação Forçada</span>
-                <div className="text-2xl font-black text-slate-900 mt-1">11 casas</div>
-                <p className="text-[11px] text-purple-600 font-bold mt-1">Tubos de exaustão em trânsito</p>
-              </div>
-
-              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
-                <span className="text-xs font-bold text-slate-500 uppercase">6. Ag. Exaustor</span>
-                <div className="text-2xl font-black text-slate-900 mt-1">2 casas</div>
-                <p className="text-[11px] text-emerald-600 font-bold mt-1">Kits Ventokit liberados</p>
-              </div>
-            </div>
+            {unitStageCounts.length > 0 ? <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">{unitStageCounts.map(({ status, count }) => <article key={status} className="rounded-xl border border-slate-200 bg-slate-50 p-4"><span className="text-xs font-bold uppercase text-slate-600">{status}</span><b className="mt-2 block text-2xl text-slate-900">{count} unidade(s)</b></article>)}</div> : <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">Cadastre quadras e unidades para acompanhar gargalos reais por etapa.</div>}
           </div>
         )}
 
         {/* ABA: MATERIAIS */}
         {activeSubTab === "materiais" && (
           <div className="space-y-4">
-            <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/40 text-xs text-blue-900 leading-relaxed">
-              <strong>Regra de Baixa Automática por Transição de Etapa:</strong> Ao avançar de <em>AG. FRIGORÍGENA</em> para <em>AG. ACABAMENTO</em>, o sistema baixa automaticamente do estoque o kit de cobre correspondente às bitolas configuradas (1/4 + 3/8), isolamento térmico e cabo PP.
-            </div>
-
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
-                  <tr>
-                    <th className="p-3">Etapa da Obra</th>
-                    <th className="p-3">Gatilho de Baixa</th>
-                    <th className="p-3">Itens do Kit Automático</th>
-                    <th className="p-3">Fórmula de Perda</th>
-                    <th className="p-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  <tr>
-                    <td className="p-3 font-bold text-slate-900">Frigorígena</td>
-                    <td className="p-3">Avanço para Acabamento</td>
-                    <td className="p-3">Caixa de Dreno, Cobre 1/4", 3/8", Isolamento, Cabo PP</td>
-                    <td className="p-3 font-mono">Cobre + 3% / PP = Cobre+2m+5%</td>
-                    <td className="p-3"><span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">Ativa</span></td>
-                  </tr>
-                  <tr>
-                    <td className="p-3 font-bold text-slate-900">Tubulação Forçada</td>
-                    <td className="p-3">Avanço para Acab. Exaustão</td>
-                    <td className="p-3">Tubo de Exaustão flexível e abraçadeiras</td>
-                    <td className="p-3 font-mono">Comprimento + 5% perda</td>
-                    <td className="p-3"><span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">Ativa</span></td>
-                  </tr>
-                  <tr>
-                    <td className="p-3 font-bold text-slate-900">Exaustão</td>
-                    <td className="p-3">Avanço para Tampa Frigorígena</td>
-                    <td className="p-3">Exaustor / Ventokit padrão e veneziana externa</td>
-                    <td className="p-3 font-mono">1 un / ambiente banho</td>
-                    <td className="p-3"><span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">Ativa</span></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <p className="rounded-xl border border-blue-200 bg-blue-50/40 p-4 text-xs leading-relaxed text-blue-900">Consumos registrados aparecem aqui por obra. O sistema não presume nem declara baixa automática sem vínculo de produto e confirmação transacional.</p>
+            <div className="overflow-x-auto rounded-xl border border-slate-200"><table className="w-full text-left text-xs"><thead className="border-b bg-slate-50 font-bold text-slate-500"><tr><th className="p-3">Obra</th><th className="p-3">Material</th><th className="p-3">Quantidade</th><th className="p-3">Valor total</th><th className="p-3">Data</th></tr></thead><tbody className="divide-y text-slate-700">{consumptions.map((item) => <tr key={item.id}><td className="p-3">{works.find((work) => work.id === item.workId)?.nome || `Obra #${item.workId}`}</td><td className="p-3 font-semibold">{item.item}</td><td className="p-3">{item.quantidade} {item.unidade}</td><td className="p-3">R$ {Number(item.valorTotal || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td><td className="p-3">{item.data ? new Date(item.data).toLocaleDateString("pt-BR") : "—"}</td></tr>)}{!consumptions.length && <tr><td colSpan={5} className="p-8 text-center text-slate-500">Nenhum consumo registrado.</td></tr>}</tbody></table></div>
           </div>
         )}
 
@@ -770,18 +818,8 @@ export function WorkOperationsPanel() {
         {activeSubTab === "medidas" && (
           <div className="space-y-4">
             <h3 className="text-sm font-bold text-slate-900">Histórico de Alterações de Projeto e Medidas de Campo</h3>
-            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 text-xs flex justify-between items-center">
-              <div>
-                <span className="font-bold text-slate-900 block">Quadra 04 — Casa 18 (Ambiente: Suíte Master)</span>
-                <span className="text-slate-500 mt-0.5 block">
-                  Aumento de tubulação de 4,50m para 7,20m devido a desvio de viga estrutural.
-                </span>
-                <span className="text-[10px] text-slate-400 font-mono mt-1 block">Solicitado por: Eng. Fiscalização (10/08/2026)</span>
-              </div>
-              <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold text-xs">
-                Executada e Conferida
-              </span>
-            </div>
+            <p className="text-xs text-slate-500">Histórico real de alterações e registros operacionais por obra.</p>
+            <div className="space-y-3">{workChanges.map((change) => <article key={change.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><b className="text-sm text-slate-900">{works.find((work) => work.id === change.workId)?.nome || `Obra #${change.workId}`}</b><span className="text-xs text-slate-500">{change.data ? new Date(change.data).toLocaleString("pt-BR") : "Data não informada"}</span></div><p className="mt-2 text-sm text-slate-700">{change.descricao}</p><div className="mt-2 flex gap-3 text-xs text-slate-500"><span>Tipo: {change.tipo}</span><span>Responsável: {change.responsavel}</span>{change.impacto && <span>Impacto: {change.impacto}</span>}</div></article>)}{!workChanges.length && <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">Nenhuma alteração registrada.</div>}</div>
           </div>
         )}
       </div>
@@ -805,7 +843,7 @@ export function WorkOperationsPanel() {
               <span className="font-bold text-slate-900 block">
                 {selectedFindingToRespond.quadra} — {selectedFindingToRespond.casa} ({selectedFindingToRespond.ambiente})
               </span>
-              <span className="text-slate-600 block italic font-medium">"{selectedFindingToRespond.descricao}"</span>
+              <span className="text-slate-600 block italic font-medium">&quot;{selectedFindingToRespond.descricao}&quot;</span>
               <span className="text-[10px] text-slate-400 block font-mono">
                 Registrado por: {selectedFindingToRespond.registradoPor}
               </span>
@@ -959,6 +997,27 @@ export function WorkOperationsPanel() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {selectedMapWork && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm">
+          <section className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <header className="flex items-start justify-between gap-4 border-b p-5"><div><span className="text-xs font-bold uppercase tracking-wide text-blue-700">Mapa operacional</span><h2 className="mt-1 text-lg font-black">{selectedMapWork.nome}</h2><p className="mt-1 text-xs text-slate-500">O progresso é calculado pela média das etapas registradas nas casas e lotes.</p></div><button type="button" onClick={() => setSelectedMapWork(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={18}/></button></header>
+            <div className="overflow-y-auto p-5">
+              <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-5">
+                <label className="text-xs font-bold">Quadra<input value={mapQuadra} onChange={(event) => setMapQuadra(event.target.value)} className="mt-1 w-full rounded-lg border p-2" placeholder="Quadra A"/></label>
+                <label className="text-xs font-bold">Casa / lote<input value={mapCasa} onChange={(event) => setMapCasa(event.target.value)} className="mt-1 w-full rounded-lg border p-2" placeholder="Casa 01"/></label>
+                <label className="text-xs font-bold">Etapa principal<select value={mapStatus} onChange={(event) => setMapStatus(event.target.value)} className="mt-1 w-full rounded-lg border bg-white p-2">{WORK_STATUSES.map((status) => <option key={status}>{status}</option>)}</select></label>
+                <label className="text-xs font-bold">Substatus<input maxLength={100} value={mapSubstatus} onChange={(event) => setMapSubstatus(event.target.value)} className="mt-1 w-full rounded-lg border p-2" placeholder="Ex.: aguardando material"/></label>
+                <button type="button" onClick={addMapUnit} className="self-end rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white">Adicionar unidade</button>
+              </div>
+              <div className="my-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50 p-4"><div><b className="text-sm text-blue-950">Progresso geral calculado</b><p className="text-xs text-blue-800">{mapHouses.length} unidade(s) · média das 8 etapas</p></div><strong className="text-3xl text-blue-700">{getWorkMapProgress(mapHouses)}%</strong></div>
+              <div className="overflow-x-auto rounded-xl border"><table className="w-full min-w-[850px] text-left text-xs"><thead className="bg-slate-50 font-bold text-slate-500"><tr><th className="p-3">Unidade</th><th className="p-3">Etapa</th><th className="p-3">Substatus</th><th className="p-3">Prioridade de entrega</th><th className="p-3">Ação</th></tr></thead><tbody className="divide-y">{mapHouses.map((unit) => { const key = `${unit.quadra}::${unit.casa}`; const priority = housePriorities[key] || { nivel: "normal" as const, motivo: "Prioridade de entrega", ativo: false }; const rowColor = priority.ativo && priority.nivel === "urgente" ? "bg-rose-50" : priority.ativo && priority.nivel === "alta" ? "bg-amber-50" : "bg-white"; return <tr key={unit.id} className={rowColor}><td className="p-3 font-bold">{unit.quadra} · {unit.casa}</td><td className="p-3"><select value={unit.status} onChange={(event) => setMapHouses((current) => current.map((item) => item.id === unit.id ? { ...item, status: event.target.value } : item))} className="rounded-lg border bg-white p-2">{WORK_STATUSES.map((status) => <option key={status}>{status}</option>)}</select></td><td className="p-3"><input maxLength={100} value={unit.substatus || ""} onChange={(event) => setMapHouses((current) => current.map((item) => item.id === unit.id ? { ...item, substatus: event.target.value } : item))} placeholder="Sem substatus" className="w-full rounded-lg border p-2"/></td><td className="space-y-1 p-3"><select value={priority.ativo ? priority.nivel : "normal"} onChange={(event) => setHousePriorities((current) => ({ ...current, [key]: { ...priority, nivel: event.target.value as HousePriority["nivel"], ativo: event.target.value !== "normal" } }))} className="w-full rounded-lg border bg-white p-2"><option value="normal">Normal</option><option value="alta">Alta · âmbar</option><option value="urgente">Urgente · vermelho</option></select>{priority.ativo && <input value={priority.motivo} onChange={(event) => setHousePriorities((current) => ({ ...current, [key]: { ...priority, motivo: event.target.value } }))} className="w-full rounded-lg border p-2" placeholder="Motivo / prazo de entrega"/>}</td><td className="p-3"><button type="button" disabled={savingPriority === key} onClick={() => void saveHousePriority(unit)} className="rounded-lg border border-blue-300 px-3 py-2 font-bold text-blue-800 disabled:opacity-50">{savingPriority === key ? "Salvando…" : "Salvar prioridade"}</button><button type="button" disabled={savingPriority === key} onClick={() => void removeMapUnit(unit)} className="ml-2 rounded-lg border px-3 py-2 text-slate-600 disabled:opacity-50">Remover</button></td></tr>; })}{!mapHouses.length && <tr><td colSpan={5} className="p-8 text-center text-slate-500">Nenhuma casa ou lote cadastrado nesta obra.</td></tr>}</tbody></table></div>
+              {feedbackMessage && <p role="status" className="mt-3 rounded-lg bg-blue-50 p-3 text-sm font-semibold text-blue-800">{feedbackMessage}</p>}
+            </div>
+            <footer className="flex justify-between gap-3 border-t bg-slate-50 p-4"><button type="button" onClick={() => setSelectedMapWork(null)} className="rounded-lg border px-4 py-2 text-sm font-bold text-slate-700">Fechar</button><button type="button" disabled={mapSaving} onClick={() => void saveMap()} className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-black text-white disabled:opacity-50">{mapSaving ? "Salvando…" : "Salvar quadras e substatus"}</button></footer>
+          </section>
         </div>
       )}
     </div>

@@ -19,7 +19,7 @@ export async function GET(request: Request) {
       const list = await db
         .select()
         .from(workHousePriorities)
-        .where(eq(workHousePriorities.workId, work.id))
+        .where(and(eq(workHousePriorities.workId, work.id), eq(workHousePriorities.ativo, true)))
         .orderBy(desc(workHousePriorities.criadoEm));
 
       return NextResponse.json({ success: true, count: list.length, data: list });
@@ -101,6 +101,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "workId/token obrigatório." }, { status: 400 });
     }
 
+    const [targetWork] = await db.select().from(works).where(eq(works.id, workId)).limit(1);
+    if (!targetWork) return NextResponse.json({ success: false, error: "Obra não encontrada." }, { status: 404 });
+    if (targetWork.companyId !== companyId) return NextResponse.json({ success: false, error: "Obra não pertence à empresa autorizada." }, { status: 403 });
+    const level = String(body.nivel || "normal").toLowerCase();
+    if (!["normal", "alta", "urgente"].includes(level)) return NextResponse.json({ success: false, error: "Prioridade deve ser normal, alta ou urgente." }, { status: 400 });
+
     const solicitante = external ? external.nome : internal!.nome;
     const solicitanteTipo = external ? external.tipo : "interno";
     const historico = [
@@ -109,7 +115,7 @@ export async function POST(request: Request) {
         autor: solicitante,
         tipo: solicitanteTipo,
         acao: "Criação de prioridade",
-        nivel: body.nivel || "normal",
+        nivel: level,
         motivo: body.motivo,
       },
     ];
@@ -121,7 +127,7 @@ export async function POST(request: Request) {
         workId,
         quadra: body.quadra,
         houseId: body.houseId,
-        nivel: body.nivel || "normal",
+        nivel: level,
         motivo: body.motivo,
         observacao: body.observacao || null,
         fotos: body.fotos || [],
@@ -153,6 +159,11 @@ export async function PATCH(request: Request) {
     const [existing] = await db.select().from(workHousePriorities).where(eq(workHousePriorities.id, Number(body.id))).limit(1);
     if (!existing) return NextResponse.json({ success: false, error: "Prioridade não encontrada." }, { status: 404 });
 
+    if (internal) {
+      try { assertCompanyAccess(internal, existing.companyId); }
+      catch { return NextResponse.json({ success: false, error: "Prioridade não pertence à empresa autorizada." }, { status: 403 }); }
+    }
+
     if (external && existing.workId !== external.workId) {
       return NextResponse.json({ success: false, error: "Credencial não pertence a esta obra." }, { status: 403 });
     }
@@ -171,7 +182,11 @@ export async function PATCH(request: Request) {
     const historicoAtual = (existing.historico as any[]) || [];
 
     const updates: any = { atualizadoEm: new Date() };
-    if (body.nivel !== undefined) updates.nivel = body.nivel;
+    if (body.nivel !== undefined) {
+      const level = String(body.nivel).toLowerCase();
+      if (!["normal", "alta", "urgente"].includes(level)) return NextResponse.json({ success: false, error: "Prioridade deve ser normal, alta ou urgente." }, { status: 400 });
+      updates.nivel = level;
+    }
     if (body.motivo !== undefined) updates.motivo = body.motivo;
     if (body.observacao !== undefined) updates.observacao = body.observacao;
     if (body.ativo !== undefined) updates.ativo = Boolean(body.ativo);

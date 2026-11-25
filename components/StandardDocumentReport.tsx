@@ -530,7 +530,7 @@ export function StandardDocumentReport({
           </div>
 
           <div className="mt-2 text-center text-blue-950 font-bold italic tracking-wide text-[10px] border-t border-slate-100 pt-1">
-            "{empresa.slogan || "Mais conforto, mais qualidade de vida!"}"
+            &quot;{empresa.slogan || "Mais conforto, mais qualidade de vida!"}&quot;
           </div>
         </footer>
 

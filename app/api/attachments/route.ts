@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     const session = await readSession(request);
     const companyId = session ? getEffectiveCompanyId(session) : 1;
 
-    let conditions = [eq(attachments.companyId, companyId)];
+    const conditions = [eq(attachments.companyId, companyId)];
     if (parentType) conditions.push(eq(attachments.parentType, parentType));
     if (parentId) conditions.push(eq(attachments.parentId, parentId));
 

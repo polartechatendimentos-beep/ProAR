@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0757c8">
+    <title>ProAR sem conexão</title>
+    <style>
+      *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:#f3f7fb;color:#14243a;font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}.card{width:min(100%,460px);padding:32px;border:1px solid #d9e4ef;border-radius:24px;background:#fff;box-shadow:0 16px 48px #17345412}.icon{display:grid;place-items:center;width:52px;height:52px;border-radius:16px;background:#fff3d6;color:#9b6500;font-size:26px}h1{margin:20px 0 8px;font-size:24px;line-height:1.2}p{margin:0;color:#53657a}.actions{display:grid;gap:10px;margin-top:24px}a,button{display:flex;min-height:48px;align-items:center;justify-content:center;border:0;border-radius:12px;padding:0 16px;font:700 14px system-ui;text-decoration:none;cursor:pointer}.primary{background:#0757c8;color:#fff}.secondary{border:1px solid #cbd7e4;background:#fff;color:#1c3554}
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <div class="icon" aria-hidden="true">⌁</div>
+      <h1>Você está sem conexão</h1>
+      <p>Esta tela ainda não foi carregada neste aparelho. Reconecte-se e abra o ProAR uma vez para preparar o acesso offline. A agenda técnica já carregada pode ser acessada pela área mobile.</p>
+      <div class="actions">
+        <a class="primary" href="/mobile">Abrir ProAR Mobile</a>
+        <button class="secondary" type="button" onclick="location.reload()">Tentar novamente</button>
+      </div>
+    </main>
+  </body>
+</html>
