@@ -6,6 +6,13 @@ type Row = Record<string, unknown>;
 type Kind = "conversation" | "quote" | "visit";
 export type DigestItem = { kind: Kind; reference: string; title: string; detail: string; urgent?: boolean };
 type DigestSection = { total: number; items: DigestItem[] };
+export type ConversationBottlenecks = {
+  inspected: number;
+  unanswered: number;
+  repeatedQuestions: number;
+  agendaFailures: number;
+  transfers: number;
+};
 export type DailyActionableDigest = {
   generatedAt: string;
   today: string;
@@ -14,6 +21,7 @@ export type DailyActionableDigest = {
   conversations: DigestSection;
   quotes: DigestSection;
   visits: DigestSection;
+  bottlenecks: { customers: ConversationBottlenecks; pilot: ConversationBottlenecks | null };
 };
 
 const clean = (value: unknown, max = 130) => typeof value === "string" ? value.trim().slice(0, max) : "";
@@ -41,26 +49,63 @@ function dedupe(items: DigestItem[]) {
 }
 const section = (items: DigestItem[]): DigestSection => ({ total: items.length, items: items.slice(0, 20) });
 
+type ChronologicalMessage = ChatConversation["messages"][number] & { epoch: number; sequence: number };
+const recordedReply = (message: ChronologicalMessage) => message.direction === "out" && message.deliveryStatus !== "failed"
+  && (!message.status || validReplyStates.has(message.status));
+const emptyBottlenecks = (): ConversationBottlenecks => ({ inspected: 0, unanswered: 0, repeatedQuestions: 0, agendaFailures: 0, transfers: 0 });
+const knownAgendaFailure = new Set(["agenda:failure", "suplemento:agenda-falha"]);
+const operatorTransfer = / transferiu o atendimento de (?:Geral|Técnico|Comercial|Financeiro|PMOC) para (?:Geral|Técnico|Comercial|Financeiro|PMOC)\.$/;
+const questions = (raw: string) => raw.match(/[^.!?\r\n]+\?/g)?.map(question => normal(question).replace(/[^\p{L}\p{N} ]/gu, " ").replace(/\s+/g, " ").trim()).filter(question => question.length >= 12) || [];
+
+function repeatedVirtualQuestion(messages: ChronologicalMessage[]): boolean {
+  const seen = new Set<string>();
+  for (const message of messages) {
+    if (!recordedReply(message) || message.actor !== "local-assistant") continue;
+    for (const question of new Set(questions(message.text))) {
+      if (seen.has(question)) return true;
+      seen.add(question);
+    }
+  }
+  return false;
+}
+
 export function dailyActionableDigest(input: { chats: ChatConversation[]; quotes: Row[]; orders: Row[]; sales?: Row[]; complete: boolean; pilotPhone?: string }, now = new Date()): DailyActionableDigest {
   const today = agendaToday(now);
   const tomorrow = shiftAgendaDate(today, 1);
   const nowMs = now.getTime();
+  const dayStart = Date.parse(digestDayStart(now));
+  const bottlenecks = { customers: emptyBottlenecks(), pilot: input.pilotPhone ? emptyBottlenecks() : null };
+  const seenPhones = new Set<string>();
   const conversationItems = input.chats.flatMap(chat => {
-    if (chat.stage === "Concluído" || chat.optOut || !chat.phone || chat.phone === input.pilotPhone) return [];
+    if (!chat.phone || seenPhones.has(chat.phone)) return [];
+    seenPhones.add(chat.phone);
     const messages = (Array.isArray(chat.messages) ? chat.messages : [])
       .map((message, sequence) => ({ ...message, epoch: Date.parse(message.at), sequence }))
       .filter(message => Number.isFinite(message.epoch) && message.epoch <= nowMs)
       .sort((a,b) => a.epoch-b.epoch || a.sequence-b.sequence);
-    const latestReplyIndex = messages.findLastIndex(message => message.direction === "out" && message.deliveryStatus !== "failed"
-      && (!chat.assistantHandoffAt || message.actor !== "local-assistant")
-      && (!message.status || validReplyStates.has(message.status)));
-    const inbound = messages.findLast((message, index) => {
+    const latestReplyIndex = messages.findLastIndex(message => recordedReply(message)
+      && (!chat.assistantHandoffAt || message.actor !== "local-assistant"));
+    const inbound = chat.stage === "Concluído" || chat.optOut ? undefined : messages.findLast((message, index) => {
       const body = normal(message.text).replace(/[\p{Emoji_Presentation}\uFE0F]/gu, "").trim();
-      return message.direction === "in" && index > latestReplyIndex && agendaToday(new Date(message.epoch)) === today
+      return message.direction === "in" && index > latestReplyIndex && message.epoch >= dayStart
         && body.length > 0 && !localTriage(body).optOut
         && ((!courtesyOnly.test(body) && !attachmentOnly.test(body)) || Boolean(chat.assistantHandoffAt && message.mediaKind));
     });
-    if (!inbound) return [];
+
+    const todayMessages = messages.filter(message => message.epoch >= dayStart);
+    const handoff = Date.parse(chat.assistantHandoffAt || "");
+    const isPilot = chat.phone === input.pilotPhone;
+    const counter = isPilot ? bottlenecks.pilot : bottlenecks.customers;
+    if (counter && (todayMessages.some(message => message.direction === "in" || message.direction === "out" || (message.direction === "event" && operatorTransfer.test(message.text)))
+      || (handoff >= dayStart && handoff <= nowMs))) {
+      counter.inspected++;
+      if (inbound) counter.unanswered++;
+      if (repeatedVirtualQuestion(todayMessages)) counter.repeatedQuestions++;
+      if (todayMessages.some(message => message.direction === "out" && message.actor === "local-assistant" && knownAgendaFailure.has(message.assistantReplyKey || ""))) counter.agendaFailures++;
+      if ((handoff >= dayStart && handoff <= nowMs) || todayMessages.some(message => message.direction === "event" && operatorTransfer.test(message.text))) counter.transfers++;
+    }
+
+    if (isPilot || !inbound) return [];
     const urgent = localTriage(inbound.text).urgent;
     const human = chat.assignee ? " • com responsável" : chat.assistantHandoffAt ? " • equipe precisa continuar" : " • sem responsável";
     return [{ epoch: inbound.epoch, item: { kind: "conversation" as const, reference: createHash("sha256").update(chat.phone + ":" + inbound.id).digest("hex").slice(0, 24), title: clean(chat.name).replace(/^\+?\d{10,15}$/,"") || `Contato final ${chat.phone.slice(-4)}`, detail: `${new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" }).format(inbound.epoch)} • ${chat.sector}${human}`, urgent } }];
@@ -85,5 +130,5 @@ export function dailyActionableDigest(input: { chats: ChatConversation[]; quotes
     return [{ time, item: { kind: "visit" as const, reference, title: clean(row.client) || reference, detail: `${time} • ${reference} • ${clean(row.service) || "Visita"} • ${needsRescheduling ? "cliente pediu reagendamento" : "presença não confirmada"}` } }];
   }).sort((a,b) => a.time.localeCompare(b.time)).map(row => row.item);
 
-  return { generatedAt: now.toISOString(), today, tomorrow, complete: input.complete, conversations: section(dedupe(conversationItems)), quotes: section(dedupe(quoteItems)), visits: section(dedupe(visitItems)) };
+  return { generatedAt: now.toISOString(), today, tomorrow, complete: input.complete, conversations: section(dedupe(conversationItems)), quotes: section(dedupe(quoteItems)), visits: section(dedupe(visitItems)), bottlenecks };
 }

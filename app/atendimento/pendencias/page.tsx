@@ -2,11 +2,25 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { DailyActionableDigest } from "../../../lib/daily-actionable-digest";
+import type { ConversationBottlenecks, DailyActionableDigest } from "../../../lib/daily-actionable-digest";
 import styles from "../workspace.module.css";
 
 const dayLabel = (day: string) => day.split("-").reverse().join("/");
 const timeLabel = (instant: string) => new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" }).format(new Date(instant));
+
+const metrics = [
+  ["unanswered", "Sem resposta registrada"],
+  ["repeatedQuestions", "Pergunta repetida pelo assistente"],
+  ["agendaFailures", "Falha na confirmação da agenda"],
+  ["transfers", "Transferida para equipe ou setor"],
+] as const satisfies readonly (readonly [keyof ConversationBottlenecks, string])[];
+
+function BottleneckCounts({ heading, counts }: { heading: string; counts: ConversationBottlenecks }) {
+  return <div>
+    <h3>{heading} <small>({counts.inspected} {counts.inspected === 1 ? "conversa" : "conversas"})</small></h3>
+    <ul>{metrics.map(([key, label]) => <li key={key}><strong>{counts[key]}</strong> • {label}</li>)}</ul>
+  </div>;
+}
 
 export default function DailyPendingDigestPage() {
   const [refresh, setRefresh] = useState(0);
@@ -41,6 +55,13 @@ export default function DailyPendingDigestPage() {
       {data && <div className={styles.panel}>
         <p>Dados de {dayLabel(data.today)}, consultados às {timeLabel(data.generatedAt)} (Brasília).</p>
         {!data.complete && <p role="alert">Consulta parcial: o limite de conversas da busca foi atingido. Confira a fila antes de concluir que não há pendências.</p>}
+        {data.bottlenecks && <section aria-label="Gargalos do WhatsApp">
+          <h2>Gargalos do WhatsApp</h2>
+          <p>Contagem por conversa na janela de hoje. Uma conversa pode aparecer em mais de uma categoria.</p>
+          <BottleneckCounts heading="Clientes" counts={data.bottlenecks.customers} />
+          {data.bottlenecks.pilot && <BottleneckCounts heading="Número de teste" counts={data.bottlenecks.pilot} />}
+          <small>Considera apenas sinais registrados no ProAR. Pergunta repetida é a mesma pergunta feita novamente pelo assistente; falhas de agenda e transferências não registradas não entram na contagem.</small>
+        </section>}
         {!hasItems && data.complete && <p role="status">Nenhuma pendência acionável encontrada.</p>}
         {sections.map(({ heading, total, items, href, link }) => <section key={heading}>
           <h2>{heading}</h2>

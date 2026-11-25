@@ -1,4 +1,4 @@
-import { parseAppointmentReply, appointmentSource, appointmentReplyAllowed, type ActionState } from "./chatdesk-actions";
+import { parseAppointmentReply, uniqueAppointmentCustomer, appointmentSource, appointmentReplyAllowed, type ActionState } from "./chatdesk-actions";
 import { resolveTenantDb, tenantHeaders } from "./tenant-rest";
 import { databaseFetch, commitNeonOperationalState, PRIMARY_DATABASE_URL } from "./supabase-rest";
 import { evolutionJobId } from "./evolution-jobs";
@@ -17,10 +17,14 @@ export async function recordAppointmentReply(companyId: string, event: {id:strin
     if (!state || state._companyId !== companyId) return false;
     const order = state.serviceOrders.find(row => String(row.id).toUpperCase() === reply.orderId);
     if (!order || order.appointmentReplyMessageId === event.id) return false;
+    // The original send check may predate a duplicate cadastro entered for this number.
+    // Resolve again from the current tenant state before accepting the WhatsApp reply.
+    const customer = uniqueAppointmentCustomer(state.customers,event.phone);
+    if (!customer || customer.id !== order.customerId) return false;
     const jobResponse = await databaseFetch(`${db.url}/rest/v1/proar_state?id=eq.${encodeURIComponent(evolutionJobId(companyId,appointmentSource(order)))}&select=payload&limit=1`,{headers,cache:"no-store"});
     if (!jobResponse.ok) throw new Error("Histórico indisponível.");
     const job = (await jobResponse.json())[0]?.payload;
-    if (job?.companyId !== companyId || !appointmentReplyAllowed(order,state.customers.find(customer=>customer.id===order.customerId),event.phone,event.at,job)) return false;
+    if (job?.companyId !== companyId || !appointmentReplyAllowed(order,customer,event.phone,event.at,job)) return false;
     // A delayed webhook must never overwrite a newer reply.
     if (Date.parse(String(order.appointmentConfirmedAt || "")) >= Date.parse(event.at)) return false;
     const next = structuredClone(state);

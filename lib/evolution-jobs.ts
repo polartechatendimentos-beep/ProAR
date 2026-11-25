@@ -7,7 +7,7 @@ import { readChat } from "./chatdesk-store";
 
 export const evolutionJobPrefix = (companyId: string) => `whatsapp-send:${createHash("sha256").update(companyId).digest("hex")}:`;
 export const evolutionJobId = (companyId: string, sourceId: string) => evolutionJobPrefix(companyId) + createHash("sha256").update(sourceId).digest("hex");
-export async function dispatchEvolutionJob(companyId: string, sourceId: string, to: string, text: string) {
+export async function dispatchEvolutionJob(companyId: string, sourceId: string, to: string, text: string, stillAllowed?: () => Promise<boolean>) {
   if ((await readChat(companyId, to))?.optOut) {
     const db = await resolveTenantDb(companyId);
     if (!db.url || !db.key) throw new Error("Base da empresa indisponível.");
@@ -35,6 +35,12 @@ export async function dispatchEvolutionJob(companyId: string, sourceId: string, 
   if (!claim.ok) throw new Error("Não foi possível registrar o envio.");
   const claimed = await claim.json();
   if (!claimed.length) return { status: "duplicate" };
+  if (stillAllowed && !await stillAllowed()) {
+    const blocked = await databaseFetch(`${endpoint}?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", headers: tenantHeaders(db.key),
+      body: JSON.stringify({ payload: { ...payload, status: "blocked-context" }, updated_at: new Date().toISOString() }) });
+    if (!blocked.ok) throw new Error("Não foi possível registrar o bloqueio de envio.");
+    return { status: "blocked-context" };
+  }
   let accepted: { messageId: string };
   try {
     accepted = await sendEvolutionTextWithConfig(stored.config, to, text);

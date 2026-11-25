@@ -105,3 +105,38 @@ test("an attachment-only turn explicitly left for staff is actionable without re
   assert.match(d.conversations.items[0].detail,/equipe precisa continuar/);
   assert.doesNotMatch(JSON.stringify(d),/Mensagem sem texto/);
 });
+
+test("bottlenecks count distinct affected conversations and separate the pilot without exposing messages", () => {
+  const question = "Seu aparelho está no quarto ou na sala?";
+  const transfer = {id:"team-event",direction:"event",at:"2026-11-25T19:00:00Z",text:"Operadora transferiu o atendimento de Comercial para Técnico."};
+  const agenda = outMsg("unknown",{at:"2026-11-25T19:04:00Z",assistantReplyKey:"agenda:failure",text:"Falha com dado do cliente PRIVADO"});
+  const repeat = outMsg("accepted",{id:"again",at:"2026-11-25T18:15:00Z",text:"SEU APARELHO ESTA NO QUARTO OU NA SALA??"});
+  const first = outMsg("accepted",{text:question});
+  const firstChat = chat("0001",[inMsg("one","Preciso de instalação"),first,repeat,transfer,agenda]);
+  const d = create({complete:false,pilotPhone:"5517900000002",chats:[
+    firstChat, firstChat,
+    chat("0002",[inMsg("pilot","Meu ar não gela"),agenda],{assistantHandoffAt:agenda.at}),
+    chat("0003",[inMsg("third","Preciso de reparo"),first,{...repeat,deliveryStatus:"failed"}]),
+    chat("0004",[{...first,at:"2026-11-25T02:59:00Z"},repeat,{...transfer,direction:"note"}]),
+    chat("0005",[inMsg("old","Contato antigo","2026-11-25T02:59:00Z")]),
+  ]});
+  assert.equal(d.complete,false);
+  assert.deepEqual(d.bottlenecks,{
+    customers:{inspected:3,unanswered:0,repeatedQuestions:1,agendaFailures:1,transfers:1},
+    pilot:{inspected:1,unanswered:1,repeatedQuestions:0,agendaFailures:1,transfers:1},
+  });
+  assert.doesNotMatch(JSON.stringify(d.bottlenecks),/PRIVADO|5517900000002|aparelho/);
+  assert.equal(create({}).bottlenecks.pilot,null);
+});
+
+test("a future event, unrelated key, same-message duplicate or customer quote does not count as a bottleneck", () => {
+  const d = create({chats:[
+    chat("0001",[outMsg("accepted",{text:"Em qual cidade fica? Em qual cidade fica?"}),
+      outMsg("accepted",{at:"2026-11-26T10:00:00Z",text:"Em qual cidade fica?",assistantReplyKey:"agenda:failure"}),
+      outMsg("accepted",{assistantReplyKey:"agenda:confirmacao"})]),
+    chat("0002",[inMsg("not-an-event","Operadora transferiu o atendimento de Comercial para Técnico.")]),
+  ]});
+  assert.equal(d.bottlenecks.customers.repeatedQuestions,0);
+  assert.equal(d.bottlenecks.customers.agendaFailures,0);
+  assert.equal(d.bottlenecks.customers.transfers,0);
+});
