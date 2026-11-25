@@ -5,6 +5,7 @@ import {stripTypeScriptTypes} from 'node:module';
 import {runInNewContext} from 'node:vm';
 import {canReplyToNewInbound, chatWebhookToken, validChatWebhookToken, parseEvolutionInbound} from '../lib/chatdesk-events.ts';
 import {localTriage} from '../lib/chatdesk-local.ts';
+import {tenantSlugFromHost} from "../lib/tenant-host.ts";
 
 test('first-response eligibility excludes old, future, media-only, and courtesy messages', () => {
   const now = Date.parse('2026-11-25T15:10:00Z');
@@ -71,4 +72,32 @@ test('authenticated arrival can answer immediately with the reminders switch off
   env.PROAR_EVOLUTION_AUTOMATION_ENABLED = 'false';
   await inbound('globally-disabled',otherPhone,now,'Orçamento de instalação');
   assert.equal(jobs.length,1);
+});
+
+test('provisioning verifies the tenant origin and leaves other provider instances unchanged', async () => {
+  const file = new URL('../app/api/atendimento/recebimento/route.ts', import.meta.url);
+  const source = stripTypeScriptTypes(await readFile(file, 'utf8')).replace(/^import .*;$/gm, '').replace(/^export /gm, '');
+  let lastWebhook, writeCount=0;
+  const handle = runInNewContext(source+'\nPOST', {
+    URL, process:{env:{PROAR_WHATSAPP_WEBHOOK_BASE_URL:'https://proar.online'}}, tenantSlugFromHost, chatWebhookToken,
+    NextResponse:{json:(body, init)=>({body,status:init?.status??200})},
+    chatAccess:()=>({companyId:'fixture-a',actor:{admin:true},session:{companySlug:'empresa-a'}}),
+    assertActiveWhatsAppCompany:async id=>assert.equal(id,'fixture-a'),
+    evolutionConnection:async id=>({config:{id}}), requiredSecret:()=> 'fixture-secret'.repeat(3),
+    evolutionRequestWithConfig:async (config,action,payload)=>{
+      assert.equal(config.id,'fixture-a');
+      if(action==='webhook/set'){lastWebhook=payload.webhook;writeCount++;}
+      return {webhook:lastWebhook};
+    },
+  });
+  function configure(origin) {
+    return handle({nextUrl:new URL(origin),headers:new Headers({origin,'sec-fetch-site':'same-origin'})});
+  }
+  assert.equal((await configure('https://empresa-b.proar.online')).status,403);
+  assert.equal(writeCount,0);
+  assert.equal((await configure('https://empresa-a.proar.online')).status,200);
+  assert.equal(lastWebhook.url,'https://empresa-a.proar.online/api/whatsapp/web/events/fixture-a');
+  assert.equal((await configure('https://proar.online')).status,200);
+  assert.equal(lastWebhook.url,'https://proar.online/api/whatsapp/web/events/fixture-a');
+  assert.equal(writeCount,2);
 });
