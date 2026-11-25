@@ -26,7 +26,7 @@ export type ServiceIntake = {
   responses?: {key:string; text:string; at:string}[];
 };
 export type ChatMessage = { id: string; direction: "in" | "out" | "note" | "event"; text: string; at: string; actor?: string; status?: string; providerMessageId?: string; assistantReplyKey?: string; assistantNudge?: boolean; hoursNoticeFor?: string; pilotTurn?: boolean; replyToId?: string; mediaKind?: "foto" | "áudio" | "vídeo" | "documento"; deliveryStatus?: DeliveryStatus };
-export type ChatConversation = { companyId: string; phone: string; name: string; sector: ChatSector; stage: ChatStage; assignee: string; revision: number; botPaused: boolean; optOut: boolean; messages: ChatMessage[]; requests: string[]; updatedAt: string; orderId?: string; assistantHandoffAt?: string; intake?: ServiceIntake; pendingDeliveryReceipts?: PendingDeliveryReceipt[]; queueActivity?: { urgent?: boolean; incoming?: ChatMessage; humanReplyAt?: string; lastOutbound?: Pick<ChatMessage, "at" | "status" | "deliveryStatus"> } };
+export type ChatConversation = { companyId: string; phone: string; name: string; sector: ChatSector; stage: ChatStage; assignee: string; revision: number; botPaused: boolean; optOut: boolean; messages: ChatMessage[]; requests: string[]; updatedAt: string; orderId?: string; assistantHandoffAt?: string; mediaTrial?: Partial<Record<"foto"|"áudio",{id:string;at:string;state:string}>>; intake?: ServiceIntake; pendingDeliveryReceipts?: PendingDeliveryReceipt[]; queueActivity?: { urgent?: boolean; incoming?: ChatMessage; humanReplyAt?: string; lastOutbound?: Pick<ChatMessage, "at" | "status" | "deliveryStatus"> } };
 export type ChatActor = { username: string; displayName: string; role: string; sectors: ChatSector[]; writeSectors: ChatSector[]; canWrite: boolean; admin: boolean };
 export type LocalChatSettings = { companyId: string; revision: number; botEnabled: boolean; botActivatedAt?: string; botTestPhone?: string; companyName: string; greeting: string; quickReplies?: ChatQuickReply[]; businessHours?: BusinessDay[]; followUp?: {enabled:boolean;delayMinutes:number;enabledAt:string} };
 const normalized = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -695,7 +695,7 @@ export function sortChatQueue(items: ChatConversation[], nowMs: number) {
 }
 export function chatQueueSummary(chat: ChatConversation): ChatConversation {
   // Internal notes and receipt buffering never leave the summary or count as a public reply.
-  const { pendingDeliveryReceipts: _pending, intake, ...visible } = chat;
+  const { pendingDeliveryReceipts: _pending, intake, mediaTrial: _mediaTrial, ...visible } = chat;
   const incoming = chat.messages.findLast(message => message.direction === "in");
   const outbound = chat.messages.findLast(message => message.direction === "out");
   const lastOutbound = outbound && { at: outbound.at, status: outbound.status, deliveryStatus: outbound.deliveryStatus };
