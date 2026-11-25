@@ -5,7 +5,7 @@ import {stripTypeScriptTypes} from 'node:module';
 import {runInNewContext} from 'node:vm';
 import {canReplyToNewInbound, chatWebhookToken, validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery} from '../lib/chatdesk-events.ts';
 import {applyChatDeliveryReceipt, completeChatSend} from "../lib/chatdesk-delivery.ts";
-import {localTriage, eventReplyPlan, chatQueuePriority, chatQueueSummary} from '../lib/chatdesk-local.ts';
+import {localTriage, eventReplyPlan, pilotReplyPlan, updateServiceIntake, chatQueuePriority, chatQueueSummary} from '../lib/chatdesk-local.ts';
 import {tenantSlugFromHost} from "../lib/tenant-host.ts";
 
 test('first-response eligibility excludes old, future, media-only, and courtesy messages', () => {
@@ -31,20 +31,22 @@ test('authenticated arrival can answer immediately with the reminders switch off
   const pilotPhone = '5517999990000', otherPhone = '5517999990001';
   const chats = new Map(), jobs = [];
   const now = Math.floor(Date.now() / 1000) - 4;
+  let bookingFailure = false, appointmentHandled = false, failReservation = false, failDispatch = false;
   let settings = {botEnabled: true, botActivatedAt: new Date((now-30)*1000).toISOString(), botTestPhone: pilotPhone, companyName:'Empresa de teste'};
   const env = {PROAR_EVOLUTION_AUTOMATION_ENABLED:'true'};
   const handle = runInNewContext(source+'\nPOST', {
     NextResponse:{json:(body, init)=>({body,status:init?.status??200})},
-    process:{env}, structuredClone, validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery, applyChatDeliveryReceipt, completeChatSend, canReplyToNewInbound, localTriage, eventReplyPlan,
+    process:{env}, structuredClone, validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery, applyChatDeliveryReceipt, completeChatSend, canReplyToNewInbound, localTriage, eventReplyPlan, pilotReplyPlan, updateServiceIntake,
     requiredSecret:()=>secret, assertActiveWhatsAppCompany:async id=>assert.equal(id,tenant),
     evolutionConnection:async()=>({config:{instance}}), chatSettings:async()=>settings,
-    recordAppointmentReply:async()=>false, tenantEvolutionAutomationEnabled:async()=>false,
+    recordAppointmentReply:async()=>{if(bookingFailure)throw new Error("Sem agenda");return appointmentHandled;}, tenantEvolutionAutomationEnabled:async()=>false,
     changeChat:async (_, phone, change)=>{
       const previous=chats.get(phone)??null; const next=change(previous);
+      if (next?.messages.at(-1)?.status === "processing" && failReservation) { failReservation=false; throw new Error("Fila indisponível"); }
       if(next) chats.set(phone,next);
       return {changed:!!next,chat:next??previous};
     },
-    dispatchEvolutionJob:async (...args)=>{jobs.push(args);return {status:'accepted',messageId:`fixture-accepted-${jobs.length}`};},
+    dispatchEvolutionJob:async (...args)=>{jobs.push(args);if(failDispatch)throw new Error('Envio incerto');return {status:'accepted',messageId:`fixture-accepted-${jobs.length}`};},
   });
   function webhook(body, token=chatWebhookToken(tenant,secret)) {
     return handle({headers:new Headers({'x-proar-webhook-secret':token}), text:async()=>JSON.stringify(body)}, {params:Promise.resolve({companyId:tenant})});
@@ -113,21 +115,28 @@ test('authenticated arrival can answer immediately with the reminders switch off
   await inbound('institution',pilotPhone,instant(),'Escola municipal');
   await inbound('unit-name',pilotPhone,instant(),'escola modesto de bálsamo');
   await inbound('room-number',pilotPhone,instant(),'3');
-  assert.equal(jobs.length,9);
+  assert.match(jobs[8][3],/Desde quando/);
+  await inbound('details',pilotPhone,instant(),'Desde ontem, é um Elgin');
+  assert.equal(jobs.length,10);
   assert.match(jobs[2][3],/^Assistente virtual/);
   assert.doesNotMatch(jobs[5][3],/cidade|bairro|Assistente virtual/);
-  assert.equal(jobs[6][3],'Qual é o nome da escola?');
+  assert.match(jobs[6][3],/Qual é o nome da escola ou o endereço/);
   assert.equal(jobs[7][3],'Em qual sala ou setor fica o aparelho?');
-  assert.match(jobs[8][3],/equipe conferir e dar continuidade/);
+  assert.match(jobs[9][3],/encaminhei para nossa equipe/);
   const handoff = chats.get(pilotPhone);
   assert.equal(handoff.sector,'Técnico');
+  assert.equal(handoff.intake.city,'Bálsamo');
+  assert.equal(handoff.intake.district,'Centro');
+  assert.equal(handoff.intake.site,'escola modesto de bálsamo');
+  assert.equal(handoff.intake.room,'3');
+  assert.equal(handoff.intake.since,'Desde ontem');
   assert.equal(handoff.botPaused,true);
   assert.equal(chatQueuePriority(chatQueueSummary(handoff),Date.now()).handoff,true);
   await inbound('on-handoff',pilotPhone,instant(),'Tem como vir amanhã?');
-  assert.equal(jobs.length,9);
+  assert.equal(jobs.length,10);
   assert.equal(chats.get(pilotPhone).messages.at(-1).id,'on-handoff');
   await inbound('nudge-on-handoff',pilotPhone,instant(),'.');
-  assert.equal(jobs.length,9);
+  assert.equal(jobs.length,10);
 
   // Reproduce the live timeline: the school name was received before the
   // release and not replied to. Only the fresh point may trigger a reply.
@@ -142,19 +151,81 @@ test('authenticated arrival can answer immediately with the reminders switch off
     row('place','Sou de Bálsamo bairro Centro',27),
     row('school-type','Escola municipal',27),
     row('school-name','Escola modesto de bálsamo',20),
-  ],botPaused:false,assistantHandoffAt:undefined});
+  ],botPaused:false,assistantHandoffAt:undefined,intake:undefined});
   settings = {...settings,botActivatedAt:at(14)};
   await inbound('unmatched-nudge',pilotPhone,instant(),'.',undefined,'elsewhere');
-  assert.equal(jobs.length,9);
+  assert.equal(jobs.length,10);
   await inbound('school-nudge',pilotPhone,instant(),'.',undefined,'school-name');
   await inbound('school-nudge',pilotPhone,instant(),'.',undefined,'school-name');
   await inbound('new-punctuation',pilotPhone,instant(),'…');
-  assert.equal(jobs.length,10);
-  assert.equal(jobs[9][3],'Em qual sala ou setor fica o aparelho?');
+  assert.equal(jobs.length,11);
+  assert.equal(jobs[10][3],'Em qual sala ou setor fica o aparelho?');
   assert.equal(chats.get(pilotPhone).messages.find(m=>m.id==='school-nudge').replyToId,'school-name');
   await inbound('short-room-after-nudge',pilotPhone,instant(),'3');
-  assert.equal(jobs.length,11);
-  assert.match(jobs[10][3],/equipe conferir e dar continuidade/);
+  assert.equal(jobs.length,12);
+  assert.match(jobs[11][3],/Desde quando/);
+  await inbound('details-after-nudge',pilotPhone,instant(),'Não sei a marca');
+  assert.equal(jobs.length,13);
+  assert.match(jobs[12][3],/encaminhei para nossa equipe/);
+
+  chats.delete(pilotPhone);
+  const mediaWebhook={event:'MESSAGES_UPSERT',instance,data:{
+    key:{id:'pilot-photo',fromMe:false,remoteJid:pilotPhone+'@s.whatsapp.net'}, messageTimestamp:instant(),
+    message:{imageMessage:{mimetype:"image/jpeg"}},
+  }};
+  await webhook(mediaWebhook);
+  await webhook(mediaWebhook);
+  assert.equal(jobs.length,14);
+  assert.match(jobs[13][3],/se ela mostra a etiqueta ou o problema/);
+  assert.equal(chats.get(pilotPhone).intake.media,"foto");
+  assert.equal(chats.get(pilotPhone).intake.symptom,undefined);
+  await inbound('vague',pilotPhone,instant(),'Isso aí');
+  assert.match(jobs[14][3],/contar um pouco mais/);
+  await inbound('still-vague',pilotPhone,instant(),'Aquilo lá');
+  assert.match(jobs[15][3],/encaminhei para nossa equipe/);
+
+  chats.delete(pilotPhone);
+  bookingFailure=true;
+  assert.equal((await inbound('booking-failure',pilotPhone,instant(),'CONFIRMAR OS-123')).status,200);
+  assert.match(jobs[16][3],/Não consegui concluir a confirmação/);
+  assert.equal(chats.get(pilotPhone).botPaused,true);
+  bookingFailure=false;
+  appointmentHandled=true;
+  chats.delete(pilotPhone);
+  await inbound('booking-success',pilotPhone,instant(),'CONFIRMAR OS-123');
+  assert.match(jobs[17][3],/Registrei sua resposta/);
+  assert.doesNotMatch(jobs[17][3],/agendado|reservado/);
+  await inbound('booking-success',pilotPhone,instant(),'CONFIRMAR OS-123');
+  assert.equal(jobs.length,18);
+  appointmentHandled=false;
+  await inbound('unknown-price',pilotPhone,instant(),'Quanto custa para instalar?');
+  assert.match(jobs[18][3],/confirmar essa informação com a equipe/);
+  assert.doesNotMatch(jobs[18][3],/R\$/);
+  chats.delete(pilotPhone);
+  await inbound('schedule-request',pilotPhone,instant(),'Quero agendar uma visita');
+  assert.match(jobs[19][3],/Nenhum horário foi reservado/);
+  chats.delete(pilotPhone);
+  await inbound('unplug-risk',pilotPhone,instant(),'Tem água perto da tomada');
+  assert.match(jobs[20][3],/apenas se puder fazer isso sem contato com água/);
+  assert.equal(chatQueuePriority(chatQueueSummary(chats.get(pilotPhone)),Date.now()).handoff,true);
+
+  chats.delete(pilotPhone);
+  failReservation=true;
+  const stamp=instant();
+  assert.equal((await inbound('repairable',pilotPhone,stamp,'Oi')).status,503);
+  assert.equal(jobs.length,21);
+  assert.equal(chats.get(pilotPhone).messages.length,1);
+  assert.equal((await inbound('repairable',pilotPhone,stamp,'Oi')).status,200);
+  assert.equal(jobs.length,22);
+  assert.match(jobs[21][3],/Como posso ajudar/);
+
+  failDispatch=true;
+  assert.equal((await inbound('do-not-retry',pilotPhone,instant(),'Quero instalar um ar')).status,200);
+  assert.equal(chats.get(pilotPhone).messages.at(-1).status,'unknown');
+  await inbound('do-not-retry',pilotPhone,instant(),'Quero instalar um ar');
+  assert.equal(jobs.length,23);
+  assert.equal(chatQueuePriority(chatQueueSummary(chats.get(pilotPhone)),Date.now()).deliveryIssue,'uncertain');
+
 
 });
 
@@ -290,4 +361,27 @@ test('a plain point uses the latest pending service but does not start an unrela
   assert.equal(plan([...details,answered],{...point,replyToId:"wa-asked"}).key,"leak:site-room");
   assert.equal(plan([...details,{...answered,assistantNudge:true}]),null);
   assert.equal(plan([...details,m("unrelated","Preciso instalar um ar de 12 mil",1)],{...point,replyToId:"school"}),null);
+});
+
+test('technical intake advances terse turns without repeating collected location data', () => {
+  const now = Date.parse("2026-11-25T22:55:00Z"), since="2026-11-25T22:50:00Z";
+  const messages=[];
+  let intake;
+  const step=(id,text,mediaKind)=>{
+    const at=new Date(now-30_000+messages.length*1000).toISOString();
+    messages.push({id,text,mediaKind,at,direction:"in"});
+    intake=updateServiceIntake(intake,messages,id);
+    const plan=pilotReplyPlan(messages,id,since,now,false,false,intake);
+    if(plan) messages.push({id:"r"+id,text:plan.reply,at,direction:"out",actor:"local-assistant",status:"accepted",assistantReplyKey:plan.key});
+    return plan;
+  };
+  assert.match(step("1","Meu ar não gela").reply,/Desde quando/);
+  assert.match(step("2","Desde ontem").reply,/cidade e bairro/);
+  assert.match(step("3","Sou de Bálsamo, bairro Centro").reply,/endereço ou o nome da unidade/);
+  assert.match(step("4","Rua Central, 171").reply,/marca ou o modelo/);
+  assert.equal(step("5","É Elgin").handoff,true);
+  assert.equal(intake.appliance,"elgin");
+  assert.equal(intake.city,"Bálsamo");
+  assert.equal(intake.district,"Centro");
+  assert.deepEqual(intake.pending,[]);
 });
