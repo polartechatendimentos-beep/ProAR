@@ -5,7 +5,7 @@ export type ChatSector = typeof chatSectors[number];
 export const chatStages = ["Novo contato", "Em atendimento", "Orçamento", "Aguardando cliente", "Concluído"] as const;
 export type ChatStage = typeof chatStages[number];
 export type ChatMessage = { id: string; direction: "in" | "out" | "note" | "event"; text: string; at: string; actor?: string; status?: string; providerMessageId?: string; assistantReplyKey?: string; deliveryStatus?: DeliveryStatus };
-export type ChatConversation = { companyId: string; phone: string; name: string; sector: ChatSector; stage: ChatStage; assignee: string; revision: number; botPaused: boolean; optOut: boolean; messages: ChatMessage[]; requests: string[]; updatedAt: string; orderId?: string; pendingDeliveryReceipts?: PendingDeliveryReceipt[]; queueActivity?: { incoming?: ChatMessage; humanReplyAt?: string; lastOutbound?: Pick<ChatMessage, "at" | "status" | "deliveryStatus"> } };
+export type ChatConversation = { companyId: string; phone: string; name: string; sector: ChatSector; stage: ChatStage; assignee: string; revision: number; botPaused: boolean; optOut: boolean; messages: ChatMessage[]; requests: string[]; updatedAt: string; orderId?: string; assistantHandoffAt?: string; pendingDeliveryReceipts?: PendingDeliveryReceipt[]; queueActivity?: { incoming?: ChatMessage; humanReplyAt?: string; lastOutbound?: Pick<ChatMessage, "at" | "status" | "deliveryStatus"> } };
 export type ChatActor = { username: string; displayName: string; role: string; sectors: ChatSector[]; writeSectors: ChatSector[]; canWrite: boolean; admin: boolean };
 export type LocalChatSettings = { companyId: string; revision: number; botEnabled: boolean; botActivatedAt?: string; botTestPhone?: string; companyName: string; greeting: string; quickReplies?: ChatQuickReply[] };
 const normalized = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -88,7 +88,7 @@ function interpretChatAnswers(active: ChatMessage[], eventPosition: number) {
       else if (/^(?:nao|nao tem|nao tenho|ainda nao)$/.test(answer)) value = "nao tem tubulacao de cobre";
     } else if (timely && (key === "leak:school" || key === "leak:site-name")
       && /^(?:[a-z][a-z0-9.'’-]*\s+){1,8}[a-z0-9.'’-]+$/.test(answer)
-      && !/^(?:(?:escola|creche|colegio) (?:municipal|estadual)|nao sei|nao lembro|qual escola)$/.test(answer)
+      && !/^(?:(?:eu )?nao\b|(?:pode|consegue|por favor|qual)\b|(?:escola|creche|colegio) (?:municipal|estadual)$)/.test(answer)
       && localTriage(answer).sector === "Geral" && !localTriage(answer).optOut
       && !placeDetail.test(answer) && !customerFollowUp.test(answer) && !equipmentDetail.test(answer)) {
       // Remember that the requested name was provided without reprinting it.
@@ -121,6 +121,14 @@ export function eventReplyPlan(messages: ChatMessage[], eventId: string, activat
   const interpreted = interpretChatAnswers(active, eventPosition);
   const read = (message: ChatMessage) => interpreted.get(message.id)?.value ?? normalized(message.text);
   const value = read(event);
+  const lastQuestion = active.slice(0, eventPosition).findLast(message => message.direction === "out");
+  const lastKey = lastQuestion?.actor === "local-assistant" ? lastQuestion.assistantReplyKey || "" : "";
+  const asksForPerson = /\b(?:falar com (?:uma pessoa|um humano|um atendente|a equipe|o tecnico|um tecnico)|atendimento humano|(?:pode|consegue|por favor) me ligar|me liga(?:m|r)?|quero um atendente)\b/.test(value);
+  const cannotAnswer = /^(?:(?:eu )?nao (?:sei|lembro)(?: (?:a marca|o modelo|o nome|o bairro|a cidade|a sala|o setor))?|nao tenho certeza|nao consigo (?:ver|conferir))[.!?,…\s]*$/u.test(value.trim());
+  const unresolvedQuestion = /^(?:leak:(?:clarify|inside|outside|both|place|city|neighborhood|school|site-name|site-room|brand)|installation:[01]{3})$/.test(lastKey);
+  if (!triage.urgent && (asksForPerson || (cannotAnswer && unresolvedQuestion)) && !bots.some(message => message.assistantReplyKey === "handoff")) {
+    return { key: "handoff", reply: "Tudo bem. Deixei a conversa para a equipe continuar daqui.", first: bots.length === 0, handoff: true as const };
+  }
   if (value === normalized(event.text) && !interpreted.get(event.id)?.clarifyLocation
     && /^(?:sim|nao|dentro|fora|interna|externa|ligad[oa]|desligad[oa])[.!?,…\s]*$/u.test(value.trim())) return null;
   if (!triage.urgent && triage.sector === "Geral" && customerFollowUp.test(value) && !leakInside.test(value) && !leakOutside.test(value) && !equipmentDetail.test(value) && !placeDetail.test(value)) return null;
@@ -180,7 +188,8 @@ export function eventReplyPlan(messages: ChatMessage[], eventId: string, activat
   }
   if (recent.some(message => message.assistantReplyKey === key || message.text.endsWith(reply))) return null;
   if (recent.length && !triage.urgent && !leakTopic && !installationTopic && recent.some(message => !message.assistantReplyKey)) return null;
-  return { key, reply: bots.length ? reply.replace(/^Olá!\s*/, "") : reply, first: bots.length === 0 };
+  const handoff = key === "leak:complete" || key === "installation:111";
+  return { key, reply: handoff ? "Obrigado! Deixei seu atendimento para a equipe conferir e dar continuidade." : bots.length ? reply.replace(/^Olá!\s*/, "") : reply, first: bots.length === 0, handoff };
 }
 
 export function chatSignature(actor: ChatActor) {
@@ -198,14 +207,14 @@ export function applyChatCommand(chat: ChatConversation, actor: ChatActor, comma
   const next = structuredClone(chat);
   const event = (text: string) => next.messages.push({ id: command.requestId, direction: "event", actor: actor.username, at: now, text });
   switch (command.action) {
-    case "claim": if (next.assignee && next.assignee !== actor.username && !actor.admin) throw new Error("Atendimento já atribuído. Solicite transferência ao responsável."); next.assignee = actor.username; next.botPaused = true; next.stage = "Em atendimento"; event(`${actor.displayName} assumiu o atendimento.`); break;
+    case "claim": if (next.assignee && next.assignee !== actor.username && !actor.admin) throw new Error("Atendimento já atribuído. Solicite transferência ao responsável."); next.assignee = actor.username; next.botPaused = true; delete next.assistantHandoffAt; next.stage = "Em atendimento"; event(`${actor.displayName} assumiu o atendimento.`); break;
     case "transfer": {
       if (!chatSectors.includes(command.sector as ChatSector)) throw new Error("Selecione um setor válido.");
       const previous = next.sector; next.sector = command.sector as ChatSector; next.assignee = ""; next.botPaused = true;
       event(`${actor.displayName} transferiu o atendimento de ${previous} para ${next.sector}.`); break;
     }
-    case "stage": if (!chatStages.includes(command.stage as ChatStage)) throw new Error("Etapa inválida."); next.stage = command.stage as ChatStage; event(`Etapa alterada para ${next.stage} por ${actor.displayName}.`); break;
-    case "bot": if (typeof command.paused !== "boolean") throw new Error("Estado inválido."); if (next.assignee && next.assignee !== actor.username && !actor.admin) throw new Error("Solicite a liberação ao responsável."); next.botPaused = command.paused; if (!next.botPaused) next.assignee = ""; event(`Assistente ${next.botPaused ? "pausado" : "liberado"} por ${actor.displayName}.`); break;
+    case "stage": if (!chatStages.includes(command.stage as ChatStage)) throw new Error("Etapa inválida."); next.stage = command.stage as ChatStage; if (next.stage === "Concluído") delete next.assistantHandoffAt; event(`Etapa alterada para ${next.stage} por ${actor.displayName}.`); break;
+    case "bot": if (typeof command.paused !== "boolean") throw new Error("Estado inválido."); if (next.assignee && next.assignee !== actor.username && !actor.admin) throw new Error("Solicite a liberação ao responsável."); next.botPaused = command.paused; if (!next.botPaused) { next.assignee = ""; delete next.assistantHandoffAt; } event(`Assistente ${next.botPaused ? "pausado" : "liberado"} por ${actor.displayName}.`); break;
     case "note": case "send": {
       const text = String(command.text || "").trim();
       if (!text || text.length > 3000) throw new Error("Escreva uma mensagem de até 3.000 caracteres.");
@@ -264,13 +273,14 @@ export function chatQueuePriority(chat: ChatConversation, nowMs: number) {
   const elapsed = waiting && Number.isFinite(nowMs) ? Math.max(0, nowMs - customerAt) : 0;
   const urgent = Boolean(waiting && lastCustomer && localTriage(lastCustomer.text).urgent);
   const followUp = Boolean(waiting && lastCustomer && recentDay(customerAt, nowMs) && customerFollowUp.test(normalized(lastCustomer.text)));
+  const handoff = Boolean(waiting && !chat.assignee && chat.assistantHandoffAt && !chat.optOut);
   const outboundAt = Date.parse(lastOutbound?.at || "");
   const deliveryIssue = open && recentDay(outboundAt, nowMs) && lastOutbound
     ? lastOutbound.deliveryStatus === "failed" || lastOutbound.status === "disconnected" ? "failed"
       : !lastOutbound.deliveryStatus && (lastOutbound.status === "unknown" || (lastOutbound.status === "processing" && nowMs - outboundAt >= 2 * 60_000)) ? "uncertain"
         : null
     : null;
-  return { waiting, urgent, followUp, deliveryIssue, waitingMinutes: Math.floor(elapsed / 60000), band: !open ? 4 : urgent ? 0 : followUp || deliveryIssue ? 1 : waiting ? 2 : 3 };
+  return { waiting, urgent, followUp, handoff, deliveryIssue, waitingMinutes: Math.floor(elapsed / 60000), band: !open ? 4 : urgent ? 0 : followUp || handoff || deliveryIssue ? 1 : waiting ? 2 : 3 };
 }
 export function sortChatQueue(items: ChatConversation[], nowMs: number) {
   return [...items].sort((a,b)=>{const first=chatQueuePriority(a,nowMs),second=chatQueuePriority(b,nowMs);return first.band-second.band || second.waitingMinutes-first.waitingMinutes || Date.parse(b.updatedAt)-Date.parse(a.updatedAt);});

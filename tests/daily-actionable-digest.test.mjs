@@ -60,6 +60,18 @@ test("only unresolved quotes with explicit expired validity and tomorrow's plann
   assert.match(digest.visits.items[1].detail, /pediu reagendamento/);
 });
 
+test("an accepted virtual handoff acknowledgement does not count as a human reply", () => {
+  const base=inMsg("original","Meu aparelho está pingando");
+  const auto=outMsg("accepted",{deliveryStatus:"delivered"});
+  const marker={assistantHandoffAt:auto.at};
+  const d=create({chats:[
+    chat("0001",[base,auto],marker),
+    chat("0002",[base,auto,outMsg("accepted",{actor:"staff",at:"2026-11-25T18:01:00Z"})],marker),
+  ]});
+  assert.equal(d.conversations.total,1);
+  assert.match(d.conversations.items[0].detail,/equipe precisa continuar/);
+});
+
 test("bounded output keeps accurate totals and never hides an incomplete scan", () => {
   const digest = create({ complete: false, chats: Array.from({ length: 30 }, (_, n) => chat(String(n).padStart(4, "0"), [inMsg("sameId", "Preciso de instalação")])) });
   assert.equal(digest.complete, false);

@@ -51,7 +51,9 @@ export function dailyActionableDigest(input: { chats: ChatConversation[]; quotes
       .map((message, sequence) => ({ ...message, epoch: Date.parse(message.at), sequence }))
       .filter(message => Number.isFinite(message.epoch) && message.epoch <= nowMs)
       .sort((a,b) => a.epoch-b.epoch || a.sequence-b.sequence);
-    const latestReplyIndex = messages.findLastIndex(message => message.direction === "out" && (message as { deliveryStatus?: string }).deliveryStatus !== "failed" && (!message.status || validReplyStates.has(message.status)));
+    const latestReplyIndex = messages.findLastIndex(message => message.direction === "out" && message.deliveryStatus !== "failed"
+      && (!chat.assistantHandoffAt || message.actor !== "local-assistant")
+      && (!message.status || validReplyStates.has(message.status)));
     const inbound = messages.findLast((message, index) => {
       const body = normal(message.text).replace(/[\p{Emoji_Presentation}\uFE0F]/gu, "").trim();
       return message.direction === "in" && index > latestReplyIndex && agendaToday(new Date(message.epoch)) === today
@@ -59,7 +61,7 @@ export function dailyActionableDigest(input: { chats: ChatConversation[]; quotes
     });
     if (!inbound) return [];
     const urgent = localTriage(inbound.text).urgent;
-    const human = chat.assignee ? " • com responsável" : " • sem responsável";
+    const human = chat.assignee ? " • com responsável" : chat.assistantHandoffAt ? " • equipe precisa continuar" : " • sem responsável";
     return [{ epoch: inbound.epoch, item: { kind: "conversation" as const, reference: createHash("sha256").update(chat.phone + ":" + inbound.id).digest("hex").slice(0, 24), title: clean(chat.name).replace(/^\+?\d{10,15}$/,"") || `Contato final ${chat.phone.slice(-4)}`, detail: `${new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" }).format(inbound.epoch)} • ${chat.sector}${human}`, urgent } }];
   }).sort((a,b) => Number(b.item.urgent) - Number(a.item.urgent) || a.epoch-b.epoch).map(row => row.item);
 

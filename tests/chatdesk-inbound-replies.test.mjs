@@ -5,7 +5,7 @@ import {stripTypeScriptTypes} from 'node:module';
 import {runInNewContext} from 'node:vm';
 import {canReplyToNewInbound, chatWebhookToken, validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery} from '../lib/chatdesk-events.ts';
 import {applyChatDeliveryReceipt, completeChatSend} from "../lib/chatdesk-delivery.ts";
-import {localTriage, eventReplyPlan} from '../lib/chatdesk-local.ts';
+import {localTriage, eventReplyPlan, chatQueuePriority, chatQueueSummary} from '../lib/chatdesk-local.ts';
 import {tenantSlugFromHost} from "../lib/tenant-host.ts";
 
 test('first-response eligibility excludes old, future, media-only, and courtesy messages', () => {
@@ -111,14 +111,21 @@ test('authenticated arrival can answer immediately with the reminders switch off
   await inbound('town-and-neighborhood',pilotPhone,instant(),'Sou de Bálsamo bairro Centro');
   await inbound('institution',pilotPhone,instant(),'Escola municipal');
   await inbound('institution',pilotPhone,instant(),'Escola municipal');
-  await inbound('unit-name',pilotPhone,instant(),'Maria de Souza');
+  await inbound('unit-name',pilotPhone,instant(),'escola modesto de bálsamo');
   await inbound('room-number',pilotPhone,instant(),'3');
   assert.equal(jobs.length,9);
   assert.match(jobs[2][3],/^Assistente virtual/);
   assert.doesNotMatch(jobs[5][3],/cidade|bairro|Assistente virtual/);
   assert.equal(jobs[6][3],'Qual é o nome da escola?');
   assert.equal(jobs[7][3],'Em qual sala ou setor fica o aparelho?');
-  assert.match(jobs[8][3],/avaliar o próximo passo/);
+  assert.match(jobs[8][3],/equipe conferir e dar continuidade/);
+  const handoff = chats.get(pilotPhone);
+  assert.equal(handoff.sector,'Técnico');
+  assert.equal(handoff.botPaused,true);
+  assert.equal(chatQueuePriority(chatQueueSummary(handoff),Date.now()).handoff,true);
+  await inbound('on-handoff',pilotPhone,instant(),'Tem como vir amanhã?');
+  assert.equal(jobs.length,9);
+  assert.equal(chats.get(pilotPhone).messages.at(-1).id,'on-handoff');
 });
 
 test('provisioning verifies the tenant origin and leaves other provider instances unchanged', async () => {
@@ -227,4 +234,13 @@ test('town, neighborhood and site details progress separately in natural service
   assert.equal(idea([a,b,c,d],d).reply,"Qual é o nome da escola?");
   assert.equal(idea([a,b,c,{...d,text:"Escola Municipal Aurora"},e],e).key,"leak:complete");
   assert.equal(idea([d],d).key,"sector:Geral");
+});
+
+test('an unknown needed detail or explicit request for a person flags a real handoff, not a repeated question', () => {
+  const since="2026-11-25T22:00:00Z", now=Date.parse("2026-11-25T22:01:00Z");
+  const a={id:"ask",direction:"out",actor:"local-assistant",assistantReplyKey:"leak:school",status:"accepted",at:"2026-11-25T22:00:02Z",text:"Qual é o nome da escola?"};
+  const b={id:"answer",direction:"in",at:"2026-11-25T22:00:04Z",text:"Não lembro o nome"};
+  assert.equal(eventReplyPlan([a,b],b.id,since,now).handoff,true);
+  assert.equal(eventReplyPlan([{...b,text:"Pode me ligar?"}],b.id,since,now).handoff,true);
+  assert.equal(eventReplyPlan([a,{...b,text:"Pode parar de enviar mensagens?"}],b.id,since,now),null);
 });
