@@ -33,7 +33,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ co
         if (previous && previous.messages.length >= 1500) throw new Error("Histórico cheio.");
         const next: ChatConversation = previous ? structuredClone(previous) : { companyId, phone: event.phone, name: event.name, sector: triage.sector, stage: "Novo contato", assignee: "", revision: 0, botPaused: false, optOut: false, messages: [], requests: [], updatedAt: event.at };
         next.optOut ||= triage.optOut;
-        if (!next.assignee && !next.botPaused) next.sector = triage.sector;
+        const contextualDetail = settings.botEnabled && settings.botActivatedAt && (!settings.botTestPhone || settings.botTestPhone === event.phone)
+          && triage.sector === "Geral" && previous?.messages.some(message => message.direction === "out" && message.actor === "local-assistant"
+            && Date.now() - Date.parse(message.at) < 30 * 60_000);
+        if (!next.assignee && !next.botPaused && !contextualDetail) next.sector = triage.sector;
         if (next.stage === "Concluído") next.stage = "Novo contato";
         next.messages.push({ id: event.id, direction: "in", text: event.text, at: event.at });
         next.updatedAt = new Date().toISOString();
@@ -58,14 +61,19 @@ export async function POST(request: NextRequest, context: { params: Promise<{ co
         const plan = settings.botActivatedAt
           ? eventReplyPlan(current.messages, event.id, settings.botActivatedAt)
           : current.messages.some(message => message.actor === "local-assistant" && Date.now() - Date.parse(message.at) < 300000)
-            ? null : {key: "", reply: triage.reply, first: true};
+            ? null : {key: "", reply: triage.reply, first: true, handoff: false};
         if (!plan) return null;
         const introduction = settings.botActivatedAt
           ? `Assistente virtual${settings.companyName ? ` da ${settings.companyName}` : ""}.\n`
           : `*Assistente automático${settings.companyName ? ` — ${settings.companyName}` : ""}:*\n`;
         const text = plan.first ? introduction + (settings.greeting ? settings.greeting + "\n\n" : "") + plan.reply : plan.reply;
         const next = structuredClone(current);
-        next.messages.push({ id: botId, direction: "out", text, actor: "local-assistant", at: new Date().toISOString(), status: "processing", assistantReplyKey: plan.key });
+        const at = new Date().toISOString();
+        if (plan.handoff) {
+          next.assistantHandoffAt = at;
+          next.botPaused = true;
+        }
+        next.messages.push({ id: botId, direction: "out", text, actor: "local-assistant", at, status: "processing", assistantReplyKey: plan.key });
         return next;
       });
       const reservedMessage = reserved.chat?.messages.find(message => message.id === botId);
