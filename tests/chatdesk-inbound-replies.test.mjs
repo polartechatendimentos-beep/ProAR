@@ -96,6 +96,18 @@ test('authenticated arrival can answer immediately with the reminders switch off
   env.PROAR_EVOLUTION_AUTOMATION_ENABLED = 'false';
   await inbound('globally-disabled',otherPhone,now,'Orçamento de instalação');
   assert.equal(jobs.length,2);
+
+  env.PROAR_EVOLUTION_AUTOMATION_ENABLED = 'true';
+  settings = {...settings,botTestPhone:pilotPhone};
+  chats.delete(pilotPhone);
+  const instant = () => Math.floor(Date.now()/1000);
+  await inbound('greeting',pilotPhone,instant(),'Oi');
+  await inbound('leak-report',pilotPhone,instant(),'Ar condicionado pingando');
+  await inbound('short-location',pilotPhone,instant(),'Dentro');
+  await inbound('short-location',pilotPhone,instant(),'Dentro');
+  assert.equal(jobs.length,5);
+  assert.match(jobs[3][3],/unidade de dentro ou da unidade de fora/);
+  assert.match(jobs[4][3],/saindo da unidade de dentro/);
 });
 
 test('provisioning verifies the tenant origin and leaves other provider instances unchanged', async () => {
@@ -163,4 +175,32 @@ test('installation follow-up uses a new BTU detail instead of asking for it agai
   const second=eventReplyPlan(messages,"j",since,now);
   assert.match(second.reply,/cidade e o bairro/);
   assert.doesNotMatch(second.reply,/BTUs|^Olá!/);
+});
+
+test('short answers are grounded in the immediately preceding accepted assistant question', () => {
+  const since="2026-11-25T22:00:00Z", now=Date.parse("2026-11-25T22:30:20Z");
+  const at = (n) => new Date(now-8000+n).toISOString();
+  const input = (id,text,n) => ({id,text,direction:"in",at:at(n)});
+  const prompt = (key,n,props={}) => ({id:"reply"+n,text:"Pergunta",direction:"out",at:at(n),actor:"local-assistant",assistantReplyKey:key,status:"accepted",...props});
+  const a = input("start","Ar condicionado pingando",1);
+  const where = prompt("leak:where",250);
+  const short = input("short","Dentro!",200);
+  assert.equal(eventReplyPlan([a,where,short],"short",since,now).key,"leak:inside");
+  assert.equal(eventReplyPlan([a,where,{...short,text:"Fora"}],"short",since,now).key,"leak:outside");
+  assert.equal(eventReplyPlan([a,where,{...short,text:"Nas duas"}],"short",since,now).key,"leak:both");
+  assert.equal(eventReplyPlan([a,where,{...short,text:"Sim"}],"short",since,now).key,"leak:clarify");
+  assert.equal(eventReplyPlan([a,where,{...short,at:at(-1001)}],"short",since,now),null);
+  assert.equal(eventReplyPlan([a,{...where,deliveryStatus:"failed"},short],"short",since,now),null);
+  assert.equal(eventReplyPlan([a,where,input("other","Vocês fazem instalação?",270),short],"short",since,now),null);
+  assert.equal(eventReplyPlan([short],"short",since,now),null);
+  const done = input("place","É um Elgin, estou em Mirassol",400);
+  assert.equal(eventReplyPlan([a,where,short,prompt("leak:inside",300),done],"place",since,now).key,"leak:complete");
+  const outside = {...short,text:"Fora"};
+  const on = input("timing","Só ligado",400);
+  assert.equal(eventReplyPlan([a,where,outside,prompt("leak:outside",300),on],"timing",since,now).key,"leak:details");
+  const install = input("install","Instalação de 12 mil em Mirassol",1);
+  const yes = input("yes","Sim",400);
+  const plan = eventReplyPlan([install,prompt("installation:110",300),yes],"yes",since,now);
+  assert.equal(plan.key,"installation:111");
+  assert.doesNotMatch(plan.reply,/preço|horário confirmado/i);
 });

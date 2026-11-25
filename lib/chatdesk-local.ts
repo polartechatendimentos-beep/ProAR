@@ -38,29 +38,73 @@ const capacityDetail = /\b(?:[0-9]{1,3}(?:[. ][0-9]{3})?\s*btus?|[0-9]{1,2}\s*(?
 const infrastructureDetail = /\b(?:tubulacao|infraestrutura|cobre|ponto eletrico|nao tem nada|sem infra)\b/;
 const leakingReplies = {
   where: "Entendi que o ar-condicionado está pingando. A água sai da unidade de dentro ou da unidade de fora?",
+  clarify: "Só para confirmar: é na unidade de dentro, na de fora ou nas duas?",
   inside: "Entendi, a água está saindo da unidade de dentro. Pode me informar a marca ou o modelo e a cidade e o bairro do atendimento? Se puder, mande uma foto da etiqueta.",
   outside: "Entendi, a água está saindo do lado de fora. Isso acontece enquanto o aparelho está ligado ou só depois de desligar? Pode informar também a cidade e o bairro?",
+  both: "Entendi, você percebeu água nas duas unidades. Pode me dizer se isso acontece com o aparelho ligado ou depois que desliga, e em qual cidade e bairro ele está?",
   details: "Obrigado pelos detalhes. Eles ajudam a equipe técnica a avaliar o vazamento. Se puder, mande uma foto de onde a água está saindo.",
   complete: "Obrigado, já tenho as informações para a equipe técnica avaliar o relato. O diagnóstico depende da avaliação do equipamento.",
 } as const;
+
+/** Expand a short answer only when a prior, related question gives it meaning. */
+function interpretChatAnswers(active: ChatMessage[], eventPosition: number) {
+  let question: ChatMessage | undefined;
+  const revised = new Map<string, { value: string; clarifyLocation: boolean }>();
+  for (const message of active.slice(0, eventPosition + 1)) {
+    if (message.direction === "out") {
+      question = message.actor === "local-assistant"
+        && (!message.status || message.status === "accepted" || message.deliveryStatus === "delivered" || message.deliveryStatus === "read")
+        && message.deliveryStatus !== "failed" ? message : undefined;
+      continue;
+    }
+    if (message.direction !== "in") continue;
+    const original = normalized(message.text);
+    const answer = original.trim().replace(/[.!?,…\s]+$/gu, "");
+    const key = question?.assistantReplyKey;
+    const timely = question && Math.floor(Date.parse(message.at)/1000) >= Math.floor(Date.parse(question.at)/1000);
+    let value = original, clarifyLocation = false;
+    if (timely && (key === "leak:where" || key === "leak:clarify")) {
+      if (/^(?:(?:e|na|no|do|pela|pelo)\s+)*(?:a\s+|de\s+)?(?:dentro|interna|interno|lado de dentro)$/.test(answer)) value = "unidade de dentro";
+      else if (/^(?:(?:e|na|no|do|pela|pelo)\s+)*(?:a\s+|de\s+)?(?:fora|externa|externo|lado de fora)$/.test(answer)) value = "unidade de fora";
+      else if (/^(?:(?:nas|nos|em)\s+)?(?:(?:as|os)\s+)?(?:duas|dois|ambas|ambos)$|^dentro e fora$/.test(answer)) value = "unidade de dentro e unidade de fora";
+      else if (/^(?:sim|nao|isso|acho que sim|nao sei)$/.test(answer)) clarifyLocation = true;
+    } else if (timely && (key === "leak:outside" || key === "leak:both")) {
+      if (/^(?:so )?(?:(?:com (?:ele|o aparelho) |quando esta ))?ligad[oa]$/.test(answer)) value = "quando liga";
+      else if (/^(?:so )?(?:(?:com (?:ele|o aparelho) |quando esta ))?desligad[oa]$/.test(answer)) value = "quando desliga";
+    } else if (timely && /^installation:[01]{2}0$/.test(key || "")) {
+      if (/^(?:sim|ja tem|tem sim|ja existe)$/.test(answer)) value = "ja tem tubulacao de cobre";
+      else if (/^(?:nao|nao tem|nao tenho|ainda nao)$/.test(answer)) value = "nao tem tubulacao de cobre";
+    }
+    revised.set(message.id, { value, clarifyLocation });
+    // A question is bound to the next inbound turn, not an arbitrary later text.
+    question = undefined;
+  }
+  return revised;
+}
 
 /** Select a reply only when it advances this conversation; never quote user input. */
 export function eventReplyPlan(messages: ChatMessage[], eventId: string, activatedAt: string, now = Date.now()) {
   const activation = Date.parse(activatedAt);
   const since = Math.max(activation, now - 30 * 60_000);
   const active = messages.filter(message => Date.parse(message.at) >= since);
-  const event = active.find(message => message.id === eventId && message.direction === "in");
-  if (!event) return null;
+  const eventPosition = active.findIndex(message => message.id === eventId && message.direction === "in");
+  if (eventPosition < 0) return null;
+  const event = active[eventPosition];
   const bots = active.filter(message => message.actor === "local-assistant" && message.direction === "out");
   const recent = bots.filter(message => now - Date.parse(message.at) < 5 * 60_000);
   const triage = localTriage(event.text);
   if (triage.optOut) return null;
   if (recent.length >= 4 && !triage.urgent) return null;
-  const value = normalized(event.text);
+  const interpreted = interpretChatAnswers(active, eventPosition);
+  const read = (message: ChatMessage) => interpreted.get(message.id)?.value ?? normalized(message.text);
+  const value = read(event);
+  if (value === normalized(event.text) && !interpreted.get(event.id)?.clarifyLocation
+    && /^(?:sim|nao|dentro|fora|interna|externa|ligad[oa]|desligad[oa])[.!?,…\s]*$/u.test(value.trim())) return null;
   if (!triage.urgent && triage.sector === "Geral" && customerFollowUp.test(value) && !leakInside.test(value) && !leakOutside.test(value) && !equipmentDetail.test(value) && !placeDetail.test(value)) return null;
-  const inbound = active.filter(message => message.direction === "in" && Date.parse(message.at) <= Date.parse(event.at));
+  const inbound = active.slice(0, eventPosition + 1).filter(message => message.direction === "in" && Date.parse(message.at) <= Date.parse(event.at));
   const idx = inbound.findIndex(message => leakIntent.test(normalized(message.text)));
-  const leakTopic = leakIntent.test(value) || (idx >= 0 && (leakInside.test(value) || leakOutside.test(value) || leakWhen.test(value) || equipmentDetail.test(value) || placeDetail.test(value)));
+  const clarifyLocation = interpreted.get(event.id)?.clarifyLocation === true;
+  const leakTopic = leakIntent.test(value) || (idx >= 0 && (clarifyLocation || leakInside.test(value) || leakOutside.test(value) || leakWhen.test(value) || equipmentDetail.test(value) || placeDetail.test(value)));
   const installationIndex = inbound.reduce((last, message, index) => installationIntent.test(normalized(message.text)) ? index : last, -1);
   const installationTopic = installationIntent.test(value) || (installationIndex >= 0
     && (capacityDetail.test(value) || placeDetail.test(value) || infrastructureDetail.test(value))
@@ -68,20 +112,20 @@ export function eventReplyPlan(messages: ChatMessage[], eventId: string, activat
   let key = "sector:" + triage.sector, reply = triage.reply;
   if (triage.urgent) key = "urgent";
   else if (leakTopic && triage.sector !== "Financeiro" && triage.sector !== "PMOC") {
-    const facts = (idx < 0 ? inbound : inbound.slice(idx)).map(message => normalized(message.text)).join("\n");
+    const facts = (idx < 0 ? inbound : inbound.slice(idx)).map(read).join("\n");
     const inside = leakInside.test(facts), outside = leakOutside.test(facts);
-    const locationKnown = inside !== outside;
+    const locationKnown = inside || outside;
     const situationKnown = leakWhen.test(facts);
     const applianceKnown = equipmentDetail.test(facts);
     const placeKnown = placeDetail.test(facts);
-    const step = locationKnown && applianceKnown && placeKnown ? "complete"
+    const step = !locationKnown && clarifyLocation ? "clarify" : locationKnown && applianceKnown && placeKnown ? "complete"
       : applianceKnown || placeKnown || situationKnown ? "details"
-      : inside && !outside ? "inside" : outside && !inside ? "outside" : "where";
+      : inside && outside ? "both" : inside ? "inside" : outside ? "outside" : "where";
     key = "leak:" + step;
     reply = leakingReplies[step];
     if (bots.some(message => message.assistantReplyKey === key)) return null;
   } else if (installationTopic && ["Comercial", "Geral"].includes(triage.sector)) {
-    const facts = inbound.slice(Math.max(0, installationIndex)).map(message => normalized(message.text)).join("\n");
+    const facts = inbound.slice(Math.max(0, installationIndex)).map(read).join("\n");
     const capacityKnown = capacityDetail.test(facts);
     const placeKnown = placeDetail.test(facts);
     const infrastructureKnown = infrastructureDetail.test(facts);
