@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { 
   Building2, Wrench, FileText, ShoppingCart, DollarSign, UsersRound,
   ShieldCheck, Landmark, Search, Bell, Settings, LogOut, CheckCircle2
@@ -14,13 +14,20 @@ import { PdvBalcaoPanel } from "@/components/PdvBalcaoPanel";
 import { FinanceiroPanel } from "@/components/FinanceiroPanel";
 import { PublicContractsPanel } from "@/components/PublicContractsPanel";
 import { TechnicalCompliancePanel } from "@/components/TechnicalCompliancePanel";
-import { CustomerProfileWorkspace } from "@/components/CustomerProfileWorkspace";
+import { CommercialRegistryWorkspace } from "@/components/CommercialRegistryWorkspace";
+import type { QuoteConversionDraft } from "@/lib/commercial-document";
 
 type TabType = "dashboard" | "clientes" | "os" | "obras" | "orcamento" | "pdv" | "financeiro" | "contratos" | "pmoc";
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
   const [globalSearch, setGlobalSearch] = useState("");
+  const [conversionDraft, setConversionDraft] = useState<QuoteConversionDraft | null>(null);
+  const clearConversionDraft = useCallback(() => setConversionDraft(null), []);
+  const convertQuote = (destination: "venda" | "os", draft: QuoteConversionDraft) => {
+    setConversionDraft(draft);
+    setActiveTab(destination === "venda" ? "pdv" : "os");
+  };
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col">
@@ -77,7 +84,7 @@ export default function HomePage() {
                 activeTab === "clientes" ? "bg-blue-600 text-white shadow-sm" : "text-slate-400 hover:text-white hover:bg-slate-900"
               }`}
             >
-              <UsersRound className="w-3.5 h-3.5" /> Clientes
+              <UsersRound className="w-3.5 h-3.5" /> Cadastros
             </button>
             <button
               onClick={() => setActiveTab("dashboard")}
@@ -154,13 +161,6 @@ export default function HomePage() {
           <div className="space-y-6">
             <DailyWorkCenter
               onNavigateTab={(t) => setActiveTab(t)}
-              osCount={3}
-              osAtrasadasCount={1}
-              obrasCount={2}
-              obrasGargaloCount={1}
-              orcamentosPendentesCount={4}
-              contasVencendoCount={2}
-              empenhosFaturarCount={1}
             />
 
             {/* Painéis operacionais em destaque */}
@@ -174,11 +174,11 @@ export default function HomePage() {
         )}
 
         {/* Abas Específicas */}
-        {activeTab === "os" && <ServiceOrdersSection />}
-        {activeTab === "clientes" && <CustomerProfileWorkspace />}
+        {activeTab === "os" && <ServiceOrdersSection conversionDraft={conversionDraft} onConversionImported={clearConversionDraft} />}
+        {activeTab === "clientes" && <CommercialRegistryWorkspace />}
         {activeTab === "obras" && <WorkOperationsPanel />}
-        {activeTab === "orcamento" && <OrcamentoPanel />}
-        {activeTab === "pdv" && <PdvBalcaoPanel />}
+        {activeTab === "orcamento" && <OrcamentoPanel onConvert={convertQuote} />}
+        {activeTab === "pdv" && <PdvBalcaoPanel conversionDraft={conversionDraft} onConversionImported={clearConversionDraft} />}
         {activeTab === "financeiro" && <FinanceiroPanel />}
         {activeTab === "contratos" && <PublicContractsPanel />}
         {activeTab === "pmoc" && <TechnicalCompliancePanel />}

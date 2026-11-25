@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { OfflineStatusBar } from "@/components/OfflineStatusBar";
 
 export const metadata: Metadata = {
   title: "ProAR - Gestão Autônoma de Licitações & Fiscal",
   description: "Plataforma de monitoramento de licitações, gestão fiscal e alertas automatizados via WhatsApp",
+  manifest: "/manifest.webmanifest",
 };
 
 export default function RootLayout({
@@ -14,6 +17,8 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">
+        <ServiceWorkerRegister />
+        <OfflineStatusBar />
         {children}
       </body>
     </html>
