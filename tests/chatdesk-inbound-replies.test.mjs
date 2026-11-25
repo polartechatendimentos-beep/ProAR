@@ -49,10 +49,10 @@ test('authenticated arrival can answer immediately with the reminders switch off
   function webhook(body, token=chatWebhookToken(tenant,secret)) {
     return handle({headers:new Headers({'x-proar-webhook-secret':token}), text:async()=>JSON.stringify(body)}, {params:Promise.resolve({companyId:tenant})});
   }
-  async function inbound(id, phone, messageTimestamp, text, token=chatWebhookToken(tenant,secret)) {
+  async function inbound(id, phone, messageTimestamp, text, token=chatWebhookToken(tenant,secret), replyToId) {
     const body = {event:'MESSAGES_UPSERT',instance,data:{
       key:{id,fromMe:false,remoteJid:phone+'@s.whatsapp.net'}, messageTimestamp,
-      message:{conversation:text},
+      message:replyToId ? {extendedTextMessage:{text,contextInfo:{stanzaId:replyToId,quotedMessage:{conversation:"Boleto de outra conversa"}}}} : {conversation:text},
     }};
     return webhook(body, token);
   }
@@ -126,6 +126,36 @@ test('authenticated arrival can answer immediately with the reminders switch off
   await inbound('on-handoff',pilotPhone,instant(),'Tem como vir amanhã?');
   assert.equal(jobs.length,9);
   assert.equal(chats.get(pilotPhone).messages.at(-1).id,'on-handoff');
+  await inbound('nudge-on-handoff',pilotPhone,instant(),'.');
+  assert.equal(jobs.length,9);
+
+  // Reproduce the live timeline: the school name was received before the
+  // release and not replied to. Only the fresh point may trigger a reply.
+  const chat = chats.get(pilotPhone);
+  const at = (minutes) => new Date((instant()-60*minutes)*1000).toISOString();
+  const row = (id,text,minutes,fields={})=>({id,text,at:at(minutes),direction:"in",...fields});
+  Object.assign(chat,{messages:[
+    row('symptom','Ar condicionado pingando',37),
+    row('old-question','A água está saindo da unidade de dentro ou da unidade de fora?',37,{direction:"out",actor:"local-assistant",status:"accepted",assistantReplyKey:"leak:where"}),
+    row('where','Dentro',37),
+    row('recent-symptom','Ar condicionado pingando',27),
+    row('place','Sou de Bálsamo bairro Centro',27),
+    row('school-type','Escola municipal',27),
+    row('school-name','Escola modesto de bálsamo',20),
+  ],botPaused:false,assistantHandoffAt:undefined});
+  settings = {...settings,botActivatedAt:at(14)};
+  await inbound('unmatched-nudge',pilotPhone,instant(),'.',undefined,'elsewhere');
+  assert.equal(jobs.length,9);
+  await inbound('school-nudge',pilotPhone,instant(),'.',undefined,'school-name');
+  await inbound('school-nudge',pilotPhone,instant(),'.',undefined,'school-name');
+  await inbound('new-punctuation',pilotPhone,instant(),'…');
+  assert.equal(jobs.length,10);
+  assert.equal(jobs[9][3],'Em qual sala ou setor fica o aparelho?');
+  assert.equal(chats.get(pilotPhone).messages.find(m=>m.id==='school-nudge').replyToId,'school-name');
+  await inbound('short-room-after-nudge',pilotPhone,instant(),'3');
+  assert.equal(jobs.length,11);
+  assert.match(jobs[10][3],/equipe conferir e dar continuidade/);
+
 });
 
 test('provisioning verifies the tenant origin and leaves other provider instances unchanged', async () => {
@@ -243,4 +273,21 @@ test('an unknown needed detail or explicit request for a person flags a real han
   assert.equal(eventReplyPlan([a,b],b.id,since,now).handoff,true);
   assert.equal(eventReplyPlan([{...b,text:"Pode me ligar?"}],b.id,since,now).handoff,true);
   assert.equal(eventReplyPlan([a,{...b,text:"Pode parar de enviar mensagens?"}],b.id,since,now),null);
+});
+
+test('a plain point uses the latest pending service but does not start an unrelated or handled chat', () => {
+  const since="2026-11-25T22:22:00Z", now=Date.parse("2026-11-25T22:36:00Z");
+  const m=(id,text,minute,fields={})=>({id,text,direction:"in",at:new Date(now-minute*60000).toISOString(),...fields});
+  const point=m("p",".",0);
+  const details=[m("report","Está pingando pela unidade de dentro",27),m("location","Sou de Bálsamo bairro Centro",27),m("school","Escola Modesto de Bálsamo",20)];
+  const plan=(rows,event=point)=>eventReplyPlan([...rows,event],event.id,since,now);
+  assert.equal(plan(details).key,"leak:site-room");
+  assert.equal(plan([]),null);
+  assert.equal(plan([m("note","Oi",3)]),null);
+  assert.equal(plan([m("old","Ar condicionado pingando",46)]),null);
+  assert.equal(plan([...details,m("human","Qual a sala?",1,{direction:"out",actor:"atendente"})]),null);
+  const answered=m("asked","Em qual sala ou setor fica o aparelho?",2,{direction:"out",actor:"local-assistant",assistantReplyKey:"leak:site-room",providerMessageId:"wa-asked",status:"accepted"});
+  assert.equal(plan([...details,answered],{...point,replyToId:"wa-asked"}).key,"leak:site-room");
+  assert.equal(plan([...details,{...answered,assistantNudge:true}]),null);
+  assert.equal(plan([...details,m("unrelated","Preciso instalar um ar de 12 mil",1)],{...point,replyToId:"school"}),null);
 });

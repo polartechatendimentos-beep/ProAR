@@ -21,11 +21,14 @@ export function parseEvolutionInbound(value: unknown, expectedInstance: string) 
     if (typeof jid !== "string") return [];
     let message = object(row.message);
     if (message.ephemeralMessage) message = object(object(message.ephemeralMessage).message);
-    const text = message.conversation || object(message.extendedTextMessage).text || object(message.imageMessage).caption || object(message.buttonsResponseMessage).selectedDisplayText;
+    const extendedText = object(message.extendedTextMessage);
+    const reference = object(extendedText.contextInfo).stanzaId;
+    const replyToId = typeof reference === "string" && /^[a-zA-Z0-9_-]{1,512}$/.test(reference) ? reference : undefined;
+    const text = message.conversation || extendedText.text || object(message.imageMessage).caption || object(message.buttonsResponseMessage).selectedDisplayText;
     const timestamp = Number(row.messageTimestamp);
     const millis = timestamp > 1000000000000 ? timestamp : timestamp * 1000;
     if (!Number.isFinite(millis) || millis <= 0 || millis > Date.now() + 300000 || !Number.isFinite(new Date(millis).getTime())) return [];
-    return [{ id: key.id, phone: jid.split("@")[0], name: typeof row.pushName === "string" ? row.pushName.slice(0, 100) : jid.split("@")[0], text: typeof text === "string" && text.trim() ? text.slice(0, 8000) : "Mensagem sem texto. Consulte o anexo no WhatsApp.", at: new Date(millis).toISOString() }];
+    return [{ id: key.id, ...(replyToId ? { replyToId } : {}), phone: jid.split("@")[0], name: typeof row.pushName === "string" ? row.pushName.slice(0, 100) : jid.split("@")[0], text: typeof text === "string" && text.trim() ? text.slice(0, 8000) : "Mensagem sem texto. Consulte o anexo no WhatsApp.", at: new Date(millis).toISOString() }];
   });
 }
 

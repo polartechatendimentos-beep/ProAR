@@ -38,7 +38,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ co
             && Date.now() - Date.parse(message.at) < 30 * 60_000);
         if (!next.assignee && !next.botPaused && !contextualDetail) next.sector = triage.sector;
         if (next.stage === "Concluído") next.stage = "Novo contato";
-        next.messages.push({ id: event.id, direction: "in", text: event.text, at: event.at });
+        next.messages.push({ id: event.id, direction: "in", text: event.text, at: event.at, ...(event.replyToId ? { replyToId: event.replyToId } : {}) });
         next.updatedAt = new Date().toISOString();
         return next;
       });
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ co
           next.assistantHandoffAt = at;
           next.botPaused = true;
         }
-        next.messages.push({ id: botId, direction: "out", text, actor: "local-assistant", at, status: "processing", assistantReplyKey: plan.key });
+        next.messages.push({ id: botId, direction: "out", text, actor: "local-assistant", at, status: "processing", assistantReplyKey: plan.key, ...("nudge" in plan && plan.nudge ? { assistantNudge: true } : {}) });
         return next;
       });
       const reservedMessage = reserved.chat?.messages.find(message => message.id === botId);

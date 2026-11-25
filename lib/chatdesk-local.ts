@@ -4,11 +4,12 @@ export const chatSectors = ["Geral", "Técnico", "Financeiro", "Comercial", "PMO
 export type ChatSector = typeof chatSectors[number];
 export const chatStages = ["Novo contato", "Em atendimento", "Orçamento", "Aguardando cliente", "Concluído"] as const;
 export type ChatStage = typeof chatStages[number];
-export type ChatMessage = { id: string; direction: "in" | "out" | "note" | "event"; text: string; at: string; actor?: string; status?: string; providerMessageId?: string; assistantReplyKey?: string; deliveryStatus?: DeliveryStatus };
+export type ChatMessage = { id: string; direction: "in" | "out" | "note" | "event"; text: string; at: string; actor?: string; status?: string; providerMessageId?: string; assistantReplyKey?: string; assistantNudge?: boolean; replyToId?: string; deliveryStatus?: DeliveryStatus };
 export type ChatConversation = { companyId: string; phone: string; name: string; sector: ChatSector; stage: ChatStage; assignee: string; revision: number; botPaused: boolean; optOut: boolean; messages: ChatMessage[]; requests: string[]; updatedAt: string; orderId?: string; assistantHandoffAt?: string; pendingDeliveryReceipts?: PendingDeliveryReceipt[]; queueActivity?: { incoming?: ChatMessage; humanReplyAt?: string; lastOutbound?: Pick<ChatMessage, "at" | "status" | "deliveryStatus"> } };
 export type ChatActor = { username: string; displayName: string; role: string; sectors: ChatSector[]; writeSectors: ChatSector[]; canWrite: boolean; admin: boolean };
 export type LocalChatSettings = { companyId: string; revision: number; botEnabled: boolean; botActivatedAt?: string; botTestPhone?: string; companyName: string; greeting: string; quickReplies?: ChatQuickReply[] };
 const normalized = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const isNudge = (text: string) => /^[.…]+$/u.test(text.trim());
 const leakIntent = /\b(?:ping(?:a|ando|ou)|gotej(?:a|ando|ou)|vazando(?: agua)?|vazamento de agua|(?:cai|caindo|escorre|escorrendo) agua)\b/;
 export function localTriage(text: string) {
   const value = normalized(text);
@@ -71,6 +72,7 @@ function interpretChatAnswers(active: ChatMessage[], eventPosition: number) {
     }
     if (message.direction !== "in") continue;
     const original = normalized(message.text);
+    if (isNudge(original)) continue;
     const answer = original.trim().replace(/[.!?,…\s]+$/gu, "");
     const key = question?.assistantReplyKey;
     const timely = question && Math.floor(Date.parse(message.at)/1000) >= Math.floor(Date.parse(question.at)/1000);
@@ -109,11 +111,40 @@ function interpretChatAnswers(active: ChatMessage[], eventPosition: number) {
 /** Select a reply only when it advances this conversation; never quote user input. */
 export function eventReplyPlan(messages: ChatMessage[], eventId: string, activatedAt: string, now = Date.now()) {
   const activation = Date.parse(activatedAt);
-  const since = Math.max(activation, now - 30 * 60_000);
-  const active = messages.filter(message => Date.parse(message.at) >= since);
-  const eventPosition = active.findIndex(message => message.id === eventId && message.direction === "in");
+  const event = messages.find(message => message.id === eventId && message.direction === "in");
+  if (!event || !Number.isFinite(activation) || Date.parse(event.at) < activation) return null;
+  const nudge = isNudge(event.text);
+  // A new punctuation-only follow-up may use recent history from before a
+  // rollout. Only the new event can send; no old messages are replayed.
+  const history = messages.slice(0, messages.indexOf(event));
+  const lastHuman = history.findLastIndex(message => message.direction === "out" && message.actor !== "local-assistant");
+  const priorNudge = history.slice(lastHuman + 1).findLast(message => message.direction === "out" && message.actor === "local-assistant" && message.assistantNudge);
+  const resumedAt = Date.parse(priorNudge?.at || "");
+  const continuing = !nudge && resumedAt >= Math.max(activation, now - 15 * 60_000);
+  const since = nudge ? now - 45 * 60_000
+    : continuing ? resumedAt - 45 * 60_000
+    : Math.max(activation, now - 30 * 60_000);
+  let active = (continuing ? messages.slice(lastHuman + 1) : messages).filter(message => Date.parse(message.at) >= since);
+  if (nudge) {
+    const pos = active.indexOf(event);
+    if (pos < 0 || active.slice(pos + 1).some(message => message.direction === "in" || message.direction === "out")) return null;
+    const recentHuman = active.slice(0, pos).findLastIndex(message => message.direction === "out" && message.actor !== "local-assistant");
+    active = active.slice(recentHuman + 1);
+    const turns = active.slice(0, pos - recentHuman - 1);
+    const lastDetail = turns.findLastIndex(message => message.direction === "in" && /[\p{L}\p{N}]/u.test(message.text)
+      && !message.text.startsWith("Mensagem sem texto."));
+    if (lastDetail < 0 || turns.slice(lastDetail + 1).some(message => message.assistantNudge)) return null;
+    if (event.replyToId) {
+      const quote = turns.findIndex(message => message.id === event.replyToId || message.providerMessageId === event.replyToId);
+      // Match only stored same-chat messages, never re-use provider-embedded quoted text.
+      if (quote < 0 || !["in", "out"].includes(turns[quote].direction)) return null;
+      const newerTopic = turns.slice(quote + 1).some(message => message.direction === "in"
+        && (leakIntent.test(normalized(message.text)) || installationIntent.test(normalized(message.text))));
+      if (newerTopic) return null;
+    }
+  }
+  const eventPosition = active.indexOf(event);
   if (eventPosition < 0) return null;
-  const event = active[eventPosition];
   const bots = active.filter(message => message.actor === "local-assistant" && message.direction === "out");
   const recent = bots.filter(message => now - Date.parse(message.at) < 5 * 60_000);
   const triage = localTriage(event.text);
@@ -135,17 +166,18 @@ export function eventReplyPlan(messages: ChatMessage[], eventId: string, activat
   const inbound = active.slice(0, eventPosition + 1).filter(message => message.direction === "in" && Date.parse(message.at) <= Date.parse(event.at));
   const idx = inbound.findIndex(message => leakIntent.test(normalized(message.text)));
   const clarifyLocation = interpreted.get(event.id)?.clarifyLocation === true;
-  const leakTopic = leakIntent.test(value) || (idx >= 0 && (clarifyLocation || leakInside.test(value) || leakOutside.test(value) || leakWhen.test(value) || equipmentDetail.test(value) || applianceIdentity.test(value) || placeDetail.test(value) || localNeighborhood.test(value) || serviceSite.test(value) || siteNameKnown.test(value) || serviceRoom.test(value)));
+  const leakTopic = (nudge && idx >= 0) || leakIntent.test(value) || (idx >= 0 && (clarifyLocation || leakInside.test(value) || leakOutside.test(value) || leakWhen.test(value) || equipmentDetail.test(value) || applianceIdentity.test(value) || placeDetail.test(value) || localNeighborhood.test(value) || serviceSite.test(value) || siteNameKnown.test(value) || serviceRoom.test(value)));
   const installationIndex = inbound.reduce((last, message, index) => installationIntent.test(normalized(message.text)) ? index : last, -1);
   const installationTopic = installationIntent.test(value) || (installationIndex >= 0
-    && (capacityDetail.test(value) || placeDetail.test(value) || infrastructureDetail.test(value))
+    && (nudge || capacityDetail.test(value) || placeDetail.test(value) || infrastructureDetail.test(value))
     && (idx < 0 || installationIndex > idx));
+  if (nudge && !leakTopic && !installationTopic) return null;
   // Give material, deduplicated steps room to progress without making
   // generic replies more frequent or replaying a question.
   if (recent.length >= (leakTopic || installationTopic ? 8 : 4) && !triage.urgent) return null;
   let key = "sector:" + triage.sector, reply = triage.reply;
   if (triage.urgent) key = "urgent";
-  else if (leakTopic && triage.sector !== "Financeiro" && triage.sector !== "PMOC") {
+  else if (leakTopic && !(nudge && installationTopic) && triage.sector !== "Financeiro" && triage.sector !== "PMOC") {
     const facts = (idx < 0 ? inbound : inbound.slice(idx)).map(read).join("\n");
     const inside = leakInside.test(facts), outside = leakOutside.test(facts);
     const locationKnown = inside || outside;
@@ -166,7 +198,7 @@ export function eventReplyPlan(messages: ChatMessage[], eventId: string, activat
       : !institution && !applianceKnown ? "brand" : "complete";
     key = "leak:" + step;
     reply = leakingReplies[step];
-    if (bots.some(message => message.assistantReplyKey === key)) return null;
+    if ((!nudge || step === "complete") && bots.some(message => message.assistantReplyKey === key)) return null;
   } else if (installationTopic && ["Comercial", "Geral"].includes(triage.sector)) {
     const facts = inbound.slice(Math.max(0, installationIndex)).map(read).join("\n");
     const capacityKnown = capacityDetail.test(facts);
@@ -181,15 +213,16 @@ export function eventReplyPlan(messages: ChatMessage[], eventId: string, activat
     reply = missing.length
       ? `Para preparar seu orçamento de instalação, pode informar ${missing.join(", ").replace(/, ([^,]+)$/, " e $1")}?`
       : "Obrigado pelos detalhes da instalação. A equipe pode usar esses dados para avaliar o orçamento. O valor depende da conferência do local e dos materiais necessários.";
-    if (bots.some(message => message.assistantReplyKey === key)) return null;
+    if ((!nudge || key === "installation:111") && bots.some(message => message.assistantReplyKey === key)) return null;
   } else if (triage.sector === "Geral" && bots.length) return null;
   else if (triage.sector === "Geral" && /^(?:oi+|ola|bom dia|boa tarde|boa noite)(?:[!.?,\s]*(?:tudo bem|tudo bom))?[!.?,\s]*$/.test(value.trim())) {
     reply = "Oi! Como posso ajudar com seu ar-condicionado?";
   }
-  if (recent.some(message => message.assistantReplyKey === key || message.text.endsWith(reply))) return null;
+  if (recent.some(message => (message.assistantReplyKey === key || message.text.endsWith(reply))
+    && (!nudge || now - Date.parse(message.at) < 60_000 || message.status === "processing" || message.status === "unknown"))) return null;
   if (recent.length && !triage.urgent && !leakTopic && !installationTopic && recent.some(message => !message.assistantReplyKey)) return null;
   const handoff = key === "leak:complete" || key === "installation:111";
-  return { key, reply: handoff ? "Obrigado! Deixei seu atendimento para a equipe conferir e dar continuidade." : bots.length ? reply.replace(/^Olá!\s*/, "") : reply, first: bots.length === 0, handoff };
+  return { key, reply: handoff ? "Obrigado! Deixei seu atendimento para a equipe conferir e dar continuidade." : bots.length ? reply.replace(/^Olá!\s*/, "") : reply, first: bots.length === 0, handoff, nudge };
 }
 
 export function chatSignature(actor: ChatActor) {
