@@ -57,7 +57,7 @@ test('OS mutations protect owner, revision, desktop edits and completion evidenc
   assert.throws(()=>applyFieldOrder({...order,notes:'desktop edit'},{...command,expectedToken:fieldOrderFingerprint(order)},session,now),/alterada/);
   assert.throws(()=>applyFieldOrder(order,{...command,action:'finish'},session,now),/Conclusão/);
   const image='data:image/png;base64,aGVsbG8=';
-  const complete={...order,checkInAt:now,diagnosis:'Defeito constatado',executedService:'Serviço realizado',photos:{before:[image],after:[image]},customerSignature:image};
+  const complete={...order,checkInAt:now,diagnosis:'Defeito constatado',executedService:'Serviço realizado',photos:{before:[image],after:[image],Etiqueta:[image]},customerSignature:image};
   const checklist=Object.fromEntries(mobileChecklist(order.service).map(item=>[item.key,true]));
   assert.equal(applyFieldOrder(complete,{...command,action:'finish',checklist},session,now).status,'Concluída');
   assert.throws(()=>applyFieldOrder(complete,{...command,action:'finish',checklist:{}},session,now),/checklist/);

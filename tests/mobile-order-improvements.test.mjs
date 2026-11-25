@@ -21,7 +21,7 @@ test('exceptions need a manager decision and never dispense report/photos/checki
   assert.throws(()=>improveFieldOrder(item,[],cmd(item,'decide-exception',{exceptionId:'request-12345678',decision:'Rejeitado',reason:'Outra decisão posterior'}),manager,true,now),/já decidida/);
   item=improveFieldOrder(item,[],{...cmd(item,'request-exception',{kind:'equipment',reason:'Serviço de inspeção sem aparelho'}),requestId:'request-equip-12345'},tech,false,now).order;
   item=improveFieldOrder(item,[],cmd(item,'decide-exception',{exceptionId:'request-equip-12345',decision:'Aprovado',reason:'Serviço sem equipamento confirmado'}),manager,true,now).order;
-  const finish=cmd(item,'finish',{diagnosis:'Inspeção realizada',report:'Orientação técnica prestada',beforePhoto:image,afterPhoto:image,checklist:{checkin:true,beforePhoto:true,afterPhoto:true,executedService:true}});
+  const finish=cmd(item,'finish',{diagnosis:'Inspeção realizada',report:'Orientação técnica prestada',equipmentLabelAbsent:true,beforePhoto:image,afterPhoto:image,checklist:{checkin:true,beforePhoto:true,afterPhoto:true,executedService:true}});
   const complete=applyFieldOrder(item,finish,tech,now);assert.equal(complete.status,'Concluída');assert.equal(complete.customerSignature,undefined);
   assert.throws(()=>applyFieldOrder(item,{...finish,beforePhoto:undefined},tech,now),/Conclusão exige/);
 });

@@ -19,7 +19,7 @@ function setup({session={username:'tecnico',role:'Técnico'},journey=true,initia
   const handlers=runInNewContext(source+'\n({post:POST,get:GET});',{
     NextResponse:{json:(body,{status=200}={})=>({body,status})},createHash,sessionFromRequest:()=>session,hasPermission:()=>true,
     routeContext:async()=>context,activeJourneyContext:async()=>{if(!journeyActive)throw new FieldSupportError('Jornada inativa',403);return context;},
-    technicianRole,applyFieldOrder,improveFieldOrder,mobileMutationActions,fieldEquipmentHistory,fieldCustomerHistory,fieldOrderReceipt,assignedToSession,FieldSupportError,RouteError,validatePoint,prepareOperationalState,OperationError,independentOperationalRows,
+    technicianRole,applyFieldOrder,fieldOrderFingerprint,improveFieldOrder,mobileMutationActions,fieldEquipmentHistory,fieldCustomerHistory,fieldOrderReceipt,assignedToSession,FieldSupportError,RouteError,validatePoint,prepareOperationalState,OperationError,independentOperationalRows,
     supabaseRest:async()=>({ok:true,json:async()=>[{trade_name:"Empresa de teste",cnpj:"documento de teste"}]}),
     PRIMARY_DATABASE_URL:'neon://test',commitNeonOperationalState:async(_id,_revision,payload)=>{saved=payload;context.state=payload;return payload;},
   });
@@ -51,7 +51,7 @@ test('mobile links eligible equipment and completes the OS atomically',async()=>
   initial.moduleRecords.Funcionários=[{id:'FUN-1',name:'tecnico',status:'Ativo',employeeSignature:image}];
   const current=initial.serviceOrders[0];
   const api=setup({initialState:initial});
-  const finish={...command(),action:'finish',expectedToken:fieldOrderFingerprint(current),equipmentIds:['EQ-1'],diagnosis:'Vazamento localizado',report:'Carga de fluido efetuada',beforePhoto:image,afterPhoto:image,signature:image,signerName:'Responsável',checklist:{checkin:true,equipment:true,beforePhoto:true,afterPhoto:true,signature:true,executedService:true},point:{id:'gps-finish-12345',capturedAt:new Date().toISOString(),latitude:-20.8,longitude:-49.5,accuracy:10}};
+  const finish={...command(),action:'finish',expectedToken:fieldOrderFingerprint(current),equipmentIds:['EQ-1'],equipmentLabelPhotos:[image],diagnosis:'Vazamento localizado',report:'Carga de fluido efetuada',beforePhoto:image,afterPhoto:image,signature:image,signerName:'Responsável',checklist:{checkin:true,equipment:true,beforePhoto:true,afterPhoto:true,signature:true,executedService:true},point:{id:'gps-finish-12345',capturedAt:new Date().toISOString(),latitude:-20.8,longitude:-49.5,accuracy:10}};
   const result=await api.fn(request(finish));
   assert.equal(result.status,200,JSON.stringify(result.body));
   assert.equal(api.saved.serviceOrders[0].status,'Concluída');
@@ -77,7 +77,7 @@ test('mobile completes without equipment or managerial exception even with equip
   initial.moduleRecords.Funcionários=[{id:'FUN-1',name:'tecnico',status:'Ativo',employeeSignature:image}];
   const current=initial.serviceOrders[0];
   const api=setup({initialState:initial});
-  const finish={...command(),action:'finish',expectedToken:fieldOrderFingerprint(current),equipmentIds:[],diagnosis:'Vazamento localizado',report:'Carga de fluido efetuada',beforePhoto:image,afterPhoto:image,signature:image,signerName:'Responsável',checklist:{checkin:true,equipment:false,beforePhoto:true,afterPhoto:true,signature:true,executedService:true},point:{id:'gps-finish-12345',capturedAt:new Date().toISOString(),latitude:-20.8,longitude:-49.5,accuracy:10}};
+  const finish={...command(),action:'finish',expectedToken:fieldOrderFingerprint(current),equipmentIds:[],equipmentLabelAbsent:true,equipmentLabelAbsentReason:'Equipamento sem etiqueta',diagnosis:'Vazamento localizado',report:'Carga de fluido efetuada',beforePhoto:image,afterPhoto:image,signature:image,signerName:'Responsável',checklist:{checkin:true,equipment:false,beforePhoto:true,afterPhoto:true,signature:true,executedService:true},point:{id:'gps-finish-12345',capturedAt:new Date().toISOString(),latitude:-20.8,longitude:-49.5,accuracy:10}};
   const result=await api.fn(request(finish));
   assert.equal(result.status,200,JSON.stringify(result.body));
   assert.equal(api.saved.serviceOrders[0].status,'Concluída');

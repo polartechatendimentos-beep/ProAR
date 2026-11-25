@@ -41,7 +41,8 @@ test("new sector becomes selectable under its actual parent without modifying ex
 test("sector-first navigation scopes units and preserves exact IDs",()=>{
  const items=[...records,{id:"CHILD",name:"UBS",customerId:"C1",category:"Unidade",parentId:"ROOT"},{id:"CHILD2",name:"UBS",customerId:"C1",category:"Unidade",parentId:"S1"},{id:"ROOM2",name:"Sala",customerId:"C1",category:"Sala",parentId:"CHILD"}];
  const root=orderSectorLocationOptions(customer,items,[customer,other]);
- assert.deepEqual(root.units,[]);
+ // A unidade cadastrada diretamente no cliente pode ser selecionada sem setor.
+ assert.deepEqual(root.units.map(x=>x.id),["U1","U2"]);
  assert.deepEqual(new Set(root.sectors.map(x=>x.id)),new Set(["ROOT","S1","S2"]));
  const selected=orderSectorLocationOptions(customer,items,[customer,other],"ROOT","CHILD");
  assert.deepEqual(selected.units.map(x=>x.id),["CHILD"]);
