@@ -5,7 +5,7 @@ import {stripTypeScriptTypes} from 'node:module';
 import {runInNewContext} from 'node:vm';
 import {canReplyToNewInbound, chatWebhookToken, validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery} from '../lib/chatdesk-events.ts';
 import {applyChatDeliveryReceipt, completeChatSend} from "../lib/chatdesk-delivery.ts";
-import {localTriage, eventReplyPlan, pilotReplyPlan, updateServiceIntake, chatQueuePriority, chatQueueSummary} from '../lib/chatdesk-local.ts';
+import {localTriage, eventReplyPlan, pilotReplyPlan, handoffSupplementPlan, updateServiceIntake, chatQueuePriority, chatQueueSummary} from '../lib/chatdesk-local.ts';
 import {tenantSlugFromHost} from "../lib/tenant-host.ts";
 
 test('first-response eligibility excludes old, future, media-only, and courtesy messages', () => {
@@ -36,7 +36,7 @@ test('authenticated arrival can answer immediately with the reminders switch off
   const env = {PROAR_EVOLUTION_AUTOMATION_ENABLED:'true'};
   const handle = runInNewContext(source+'\nPOST', {
     NextResponse:{json:(body, init)=>({body,status:init?.status??200})},
-    process:{env}, structuredClone, validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery, applyChatDeliveryReceipt, completeChatSend, canReplyToNewInbound, localTriage, eventReplyPlan, pilotReplyPlan, updateServiceIntake,
+    process:{env}, structuredClone, validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery, applyChatDeliveryReceipt, completeChatSend, canReplyToNewInbound, localTriage, eventReplyPlan, pilotReplyPlan, handoffSupplementPlan, updateServiceIntake,
     requiredSecret:()=>secret, assertActiveWhatsAppCompany:async id=>assert.equal(id,tenant),
     evolutionConnection:async()=>({config:{instance}}), chatSettings:async()=>settings,
     recordAppointmentReply:async()=>{if(bookingFailure)throw new Error("Sem agenda");return appointmentHandled;}, tenantEvolutionAutomationEnabled:async()=>false,
@@ -108,6 +108,7 @@ test('authenticated arrival can answer immediately with the reminders switch off
   await inbound('short-location',pilotPhone,instant(),'Dentro');
   await inbound('short-location',pilotPhone,instant(),'Dentro');
   assert.equal(jobs.length,5);
+  assert.match(jobs[3][3],/várias causas.*Recomendo uma visita técnica/);
   assert.match(jobs[3][3],/unidade de dentro ou da unidade de fora/);
   assert.match(jobs[4][3],/pingando pela unidade de dentro/);
   await inbound('town-and-neighborhood',pilotPhone,instant(),'Sou de Bálsamo bairro Centro');
@@ -133,10 +134,20 @@ test('authenticated arrival can answer immediately with the reminders switch off
   assert.equal(handoff.botPaused,true);
   assert.equal(chatQueuePriority(chatQueueSummary(handoff),Date.now()).handoff,true);
   await inbound('on-handoff',pilotPhone,instant(),'Tem como vir amanhã?');
-  assert.equal(jobs.length,10);
-  assert.equal(chats.get(pilotPhone).messages.at(-1).id,'on-handoff');
+  assert.match(jobs.at(-1)[3],/Ainda não há horário confirmado/);
+  jobs.pop();
+  assert.equal(chats.get(pilotPhone).botPaused,true);
   await inbound('nudge-on-handoff',pilotPhone,instant(),'.');
   assert.equal(jobs.length,10);
+  const schoolQuestionId = chats.get(pilotPhone).messages.find(m=>m.assistantReplyKey==='leak:school').providerMessageId;
+  await inbound('school-post-handoff',pilotPhone,instant(),'Escola modesto',undefined,schoolQuestionId);
+  assert.equal(jobs.length,11);
+  assert.equal(jobs.at(-1)[3],'Anotei o nome da escola na ficha para a equipe.');
+  assert.equal(chats.get(pilotPhone).intake.site,'Escola modesto');
+  await inbound('school-post-handoff',pilotPhone,instant(),'Escola modesto',undefined,schoolQuestionId);
+  await inbound('repeated-school-data',pilotPhone,instant(),'Escola modesto',undefined,schoolQuestionId);
+  assert.equal(jobs.length,11);
+  jobs.pop();
 
   // Reproduce the live timeline: the school name was received before the
   // release and not replied to. Only the fresh point may trigger a reply.
@@ -384,4 +395,48 @@ test('technical intake advances terse turns without repeating collected location
   assert.equal(intake.city,"Bálsamo");
   assert.equal(intake.district,"Centro");
   assert.deepEqual(intake.pending,[]);
+});
+
+test('the real photo, room and quoted school reply stay attached to the correct questions', () => {
+  const now=Date.parse("2026-11-25T23:03:30Z"), since="2026-11-25T22:59:30Z";
+  const messages=[];
+  let intake;
+  const step=(id,text,fields={})=>{
+    const at=new Date(now-20_000+messages.length*1000).toISOString();
+    messages.push({id,text,at,direction:"in",...fields});
+    intake=updateServiceIntake(intake,messages,id);
+    const plan=pilotReplyPlan(messages,id,since,now,false,false,intake);
+    if(plan) messages.push({id:"r"+id,providerMessageId:"wa-"+id,text:plan.reply,at,direction:"out",actor:"local-assistant",status:"accepted",assistantReplyKey:plan.key});
+    return plan;
+  };
+  step("1","Ar condicionado pingando");
+  step("2","Dentro");
+  step("3","Bairro centro Bálsamo");
+  assert.match(step("4","Escola municipal de bálsamo").reply,/nome da escola ou o endereço/);
+  const photo=step("5","Mensagem sem texto. Consulte o anexo no WhatsApp.",{mediaKind:"foto"});
+  assert.equal(photo.key,"anexo:foto");
+  assert.ok(intake.pending.includes("endereço ou nome da unidade"));
+  assert.match(step("6","Sala infantil 1").reply,/Anotei a sala.*nome da escola/);
+  assert.equal(intake.room,"Sala infantil 1");
+  assert.match(step("7","Escola modesto",{replyToId:"wa-4"}).reply,/Desde quando/);
+  assert.equal(intake.site,"Escola modesto");
+  assert.equal(intake.district,"centro");
+  assert.equal(intake.city,"Bálsamo");
+});
+
+test('a follow-up acknowledgement is limited to a fresh, unclaimed transfer', () => {
+  const now=Date.parse("2026-11-25T23:04:00Z");
+  const oldAt=new Date(now-1000).toISOString(), at=new Date(now).toISOString();
+  const event={id:"quoted-name",direction:"in",text:"Modesto",replyToId:"a-real-question",at};
+  const chat={botPaused:true,assistantHandoffAt:oldAt,stage:"Novo contato",messages:[
+    {id:"q",providerMessageId:"a-real-question",direction:"out",actor:"local-assistant",assistantReplyKey:"leak:school",status:"accepted",at:oldAt,text:"Qual é o nome da escola?"},
+    event,
+  ]};
+  assert.equal(handoffSupplementPlan(chat,event.id,now).key,"suplemento:unidade");
+  for (const fields of [{assignee:"tecnico"},{optOut:true},{assistantHandoffAt:undefined},{stage:"Concluído"}]) {
+    assert.equal(handoffSupplementPlan({...chat,...fields},event.id,now),null);
+  }
+  const staff={id:"staff",direction:"out",actor:"staff",at:oldAt,text:"Estou acompanhando."};
+  assert.equal(handoffSupplementPlan({...chat,messages:[chat.messages[0],staff,event]},event.id,now),null);
+  assert.equal(handoffSupplementPlan({...chat,messages:[chat.messages[0],{...event,replyToId:"unknown"}]},event.id,now),null);
 });

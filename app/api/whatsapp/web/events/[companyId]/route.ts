@@ -4,7 +4,7 @@ import { validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery, c
 import { requiredSecret } from "../../../../../../lib/security-env";
 import { assertActiveWhatsAppCompany, evolutionConnection, tenantEvolutionAutomationEnabled } from "../../../../../../lib/evolution-tenant";
 import { changeChat, chatSettings } from "../../../../../../lib/chatdesk-store";
-import { localTriage, eventReplyPlan, pilotReplyPlan, updateServiceIntake, type ChatConversation } from "../../../../../../lib/chatdesk-local";
+import { localTriage, eventReplyPlan, pilotReplyPlan, handoffSupplementPlan, updateServiceIntake, type ChatConversation } from "../../../../../../lib/chatdesk-local";
 import { applyChatDeliveryReceipt, completeChatSend } from "../../../../../../lib/chatdesk-delivery";
 import { dispatchEvolutionJob } from "../../../../../../lib/evolution-jobs";
 export const runtime = "nodejs";
@@ -58,11 +58,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ co
       try { appointmentHandled = !triage.optOut && await recordAppointmentReply(companyId, event); }
       catch (error) {
         // Continue only if we can durably flag this new conversation for staff.
-        if (!freshPilot || !mayReply || result.chat?.assignee || result.chat?.botPaused || result.chat?.optOut) throw error;
+        if (!freshPilot || !mayReply || chat?.assignee || (chat?.botPaused && !chat.assistantHandoffAt) || chat?.optOut) throw error;
         agendaFailed = true;
       }
       const recentBot = chat?.messages.some(message => message.actor === "local-assistant" && Date.now() - Date.parse(message.at) < 300000);
-      if ((appointmentHandled && !freshPilot) || !mayReply || !chat || !settings.botEnabled || chat.optOut || chat.botPaused || chat.assignee) continue;
+      if ((appointmentHandled && !freshPilot) || !mayReply || !chat || !settings.botEnabled || chat.optOut || (chat.botPaused && (!freshPilot || !chat.assistantHandoffAt)) || chat.assignee) continue;
       if (settings.botActivatedAt) {
         if (process.env.PROAR_EVOLUTION_AUTOMATION_ENABLED !== "true" || !canReplyToNewInbound({
           activatedAt: settings.botActivatedAt, testPhone: settings.botTestPhone,
@@ -72,9 +72,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ co
       // Reserve ownership in the conversation as well as in the outbox. A human
       // claim that wins the optimistic write prevents this automatic response.
       const reserved = await changeChat(companyId, event.phone, current => {
-        if (!current || current.assignee || current.botPaused || current.optOut || current.messages.some(message => message.id === botId)) return null;
+        if (!current || current.assignee || (current.botPaused && (!freshPilot || !current.assistantHandoffAt)) || current.optOut || current.messages.some(message => message.id === botId)) return null;
         if (repairReservation && current.messages.findLast(message => message.direction === "in")?.id !== event.id) return null;
-        const plan = settings.botActivatedAt
+        const plan = current.botPaused ? handoffSupplementPlan(current, event.id, Date.now(), appointmentHandled, agendaFailed)
+          : settings.botActivatedAt
           ? pilot ? pilotReplyPlan(current.messages, event.id, settings.botActivatedAt, Date.now(), agendaFailed, appointmentHandled, current.intake)
             : eventReplyPlan(current.messages, event.id, settings.botActivatedAt)
           : current.messages.some(message => message.actor === "local-assistant" && Date.now() - Date.parse(message.at) < 300000)
