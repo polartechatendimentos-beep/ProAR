@@ -83,12 +83,22 @@ export async function chatSettings(companyId: string): Promise<LocalChatSettings
   if (companies[0]?.id !== companyId) throw new Error("Empresa não identificada.");
   return { companyId, revision: 0, botEnabled: false, companyName: String(companies[0].trade_name || companies[0].legal_name || "").slice(0, 100), greeting: "", quickReplies: defaultChatQuickReplies };
 }
-export async function saveChatSettings(companyId: string, input: { revision: number; botEnabled: boolean; companyName: string; greeting: string; quickReplies?: ChatQuickReply[] }) {
+export async function saveChatSettings(companyId: string, input: { revision: number; botEnabled: boolean; botTestPhone?: unknown; companyName: string; greeting: string; quickReplies?: ChatQuickReply[] }) {
   await assertActiveWhatsAppCompany(companyId);
   const db = await chatDb(companyId);
   const previous = await chatSettings(companyId);
   if (input.revision !== previous.revision) throw new Error("Configuração alterada por outro administrador. Atualize a página.");
-  const payload = { companyId, revision: previous.revision + 1, botEnabled: input.botEnabled === true, companyName: String(input.companyName || "").trim().slice(0, 100), greeting: String(input.greeting || "").trim().slice(0, 500), quickReplies: validateChatQuickReplies(input.quickReplies === undefined ? previous.quickReplies || defaultChatQuickReplies : input.quickReplies) };
+  const botEnabled = input.botEnabled === true;
+  const rawPhone = input.botTestPhone === undefined ? previous.botTestPhone || "" : input.botTestPhone;
+  if (typeof rawPhone !== "string" || rawPhone.length > 40 || /[^+0-9 ()-]/.test(rawPhone)) throw new Error("Informe um número de teste válido.");
+  let botTestPhone = rawPhone.replace(/\D/g, "");
+  if (/^\d{10,11}$/.test(botTestPhone)) botTestPhone = `55${botTestPhone}`;
+  if (botTestPhone && !/^[1-9]\d{9,14}$/.test(botTestPhone)) throw new Error("Informe o número de teste com DDD ou código do país.");
+  const eventMode = !previous.botEnabled || Boolean(previous.botActivatedAt) || Boolean(botTestPhone);
+  const botActivatedAt = botEnabled && eventMode
+    ? (previous.botEnabled && previous.botTestPhone === botTestPhone && previous.botActivatedAt || new Date().toISOString())
+    : "";
+  const payload = { companyId, revision: previous.revision + 1, botEnabled, botActivatedAt, botTestPhone, companyName: String(input.companyName || "").trim().slice(0, 100), greeting: String(input.greeting || "").trim().slice(0, 500), quickReplies: validateChatQuickReplies(input.quickReplies === undefined ? previous.quickReplies || defaultChatQuickReplies : input.quickReplies) };
   const result = await commitJsonState(databaseFetch, db.url, tenantHeaders(db.key), settingsId(companyId), previous.revision ? previous as unknown as Record<string, unknown> : null, payload);
   if (!result.ok) throw new Error("Não foi possível salvar. Atualize a configuração e tente novamente.");
   return payload;

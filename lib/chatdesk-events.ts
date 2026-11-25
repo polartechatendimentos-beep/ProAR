@@ -27,3 +27,17 @@ export function parseEvolutionInbound(value: unknown, expectedInstance: string) 
     return [{ id: key.id, phone: jid.split("@")[0], name: typeof row.pushName === "string" ? row.pushName.slice(0, 100) : jid.split("@")[0], text: typeof text === "string" && text.trim() ? text.slice(0, 8000) : "Mensagem sem texto. Consulte o anexo no WhatsApp.", at: new Date(millis).toISOString() }];
   });
 }
+
+// Separate the tenant's first-response setting from its background reminder
+// setting. The platform kill switch remains in force for both paths.
+export function canReplyToNewInbound(
+  input: { activatedAt: string; testPhone?: string; eventAt: string; phone: string; text: string },
+  now = Date.now(),
+): boolean {
+  const since = Date.parse(input.activatedAt), at = Date.parse(input.eventAt);
+  if (!Number.isFinite(since) || !Number.isFinite(at) || at <= since || at > now || now - at > 300_000) return false;
+  if (input.testPhone && input.phone !== input.testPhone) return false;
+  const text = input.text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  if (!text || text === "mensagem sem texto. consulte o anexo no whatsapp.") return false;
+  return !/^(?:ok|certo|entendi|beleza|(?:muito )?obrigad[oa]|valeu)[.!\s]*$/.test(text);
+}

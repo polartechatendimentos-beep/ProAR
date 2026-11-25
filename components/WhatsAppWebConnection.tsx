@@ -95,7 +95,7 @@ export function WhatsAppWebConnection({ companyId }: { companyId: string }) {
       {connection?.configured && connection.state !== "open" &&
         <button type="button" className="primary-btn" disabled={busy} onClick={() => void refresh(true)}>Gerar QR Code</button>}
       {connection?.configured && !connection.needsProvisioning && <div>
-        <p>Envios automáticos desta empresa: {connection.automationEnabled ? "ativados" : "desativados"}.</p>
+        <p>Lembretes e rotinas de envio automático desta empresa: {connection.automationEnabled ? "ativados" : "desativados"}.</p>
         {connection.automationAvailable === false && <p role="note">O administrador do ProAR ainda precisa habilitar o serviço geral de automação.</p>}
         <button type="button" className="secondary-btn" disabled={busy || (!connection.automationEnabled && (connection.state !== "open" || connection.automationAvailable !== true))} onClick={() => void toggleAutomation()}>{connection.automationEnabled ? "Desativar envios automáticos" : "Ativar envios automáticos"}</button>
       </div>}

@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     if (!body || typeof body !== "object" || Array.isArray(body)) return reply({ error: "Solicitação inválida." }, 400);
     if (body.action === "settings") {
       if (!access.actor.admin) return reply({ error: "Somente o administrador configura o assistente." }, 403);
-      const settings = await saveChatSettings(access.companyId, { revision: Number(body.revision), botEnabled: body.botEnabled === true, companyName: String(body.companyName || ""), greeting: String(body.greeting || ""), quickReplies: body.quickReplies });
+      const settings = await saveChatSettings(access.companyId, { revision: Number(body.revision), botEnabled: body.botEnabled === true, botTestPhone: body.botTestPhone, companyName: String(body.companyName || ""), greeting: String(body.greeting || ""), quickReplies: body.quickReplies });
       return reply({ settings, saved: true });
     }
     const phone = String(body.phone || "");
