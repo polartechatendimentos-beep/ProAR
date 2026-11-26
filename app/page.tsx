@@ -1246,7 +1246,7 @@ function OrderDetail({ order, customerPhone, company, catalog, contracts, close,
       setCurrentOrder(confirmedOrder); setConfirmedBase(confirmedOrder); setDirty(false); setSaveNotice("✓ Alterações salvas");
       if(confirmedOrder.googleCalendarSyncEnabled && confirmedOrder.date) await syncGoogleCalendar(confirmedOrder);
       return confirmedOrder;
-    } catch (error) { setSaveNotice("Não foi possível salvar esta Ordem de Serviço. Verifique os dados e tente novamente."); throw error; }
+    } catch (error) { setSaveNotice(error instanceof Error ? error.message : "Não foi possível salvar esta Ordem de Serviço."); throw error; }
     finally { setSaving(false); }
   };
   const attachStatusPhoto = async (file?: File) => { if (!file) return; const encoded = await imageFileToDataUrl(file); setStatusPhotos(current => [...current, encoded]); setDirty(true); };
@@ -4626,25 +4626,26 @@ export default function Home() {
     document.addEventListener("visibilitychange", refresh);
     return () => { window.clearInterval(timer); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
   }, [online, authenticatedUser, activeCompany.id, syncing]);
-  const updateServiceOrder = async (updatedOrder: ServiceOrder) => {
+  const updateServiceOrder = async (updatedOrder: ServiceOrder, reportInEditor = false) => {
+    const rejectSave = (message: string) => {
+      showFeedback(message, "error", 6000);
+      if (reportInEditor) throw new Error(message);
+      return null;
+    };
     const previousOrder = serviceOrders.find(order => order.id === updatedOrder.id);
     if (!previousOrder) {
-      showFeedback(`Falha ao salvar • a ordem ${updatedOrder.id || "selecionada"} não foi localizada na base atual.`, "error", 5000);
-      return null;
+      return rejectSave(`Falha ao salvar • a ordem ${updatedOrder.id || "selecionada"} não foi localizada na base atual.`);
     }
     if (!updatedOrder.client?.trim()) {
-      showFeedback("Falha ao salvar • selecione o cliente da ordem de serviço.", "error", 5000);
-      return null;
+      return rejectSave("Falha ao salvar • selecione o cliente da ordem de serviço.");
     }
     if (!updatedOrder.service?.trim()) {
-      showFeedback("Falha ao salvar • informe o serviço da ordem de serviço.", "error", 5000);
-      return null;
+      return rejectSave("Falha ao salvar • informe o serviço da ordem de serviço.");
     }
     if (updatedOrder.structureId) {
       const structure = (moduleRecords["Unidades e setores"] ?? []).find(item => item.id === updatedOrder.structureId);
       if (!structure || structure.client !== updatedOrder.client) {
-        showFeedback("Falha ao salvar • a unidade/setor/ambiente selecionado não pertence ao cliente desta OS.", "error", 6000);
-        return null;
+        return rejectSave("Falha ao salvar • a unidade/setor/ambiente selecionado não pertence ao cliente desta OS.");
       }
     }
     let orderForPersistence: ServiceOrder = { ...updatedOrder, contractItems: (updatedOrder.contractItems ?? []).map(item => ({ ...item })) };
@@ -4717,8 +4718,7 @@ export default function Home() {
     // O servidor deriva faturamento e consumo de produtos com IDs estáveis,
     // confirmados na mesma transação da OS.
     if (!navigator.onLine) {
-      showFeedback("Falha ao salvar a OS • sem conexão com o banco. Nenhuma confirmação foi registrada.", "error", 6000);
-      return null;
+      return rejectSave("Falha ao salvar a OS • sem conexão com o banco. Nenhuma confirmação foi registrada.");
     }
     updatedModules = appendAudit(updatedModules,"OS atualizada",`Ordens de serviço • ${orderForPersistence.id}`,`Status: ${previousOrder.status} → ${orderForPersistence.status}`,{moduleName:"Ordens de serviço",recordId:orderForPersistence.id,before:previousOrder as unknown as Record<string,unknown>,after:orderForPersistence as unknown as Record<string,unknown>});
     const payload = { companyId: activeCompany.id, customers: customerRecords, serviceOrders: updatedOrders, moduleRecords: updatedModules, _baseRevision: stateRevision };
@@ -4728,21 +4728,32 @@ export default function Home() {
       response = await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) });
       result = await response.json();
     } catch (error) {
-      showFeedback(error instanceof Error ? `Falha ao salvar a OS • ${error.message}` : "Falha ao salvar a OS • banco indisponível.", "error", 6000);
-      return null;
+      return rejectSave(error instanceof Error ? `Falha ao salvar a OS • ${error.message}` : "Falha ao salvar a OS • banco indisponível.");
     }
     if (!response.ok) {
       if (response.status === 409 && result.state) {
         const serverCustomers=result.state.customers??[]; const serverOrders=result.state.serviceOrders??[]; const serverModules=mergeImportedServices(result.state.moduleRecords??{});
         setCustomerRecords(serverCustomers); setServiceOrders(serverOrders); setModuleRecords(serverModules); setStateRevision(Number(result.state._revision||0));
-        localStorage.setItem(companyStorageKey(activeCompany.id,"customers"),JSON.stringify(serverCustomers)); localStorage.setItem(companyStorageKey(activeCompany.id,"service-orders"),JSON.stringify(serverOrders)); localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(serverModules));
+        try {
+          localStorage.setItem(companyStorageKey(activeCompany.id,"customers"),JSON.stringify(serverCustomers)); localStorage.setItem(companyStorageKey(activeCompany.id,"service-orders"),JSON.stringify(serverOrders)); localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(serverModules));
+        } catch {}
       }
-      showFeedback(response.status === 409 ? "Conflito ao salvar a OS • uma versão mais recente do banco foi preservada. Revise e tente novamente." : `Falha ao salvar a OS • ${result.error || "não foi possível confirmar a gravação no banco."}`, response.status === 409 ? "warning" : "error", 6000);
-      return null;
+      if (response.status === 409 && result?.conflict === true) {
+        return rejectSave("A base foi atualizada em outro acesso. Suas alterações continuam em edição. Confira os dados antes de tentar salvar novamente.");
+      }
+      return rejectSave(typeof result?.error === "string" ? result.error : `Não foi possível salvar a OS (HTTP ${response.status}).`);
     }
-    const confirmedCustomers=result.state?.customers??customerRecords; const confirmedOrders=result.state?.serviceOrders??updatedOrders; const confirmedModules=mergeImportedServices(result.state?.moduleRecords??updatedModules);
-    setCustomerRecords(confirmedCustomers); setServiceOrders(confirmedOrders); setModuleRecords(confirmedModules); setSelectedOrder(orderForPersistence); setStateRevision(Number(result.state?._revision||stateRevision+1));
-    localStorage.setItem(companyStorageKey(activeCompany.id,"customers"),JSON.stringify(confirmedCustomers)); localStorage.setItem(companyStorageKey(activeCompany.id,"service-orders"),JSON.stringify(confirmedOrders)); localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(confirmedModules));
+    const confirmedOrders: ServiceOrder[] | undefined = result?.state?.serviceOrders;
+    const confirmedOrder = Array.isArray(confirmedOrders) ? confirmedOrders.find(order => order.id === orderForPersistence.id) : undefined;
+    if (result?.saved !== true || !confirmedOrder || !confirmedOrders) {
+      return rejectSave("O servidor não confirmou a gravação desta OS. Suas alterações continuam em edição.");
+    }
+    const confirmedCustomers = result.state.customers ?? customerRecords;
+    const confirmedModules = mergeImportedServices(result.state.moduleRecords ?? updatedModules);
+    setCustomerRecords(confirmedCustomers); setServiceOrders(confirmedOrders); setModuleRecords(confirmedModules); setSelectedOrder(confirmedOrder); setStateRevision(Number(result.state._revision));
+    try {
+      localStorage.setItem(companyStorageKey(activeCompany.id,"customers"),JSON.stringify(confirmedCustomers)); localStorage.setItem(companyStorageKey(activeCompany.id,"service-orders"),JSON.stringify(confirmedOrders)); localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(confirmedModules));
+    } catch {}
     // O acompanhamento externo recebe somente o recorte liberado ao cliente;
     // observações internas, financeiro e demais dados operacionais ficam na base autenticada.
     if (orderForPersistence.trackingToken) {
@@ -4755,7 +4766,7 @@ export default function Home() {
       }
     }
     showFeedback(orderForPersistence.status === "Concluída" && orderForPersistence.reminderEnabled ? `OS ${orderForPersistence.id} salva com sucesso • conclusão confirmada e lembrete agendado.` : `Alteração salva com sucesso • OS ${orderForPersistence.id} confirmada no banco.`, "success");
-    return orderForPersistence;
+    return confirmedOrder;
   };
   const hasAction = (moduleName: string, action: "Visualizar" | "Criar" | "Editar" | "Excluir") => Boolean(authenticatedUser?.permissions?.includes("*") || authenticatedUser?.role === "Administrador" || authenticatedUser?.permissions?.includes(`${moduleName}:${action}`));
   const updateCustomer = (updatedCustomer: Customer) => {
@@ -5441,7 +5452,7 @@ export default function Home() {
       <footer><span>© {new Date().getFullYear()} ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
     {modal && <div data-testid={modal === "Novo cliente" ? "customer-new-dialog" : undefined}><Modal initialOrderSeed={orderSeed} title={modal} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalogRecords={[...(moduleRecords["Serviços"] ?? []).map(item=>({...item,kind:"Serviço" as const})), ...(moduleRecords["Produtos"] ?? []).map(item=>({...item,kind:"Produto" as const}))]} supplierRecords={moduleRecords["Fornecedores"] ?? []} employeeRecords={moduleRecords["Funcionários"] ?? []} equipmentRecords={moduleRecords["Equipamentos"] ?? []} serviceOrders={serviceOrders} close={() => {setModal("");setOrderSeed(undefined);}} onSave={saveRecord} canCreateCustomer={hasAction("Clientes","Criar")} onCreateCustomer={createOrderCustomer} onCreateStructure={createOrderStructure}/></div>}
-    {selectedOrder && <OrderDetail order={selectedOrder} customerPhone={(customerRecords.find(customer => customer.id === selectedOrder.customerId) || customerRecords.find(customer => customer.name === selectedOrder.client))?.phone} company={activeCompany} catalog={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} contracts={(moduleRecords.Certames ?? []) as PublicContractRecord[]} customers={customerRecords} employees={moduleRecords["Funcionários"] ?? []} structures={moduleRecords["Unidades e setores"] ?? []} equipment={moduleRecords["Equipamentos"] ?? []} errorCodes={[...(moduleRecords["Códigos HVAC"] ?? []), ...(moduleRecords["Códigos de erro"] ?? []), ...(moduleRecords["ErrorCode"] ?? [])]} manuals={[...(moduleRecords["Base Técnica"] ?? []), ...(moduleRecords["Manuais Técnicos"] ?? []), ...(moduleRecords["Manuais HVAC"] ?? []), ...(moduleRecords["DiagnosticManual"] ?? [])]} close={() => setSelectedOrder(null)} onUpdate={updateServiceOrder} onDelete={deleteOrder} onSyncEquipmentDiagnostic={async (equipmentId, entry) => {
+    {selectedOrder && <OrderDetail order={selectedOrder} customerPhone={(customerRecords.find(customer => customer.id === selectedOrder.customerId) || customerRecords.find(customer => customer.name === selectedOrder.client))?.phone} company={activeCompany} catalog={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} contracts={(moduleRecords.Certames ?? []) as PublicContractRecord[]} customers={customerRecords} employees={moduleRecords["Funcionários"] ?? []} structures={moduleRecords["Unidades e setores"] ?? []} equipment={moduleRecords["Equipamentos"] ?? []} errorCodes={[...(moduleRecords["Códigos HVAC"] ?? []), ...(moduleRecords["Códigos de erro"] ?? []), ...(moduleRecords["ErrorCode"] ?? [])]} manuals={[...(moduleRecords["Base Técnica"] ?? []), ...(moduleRecords["Manuais Técnicos"] ?? []), ...(moduleRecords["Manuais HVAC"] ?? []), ...(moduleRecords["DiagnosticManual"] ?? [])]} close={() => setSelectedOrder(null)} onUpdate={order => updateServiceOrder(order, true)} onDelete={deleteOrder} onSyncEquipmentDiagnostic={async (equipmentId, entry) => {
     const currentEquipment=(moduleRecords["Equipamentos"] ?? []).find(item=>item.id===equipmentId);
     if(!currentEquipment)return false;
     const history=Array.isArray(currentEquipment.diagnosticHistory)?currentEquipment.diagnosticHistory as Record<string,unknown>[]:[];
