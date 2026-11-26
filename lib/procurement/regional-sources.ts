@@ -30,6 +30,6 @@ export function publicationSystem(name:unknown):string|undefined{
 
 export function disputePlatformFromUrl(value:unknown):string|undefined{
  let host='';try{host=new URL(String(value??'')).hostname.toLowerCase().replace(/^www\./,'');}catch{return undefined;}
- for(const [domain,name] of [['bllcompras.com','BLL Compras'],['compras.gov.br','Compras.gov.br'],['comprasnet.gov.br','Compras.gov.br'],['licitacoes-e.com.br','Licitações-e'],['bec.sp.gov.br','BEC-SP']])if(host===domain||host.endsWith(`.${domain}`))return name;
+ for(const [domain,name] of [['licitanet.com.br','Licitanet'],['portaldecompraspublicas.com.br','Portal de Compras Públicas'],['cnetmobile.estaleiro.serpro.gov.br','Compras.gov.br'],['bllcompras.com','BLL Compras'],['compras.gov.br','Compras.gov.br'],['comprasnet.gov.br','Compras.gov.br'],['licitacoes-e.com.br','Licitações-e'],['bec.sp.gov.br','BEC-SP']])if(host===domain||host.endsWith(`.${domain}`))return name;
  return undefined;
 }
