@@ -5,7 +5,7 @@ import { assertActiveWhatsAppCompany } from "./evolution-tenant";
 import { resolveTenantDb, tenantHeaders } from "./tenant-rest";
 import { databaseFetch, supabaseRest } from "./supabase-rest";
 import { commitJsonState } from "./state-commit";
-import { chatSectors, canReadChat, chatQueueSummary, defaultChatQuickReplies, validateChatQuickReplies, validateBusinessHours, type ChatQuickReply, type ChatActor, type ChatConversation, type ChatSector, type LocalChatSettings } from "./chatdesk-local";
+import { chatSectors, canReadChat, chatQueueSummary, defaultChatQuickReplies, validateChatQuickReplies, validateBusinessHours, validateChatAutomationFlows, type ChatQuickReply, type ChatActor, type ChatConversation, type ChatSector, type LocalChatSettings } from "./chatdesk-local";
 
 export function chatAccess(request: NextRequest) {
   const session = sessionFromRequest(request);
@@ -76,14 +76,14 @@ export async function chatSettings(companyId: string): Promise<LocalChatSettings
   const rows = await response.json();
   const stored = rows[0]?.payload;
   if (stored && stored.companyId !== companyId) throw new Error("Configuração inválida.");
-  if (stored) return {...stored,quickReplies:stored.quickReplies || defaultChatQuickReplies};
+  if (stored) return {...stored,quickReplies:stored.quickReplies || defaultChatQuickReplies,flows:validateChatAutomationFlows(stored.flows)};
   const companyResponse = await supabaseRest(`proar_companies?select=id,trade_name,legal_name&id=eq.${encodeURIComponent(companyId)}&limit=1`);
   if (!companyResponse.ok) throw new Error("Não foi possível carregar a identificação da empresa.");
   const companies = await companyResponse.json();
   if (companies[0]?.id !== companyId) throw new Error("Empresa não identificada.");
-  return { companyId, revision: 0, botEnabled: false, companyName: String(companies[0].trade_name || companies[0].legal_name || "").slice(0, 100), greeting: "", quickReplies: defaultChatQuickReplies };
+  return { companyId, revision: 0, botEnabled: false, companyName: String(companies[0].trade_name || companies[0].legal_name || "").slice(0, 100), greeting: "", quickReplies: defaultChatQuickReplies, flows: [] };
 }
-export async function saveChatSettings(companyId: string, input: { revision: number; botEnabled: boolean; botTestPhone?: unknown; companyName: string; greeting: string; quickReplies?: ChatQuickReply[]; businessHours?: unknown; followUp?: unknown }) {
+export async function saveChatSettings(companyId: string, input: { revision: number; botEnabled: boolean; botTestPhone?: unknown; companyName: string; greeting: string; quickReplies?: ChatQuickReply[]; flows?: unknown; businessHours?: unknown; followUp?: unknown }) {
   await assertActiveWhatsAppCompany(companyId);
   const db = await chatDb(companyId);
   const previous = await chatSettings(companyId);
@@ -106,7 +106,7 @@ export async function saveChatSettings(companyId: string, input: { revision: num
   const followUpEnabled=opt.enabled===true && Boolean(botTestPhone) && businessHours.length>0;
   const followUp={enabled:followUpEnabled,delayMinutes,enabledAt:followUpEnabled
     ? (previous.followUp?.enabled && previous.followUp.enabledAt && previous.botTestPhone===botTestPhone ? previous.followUp.enabledAt : new Date().toISOString()) : ""};
-  const payload = { companyId, revision: previous.revision + 1, botEnabled, botActivatedAt, botTestPhone, businessHours, followUp, companyName: String(input.companyName || "").trim().slice(0, 100), greeting: String(input.greeting || "").trim().slice(0, 500), quickReplies: validateChatQuickReplies(input.quickReplies === undefined ? previous.quickReplies || defaultChatQuickReplies : input.quickReplies) };
+  const payload = { companyId, revision: previous.revision + 1, botEnabled, botActivatedAt, botTestPhone, businessHours, followUp, companyName: String(input.companyName || "").trim().slice(0, 100), greeting: String(input.greeting || "").trim().slice(0, 500), quickReplies: validateChatQuickReplies(input.quickReplies === undefined ? previous.quickReplies || defaultChatQuickReplies : input.quickReplies), flows: validateChatAutomationFlows(input.flows === undefined ? previous.flows || [] : input.flows) };
   const result = await commitJsonState(databaseFetch, db.url, tenantHeaders(db.key), settingsId(companyId), previous.revision ? previous as unknown as Record<string, unknown> : null, payload);
   if (!result.ok) throw new Error("Não foi possível salvar. Atualize a configuração e tente novamente.");
   return payload;
