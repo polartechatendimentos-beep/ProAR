@@ -26,10 +26,38 @@ export type ServiceIntake = {
   responses?: {key:string; text:string; at:string}[];
 };
 export type ChatMessage = { id: string; direction: "in" | "out" | "note" | "event"; text: string; at: string; actor?: string; status?: string; providerMessageId?: string; assistantReplyKey?: string; assistantNudge?: boolean; hoursNoticeFor?: string; pilotTurn?: boolean; replyToId?: string; mediaKind?: "foto" | "áudio" | "vídeo" | "documento"; deliveryStatus?: DeliveryStatus };
-export type ChatConversation = { companyId: string; phone: string; name: string; sector: ChatSector; stage: ChatStage; assignee: string; revision: number; botPaused: boolean; optOut: boolean; messages: ChatMessage[]; requests: string[]; updatedAt: string; orderId?: string; assistantHandoffAt?: string; mediaTrial?: Partial<Record<"foto"|"áudio",{id:string;at:string;state:string}>>; intake?: ServiceIntake; pendingDeliveryReceipts?: PendingDeliveryReceipt[]; queueActivity?: { urgent?: boolean; incoming?: ChatMessage; humanReplyAt?: string; lastOutbound?: Pick<ChatMessage, "at" | "status" | "deliveryStatus"> } };
+export type ChatConversation = { tags?:string[]; companyId: string; phone: string; name: string; sector: ChatSector; stage: ChatStage; assignee: string; revision: number; botPaused: boolean; optOut: boolean; messages: ChatMessage[]; requests: string[]; updatedAt: string; orderId?: string; assistantHandoffAt?: string; mediaTrial?: Partial<Record<"foto"|"áudio",{id:string;at:string;state:string}>>; intake?: ServiceIntake; pendingDeliveryReceipts?: PendingDeliveryReceipt[]; queueActivity?: { urgent?: boolean; incoming?: ChatMessage; humanReplyAt?: string; lastOutbound?: Pick<ChatMessage, "at" | "status" | "deliveryStatus"> } };
 export type ChatActor = { username: string; displayName: string; role: string; sectors: ChatSector[]; writeSectors: ChatSector[]; canWrite: boolean; admin: boolean };
-export type LocalChatSettings = { companyId: string; revision: number; botEnabled: boolean; botActivatedAt?: string; botTestPhone?: string; companyName: string; greeting: string; quickReplies?: ChatQuickReply[]; businessHours?: BusinessDay[]; followUp?: {enabled:boolean;delayMinutes:number;enabledAt:string} };
+export type LocalChatSettings = { companyId: string; revision: number; botEnabled: boolean; botActivatedAt?: string; botTestPhone?: string; companyName: string; greeting: string; quickReplies?: ChatQuickReply[]; flows?: ChatAutomationFlow[]; businessHours?: BusinessDay[]; followUp?: {enabled:boolean;delayMinutes:number;enabledAt:string} };
 const normalized = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+export type ChatAutomationFlow = { id:string; name:string; enabled:boolean; keywords:string[]; matchMode:"any"|"all"; sector:"Todos"|ChatSector; response:string; targetSector?:ChatSector; targetStage?:ChatStage; addTags?:string[] };
+export function validateChatAutomationFlows(value:unknown):ChatAutomationFlow[]{
+  if(value===undefined)return [];
+  if(!Array.isArray(value)||value.length>50)throw new Error("Cadastre até 50 automações.");
+  const ids=new Set<string>();
+  return value.map((raw,index)=>{
+    if(!raw||typeof raw!=="object"||Array.isArray(raw))throw new Error(`Automação ${index+1} inválida.`);
+    const flow=raw as Record<string,unknown>,id=String(flow.id||"").trim(),name=String(flow.name||"").trim(),response=String(flow.response||"").trim();
+    const keywords=Array.isArray(flow.keywords)?flow.keywords.map(item=>String(item).trim()).filter(Boolean).slice(0,20):[];
+    const addTags=Array.isArray(flow.addTags)?[...new Set(flow.addTags.map(item=>String(item).trim()).filter(Boolean))].slice(0,10):[];
+    const matchMode=flow.matchMode==="all"?"all":"any",sector=String(flow.sector||"Todos");
+    const targetSector=String(flow.targetSector||""),targetStage=String(flow.targetStage||"");
+    if(!/^[a-zA-Z0-9_-]{1,80}$/.test(id)||ids.has(id))throw new Error(`Identificação inválida ou repetida na automação ${index+1}.`);
+    if(name.length<2||name.length>80)throw new Error(`Informe um nome de 2 a 80 caracteres na automação ${index+1}.`);
+    if(!keywords.length||keywords.some(word=>word.length<2||word.length>80))throw new Error(`Informe de 1 a 20 palavras-chave de 2 a 80 caracteres na automação ${index+1}.`);
+    if(response.length<2||response.length>1200)throw new Error(`A resposta da automação ${index+1} deve ter de 2 a 1.200 caracteres.`);
+    if(!["Todos",...chatSectors].includes(sector as ChatSector|"Todos"))throw new Error(`Setor inválido na automação ${index+1}.`);
+    if(targetSector&&!chatSectors.includes(targetSector as ChatSector))throw new Error(`Setor de destino inválido na automação ${index+1}.`);
+    if(targetStage&&!chatStages.includes(targetStage as ChatStage))throw new Error(`Etapa de destino inválida na automação ${index+1}.`);
+    if(addTags.some(tag=>tag.length>30))throw new Error(`As etiquetas da automação ${index+1} devem ter até 30 caracteres.`);
+    ids.add(id);
+    return {id,name,enabled:flow.enabled===true,keywords,matchMode,sector:sector as ChatAutomationFlow["sector"],response,...(targetSector?{targetSector:targetSector as ChatSector}:{}),...(targetStage?{targetStage:targetStage as ChatStage}:{}),...(addTags.length?{addTags}:{})};
+  });
+}
+export function matchChatAutomation(flows:ChatAutomationFlow[]|undefined,text:string,sector:ChatSector){
+  const value=normalized(text);
+  return (flows||[]).find(flow=>flow.enabled&&(flow.sector==="Todos"||flow.sector===sector)&&flow.keywords.length>0&&(flow.matchMode==="all"?flow.keywords.every(keyword=>value.includes(normalized(keyword))):flow.keywords.some(keyword=>value.includes(normalized(keyword)))))||null;
+}
 export type ChatIntent = "Orçamento" | "Manutenção" | "Instalação" | "Agendamento" | "Licitação" | "Dúvida geral";
 export type BusinessDay = { day:number; opens:string; closes:string };
 export function detectChatIntents(text:string):ChatIntent[] {

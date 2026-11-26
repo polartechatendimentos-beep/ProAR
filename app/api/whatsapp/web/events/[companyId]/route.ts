@@ -4,7 +4,7 @@ import { validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery, c
 import { requiredSecret } from "../../../../../../lib/security-env";
 import { assertActiveWhatsAppCompany, evolutionConnection, tenantEvolutionAutomationEnabled } from "../../../../../../lib/evolution-tenant";
 import { changeChat, chatSettings } from "../../../../../../lib/chatdesk-store";
-import { localTriage, eventReplyPlan, pilotReplyPlan, handoffSupplementPlan, businessHoursNotice, recordIntakeReply, updateServiceIntake, type ChatConversation } from "../../../../../../lib/chatdesk-local";
+import { localTriage, matchChatAutomation, eventReplyPlan, pilotReplyPlan, handoffSupplementPlan, businessHoursNotice, recordIntakeReply, updateServiceIntake, type ChatConversation } from "../../../../../../lib/chatdesk-local";
 import { applyChatDeliveryReceipt, completeChatSend } from "../../../../../../lib/chatdesk-delivery";
 import { dispatchEvolutionJob } from "../../../../../../lib/evolution-jobs";
 export const runtime = "nodejs";
@@ -74,6 +74,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ co
       const reserved = await changeChat(companyId, event.phone, current => {
         if (!current || current.assignee || (current.botPaused && (!freshPilot || !current.assistantHandoffAt)) || current.optOut || current.messages.some(message => message.id === botId)) return null;
         if (repairReservation && current.messages.findLast(message => message.direction === "in")?.id !== event.id) return null;
+        const flow = matchChatAutomation(settings.flows,event.text,current.sector);
         const plan = current.botPaused ? handoffSupplementPlan(current, event.id, Date.now(), appointmentHandled, agendaFailed)
           : settings.botActivatedAt
           ? pilot ? pilotReplyPlan(current.messages, event.id, settings.botActivatedAt, Date.now(), agendaFailed, appointmentHandled, current.intake)
@@ -87,9 +88,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ co
         const notice = freshPilot && !triage.urgent ? businessHoursNotice(settings.businessHours) : null;
         const showNotice = notice && !current.messages.some(message=>message.hoursNoticeFor===notice.key);
         const text = (plan.first ? introduction + (settings.greeting ? settings.greeting + "\n\n" : "") : "")
-          + (showNotice ? notice.text + "\n\n" : "") + plan.reply;
+          + (showNotice ? notice.text + "\n\n" : "") + (flow && !plan.handoff ? flow.response : plan.reply);
         const next = structuredClone(current);
         const at = new Date().toISOString();
+        if (flow) {
+          if(flow.targetSector)next.sector=flow.targetSector;
+          if(flow.targetStage)next.stage=flow.targetStage;
+          if(flow.addTags?.length)next.tags=[...new Set([...(next.tags||[]),...flow.addTags])].slice(0,20);
+        }
         if (plan.handoff) {
           next.assistantHandoffAt = at;
           next.botPaused = true;
