@@ -66,7 +66,7 @@ export function detectChatIntents(text:string):ChatIntent[] {
     ["Licitação",/\b(?:licitacao|licitacoes|edital|pregao|pncp|compras publicas)\b/],
     ["Agendamento",/\b(?:agendar|agendamento|reagendar|remarcar|cancelar (?:a |o )?(?:visita|horario)|(?:podem|conseguem) vi(?:r|m)|tem como vir)\b/],
     ["Instalação",/\b(?:instalacao|instalam|instalar|desinstalacao|remocao|retirada do aparelho)\b/],
-    ["Manutenção",/\b(?:manutencao|higienizacao|pmoc|nao gela|nao liga|barulho|defeito|esta pingando|pingando|pinga|vazamento|gotejando|limpeza do ar|parou de gelar)\b/],
+    ["Manutenção",/\b(?:manutencao|higienizacao|pmoc|nao (?:gela|(?:esta|ta) gelando)|nao liga|barulho|defeito|esta pingando|pingando|pinga|vazamento|gotejando|limpeza do ar|parou de gelar)\b/],
     ["Orçamento",/\b(?:orcamento|preco|quanto (?:custa|fica)|qual (?:e )?o valor|cotacao)\b/],
   ];
   const found=patterns.filter(([,pattern])=>pattern.test(value)).map(([label])=>label);
@@ -107,7 +107,7 @@ export function localTriage(text: string) {
   const value = normalized(text);
   const urgent = /(?:agua\s+(?:perto|proxima|caindo)\s+(?:d[oa]s?\s+|n[ao]s?\s+)?(?:tomada|fiacao|componentes? eletricos?|partes? eletricas?)|cheiro de queimad|fumaca|faisca|choque eletric|curto.circuito|fio(?:s)? (?:esta(?:o)? )?derretend|disjuntor (?:esta )?(?:desarmand|caind)|tomada (?:esta )?(?:esquentand|derretend))/.test(value);
   const optOut = /(?:nao (?:quero|desejo) (?:mais )?receber|nao (?:me )?(?:mande|envie) mais mensagens|pare de (?:me )?enviar|pare de mandar mensagens|retire meu (?:numero|contato)|cancelar (?:as )?mensagens|remover meu (?:numero|contato))/.test(value) || /^(?:sair|parar|stop|cancelar)[.!\s]*$/.test(value.trim());
-  const matches: [ChatSector, RegExp][] = [["Financeiro", /boleto|\bpix\b|nota fiscal|cobranca|pagamento|financeiro/], ["PMOC", /\bpmoc\b|contrato|laudo|preventiva|certificado/], ["Comercial", /orcamento|preco|comprar|venda|instalacao/], ["Técnico", /nao gela|pingando|pinga\b|gotejando|goteja\b|caindo agua|escorrendo agua|vazando|vazamento|erro|defeito|barulho|manutencao|higienizacao|limpeza do ar|parou de gelar/]];
+  const matches: [ChatSector, RegExp][] = [["Financeiro", /boleto|\bpix\b|nota fiscal|cobranca|pagamento|financeiro/], ["PMOC", /\bpmoc\b|contrato|laudo|preventiva|certificado/], ["Comercial", /orcamento|preco|comprar|venda|instalacao/], ["Técnico", /nao (?:gela|(?:esta|ta) gelando)|pingando|pinga\b|gotejando|goteja\b|caindo agua|escorrendo agua|vazando|vazamento|erro|defeito|barulho|manutencao|higienizacao|limpeza do ar|parou de gelar/]];
   const found = matches.filter(([, expression]) => expression.test(value)).map(([sector]) => sector);
   const sector: ChatSector = urgent || leakIntent.test(value) ? "Técnico" : found[0] || "Geral";
   const suggestions: Record<ChatSector, string> = {
@@ -362,7 +362,7 @@ export function updateServiceIntake(previous: ServiceIntake | undefined, message
   facts.urgent ||= localTriage(value).urgent;
   const aside = Boolean((facts.symptom || facts.service) && (serviceAside(clue) || visitAside(clue)));
   const standalone = /^[\p{L}\p{N}][\p{L}\p{N} .'-]{0,70}$/u.test(value) && !/^(?:oi|sim|não|nao|ok|obrigad[oa]|não sei|nao sei)$/iu.test(value);
-  if (!aside && (leakIntent.test(clue) || /\b(?:nao gela|nao esta gelando|parou de gelar|nao liga|barulho|cheiro de queimado|agua perto|falha|erro|higienizacao|limpeza do ar|manutencao)\b/.test(clue))) {
+  if (!aside && (leakIntent.test(clue) || /\b(?:nao (?:gela|(?:esta|ta) gelando)|parou de gelar|nao liga|barulho|cheiro de queimado|agua perto|falha|erro|higienizacao|limpeza do ar|manutencao)\b/.test(clue))) {
     facts.symptom = compact(value);
     facts.service = /\b(?:higienizacao|limpeza do ar)\b/.test(clue) ? "Higienização" : "Avaliação técnica";
   }
@@ -406,7 +406,14 @@ export function updateServiceIntake(previous: ServiceIntake | undefined, message
   if (facts.service==="Instalação" && (infrastructureDetail.test(clue) || (recentPrompt && /^installation:110(?::clarify)?$/.test(prompt || "") && /^(?:sim|nao)[.!]?$/i.test(clue)))) {
     facts.infrastructure = /\b(?:nao|sem)\b/.test(clue) ? "Não informada como existente" : /^(?:sim|ja tem|tem sim)|\b(?:ja tem|ja existe|tem tubulacao|tem infraestrutura)\b/.test(clue) ? "Existente segundo o cliente" : undefined;
   }
-  const since = value.match(/\b(?:desde\s+[^,;.!?\n]{2,48}|h[áa]\s+(?:\d{1,3}|um[aa]?|dois|três)\s+(?:dias?|semanas?|meses?|horas?))/iu)?.[0];
+  // A duration without "há"/"desde" is meaningful only as a response to
+  // the recent onset question, not as a scheduling preference or a new topic.
+  const answeringOnset = recentPrompt && before && (event.replyToId || before === chat.findLast(message => message.direction === "out"))
+    && (prompt === "tecnico:inicio" || /\b(?:desde quando|quando (?:isso )?come[cç]ou)\b/i.test(before.text))
+    && Boolean(facts.symptom);
+  const shortOnset = /^[\s]*(?:(?:faz\s+)?(?:uns?\s+|umas?\s+)?(?:(?:\d{1,3}|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez)\s+(?:horas?|dias?|semanas?|mes(?:es)?|anos?)|(?:semanas?|dias?|mes|ano)\s+passad[oa]s?)|hoje|ontem|anteontem|(?:segunda|terca|quarta|quinta|sexta)(?:-feira)?|sabado|domingo)(?:\s+(?:atras|de manha|a tarde|a noite))?[.!\s]*$/u;
+  const since = value.match(/\b(?:desde\s+[^,;.!?\n]{2,48}|h[áa]\s+(?:\d{1,3}|um[aa]?|dois|três)\s+(?:dias?|semanas?|meses?|horas?))/iu)?.[0]
+    || (answeringOnset && !event.mediaKind && shortOnset.test(clue) ? value : undefined);
   if (since) facts.since = compact(since);
   const preference = value.match(/\b(?:de manhã|à tarde|à noite|amanhã|segunda-feira|terça-feira|quarta-feira|quinta-feira|sexta-feira|sábado|domingo)\b(?:\s+(?:de manhã|à tarde|à noite))?/iu)?.[0];
   if (preference && !since) facts.preference = compact(preference);

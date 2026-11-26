@@ -5,7 +5,7 @@ import {stripTypeScriptTypes} from 'node:module';
 import {runInNewContext} from 'node:vm';
 import {canReplyToNewInbound, chatWebhookToken, validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery} from '../lib/chatdesk-events.ts';
 import {applyChatDeliveryReceipt, completeChatSend} from "../lib/chatdesk-delivery.ts";
-import {localTriage, eventReplyPlan, pilotReplyPlan, businessHoursNotice, detectChatIntents, validateBusinessHours, handoffSupplementPlan, recordIntakeReply, updateServiceIntake, chatQueuePriority, chatQueueSummary} from '../lib/chatdesk-local.ts';
+import {localTriage, matchChatAutomation, eventReplyPlan, pilotReplyPlan, businessHoursNotice, detectChatIntents, validateBusinessHours, handoffSupplementPlan, recordIntakeReply, updateServiceIntake, chatQueuePriority, chatQueueSummary} from '../lib/chatdesk-local.ts';
 import {tenantSlugFromHost} from "../lib/tenant-host.ts";
 
 test('first-response eligibility excludes old, future, media-only, and courtesy messages', () => {
@@ -36,7 +36,7 @@ test('authenticated arrival can answer immediately with the reminders switch off
   const env = {PROAR_EVOLUTION_AUTOMATION_ENABLED:'true'};
   const handle = runInNewContext(source+'\nPOST', {
     NextResponse:{json:(body, init)=>({body,status:init?.status??200})},
-    process:{env}, structuredClone, validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery, applyChatDeliveryReceipt, completeChatSend, canReplyToNewInbound, localTriage, eventReplyPlan, pilotReplyPlan, businessHoursNotice, handoffSupplementPlan, recordIntakeReply, updateServiceIntake,
+    process:{env}, structuredClone, validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery, applyChatDeliveryReceipt, completeChatSend, canReplyToNewInbound, localTriage, matchChatAutomation, eventReplyPlan, pilotReplyPlan, businessHoursNotice, handoffSupplementPlan, recordIntakeReply, updateServiceIntake,
     requiredSecret:()=>secret, assertActiveWhatsAppCompany:async id=>assert.equal(id,tenant),
     evolutionConnection:async()=>({config:{instance}}), chatSettings:async()=>settings,
     recordAppointmentReply:async()=>{if(bookingFailure)throw new Error("Sem agenda");return appointmentHandled;}, tenantEvolutionAutomationEnabled:async()=>false,
@@ -513,4 +513,33 @@ test('after-hours reply uses saved Brasília hours and never assumes an unconfig
   assert.match(businessHoursNotice(hours,new Date("2026-11-25T23:00:00Z")).text,/sábado às 08:00/);
   assert.match(businessHoursNotice(hours,new Date("2026-11-25T10:00:00Z")).text,/hoje às 08:00/);
   assert.throws(()=>validateBusinessHours([{day:2,opens:"21:00",closes:"08:00"}]),/Horário inválido/);
+});
+
+
+test('cooling issue accepts a short duration and continues without restarting intake', () => {
+  const now=Date.parse("2026-11-26T18:10:00Z"), activatedAt="2026-11-26T18:00:00Z";
+  const messages=[];
+  let intake;
+  function step(id,text,fields={}) {
+    const at=new Date(now-20_000+messages.length*1000).toISOString();
+    messages.push({id,text,at,direction:"in",...fields});
+    intake=updateServiceIntake(intake,messages,id);
+    const plan=pilotReplyPlan(messages,id,activatedAt,now,false,false,intake);
+    if(plan) messages.push({id:"r"+id,providerMessageId:"wa-"+id,text:plan.reply,at,direction:"out",actor:"local-assistant",status:"accepted",assistantReplyKey:plan.key});
+    return plan;
+  }
+  assert.match(step("hello","Oi").reply,/Como posso ajudar/);
+  assert.equal(step("symptom","Não está gelando").key,"tecnico:inicio");
+  assert.equal(step("duration","Uma semana").key,"tecnico:cidade");
+  assert.equal(intake.since,"Uma semana");
+  assert.ok(!intake.pending.includes("quando começou"));
+  step("correction","3 dias.",{replyToId:"wa-symptom"});
+  assert.equal(intake.since,"3 dias");
+  assert.equal(step("town","Mirassol").key,"tecnico:bairro");
+  step("different-question","Uma semana");
+  assert.equal(intake.since,"3 dias");
+});
+
+test('tá gelando wording is classified as maintenance, not equipment or a new topic', () => {
+  assert.ok(detectChatIntents("Meu ar condicionado não tá gelando").includes("Manutenção"));
 });
