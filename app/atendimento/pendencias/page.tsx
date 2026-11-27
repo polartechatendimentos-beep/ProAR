@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { ConversationBottlenecks, DailyActionableDigest } from "../../../lib/daily-actionable-digest";
 import styles from "../workspace.module.css";
+import { useAttendancePalette } from "../useAttendancePalette";
 
 const dayLabel = (day: string) => day.split("-").reverse().join("/");
 const timeLabel = (instant: string) => new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" }).format(new Date(instant));
@@ -23,6 +24,7 @@ function BottleneckCounts({ heading, counts }: { heading: string; counts: Conver
 }
 
 export default function DailyPendingDigestPage() {
+  const { darkMode } = useAttendancePalette();
   const [refresh, setRefresh] = useState(0);
   const [data, setData] = useState<DailyActionableDigest | null>(null);
   const [error, setError] = useState("");
@@ -44,7 +46,7 @@ export default function DailyPendingDigestPage() {
     { heading: `Visitas de ${dayLabel(data.tomorrow)} sem presença confirmada`, ...data.visits, href: "/?tab=agenda", link: "Abrir agenda" },
   ] : [];
   const hasItems = sections.some(item => item.total > 0);
-  return <main className={styles.workspace}>
+  return <main className={`${styles.workspace} ${darkMode ? styles.workspaceDark : ""}`}>
     <div className={styles.content}>
       <header className={styles.header}>
         <div><Link href="/atendimento">Voltar ao Atendimento</Link><h1>Pendências do dia</h1><p>Conferência da empresa para fechar o expediente. Nenhuma mensagem é enviada por esta tela.</p></div>

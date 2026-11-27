@@ -4,6 +4,8 @@ import test from "node:test";
 
 const css = readFileSync(new URL("../app/proar520-layout-a11y.css", import.meta.url), "utf8");
 
+const palette = readFileSync(new URL("../app/proar-keyboard-palette.css", import.meta.url), "utf8");
+
 function declarationBlock(selector) {
   const start = css.indexOf(selector);
   assert.notEqual(start, -1, `seletor não encontrado: ${selector}`);
@@ -14,9 +16,9 @@ function declarationBlock(selector) {
 }
 
 function token(block, name) {
-  const match = block.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})\\s*;`));
+  const match = block.match(new RegExp(`--${name}:\\s*(?:(#[0-9a-fA-F]{6})|var\\(--(kbd-[\\w-]+)\\))\\s*;`));
   assert.ok(match, `token --${name} não encontrado`);
-  return match[1];
+  return match[1] ?? token(palette, match[2]);
 }
 
 function luminance(hex) {

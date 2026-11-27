@@ -1,4 +1,4 @@
-const CACHE = "proar-shell-offline-day-v7";
+const CACHE = "proar-shell-offline-day-v8";
 const SHELL = ["/", "/manifest.webmanifest", "/manifest-system.webmanifest", "/brand/proar-mobile-192.png", "/brand/proar-mobile-512.png", "/brand/proar-system-192.png", "/brand/proar-system-512.png", "/icon-192.png", "/icon-512.png", "/proar-logo.png"];
 async function prepareMobileShell(){
   const cache=await caches.open(CACHE),response=await fetch('/mobile',{cache:'no-store'});
