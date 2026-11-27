@@ -195,3 +195,35 @@
 .libraryTable{overflow-x:auto;border:1px solid var(--field-line);border-radius:12px}.libraryTable table{width:100%;border-collapse:collapse;background:var(--field-card);color:var(--field-text);font-size:14px}.libraryTable :is(th,td){padding:10px;text-align:right;border-bottom:1px solid var(--field-line);font-variant-numeric:tabular-nums}.libraryTable caption{padding:10px;text-align:left}.librarySource{display:flex;flex-wrap:wrap;gap:8px;border-top:1px solid var(--field-line);padding:12px 0;margin-top:10px}.librarySource a{color:var(--field-accent);overflow-wrap:anywhere}.librarySource small{flex-basis:100%;color:var(--field-muted)}.librarySource button{border:1px solid var(--field-line);background:var(--field-soft);color:var(--field-text);border-radius:8px;padding:8px}
 
 .mobileLogin{max-width:460px;margin:24px auto;padding:24px}.mobileLogin form>.primaryAction{width:100%;margin-top:12px}.mobileLogin input{font-size:16px!important}.mobileLogin .title{font-size:26px}
+
+/* Detail of a work order: compact identity and one visible work stage. */
+.osIdentity{min-width:0;padding:12px 14px;border:1px solid #335677;border-radius:14px;background:#102640}
+.osIdentity h2{font-size:17px;line-height:1.35;margin:6px 0;overflow-wrap:anywhere}
+.osIdentity p{margin:5px 0;line-height:1.4}
+.osTitleRow,.osRoute{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.osTitleRow .title{font-size:21px;margin:0}
+.osRoute .secondaryAction{padding:6px 10px;margin:0;width:auto;min-height:40px}
+.osStepNav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin:10px 0;scroll-margin-top:84px}
+.osStepNav button{border:1px solid #416180;border-radius:8px;background:transparent;color:inherit;min-height:44px;padding:3px;font:inherit;font-size:.88em;overflow-wrap:anywhere;cursor:pointer}
+.osStepNav button[aria-current="step"]{background:#164972;border-color:#6bc8f6;color:#fff;font-weight:750}
+.osStepNav button:focus-visible,.osDisclosure summary:focus-visible,.osQuietAction:focus-visible,.osPhotoLabel:focus-within .osPhotoButton{outline:2px solid #62cfff;outline-offset:2px}
+.osStepPanel{min-width:0}.osStepPanel[hidden]{display:none}.osStepPanel h3{font-size:1rem}
+.osStepPanel textarea{min-height:84px}
+.osDisclosure{padding:8px 0;border-top:1px solid #345472;margin:7px 0}
+.osDisclosure summary{min-height:40px;cursor:pointer;font-weight:650;line-height:40px}
+.osPending{list-style:none;margin:0;padding:0}
+.osPending .secondaryAction{margin:3px 0;text-align:left;justify-content:flex-start}
+.osChecklist .checkLabel{padding:7px 9px;margin:4px 0;border-radius:8px;min-height:42px}
+.osPhotos{border-bottom:1px solid #345472;padding:9px 0;margin:4px 0}
+.osPhotoLabel{display:flex;align-items:center;justify-content:space-between;gap:8px;position:relative;font-weight:700}
+.osPhotoButton{border:1px solid #537998;border-radius:8px;padding:8px 10px;min-height:40px;display:inline-flex;align-items:center;cursor:pointer}
+.osPhotoLabel:has(input:disabled) .osPhotoButton{opacity:.55;cursor:not-allowed}
+.osPhotoInput{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);padding:0;border:0}
+.osActions{position:sticky;bottom:0;z-index:8;display:flex;flex-direction:column;gap:4px;margin-top:12px;padding:8px 2px max(6px,env(safe-area-inset-bottom));border-top:1px solid #345472;background:#102640}
+.orderEditor .osActions :is(.primaryAction,.finishAction){margin:0;min-height:44px}
+.osQuietAction{align-self:center;padding:6px 9px;min-height:40px;background:transparent;border:0;color:inherit;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.osQuietAction:disabled{opacity:.55;cursor:default}
+.reviewPanel[aria-label="Revisar conclusão"]{scroll-margin-top:84px}
+.app[data-mobile-theme="light"]:not(.sunlightMode) :is(.osIdentity,.osActions){background:#f7fbff;border-color:#bdcfe0}
+.app.sunlightMode :is(.osIdentity,.osActions){background:#fff;color:#0b1830;border-color:#293b57}
+@media(max-width:360px){.osStepNav button{font-size:.78em}}
