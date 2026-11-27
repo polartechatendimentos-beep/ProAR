@@ -1,13 +1,13 @@
 import { databaseFetch, masterDatabaseConfig } from "../../../lib/supabase-rest";
-import { randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission, sessionCompany } from "../../../lib/permissions";
+import {GET as getOperationalState} from "../state/route";
+import {publicOrderProjection,safePublicOrderId} from "../../../lib/service-order-public-view";
+import {publicOrderStore} from "../../../lib/service-order-public-store";
+import type {AccessState} from "../../../lib/state-access";
 
 const config = masterDatabaseConfig;
 const headers = (key: string) => ({ apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" });
-const safe = (value: unknown, fallback: string) => String(value || fallback).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 120) || fallback;
-const snapshotId = (company: unknown, order: unknown) => `osmap-${safe(company,"company")}-${safe(order,"order")}`;
-
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get("token")?.trim();
   if (!token || token.length < 20) return NextResponse.json({ error: "Link de acompanhamento inválido." }, { status: 400 });
@@ -21,15 +21,29 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
+  const respond=(payload:unknown,status=200)=>NextResponse.json(payload,{status,headers:{"Cache-Control":"private, no-store"}});
   const auth = requirePermission(request, "os.editar");
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-  const { url, key } = config();
-  if (!url || !key) return NextResponse.json({ error: "Base de dados indisponível." }, { status: 503 });
-  const body = await request.json(); const scope = sessionCompany(auth.session, body.companyId); if (!scope.ok) return NextResponse.json({ error: scope.error }, { status: scope.status }); const id = snapshotId(scope.companyId, body.orderId);
-  const response = await databaseFetch(`${url}/rest/v1/proar_state?id=eq.${encodeURIComponent(id)}&select=payload`, { headers: headers(key), cache: "no-store" });
-  const rows = response.ok ? await response.json() as { payload?: { token?: string } }[] : [];
-  const token = body.token || rows[0]?.payload?.token || randomBytes(24).toString("base64url");
-  const payload = { token, orderId:String(body.orderId || ""), companyId:safe(scope.companyId,"company"), client:String(body.client || ""), service:String(body.service || ""), date:String(body.date || ""), time:String(body.time || ""), status:String(body.status || ""), timeline:Array.isArray(body.timeline) ? body.timeline : [], updatedAt:new Date().toISOString() };
-  const save = await databaseFetch(`${url}/rest/v1/proar_state?on_conflict=id`, { method:"POST", headers:{ ...headers(key), Prefer:"resolution=merge-duplicates,return=minimal" }, body:JSON.stringify({id,payload,updated_at:payload.updatedAt}) });
-  return save.ok ? NextResponse.json({ saved:true, token }) : NextResponse.json({ error:"Não foi possível publicar o acompanhamento." }, { status:502 });
+  if (!auth.ok) return respond({ error: auth.error },auth.status);
+  if(request.headers.get("sec-fetch-site")==="cross-site"||(request.headers.get("origin")&&request.headers.get("origin")!==request.nextUrl.origin))return respond({error:"Origem inválida."},403);
+  try {
+    const raw=await request.text();
+    if(raw.length>16_384)return respond({error:"Informe somente o identificador da OS."},413);
+    let body;try{body=JSON.parse(raw);}catch{return respond({error:"Solicitação inválida."},400);}
+    const orderId=safePublicOrderId(body?.orderId);
+    if(!orderId)return respond({error:"Informe uma ordem de serviço válida."},400);
+    const scope=sessionCompany(auth.session,body?.companyId);
+    if(!scope.ok)return respond({error:scope.error},scope.status);
+    const original=await getOperationalState(request);
+    const result=await original.json() as {state?:AccessState};
+    if(!original.ok||!result.state)return respond({error:"Não foi possível ler a ordem salva."},503);
+    const order=result.state.serviceOrders?.find(row=>row.id===orderId);
+    if(!order)return respond({error:"A ordem não está disponível para esta sessão."},404);
+    const projection=publicOrderProjection(order,scope.companyId);
+    if(!projection)return respond({error:"A OS salva não tem link de acompanhamento válido."},409);
+    const synced=await (await publicOrderStore()).publish(projection,Number(result.state._revision)||0);
+    if(synced.status==="conflict")return respond({error:"Acompanhamento em atualização. Tente conferir novamente."},409);
+    return respond({saved:true,status:synced.status});
+  }catch{
+    return respond({error:"O acompanhamento não foi confirmado. Nenhuma nova gravação da OS foi solicitada."},503);
+  }
 }

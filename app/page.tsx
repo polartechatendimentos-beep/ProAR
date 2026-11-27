@@ -1,11 +1,13 @@
 "use client";
+
+import dynamic from "next/dynamic";
+import Link from "next/link";
 import { CompanyReportLetterhead } from "@/components/CompanyReportLetterhead";
 import {CustomerAddressFields} from "@/components/CustomerAddressFields";
 import type {CustomerAddress} from "@/lib/customer-address";
 import {ServiceOrderReportPreview} from "../components/ServiceOrderReportPreview";
 import {prepareOrderWorkspaceSave,orderStatusTone,workspaceDraftKey,newOrderSchedulingIssue,type OrderScheduleSeed} from "../lib/order-workspace-state";
 import {OperationalAgenda} from "../components/OperationalAgenda";
-import {BiddingDocumentsWorkspace} from "@/components/BiddingDocumentsWorkspace";
 
 import { createPortal } from "react-dom";
 
@@ -82,8 +84,9 @@ import { centsToMoney, moneyToCents } from "@/lib/money-input";
 import { validateCpf, validateCnpj, findDuplicateCustomers } from "@/lib/customer-validation";
 import { CustomerHierarchyProvider } from "@/components/CustomerHierarchyContext";
 import { customerHierarchy, hierarchySelection, isMunicipalCustomer, matchesHierarchyLocation, type HierarchySelection } from "@/lib/customer-hierarchy";
-import { TechnicalBasePanel } from "@/components/TechnicalBasePanel";
-import { moduleFromSearch, moduleNavigationUrl, canNavigateModule } from "@/lib/module-navigation";
+import {nfseIssuanceHold} from "@/lib/nfse-issuance-status";
+import {convertedServiceFiscalValue,type CommercialSnapshot} from "@/lib/commercial-conversion";
+import { moduleNavigationUrl, canNavigateModule, resolveNavigationDestination } from "@/lib/module-navigation";
 import { isMobileInterfacePath } from "@/lib/interface-experience";
 import { TenderPipelinePanel } from "@/components/TenderPipelinePanel";
 import type { TenderTracking } from "@/lib/tender-pipeline";
@@ -98,7 +101,6 @@ import { ServiceOrderWorkspace, type WorkspaceOrder } from "@/components/Service
 import { canLinkHistoricalServiceOrder, isEquipmentLabelCode, normalizeEquipmentLabelCode } from "@/lib/equipment-label-associations";
 import { CustomerProfileWorkspace } from "@/components/CustomerProfileWorkspace";
 import { TechnicalCompliancePanel } from "@/components/TechnicalCompliancePanel";
-import { IntegrityAudit } from "@/components/IntegrityAudit";
 import { calculateCertameItemBalance, createCertameMovement, financialOutstandingValue, financialRealizedValue } from "@/lib/public-contracts";
 import { improveTechnicalText } from "@/lib/text-assist";
 import { WORK_STATUSES, getWorkProgress, getWorkStatusColor, normalizeWorkStatus, type WorkStatus } from "@/lib/work-status";
@@ -109,12 +111,10 @@ import { deriveOperationalActions } from "@/lib/action-center";
 import { OperationsActionCenter } from "@/components/OperationsActionCenter";
 import { DashboardWorkspace } from "@/components/DashboardWorkspace";
 import { ApprovalCenter } from "@/components/ApprovalCenter";
-import { FiscalWorkspace } from "@/components/FiscalWorkspace";
 import { inferFeedbackTone, notifyFeedback, type FeedbackAction, type FeedbackTone } from "@/lib/ui-feedback";
 import { friendlyErrorMessage } from "@/lib/error-messages";
 import { CURRENT_PROAR_RELEASE, PROAR_RELEASES, type ReleaseNoteType } from "@/lib/release-notes";
 import { ActivityCenter } from "@/components/ActivityCenter";
-import { DiagnosticManagementDashboard } from "@/components/DiagnosticManagementDashboard";
 import { auditMatches, diffAuditRecord } from "@/lib/audit-utils";
 import { buildWorkTodaySummary, workDailyLog } from "@/lib/work-operations";
 import type {EmployeeComplianceDoc,EmployeeAsset} from "@/lib/employee-management";
@@ -199,7 +199,9 @@ type ServiceOrder = {
   lastMaintenanceDate?: string;
   reviewPeriodMonths?: 3 | 6 | 12;
   notifyDaysBefore?: number;
-  nfseStatus?: "Não emitida" | "Pendente" | "Validando" | "Transmitindo" | "Processando" | "Autorizada" | "Emitida" | "Rejeitada" | "Erro" | "Cancelada" | "Contingência";
+  commercialSnapshot?:CommercialSnapshot;
+  financeReviewRequired?:boolean;
+  nfseStatus?: "Não emitida" | "Pendente" | "Validando" | "Transmitindo" | "Processando" | "Autorizada" | "Emitida" | "Rejeitada" | "Erro" | "Cancelada" | "Contingência" | "Conferência pendente";
   nfseNumber?: string;
   nfseVerificationCode?: string;
   nfseIssuedAt?: string;
@@ -472,7 +474,17 @@ async function prepareCatalogImage(file: File): Promise<{dataUrl:string;name:str
 
 const companyIdFromCnpj = (cnpj: string) => normalizeCnpj(cnpj) || `empresa-${Date.now()}`;
 
+const moduleLoading=()=> <p role="status" className="panel">Carregando módulo…</p>;
+const BiddingDocumentsWorkspace=dynamic(()=>import("@/components/BiddingDocumentsWorkspace").then(module=>module.BiddingDocumentsWorkspace),{loading:moduleLoading});
+const TechnicalBasePanel=dynamic(()=>import("@/components/TechnicalBasePanel").then(module=>module.TechnicalBasePanel),{loading:moduleLoading});
+const FiscalWorkspace=dynamic(()=>import("@/components/FiscalWorkspace").then(module=>module.FiscalWorkspace),{loading:moduleLoading});
+const DiagnosticManagementDashboard=dynamic(()=>import("@/components/DiagnosticManagementDashboard").then(module=>module.DiagnosticManagementDashboard),{loading:moduleLoading});
+const IntegrityAudit=dynamic(()=>import("@/components/IntegrityAudit").then(module=>module.IntegrityAudit),{loading:moduleLoading});
+
 type ModuleRecord = {
+  sourceBudgetId?:string;
+  commercialSnapshot?:CommercialSnapshot;
+  budgetConversion?:{target:"Pedido"|"Ordem de serviço";destinationId:string};
   tracking?: TenderTracking;
   procurement?: ProcurementData;
   pricing?: PricingInput;
@@ -1013,7 +1025,8 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: so
   }).filter((item, index, all) => all.findIndex(candidate => candidate.order.id === item.order.id && candidate.equipment === item.equipment && candidate.date === item.date) === index)
     .sort((a, b) => a.daysLeft - b.daysLeft || a.date.localeCompare(b.date));
   const sendWhatsApp = (order: ServiceOrder) => {
-    const customer = customers.find(item => item.name === order.client);
+    const legacyCustomer=customers.filter(item=>item.name===order.client);
+    const customer=order.customerId?customers.find(item=>item.id===order.customerId):legacyCustomer.length===1?legacyCustomer[0]:undefined;
     const phone = String(customer?.whatsapp || customer?.phone || "").replace(/\D/g, "");
     if (!phone) return window.alert("O cliente desta OS não possui WhatsApp cadastrado.");
     const internationalPhone = phone.startsWith("55") ? phone : "55" + phone;
@@ -1022,7 +1035,8 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: so
     window.open("https://wa.me/" + internationalPhone + "?text=" + encodeURIComponent(message), "_blank", "noopener,noreferrer");
   };
   const sendPmocWhatsApp = (order: ServiceOrder, equipment: string, date: string) => {
-    const customer = customers.find(item => item.name === order.client);
+    const legacyCustomer=customers.filter(item=>item.name===order.client);
+    const customer=order.customerId?customers.find(item=>item.id===order.customerId):legacyCustomer.length===1?legacyCustomer[0]:undefined;
     const phone = String(customer?.whatsapp || customer?.phone || "").replace(/\D/g, "");
     if (!phone) return window.alert("O cliente desta OS não possui WhatsApp cadastrado.");
     const internationalPhone = phone.startsWith("55") ? phone : "55" + phone;
@@ -1031,19 +1045,28 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: so
     window.open("https://wa.me/" + internationalPhone + "?text=" + encodeURIComponent(message), "_blank", "noopener,noreferrer");
   };
   const emitNfse = async (order: ServiceOrder) => {
-    const customer = customers.find(item => item.name === order.client);
+    const hold=nfseIssuanceHold(order);
+    if(hold)return window.alert(hold);
+    const legacy=customers.filter(item=>item.name===order.client);
+    const customer=order.customerId?customers.find(item=>item.id===order.customerId):legacy.length===1?legacy[0]:undefined;
     if (!customer?.doc) return window.alert("Cadastre o CPF/CNPJ do cliente antes de emitir a NFS-e.");
-    const rawValue = window.prompt("Valor da NFS-e (R$):", String(order.nfseValue || ""));
+    let snapshotValue:number|undefined;
+    try{snapshotValue=convertedServiceFiscalValue(order.commercialSnapshot);}
+    catch(error){return window.alert(error instanceof Error?error.message:"Confira a classificação fiscal do orçamento.");}
+    if(order.financeReviewRequired&&snapshotValue===undefined)return window.alert("Esta OS precisa de conferência no Fiscal antes de emitir.");
+    const rawValue = window.prompt("Valor da NFS-e (R$):", String(snapshotValue??order.nfseValue??""));
     if (rawValue === null) return;
     const value = Number(rawValue.replace(",", "."));
     if (!Number.isFinite(value) || value <= 0) return window.alert("Informe um valor válido.");
+    if(snapshotValue!==undefined&&Math.round(value*100)!==Math.round(snapshotValue*100))return window.alert("O valor diverge do orçamento convertido. Confira a origem antes de emitir.");
+    let requested=false;
     try {
       const configResponse=await fetch("/api/fiscal-config",{cache:"no-store"});
       const fiscal=await configResponse.json();
       if(!configResponse.ok)throw new Error(fiscal.error||"Não foi possível carregar a configuração fiscal da empresa.");
       const nfseConfig=fiscal.nfse||{};
       if(!nfseConfig.serviceCode||!nfseConfig.municipalityCode)throw new Error("Configure o código do serviço e o município emissor em Configurações → Fiscal antes de preparar a NFS-e Nacional.");
-      onUpdate({ ...order, nfseStatus:"Processando", nfseValue:value });
+      requested=true;
       const response = await fetch("/api/nfse/issue", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ serviceOrderId:order.id, customer:{ name:order.client, document:customer.doc, unit:order.unit, address:order.address }, service:{ description:nfseConfig.defaultServiceDescription||order.service, value }, nfse:{provider:"SEFIN Nacional",environment:fiscal.company?.environment||"Homologação",taxRegime:fiscal.company?.taxRegime,municipalityCode:nfseConfig.municipalityCode,serviceCode:nfseConfig.serviceCode,nbsCode:nfseConfig.nbsCode,issRate:nfseConfig.issRate,rpsSeries:nfseConfig.rpsSeries,issWithheld:nfseConfig.issWithheld,specialTaxRegime:nfseConfig.specialTaxRegime} }) });
       const result = await response.json().catch(()=>({}));
       if (response.status === 202 || result.status === "Processando") {
@@ -1051,11 +1074,18 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: so
         window.alert("A NFS-e foi recebida para processamento, mas ainda não está autorizada. Consulte novamente antes de enviar ao cliente.");
         return;
       }
-      if (!response.ok || result.issued !== true || result.status !== "Autorizada") throw new Error(result.error || "A emissão não foi confirmada pela SEFIN Nacional.");
+      if(result.status==="Conferência pendente"||result.status==="Rejeitada"){
+        onUpdate({...order,nfseStatus:result.status,nfseValue:value});
+        return window.alert(result.error||(result.status==="Rejeitada"?"A emissão foi rejeitada pelo provedor.":"Confira a situação no provedor antes de transmitir novamente."));
+      }
+      if(!response.ok||result.issued!==true||result.status!=="Autorizada"){
+        if(response.status>=500)onUpdate({...order,nfseStatus:"Conferência pendente",nfseValue:value});
+        return window.alert(result.error||"A emissão não foi confirmada. Confira a situação antes de tentar novamente.");
+      }
       const provider = result.result?.result || result.result?.data || result.result || {};
       onUpdate({ ...order, nfseStatus:"Autorizada", nfseValue:value, nfseNumber:String(provider.number || provider.numero || provider.nfseNumber || ""), nfseVerificationCode:String(provider.verificationCode || provider.codigoVerificacao || provider.chave || provider.key || ""), nfseIssuedAt:new Date().toISOString() });
       window.alert(`NFS-e autorizada${provider.number || provider.numero ? `: ${provider.number || provider.numero}` : "."}`);
-    } catch (error) { onUpdate({ ...order, nfseStatus:"Rejeitada", nfseValue:value }); window.alert(error instanceof Error ? error.message : "Não foi possível autorizar a NFS-e."); }
+    } catch (error) { if(requested)onUpdate({...order,nfseStatus:"Conferência pendente",nfseValue:value});window.alert(error instanceof Error?error.message:"Não foi possível confirmar a NFS-e."); }
   };
   const myTodayOrders = visibleOrders.filter(order => order.date === todayIso);
   return <section className={`module-page service-orders ${technicianMode ? "technician-mode" : ""}`}>
@@ -1682,7 +1712,7 @@ function LicitacoesWorkspace({
   orders: ServiceOrder[];
   onSaveRecord: (moduleName: string, record: ModuleRecord) => Promise<boolean>;
   onDeleteRecord: (moduleName: string, record: ModuleRecord) => void;
-  onReadyToInvoice: (record: PublicCommitmentRecord) => Promise<boolean>;
+  onReadyToInvoice: (record: PublicCommitmentRecord,invoiceableValue:number) => Promise<boolean>;
   onOpenTender: (item: Tender) => void;
 }) {
   const [tab, setTab] = useState<LicitacoesTab>("Radar");
@@ -1709,7 +1739,7 @@ function LicitacoesWorkspace({
     {tab==="Radar" && <BiddingModule company={company} trackingRecords={modules["Acompanhamento de licitações"]??[]} onSaveTracking={record=>onSaveRecord("Acompanhamento de licitações",record as ModuleRecord)} qualificationDocuments={documents} onManageDocuments={()=>setTab("Habilitação e BDI")} imported={modules["Oportunidades importadas"]??[]} onImport={record=>onSaveRecord("Oportunidades importadas",record as ModuleRecord)} onOpen={onOpenTender}/>}
     {tab==="Empenhos / Saldo Contratual" && <div className="licitacoes-tab-stack">
       <PublicContractsPanel records={contracts} customers={customers} onSave={record=>onSaveRecord("Certames",record as ModuleRecord)} onDelete={record=>onDeleteRecord("Certames",record as ModuleRecord)}/>
-      <PublicCommitmentsPanel orders={orders} contracts={contracts} customers={customers.map(customer=>({name:customer.name,doc:customer.doc}))} commitments={commitments} onSave={record=>onSaveRecord("Empenhos",record as ModuleRecord)} onReadyToInvoice={onReadyToInvoice} onCancel={record=>onSaveRecord("Empenhos",record as ModuleRecord)}/>
+      <PublicCommitmentsPanel orders={orders} contracts={contracts} customers={customers.map(customer=>({id:customer.id,name:customer.name,doc:customer.doc}))} commitments={commitments} onSave={record=>onSaveRecord("Empenhos",record as ModuleRecord)} onReadyToInvoice={onReadyToInvoice} onCancel={record=>onSaveRecord("Empenhos",record as ModuleRecord)}/>
     </div>}
     {tab==="Habilitação e BDI" && <ProcurementReadinessPanel documents={documents} compositions={modules["Composições de licitação"]??[]} onSave={(module,record)=>onSaveRecord(module,record as ModuleRecord)}/>}
     {tab==="Documentos" && <section className="licitacoes-data-panel panel"><BiddingDocumentsWorkspace companyName={company.legalName}/><header><div><span className="section-kicker"><FileText size={13}/> HABILITAÇÃO</span><h3>Documentos</h3><p>Documentos reais já cadastrados em Documentação / Habilitação.</p></div><strong>{documents.length} registros</strong></header><div className="licitacoes-record-list">{documents.map(item=><article key={item.id}><div><b>{item.name}</b><small>{item.category || "Documento"} • {item.client || "PolarTech"}</small><p>{item.description || "Sem observação adicional."}</p></div><span>{item.status || "Cadastrado"}</span><div className="record-actions"><button title="Alterar documento" onClick={()=>setEditingDocument({...item})}><Edit3 size={14}/></button><button className="danger" title="Excluir / inativar documento" onClick={()=>onDeleteRecord("Documentação / Habilitação",item)}><Trash2 size={14}/></button></div></article>)}{!documents.length&&<div className="linked-empty"><FileText size={23}/><h4>Nenhum documento cadastrado</h4><p>Esta aba não cria dados fictícios. Cadastros reais aparecerão aqui após confirmação no banco.</p></div>}</div></section>}
@@ -1939,6 +1969,8 @@ function SalesPDV({ customers, structures, records, sales, onSave, onDelete }: {
     setNotice(editingSale ? `Pedido ${sale.id} atualizado e sincronizado.` : `Venda ${sale.id} finalizada e sincronizada — R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.`);
   };
   const editSavedSale = (sale: ModuleRecord) => {
+    if(sale.commercialSnapshot){window.alert("Pedido com origem em orçamento. Confira a composição salva antes de alterar os valores.");return;}
+
     setSaleLocation(null); setEditingSale(sale); setCustomer(sale.client === "Consumidor final" ? "" : sale.client); setUnit(sale.unit || ""); setPayment(sale.paymentMethod || "PIX");
     const match = sale.description?.match(/desconto R\$ ([\d.,]+)/i); setDiscount(match ? Number(match[1].replace(".","").replace(",",".")) || 0 : 0);
     setCart((sale.purchaseItems ?? []).map(item => ({ id:item.productId || item.id, name:item.description, code:item.productId || item.id, price:item.unitValue, quantity:item.quantity, kind:item.kind === "Serviço" ? "Serviço" : "Produto", unit:records.find(record => record.id === (item.productId || item.id))?.unitOfMeasure || "un" })));
@@ -4300,12 +4332,6 @@ export default function Home() {
   const [bootRunId, setBootRunId] = useState("");
   const [bootAttempt, setBootAttempt] = useState(0);
   const [current, setCurrentState] = useState("Painel inicial");
-  const setCurrent = useCallback((moduleName:string) => {
-    if (!navigationModuleNames().includes(moduleName)) return;
-    setCurrentState(moduleName);
-    const next=moduleNavigationUrl(window.location.href,moduleName);
-    if(next && next!==window.location.pathname+window.location.search+window.location.hash) window.history.pushState(null,"",next);
-  }, []);
   const [menuOpen, setMenuOpen] = useState(false);
   const [modal, setModal] = useState("");
   const [orderSeed,setOrderSeed]=useState<OrderScheduleSeed|undefined>(undefined);
@@ -4324,13 +4350,17 @@ export default function Home() {
   const [lastSuccessfulSyncAt, setLastSuccessfulSyncAt] = useState("");
   const primaryTenantAccess = isPrimaryPolartechClient(authenticatedUser);
   const effectiveEntitledModules = useMemo(() => primaryTenantAccess ? navigationModuleNames() : authenticatedUser?.entitledModules, [primaryTenantAccess, authenticatedUser?.entitledModules]);
+  const setCurrent = useCallback((moduleName:string) => {
+    if(!authenticatedUser||!navigationModuleNames().includes(moduleName)||!canNavigateModule(moduleName,authenticatedUser,effectiveEntitledModules))return;
+    setCurrentState(moduleName);
+    const next=moduleNavigationUrl(window.location.href,moduleName);
+    if(next && next!==window.location.pathname+window.location.search+window.location.hash) window.history.pushState(null,"",next);
+  }, [authenticatedUser,effectiveEntitledModules]);
   useEffect(() => {
     if(!authenticatedUser || checkingSession) return;
     const syncFromUrl=()=>{
-      const requested=moduleFromSearch(window.location.search);
-      const allowed=navigationModuleNames().filter(name=>canNavigateModule(name,authenticatedUser,effectiveEntitledModules));
-      const target=canNavigateModule(requested,authenticatedUser,effectiveEntitledModules)?requested:allowed[0]||"Painel inicial";
-      setCurrentState(target);
+      const target=resolveNavigationDestination(window.location.search,navigationModuleNames(),authenticatedUser,effectiveEntitledModules);
+      setCurrentState(target||"Sem acesso");
     };
     syncFromUrl();window.addEventListener("popstate",syncFromUrl);
     return ()=>window.removeEventListener("popstate",syncFromUrl);
@@ -4340,7 +4370,7 @@ export default function Home() {
     const navigate = (event: Event) => setCurrent((event as CustomEvent<string>).detail);
     window.addEventListener("proar:navigate", navigate);
     return () => window.removeEventListener("proar:navigate", navigate);
-  }, []);
+  }, [setCurrent]);
   const handleLogin = (user: AuthenticatedUser) => {
     const primaryTenant = isPrimaryPolartechClient(user);
     const normalizedUser = primaryTenant
@@ -4743,15 +4773,17 @@ export default function Home() {
     const confirmedCustomers=result.state?.customers??customerRecords; const confirmedOrders=result.state?.serviceOrders??updatedOrders; const confirmedModules=mergeImportedServices(result.state?.moduleRecords??updatedModules);
     setCustomerRecords(confirmedCustomers); setServiceOrders(confirmedOrders); setModuleRecords(confirmedModules); setSelectedOrder(orderForPersistence); setStateRevision(Number(result.state?._revision||stateRevision+1));
     localStorage.setItem(companyStorageKey(activeCompany.id,"customers"),JSON.stringify(confirmedCustomers)); localStorage.setItem(companyStorageKey(activeCompany.id,"service-orders"),JSON.stringify(confirmedOrders)); localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(confirmedModules));
-    // O acompanhamento externo recebe somente o recorte liberado ao cliente;
-    // observações internas, financeiro e demais dados operacionais ficam na base autenticada.
+    // Publicação separada: carregar somente a OS já salva, sem gravá-la
+    // novamente nem reutilizar dados recolhidos do navegador.
     if (orderForPersistence.trackingToken) {
-      const timeline = (orderForPersistence.timeline ?? []).filter(event => event.customerVisible).map(event => ({ id:event.id, createdAt:event.createdAt, status:event.status, customerNote:event.customerNote, photos:event.photos, customerVisible:true }));
+      let trackingConfirmed=false;
       try {
-        const trackingResponse = await fetch("/api/public-service-order", { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ companyId:activeCompany.id, orderId:orderForPersistence.id, token:orderForPersistence.trackingToken, client:orderForPersistence.client, service:orderForPersistence.service, date:orderForPersistence.date, time:orderForPersistence.time, status:orderForPersistence.status, timeline }) });
-        if (!trackingResponse.ok) showFeedback(`OS ${orderForPersistence.id} salva, mas o acompanhamento público não foi atualizado. Tente salvar novamente.`, "warning", 6000);
-      } catch {
-        showFeedback(`OS ${orderForPersistence.id} salva, mas houve falha ao sincronizar o acompanhamento público.`, "warning", 6000);
+        const trackingResponse=await fetch("/api/public-service-order",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({orderId:orderForPersistence.id})});
+        trackingConfirmed=trackingResponse.ok&&(await trackingResponse.json()).saved===true;
+      }catch{/* A gravação da OS continua válida. */}
+      if(!trackingConfirmed){
+        showFeedback(`OS ${orderForPersistence.id} salva. Atualize apenas o acompanhamento em Central de Pendências.`,"warning",6500);
+        return orderForPersistence;
       }
     }
     showFeedback(orderForPersistence.status === "Concluída" && orderForPersistence.reminderEnabled ? `OS ${orderForPersistence.id} salva com sucesso • conclusão confirmada e lembrete agendado.` : `Alteração salva com sucesso • OS ${orderForPersistence.id} confirmada no banco.`, "success");
@@ -4771,20 +4803,11 @@ export default function Home() {
     showFeedback(`Alteração salva com sucesso • ${updatedCustomer.name}.`, "success");
   };
   const appendAudit = (modules: Record<string, ModuleRecord[]>, action: string, reference: string, detail: string, meta?: { moduleName?:string; recordId?:string; before?:Record<string,unknown>; after?:Record<string,unknown> }) => ({ ...modules, Auditoria: [{ id: `AUD-${Date.now()}-${Math.random().toString(36).slice(2,6)}`, name: action, client: authenticatedUser?.displayName || "Sistema", description: `${reference} • ${detail}`, createdAt: new Date().toLocaleString("pt-BR"), status: "Registrado", category: "Rastreabilidade", auditModule:meta?.moduleName, recordId:meta?.recordId, auditAction:action, auditDetail:detail, auditUser:authenticatedUser?.displayName || "Sistema", auditChanges:diffAuditRecord(meta?.before,meta?.after), auditBeforeData:meta?.moduleName==="Clientes"?meta.before:undefined, auditAfterData:meta?.moduleName==="Clientes"?meta.after:undefined }, ...(modules.Auditoria ?? [])].slice(0, 1000) });
-  const convertBudget = (budget: ModuleRecord, target: "Pedido" | "Ordem de serviço") => {
-    if (budget.approvalRequired && budget.approvalStatus !== "Aprovado") { setSavedMessage("Este orçamento depende de aprovação por alçada antes da conversão."); window.setTimeout(()=>setSavedMessage(""),3500); return; }
-    if (target === "Pedido") {
-      const sale: ModuleRecord = { ...budget, id:`VEN-${Date.now().toString().slice(-6)}`, name:`Pedido • ${budget.name}`, status:"Pedido confirmado", createdAt:new Date().toLocaleString("pt-BR") };
-      const updated = { ...moduleRecords, Vendas:[sale,...(moduleRecords.Vendas ?? [])], Orçamentos:(moduleRecords.Orçamentos ?? []).map(item => item.id === budget.id ? {...item,status:"Convertido em pedido"} : item) };
-      setModuleRecords(updated); persistSharedState(customerRecords, serviceOrders, updated); setCurrent("Vendas");
-    } else {
-      const customer = customerRecords.find(item => item.name === budget.client);
-      const budgetStructure = budget.structureId ? (moduleRecords["Unidades e setores"] ?? []).find(item => item.id === budget.structureId && item.client === budget.client) : undefined;
-      const order: ServiceOrder = { id:`#OS-${String(Math.max(15499,...serviceOrders.map(item => Number(item.id.replace(/\D/g,""))||0))+1).padStart(5,"0")}`, client:budget.client, customerId:budget.customerId || customer?.id, unit:budget.unitId ? budget.unit || "Matriz" : budgetStructure?.name || budget.unit || "Matriz", structureId:budget.structureId || budgetStructure?.id, unitId:budget.unitId || budgetStructure?.id, sector:budget.sector, sectorId:budget.sectorId, room:budget.room, roomId:budget.roomId, sourceBudgetId:budget.id, service:budget.purchaseItems?.map(item => item.description).join(", ") || budget.name, tech:"Não definido", date:new Date().toISOString().slice(0,10), time:"A definir", address:budgetStructure?.address || customer?.address || "", status:"Aberta", tone:"blue", avatar:budget.client.split(" ").map(item => item[0]).slice(0,2).join(""), catalogItems:budget.purchaseItems?.filter(item => item.kind !== "Custo adicional").map(item => ({ id:item.productId || item.id, name:item.description, kind:item.kind === "Produto" ? "Produto" : "Serviço" })) };
-      const updatedOrders = [order,...serviceOrders]; const updatedModules = { ...moduleRecords, Orçamentos:(moduleRecords.Orçamentos ?? []).map(item => item.id === budget.id ? {...item,status:"Convertido em OS"} : item) };
-      setServiceOrders(updatedOrders); setModuleRecords(updatedModules); persistSharedState(customerRecords,updatedOrders,updatedModules); setCurrent("Ordens de serviço");
-    }
-    setSavedMessage(`Orçamento convertido em ${target}.`); window.setTimeout(() => setSavedMessage(""),2500);
+  const convertBudget = async (budget: ModuleRecord, target: "Pedido" | "Ordem de serviço") => {
+    try{
+      await runOperationalCommand({action:"budget-convert",recordId:budget.id,expectedRecord:budget,data:{target},idempotencyKey:crypto.randomUUID()});
+      setCurrent(target==="Pedido"?"Vendas":"Ordens de serviço");
+    }catch(error){showFeedback(error instanceof Error?error.message:"Conversão não confirmada.","error",6000);}
   };
   const recordSaveLock=useRef(false);
   const saveRecord = async (data: ModalSave) => {
@@ -5422,11 +5445,12 @@ export default function Home() {
   const mobileManagerModules = new Set([...mobileOperationalModules,"Vendas","Estoque"]);
   const mobileAllowedModules = mobileManager ? mobileManagerModules : mobileTechnicianModules;
   const mobileBlocked = mobileExperience && !mobileAllowedModules.has(current);
+  const moduleDenied=Boolean(!authenticatedUser||!canNavigateModule(current,authenticatedUser,effectiveEntitledModules));
   const planBlocked = !primaryTenantAccess && Array.isArray(effectiveEntitledModules) && !effectiveEntitledModules.includes(current);
   return <CustomerHierarchyProvider customers={customerRecords} records={moduleRecords["Unidades e setores"] ?? []} equipment={(moduleRecords.Equipamentos ?? []) as unknown as Record<string,unknown>[]} orders={serviceOrders as unknown as Record<string,unknown>[]}><div className={`app-shell ${mobileExperience?"mobile-operation-policy mobile-dedicated-experience":"proar-full-system"}`}>{!selectedOrder&&<CompanyReportLetterhead company={activeCompany}/>}<a className="proar-skip-link" href="#conteudo-principal">Pular para o conteúdo</a><ConnectivityBanner/>
     <div data-testid="proar-sidebar"><Sidebar current={current} setCurrent={setCurrent} open={menuOpen} close={() => setMenuOpen(false)} permissions={authenticatedUser.permissions} role={authenticatedUser.role} entitledModules={effectiveEntitledModules}/></div>
     <main id="conteudo-principal" tabIndex={-1} className="main">
-      <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNew={openNew} searchItems={globalSearchItems} pendingItems={pendingItems} onSearchSelect={openGlobalSearch} onPendingSelect={openPending} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onSwitchUser={logout} online={online} syncing={syncing} onPull={() => void pullFromDatabase()} onPush={() => void pushToDatabase()}/>
+      <Header title={current === "Painel inicial" ? `Olá, ${authenticatedUser.displayName.split(" ")[0]}` : titles[current] || current} subtitle={subtitles[current] || "Controle integrado da sua operação."} onMenu={() => setMenuOpen(true)} onNew={openNew} searchItems={globalSearchItems.filter(item=>canNavigateModule(item.module,authenticatedUser,effectiveEntitledModules))} pendingItems={pendingItems} onSearchSelect={openGlobalSearch} onPendingSelect={openPending} userName={authenticatedUser.displayName} userRole={authenticatedUser.role ?? "Utilizador"} onSwitchUser={logout} online={online} syncing={syncing} onPull={() => void pullFromDatabase()} onPush={() => void pushToDatabase()}/>
       {syncPhase !== "idle" && <div className={`sync-progress ${syncPhase}`} role="status" aria-label={syncPhase === "complete" ? "Dados atualizados" : "Sincronizando dados"}><i/></div>}
       {databaseMode !== "online" && <div className={`database-contingency ${databaseMode}`} role="status">
         <AlertTriangle size={16}/>
@@ -5437,7 +5461,7 @@ export default function Home() {
 
       <div className="company-context"><Building2 size={13}/><span>{activeCompany.tradeName}</span><small>{activeCompany.cnpj || "CNPJ pendente"} • {activeCompany.city}/{activeCompany.state}</small></div>
       {current === "PMOC e conformidade" && !planBlocked ? <TechnicalCompliancePanel plans={(moduleRecords.PMOC ?? []) as any} fluids={(moduleRecords.Refrigerantes ?? []) as any} documents={(moduleRecords["Documentação / Habilitação"] ?? []) as any} onSave={(module,record)=>saveConfirmedModuleRecord(module,record)} onDelete={(module,record)=>deleteModuleRecord(module,record as ModuleRecord)}/> : null}
-      <div className="page-content">{planBlocked ? <section className="mobile-module-blocked"><LockKeyhole size={28}/><h2>Módulo não contratado</h2><p>Este módulo não faz parte do plano ativo desta empresa. A liberação é feita pelo ProAR Manager conforme o contrato.</p><button className="primary-btn" onClick={()=>setCurrent(effectiveEntitledModules?.[0]||"Painel inicial")}>Voltar para módulos liberados</button></section> : mobileBlocked ? <section className="mobile-module-blocked"><ShieldCheck size={28}/><h2>Módulo disponível no computador</h2><p>No celular e tablet o ProAR é focado na operação de trabalho. Para gestão administrativa completa, utilize a versão desktop.</p><button className="primary-btn" onClick={()=>setCurrent("Painel inicial")}>Voltar para operação</button></section> : current === "PMOC e conformidade" ? null : current === "Integridade do Sistema" ? <IntegrityAudit/> : current === "Atividades" ? <ActivityCenter records={moduleRecords["Auditoria operacional"] ?? []}/> : current === "Painel inicial" && mobileExperience ? <MobileToday manager={mobileManager}/> : current === "Painel inicial" ? <DashboardWorkspace onNavigate={setCurrent} serviceOrders={serviceOrders} modules={moduleRecords} role={authenticatedUser.role}/> : current === "Central de pendências" ? <OperationsActionCenter serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} modules={moduleRecords as unknown as Record<string,Record<string,unknown>[]>} onNavigate={setCurrent}/> : current === "Clientes" ? <Customers onOpen={name => { setModal(""); window.setTimeout(() => setModal(name), 0); }} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={saveCustomerStructure} onDeleteStructure={deleteCustomerStructure} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Agenda" ? <Agenda companyId={activeCompany.id} serviceOrders={serviceOrders} onOpen={(name,seed)=>{setOrderSeed(seed);setModal(name);}} onSelect={setSelectedOrder} onScheduleUpdate={hasAction("Ordens de serviço","Editar")?updateServiceOrder:undefined} customers={customerRecords} staff={moduleRecords["Funcionários"]||[]}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} company={activeCompany} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <LicitacoesWorkspace company={activeCompany} modules={moduleRecords} customers={customerRecords} orders={serviceOrders} onSaveRecord={(moduleName,record)=>saveConfirmedModuleRecord(moduleName,record)} onDeleteRecord={deleteModuleRecord} onReadyToInvoice={record=>saveConfirmedModuleRecord("Empenhos",{...record,status:"Pronto para faturar"},[{moduleName:"Financeiro",record:{id:`FAT-${record.id}`,name:`Faturamento • ${record.name}`,client:record.client,description:`Aguardando emissão de Nota Fiscal • ${record.empenhoProcess || "processo não informado"}`,createdAt:new Date().toLocaleString("pt-BR"),status:"Pronto para faturar",date:new Date().toISOString().slice(0,10),value:record.value??0,category:"Faturamento público",transactionType:"Receber",empenhoId:record.id}}])} onOpenTender={item=>setModal(`Análise de edital • ${item.numeroControlePNCP || item.objetoCompra || "Licitação"}`)}/> : current === "Orçamentos" ? <BudgetPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={record => updateModuleRecord("Orçamentos",record)} onConvert={convertBudget} onDelete={record => deleteModuleRecord("Orçamentos",record)} onCreateCustomer={createQuickCustomer} onCreateStructure={createQuickStructure}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} sales={moduleRecords.Vendas ?? []} onSave={record => updateModuleRecord("Vendas",record)} onDelete={record=>deleteModuleRecord("Vendas",record)}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders} company={activeCompany}/> : current === "Diagnósticos" ? <DiagnosticManagementDashboard serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} equipment={(moduleRecords["Equipamentos"] ?? []) as unknown as Record<string,unknown>[]}/> : current === "Fiscal" ? <FiscalWorkspace modules={moduleRecords} serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} company={activeCompany} onNavigate={setCurrent}/> : current === "Base Técnica" ? <TechnicalBasePanel/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany} isAdministrator={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*"))}/> : current === "Aprovações" ? <ApprovalCenter records={moduleRecords["Aprovações"] ?? []} canApprove={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*") || authenticatedUser.permissions?.includes("aprovacoes.aprovar") || authenticatedUser.permissions?.includes("Aprovações"))} onOperation={runOperationalCommand}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} modules={moduleRecords} onOperation={runOperationalCommand} onOpen={setModal} onIssueInvoice={(record,invoiceNumber)=>{const commitment=(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId);const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Faturado"}}]:[];return saveConfirmedModuleRecord("Financeiro",{...record,status:"Em aberto",transactionType:"Receber",invoiceNumber,invoiceIssuedAt:new Date().toISOString()},related)}}/> : current === "Funcionários" ? <EmployeesWorkspace records={moduleRecords["Funcionários"] ?? []} serviceOrders={serviceOrders} onOpen={setModal} onUpdate={(moduleName,record)=>saveConfirmedModuleRecord(moduleName,record)} onDelete={deleteModuleRecord} canEdit={hasAction("Funcionários","Editar")} canManageLogin={Boolean(authenticatedUser.role==="Administrador"||authenticatedUser.permissions?.includes("*"))}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} onUpdate={updateServiceOrder} serviceOrders={serviceOrders} customers={customerRecords} company={activeCompany} role={authenticatedUser.role}/> : <>{(current === "Compras" || current === "Estoque") && <InventoryOperations mode={current} modules={moduleRecords} onOperation={runOperationalCommand}/>}<GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []} allModules={moduleRecords} serviceOrders={serviceOrders}/></>}</div>
+      <div className="page-content">{moduleDenied ? <section className="panel" role="status"><h2>Módulo não disponível</h2><p>Escolha um módulo liberado no menu.</p></section> : planBlocked ? <section className="mobile-module-blocked"><LockKeyhole size={28}/><h2>Módulo não contratado</h2><p>Este módulo não faz parte do plano ativo desta empresa. A liberação é feita pelo ProAR Manager conforme o contrato.</p><button className="primary-btn" onClick={()=>setCurrent(effectiveEntitledModules?.[0]||"Painel inicial")}>Voltar para módulos liberados</button></section> : mobileBlocked ? <section className="mobile-module-blocked"><ShieldCheck size={28}/><h2>Módulo disponível no computador</h2><p>No celular e tablet o ProAR é focado na operação de trabalho. Para gestão administrativa completa, utilize a versão desktop.</p><button className="primary-btn" onClick={()=>setCurrent("Painel inicial")}>Voltar para operação</button></section> : current === "PMOC e conformidade" ? null : current === "Integridade do Sistema" ? <IntegrityAudit/> : current === "Atividades" ? <ActivityCenter records={moduleRecords["Auditoria operacional"] ?? []}/> : current === "Painel inicial" && mobileExperience ? <MobileToday manager={mobileManager}/> : current === "Painel inicial" ? <DashboardWorkspace onNavigate={setCurrent} serviceOrders={serviceOrders} modules={moduleRecords} role={authenticatedUser.role}/> : current === "Central de pendências" ? <><OperationsActionCenter serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} modules={moduleRecords as unknown as Record<string,Record<string,unknown>[]>} onNavigate={setCurrent}/>{(authenticatedUser.role==="Administrador"||authenticatedUser.permissions?.includes("*"))&&<Link className="outline-btn" href="/atendimento/pendencias">Conferir mensagens e acompanhamento das OS</Link>}</> : current === "Clientes" ? <Customers onOpen={name => { setModal(""); window.setTimeout(() => setModal(name), 0); }} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={saveCustomerStructure} onDeleteStructure={deleteCustomerStructure} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Agenda" ? <Agenda companyId={activeCompany.id} serviceOrders={serviceOrders} onOpen={(name,seed)=>{setOrderSeed(seed);setModal(name);}} onSelect={setSelectedOrder} onScheduleUpdate={hasAction("Ordens de serviço","Editar")?updateServiceOrder:undefined} customers={customerRecords} staff={moduleRecords["Funcionários"]||[]}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} company={activeCompany} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <LicitacoesWorkspace company={activeCompany} modules={moduleRecords} customers={customerRecords} orders={serviceOrders} onSaveRecord={(moduleName,record)=>saveConfirmedModuleRecord(moduleName,record)} onDeleteRecord={deleteModuleRecord} onReadyToInvoice={(record,invoiceableValue)=>saveConfirmedModuleRecord("Empenhos",{...record,status:"Pronto para faturar"},[{moduleName:"Financeiro",record:{id:`FAT-${record.id}`,name:`Faturamento • ${record.name}`,client:record.client,description:`Aguardando emissão de Nota Fiscal • ${record.empenhoProcess || "processo não informado"}`,createdAt:new Date().toLocaleString("pt-BR"),status:"Pronto para faturar",date:new Date().toISOString().slice(0,10),value:invoiceableValue,category:"Faturamento público",transactionType:"Receber",empenhoId:record.id}}])} onOpenTender={item=>setModal(`Análise de edital • ${item.numeroControlePNCP || item.objetoCompra || "Licitação"}`)}/> : current === "Orçamentos" ? <BudgetPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={record => updateModuleRecord("Orçamentos",record)} onConvert={convertBudget} onDelete={record => deleteModuleRecord("Orçamentos",record)} onCreateCustomer={createQuickCustomer} onCreateStructure={createQuickStructure}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} sales={moduleRecords.Vendas ?? []} onSave={record => updateModuleRecord("Vendas",record)} onDelete={record=>deleteModuleRecord("Vendas",record)}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders} company={activeCompany}/> : current === "Diagnósticos" ? <DiagnosticManagementDashboard serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} equipment={(moduleRecords["Equipamentos"] ?? []) as unknown as Record<string,unknown>[]}/> : current === "Fiscal" ? <FiscalWorkspace traceAccess={{inventory:hasAction("Estoque","Visualizar"),finance:hasAction("Financeiro","Visualizar"),fiscal:true}} modules={moduleRecords} serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} company={activeCompany} onNavigate={setCurrent}/> : current === "Base Técnica" ? <TechnicalBasePanel/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany} isAdministrator={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*"))}/> : current === "Aprovações" ? <ApprovalCenter records={moduleRecords["Aprovações"] ?? []} canApprove={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*") || authenticatedUser.permissions?.includes("aprovacoes.aprovar") || authenticatedUser.permissions?.includes("Aprovações"))} onOperation={runOperationalCommand}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} modules={moduleRecords} onOperation={runOperationalCommand} onOpen={setModal} onIssueInvoice={(record,invoiceNumber)=>{const commitment=(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId);const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Faturado"}}]:[];return saveConfirmedModuleRecord("Financeiro",{...record,status:"Em aberto",transactionType:"Receber",invoiceNumber,invoiceIssuedAt:new Date().toISOString()},related)}}/> : current === "Funcionários" ? <EmployeesWorkspace records={moduleRecords["Funcionários"] ?? []} serviceOrders={serviceOrders} onOpen={setModal} onUpdate={(moduleName,record)=>saveConfirmedModuleRecord(moduleName,record)} onDelete={deleteModuleRecord} canEdit={hasAction("Funcionários","Editar")} canManageLogin={Boolean(authenticatedUser.role==="Administrador"||authenticatedUser.permissions?.includes("*"))}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} onUpdate={updateServiceOrder} serviceOrders={serviceOrders} customers={customerRecords} company={activeCompany} role={authenticatedUser.role}/> : <>{(current === "Compras" || current === "Estoque") && <InventoryOperations mode={current} modules={moduleRecords} onOperation={runOperationalCommand}/>}<GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []} allModules={moduleRecords} serviceOrders={serviceOrders}/></>}</div>
       <footer><span>© {new Date().getFullYear()} ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
     {modal && <div data-testid={modal === "Novo cliente" ? "customer-new-dialog" : undefined}><Modal initialOrderSeed={orderSeed} title={modal} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalogRecords={[...(moduleRecords["Serviços"] ?? []).map(item=>({...item,kind:"Serviço" as const})), ...(moduleRecords["Produtos"] ?? []).map(item=>({...item,kind:"Produto" as const}))]} supplierRecords={moduleRecords["Fornecedores"] ?? []} employeeRecords={moduleRecords["Funcionários"] ?? []} equipmentRecords={moduleRecords["Equipamentos"] ?? []} serviceOrders={serviceOrders} close={() => {setModal("");setOrderSeed(undefined);}} onSave={saveRecord} canCreateCustomer={hasAction("Clientes","Criar")} onCreateCustomer={createOrderCustomer} onCreateStructure={createOrderStructure}/></div>}

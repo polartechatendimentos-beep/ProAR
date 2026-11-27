@@ -4,6 +4,7 @@ import { resolveTenantDb, tenantHeaders } from "../../../../lib/tenant-rest";
 import { tenantEvolutionAutomationEnabled } from "../../../../lib/evolution-tenant";
 import { dispatchEvolutionJob, evolutionJobId, evolutionJobPrefix } from "../../../../lib/evolution-jobs";
 
+import { drainQueuedPilot, durablePilotEnabled } from "../../../../lib/chatdesk-pilot-queue";
 import { runPilotFollowUp } from "../../../../lib/chatdesk-follow-up";
 
 export const runtime = "nodejs";
@@ -13,7 +14,7 @@ export async function GET(request: NextRequest) {
   if (process.env.PROAR_EVOLUTION_AUTOMATION_ENABLED !== "true") return NextResponse.json({ enabled: false });
   const started = Date.now();
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-  const summary = { companies: 0, accepted: 0, duplicate: 0, unknown: 0, errors: 0, followUps: 0, followUpErrors: 0, deferred: false };
+  const summary = { companies: 0, accepted: 0, duplicate: 0, unknown: 0, errors: 0, followUps: 0, followUpErrors: 0, inboundProcessed:0, inboundErrors:0, deferred: false };
   try {
     const cursorResponse = await supabaseRest("proar_state?select=payload&id=eq.evolution-cron-cursor&limit=1");
     if (!cursorResponse.ok) throw new Error("Fila indisponível.");
@@ -30,6 +31,9 @@ export async function GET(request: NextRequest) {
       const companies = await response.json() as { id: string; trade_name?: string; legal_name?: string }[];
       for (const company of companies) {
         if (Date.now() - started > 80000) { summary.deferred = true; return NextResponse.json(summary); }
+        if (process.env.PROAR_WHATSAPP_DURABLE_PILOT === "true" && durablePilotEnabled(company.id) && Date.now()-started<50_000) {
+          try { summary.inboundProcessed+=await drainQueuedPilot(company.id); } catch { summary.inboundErrors++; }
+        }
         if (summary.accepted + summary.unknown < 20) {
           try {
             const status = await runPilotFollowUp(company.id);

@@ -1,0 +1,30 @@
+.panel {
+  display: grid;
+  gap: .6rem;
+  border: 1px solid var(--border, #8090a4);
+  border-radius: .65rem;
+  min-width: 0;
+  padding: .85rem;
+  margin-block: .85rem;
+}
+.panel h4, .panel p { margin: 0; }
+.header, .actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.header > svg { flex: none; }
+.header div { min-width: 0; overflow-wrap: anywhere; }
+.result > p, .files p { margin-block: .4rem; }
+.files { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: .8rem; }
+.files > div { display: grid; align-content: start; justify-items: start; gap: .4rem; min-width: 0; }
+.files label { display: grid; gap: .3rem; max-width: 100%; font-weight: 600; }
+.files input { max-width: 100%; min-width: 0; }
+.files small { overflow-wrap: anywhere; }
+.panel details { padding-block: .25rem; }
+.panel summary { cursor: pointer; font-weight: 600; }
+.result { min-width: 0; }
+.error { display: block; padding: .5rem; border: 1px solid #bc5137; border-radius: .35rem; margin-block: .35rem; }
+.error ul { padding-inline-start: 1.25rem; }
+.scroll { max-width: 100%; overflow-x: auto; margin-block: .75rem; }
+.scroll table { width: 100%; min-width: 40rem; border-collapse: collapse; }
+.scroll caption { padding-bottom: .25rem; text-align: left; }
+.scroll th, .scroll td { border-bottom: 1px solid var(--border, #8090a4); padding: .45rem; vertical-align: top; text-align: left; overflow-wrap: anywhere; }
+.scroll :is(th, td):nth-child(n + 3):nth-child(-n + 6) { white-space: nowrap; }
+.actions { margin-block: .45rem; }

@@ -1,12 +1,12 @@
-import { recordAppointmentReply } from "../../../../../../lib/chatdesk-appointment-reply";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { validChatWebhookToken, parseEvolutionInbound, parseEvolutionDelivery, canReplyToNewInbound } from "../../../../../../lib/chatdesk-events";
 import { requiredSecret } from "../../../../../../lib/security-env";
-import { assertActiveWhatsAppCompany, evolutionConnection, tenantEvolutionAutomationEnabled } from "../../../../../../lib/evolution-tenant";
+import { assertActiveWhatsAppCompany, evolutionConnection } from "../../../../../../lib/evolution-tenant";
 import { changeChat, chatSettings } from "../../../../../../lib/chatdesk-store";
-import { localTriage, matchChatAutomation, eventReplyPlan, pilotReplyPlan, handoffSupplementPlan, businessHoursNotice, recordIntakeReply, updateServiceIntake, type ChatConversation } from "../../../../../../lib/chatdesk-local";
-import { applyChatDeliveryReceipt, completeChatSend } from "../../../../../../lib/chatdesk-delivery";
-import { dispatchEvolutionJob } from "../../../../../../lib/evolution-jobs";
+import { applyChatDeliveryReceipt } from "../../../../../../lib/chatdesk-delivery";
+import { localTriage } from "../../../../../../lib/chatdesk-local";
+import { processInboundEvent } from "../../../../../../lib/chatdesk-inbound-worker";
+import { enqueuePilotEvents, drainQueuedPilot } from "../../../../../../lib/chatdesk-pilot-queue";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 export async function POST(request: NextRequest, context: { params: Promise<{ companyId: string }> }) {
@@ -26,99 +26,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ co
     for (const receipt of receipts) await changeChat(companyId, receipt.phone, current => applyChatDeliveryReceipt(current, receipt));
     if (!events.length) return NextResponse.json({ received: 0, receipts: receipts.length });
     const settings = await chatSettings(companyId);
-    for (const event of events) {
-      const triage = localTriage(event.text);
-      const pilot = Boolean(settings.botEnabled && settings.botActivatedAt && settings.botTestPhone && settings.botTestPhone === event.phone
-        && process.env.PROAR_EVOLUTION_AUTOMATION_ENABLED === "true");
-      const freshPilot = pilot && canReplyToNewInbound({activatedAt:settings.botActivatedAt!,testPhone:settings.botTestPhone,eventAt:event.at,phone:event.phone,text:event.text,acceptNewTurns:true});
-      const result = await changeChat(companyId, event.phone, previous => {
-        if (previous?.messages.some(message => message.id === event.id && message.direction === "in")) return null;
-        if (previous && previous.messages.length >= 1500) throw new Error("Histórico cheio.");
-        const next: ChatConversation = previous ? structuredClone(previous) : { companyId, phone: event.phone, name: event.name, sector: triage.sector, stage: "Novo contato", assignee: "", revision: 0, botPaused: false, optOut: false, messages: [], requests: [], updatedAt: event.at };
-        next.optOut ||= triage.optOut;
-        const contextualDetail = settings.botEnabled && settings.botActivatedAt && (!settings.botTestPhone || settings.botTestPhone === event.phone)
-          && triage.sector === "Geral" && previous?.messages.some(message => message.direction === "out" && message.actor === "local-assistant"
-            && Date.now() - Date.parse(message.at) < 30 * 60_000);
-        if (!next.assignee && !next.botPaused && !contextualDetail) next.sector = triage.sector;
-        if (next.stage === "Concluído") { next.stage = "Novo contato"; delete next.intake; }
-        next.messages.push({ id: event.id, direction: "in", text: event.text, at: event.at, ...(event.replyToId ? { replyToId: event.replyToId } : {}), ...(event.mediaKind ? { mediaKind: event.mediaKind } : {}), ...(freshPilot ? { pilotTurn: true } : {}) });
-        if (freshPilot && !next.optOut) next.intake = updateServiceIntake(next.intake, next.messages, event.id);
-        next.updatedAt = new Date().toISOString();
-        return next;
-      });
-      // Runs on redelivery too: if the chat write succeeded but the agenda failed, retry safely.
-      const chat = result.chat;
-      const botId = `local:${event.id}`;
-      // A verified redelivery can repair a failed reservation, not an uncertain send.
-      const newest = chat?.messages.findLast(message => message.direction === "in");
-      const repairReservation = !result.changed && freshPilot && newest?.id === event.id && newest.pilotTurn
-        && !chat?.messages.some(message => message.id === botId);
-      const mayReply = result.changed || repairReservation;
-      let appointmentHandled = false, agendaFailed = false;
-      try { appointmentHandled = !triage.optOut && await recordAppointmentReply(companyId, event); }
-      catch (error) {
-        // Continue only if we can durably flag this new conversation for staff.
-        if (!freshPilot || !mayReply || chat?.assignee || (chat?.botPaused && !chat.assistantHandoffAt) || chat?.optOut) throw error;
-        agendaFailed = true;
-      }
-      const recentBot = chat?.messages.some(message => message.actor === "local-assistant" && Date.now() - Date.parse(message.at) < 300000);
-      if ((appointmentHandled && !freshPilot) || !mayReply || !chat || !settings.botEnabled || chat.optOut || (chat.botPaused && (!freshPilot || !chat.assistantHandoffAt)) || chat.assignee) continue;
-      if (settings.botActivatedAt) {
-        if (process.env.PROAR_EVOLUTION_AUTOMATION_ENABLED !== "true" || !canReplyToNewInbound({
-          activatedAt: settings.botActivatedAt, testPhone: settings.botTestPhone,
-          eventAt: event.at, phone: event.phone, text: event.text, acceptNewTurns: pilot,
-        })) continue;
-      } else if (recentBot || !await tenantEvolutionAutomationEnabled(companyId)) continue;
-      // Reserve ownership in the conversation as well as in the outbox. A human
-      // claim that wins the optimistic write prevents this automatic response.
-      const reserved = await changeChat(companyId, event.phone, current => {
-        if (!current || current.assignee || (current.botPaused && (!freshPilot || !current.assistantHandoffAt)) || current.optOut || current.messages.some(message => message.id === botId)) return null;
-        if (repairReservation && current.messages.findLast(message => message.direction === "in")?.id !== event.id) return null;
-        const flow = matchChatAutomation(settings.flows,event.text,current.sector);
-        const plan = current.botPaused ? handoffSupplementPlan(current, event.id, Date.now(), appointmentHandled, agendaFailed)
-          : settings.botActivatedAt
-          ? pilot ? pilotReplyPlan(current.messages, event.id, settings.botActivatedAt, Date.now(), agendaFailed, appointmentHandled, current.intake)
-            : eventReplyPlan(current.messages, event.id, settings.botActivatedAt)
-          : current.messages.some(message => message.actor === "local-assistant" && Date.now() - Date.parse(message.at) < 300000)
-            ? null : {key: "", reply: triage.reply, first: true, handoff: false};
-        if (!plan) return null;
-        const introduction = settings.botActivatedAt
-          ? `Assistente virtual${settings.companyName ? ` da ${settings.companyName}` : ""}.\n`
-          : `*Assistente automático${settings.companyName ? ` — ${settings.companyName}` : ""}:*\n`;
-        const notice = freshPilot && !triage.urgent ? businessHoursNotice(settings.businessHours) : null;
-        const showNotice = notice && !current.messages.some(message=>message.hoursNoticeFor===notice.key);
-        const text = (plan.first ? introduction + (settings.greeting ? settings.greeting + "\n\n" : "") : "")
-          + (showNotice ? notice.text + "\n\n" : "") + (flow && !plan.handoff ? flow.response : plan.reply);
-        const next = structuredClone(current);
-        const at = new Date().toISOString();
-        if (flow) {
-          if(flow.targetSector)next.sector=flow.targetSector;
-          if(flow.targetStage)next.stage=flow.targetStage;
-          if(flow.addTags?.length)next.tags=[...new Set([...(next.tags||[]),...flow.addTags])].slice(0,20);
-        }
-        if (plan.handoff) {
-          next.assistantHandoffAt = at;
-          next.botPaused = true;
-        }
-        next.messages.push({ id: botId, direction: "out", text, actor: "local-assistant", at, status: "processing", assistantReplyKey: plan.key, ...(showNotice ? {hoursNoticeFor:notice.key} : {}), ...("nudge" in plan && plan.nudge ? { assistantNudge: true } : {}) });
-        return next;
-      });
-      const reservedMessage = reserved.chat?.messages.find(message => message.id === botId);
-      if (!reserved.changed || !reservedMessage) continue;
-      let status = "unknown", providerMessageId: string | undefined;
-      try { const sent = await dispatchEvolutionJob(companyId, `chatbot:${event.phone}:${event.id}`, event.phone, reservedMessage.text); status = sent.status; if (sent.status === "accepted") providerMessageId = sent.messageId; } catch { /* Keep an auditable uncertain result. */ }
-      await changeChat(companyId, event.phone, current => {
-        const next = completeChatSend(current, botId, status, providerMessageId);
-        if (freshPilot && status === "accepted" && next) {
-          const newerTurn = next.messages.findLast(message => message.direction === "in")?.id !== event.id;
-          const updated = recordIntakeReply(next.intake, reservedMessage.assistantReplyKey || "", reservedMessage.text, reservedMessage.at,
-            Boolean(next.botPaused && !reservedMessage.assistantReplyKey?.startsWith("suplemento:")));
-          if (updated && newerTurn && next.intake) updated.lastQuestion = next.intake.lastQuestion;
-          next.intake = updated;
-        }
-        return next;
-      });
+    const queued = process.env.PROAR_WHATSAPP_DURABLE_PILOT_COMPANY_ID === companyId && process.env.PROAR_WHATSAPP_DURABLE_PILOT === "true" && process.env.PROAR_EVOLUTION_AUTOMATION_ENABLED === "true"
+      && settings.botEnabled && settings.botTestPhone && settings.botActivatedAt
+      ? events.filter(event => !localTriage(event.text).optOut && canReplyToNewInbound({activatedAt:settings.botActivatedAt!,testPhone:settings.botTestPhone,eventAt:event.at,phone:event.phone,text:event.text,acceptNewTurns:true},Date.now()))
+      : [];
+    if (queued.length) {
+      await enqueuePilotEvents(companyId, settings.botActivatedAt!, connection.config.instance, queued);
+      after(async () => { try { await drainQueuedPilot(companyId); } catch { /* Recovery cron handles durable work. */ } });
     }
+    const enqueued = new Set(queued);
+    for (const event of events) if (!enqueued.has(event)) await processInboundEvent(companyId, settings, event);
     return NextResponse.json({ received: events.length });
   } catch { return NextResponse.json({ error: "Não foi possível registrar o evento." }, { status: 503 }); }
 }

@@ -1,3 +1,4 @@
+import {fieldEquipmentIds,projectEquipmentResults,type FieldEquipmentResult} from "./mobile-equipment-results.ts";
 /**
  * ProAR Field — read-only mobile projection of the existing ERP state.
  * Never send the full state to a field technician: it includes finance, fiscal
@@ -15,6 +16,8 @@ export type MobileFieldOrder = {
   address: string;
   status: string;
   equipmentIds: string[];
+  equipmentResults?:FieldEquipmentResult[];
+  equipmentAcceptancePending?:boolean;
   checkInAt: string;
   fieldVersion: number;
   diagnosis: string;
@@ -100,9 +103,10 @@ export function mobileFieldOrders(
     const id = short(order.id, 100);
     if (!id || seen.has(id) || !assignedToSession(order, session) || (!canSeeAllMobileOrders(session) && !isOpenMobileOrder(order.status))) continue;
     seen.add(id);
-    const equipmentIds = (Array.isArray(order.equipmentIds) ? order.equipmentIds : [order.equipmentId])
-      .filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
-      .map(value => value.slice(0, 100)).slice(0, 20);
+    const equipmentIds = fieldEquipmentIds(order).slice(0,20);
+    const photos = isRecord(order.photos)?order.photos:{};
+    const photoCounts={before:Array.isArray(photos.before)?photos.before.length:0,after:Array.isArray(photos.after)?photos.after.length:0,equipmentLabel:Array.isArray(photos["Etiqueta"])?photos["Etiqueta"].length:0};
+    const equipmentResults=projectEquipmentResults(order.fieldEquipmentResults,equipmentIds,photoCounts);
     results.push({
       id,
       client: short(order.client, 150),
@@ -115,6 +119,8 @@ export function mobileFieldOrders(
       address: short(order.address, 220),
       status: short(order.status, 70),
       equipmentIds,
+      ...(equipmentResults.length?{equipmentResults}:{}),
+      ...(order.fieldEquipmentAcceptancePending===true?{equipmentAcceptancePending:true}:{}),
       checkInAt: short(order.checkInAt, 40),
       fieldVersion: typeof order.fieldVersion === "number" && Number.isSafeInteger(order.fieldVersion) && order.fieldVersion >= 0 ? order.fieldVersion : 0,
       fieldExceptions: Array.isArray(order.fieldExceptions) ? order.fieldExceptions.filter((item): item is Record<string,unknown> & {kind:"signature"|"equipment"} => isRecord(item) && (item.kind === "signature" || item.kind === "equipment")).slice(-20).map(item=>({id:short(item.id,100),kind:item.kind,reason:short(item.reason,1000),status:short(item.status,30),requestedBy:short(item.requestedBy,120),requestedAt:short(item.requestedAt,40),decidedBy:short(item.decidedBy,120),decidedAt:short(item.decidedAt,40),decisionReason:short(item.decisionReason,1000)})) : [],
@@ -126,7 +132,7 @@ export function mobileFieldOrders(
       warranty:isRecord(order.fieldWarranty)?{days:boundedInteger((order.fieldWarranty as Record<string,unknown>).days,3650),terms:short((order.fieldWarranty as Record<string,unknown>).terms,2000)}:undefined,
       observations: short(order.fieldObservations,4000),
       measurements: Object.fromEntries(["pressure","temperature","voltage","current"].filter(key=>typeof (order.fieldMeasurements as Record<string,unknown>|undefined)?.[key]==="string").map(key=>[key,short((order.fieldMeasurements as Record<string,unknown>)[key],30)])),
-      photoCounts:{before:Array.isArray((order.photos as Record<string,unknown>|undefined)?.before)?(order.photos as Record<string,string[]>).before.length:0,after:Array.isArray((order.photos as Record<string,unknown>|undefined)?.after)?(order.photos as Record<string,string[]>).after.length:0,equipmentLabel:Array.isArray((order.photos as Record<string,unknown>|undefined)?.["Etiqueta"])?(order.photos as Record<string,string[]>)["Etiqueta"].length:0},
+      photoCounts,
       appliedServices:Array.isArray(order.catalogItems)?order.catalogItems.filter(isRecord).filter(item=>item.kind==="Serviço").slice(0,100).map(item=>({id:short(item.id,120),name:short(item.name,200),quantity:typeof item.quantity==="number"&&Number.isFinite(item.quantity)&&item.quantity>0?item.quantity:1})):[],
       appliedMaterials:Array.isArray(order.catalogItems)?order.catalogItems.filter(isRecord).filter(item=>item.kind==="Produto").slice(0,100).map(item=>({name:short(item.name,150),quantity:typeof item.quantity==="number"&&Number.isFinite(item.quantity)&&item.quantity>0?item.quantity:1})):[],
       diagnosis: short(order.diagnosis, 4000),

@@ -3,6 +3,7 @@ import { FieldSupportError } from "./field-support.ts";
 import { assignedToSession, isOpenMobileOrder, type MobileFieldSession } from "./mobile-field.ts";
 import { mobileChecklist, checklistProgress } from "./mobile-service-checklists.ts";
 import { validateFieldMeasurements, type FieldMeasurements } from "./mobile-report-details.ts";
+import {equipmentCompletionIssue,equipmentResultsIssue,fieldEquipmentIds,projectEquipmentResults,type FieldEquipmentResult} from "./mobile-equipment-results.ts";
 import { createHash } from "node:crypto";
 export function fieldOrderFingerprint(order:Record<string,unknown>){return createHash("sha256").update(JSON.stringify(order)).digest("hex");}
 
@@ -15,7 +16,7 @@ export function requireActiveJourney(routes: WorkRoute[], now: string) {
   if(!active)throw new FieldSupportError("Inicie a jornada ou registre o retorno da pausa antes de atuar na OS.",403);
   return active;
 }
-export type FieldOrderCommand = { requestId:string; action:"start"|"save"|"finish"; orderId:string; expectedVersion:number; expectedToken?:string; report?:string; diagnosis?:string; observations?:string; measurements?:FieldMeasurements; beforePhotos?:string[]; afterPhotos?:string[]; equipmentLabelPhotos?:string[]; equipmentLabelAbsent?:boolean; equipmentLabelAbsentReason?:string; checklist?:Record<string,boolean>; beforePhoto?:string; afterPhoto?:string; signature?:string; signerName?:string; equipmentIds?:string[]; point?:{id:string;capturedAt:string;latitude:number;longitude:number;accuracy:number} };
+export type FieldOrderCommand = { requestId:string; action:"start"|"save"|"finish"; orderId:string; expectedVersion:number; expectedToken?:string; report?:string; diagnosis?:string; observations?:string; measurements?:FieldMeasurements; beforePhotos?:string[]; afterPhotos?:string[]; equipmentLabelPhotos?:string[]; equipmentLabelAbsent?:boolean; equipmentLabelAbsentReason?:string; checklist?:Record<string,boolean>; beforePhoto?:string; afterPhoto?:string; signature?:string; signerName?:string; equipmentIds?:string[]; equipmentResults?:FieldEquipmentResult[]; point?:{id:string;capturedAt:string;latitude:number;longitude:number;accuracy:number} };
 function image(value:unknown) {
   if(value == null || value === "")return "";
   if(typeof value !== "string" || value.length > 350000 || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(value))throw new FieldSupportError("Imagem inválida ou maior que o limite de 250 KB.");
@@ -36,11 +37,14 @@ export function applyFieldOrder(order:Record<string,unknown>, command:FieldOrder
   if(command.expectedToken && command.expectedToken !== fieldOrderFingerprint(order))throw new FieldSupportError("Esta OS foi alterada no sistema. Atualize antes de salvar.",409);
   if(!["start","save","finish"].includes(command.action))throw new FieldSupportError("Ação de OS inválida.");
   const next={...order};
+  const savedIds=fieldEquipmentIds(order);
   if(command.equipmentIds !== undefined){
     if(!Array.isArray(command.equipmentIds) || command.equipmentIds.length>20 || command.equipmentIds.some(id=>typeof id!=="string" || !id || id.length>100) || new Set(command.equipmentIds).size!==command.equipmentIds.length)throw new FieldSupportError("Seleção de equipamentos inválida.");
-    const existing=Array.isArray(order.equipmentIds)?order.equipmentIds:order.equipmentId?[order.equipmentId]:[];
+    const existing=savedIds;
     const allowed=new Set([...existing,...eligibleFieldEquipment(order,equipment).map(item=>item.id)]);
     if(command.equipmentIds.some(id=>!allowed.has(id)))throw new FieldSupportError("Equipamento não pertence ao cliente e local desta OS.",403);
+    const tracked = savedIds.length>1 || (Array.isArray(order.fieldEquipmentResults)&&order.fieldEquipmentResults.length>0);
+    if(tracked && savedIds.some(id=>!command.equipmentIds!.includes(id)))throw new FieldSupportError("Não remova aparelhos de uma OS com acompanhamento por aparelho. Corrija o vínculo com a equipe.",409);
     next.equipmentIds=command.equipmentIds;
   }
   if(command.report != null)next.executedService=String(command.report).trim().slice(0,8000);
@@ -54,14 +58,29 @@ export function applyFieldOrder(order:Record<string,unknown>, command:FieldOrder
   for(const [key,values] of [["before",command.beforePhotos],["after",command.afterPhotos],["Etiqueta",command.equipmentLabelPhotos]] as const){if(values!==undefined){if(!Array.isArray(values)||values.length>3||values.some(value=>!value))throw new FieldSupportError("Envie até 3 fotos válidas por etapa.");const existing=Array.isArray(photos[key])?photos[key]:[];const added=values.map(image);if(existing.length+added.length>10)throw new FieldSupportError("Limite de 10 fotos por etapa atingido.");photos[key]=[...existing,...added];}}
   if(command.equipmentLabelAbsent!==undefined){if(typeof command.equipmentLabelAbsent!=="boolean")throw new FieldSupportError("Marcação de etiqueta ausente inválida.");if(command.equipmentLabelAbsent&&photos["Etiqueta"]?.length)throw new FieldSupportError("Já existe foto da etiqueta nesta OS; remova a marcação de etiqueta ausente.");next.equipmentLabelAbsent=command.equipmentLabelAbsent;if(command.equipmentLabelAbsent){next.equipmentLabelAbsentAt=now;next.equipmentLabelAbsentBy=session.displayName||session.username;next.equipmentLabelAbsentReason=String(command.equipmentLabelAbsentReason||"").trim().slice(0,300);}else{delete next.equipmentLabelAbsentAt;delete next.equipmentLabelAbsentBy;delete next.equipmentLabelAbsentReason;}}
   if(command.equipmentLabelPhotos?.length){if(next.equipmentLabelAbsent)throw new FieldSupportError("Remova a marcação de etiqueta ausente para anexar uma foto.");next.equipmentLabelAbsent=false;delete next.equipmentLabelAbsentAt;delete next.equipmentLabelAbsentBy;delete next.equipmentLabelAbsentReason;}
+  const ids=fieldEquipmentIds(next);
+  const counts={before:Array.isArray(photos.before)?photos.before.length:0,after:Array.isArray(photos.after)?photos.after.length:0};
+  if((command.beforePhoto||command.afterPhoto) && Array.isArray(order.fieldEquipmentResults) && order.fieldEquipmentResults.some(row=>row?.photo?.phase===(command.beforePhoto?"before":"")||row?.photo?.phase===(command.afterPhoto?"after":"")))throw new FieldSupportError("Não substitua uma foto já vinculada a um aparelho. Adicione novas fotos sem substituir as anteriores.",409);
+  if(command.equipmentResults!==undefined){
+    const issue=equipmentResultsIssue(command.equipmentResults,ids,counts);
+    if(issue)throw new FieldSupportError(issue);
+    const existingResults=projectEquipmentResults(order.fieldEquipmentResults,savedIds,counts);
+    if(existingResults.some(row=>!command.equipmentResults!.some(item=>item.equipmentId===row.equipmentId)))throw new FieldSupportError("Preserve os resultados já registrados. Altere o status ou o relato do aparelho para corrigir.",409);
+    next.fieldEquipmentResults=projectEquipmentResults(command.equipmentResults,ids,counts);
+  }
   next.photos=photos;
+  const equipmentIssue=equipmentCompletionIssue(ids,projectEquipmentResults(next.fieldEquipmentResults,ids,counts));
+  if(command.action==="finish"&&equipmentIssue)throw new FieldSupportError(equipmentIssue,409);
+  // A signature from a partial visit is not final acceptance for a later complete visit.
+  if(equipmentIssue&&(order.customerSignature||command.signature))next.fieldEquipmentAcceptancePending=true;
+  if(!equipmentIssue&&command.signature)delete next.fieldEquipmentAcceptancePending;
+  if(command.action==="finish"&&next.fieldEquipmentAcceptancePending&&!approvedFieldException(order,"signature"))throw new FieldSupportError("Colete um novo aceite após resolver todos os aparelhos.",409);
   if(command.signature){if(!String(command.signerName||"").trim())throw new FieldSupportError("Identifique quem assinou o aceite.");next.customerSignature=image(command.signature);next.customerSignatureName=String(command.signerName).trim().slice(0,120);next.customerSignatureAt=now;}
   if(command.action === "start"){next.status="Em andamento";next.checkInAt=order.checkInAt||now;}
   if(command.point && command.action === "start")next.checkInGps={latitude:command.point.latitude,longitude:command.point.longitude,accuracy:command.point.accuracy,capturedAt:command.point.capturedAt};
   if(command.point && command.action === "finish")next.checkOutGps={latitude:command.point.latitude,longitude:command.point.longitude,accuracy:command.point.accuracy,capturedAt:command.point.capturedAt};
   if(command.action === "finish") {
     if(order.fieldAttendancePaused)throw new FieldSupportError("Retome o atendimento pausado antes de concluir.",409);
-    const ids=Array.isArray(next.equipmentIds)?next.equipmentIds:next.equipmentId?[next.equipmentId]:[];
     if(!order.checkInAt || !String(next.diagnosis||"").trim() || !String(next.executedService||"").trim() || !photos.before?.length || !photos.after?.length || (!(photos["Etiqueta"]?.length||next.equipmentLabelAbsent===true)) || (!next.customerSignature&&!approvedFieldException(order,"signature")))throw new FieldSupportError("Conclusão exige check-in, diagnóstico, serviço executado, foto da etiqueta (ou marcação de etiqueta ausente), fotos antes/depois e assinatura do cliente. Exceções de assinatura precisam de aprovação do gestor.");
     const checks=next.mobileChecklist as Record<string,boolean>|undefined;
     if(!checks || !checklistProgress(mobileChecklist(String(order.service||"")),{...checks,equipmentLabel:Boolean(photos["Etiqueta"]?.length||next.equipmentLabelAbsent===true),equipment:ids.length>0||approvedFieldException(order,"equipment"),signature:Boolean(next.customerSignature)||approvedFieldException(order,"signature")}).ready)throw new FieldSupportError("Complete o checklist técnico antes de concluir.");

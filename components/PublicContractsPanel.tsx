@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { CheckCircle2, Edit3, FileText, Landmark, Plus, Trash2 } from "lucide-react";
+import { inspectCanonicalServiceLinks } from "@/lib/canonical-service-links";
 import { hierarchySelection, type HierarchySelection } from "@/lib/customer-hierarchy";
 import { useCustomerHierarchy } from "./CustomerHierarchyContext";
 import { CustomerSearchSelect } from "@/components/CustomerSearchSelect";
@@ -145,7 +146,8 @@ export function PublicContractsPanel({
   const save = async (event: FormEvent) => {
     event.preventDefault();
     if (saving) return;
-    const customer = customers.find(item => item.id === customerId);
+    const customerMatches=customers.filter(item=>item.id===customerId);
+    const customer=customerMatches.length===1?customerMatches[0]:undefined;
     if (!customer) {
       setMessage("Selecione o cliente público deste Certame.");
       return;
@@ -165,6 +167,12 @@ export function PublicContractsPanel({
     }
 
     const existing=records.find(record=>record.id===editingId);
+    const canonicalLocation=location??(existing?.certameCustomerId===customer.id||existing?.customerId===customer.id?{
+      structureId:existing.structureId,unitId:existing.unitId,sectorId:existing.sectorId,roomId:existing.roomId,
+      unit:existing.unit,sector:existing.sector,room:existing.room,
+    }:{});
+    const locationCheck=inspectCanonicalServiceLinks({customerId:customer.id,...canonicalLocation},hierarchy.customers,hierarchy.records,[]);
+    if (locationCheck.issues.length) { setMessage(locationCheck.issues.join(" "));return; }
     const id = existing?.id || `CER-${Date.now().toString().slice(-8)}`;
     const certameItems: PublicContractItemRecord[] = validItems.map((item, index) => ({
       id: `${id}-ITEM-${String(index + 1).padStart(3, "0")}`,
@@ -192,7 +200,7 @@ export function PublicContractsPanel({
       value: total,
       category: "Certame público",
       certameCustomerId: customer.id,
-      ...(location || {}),
+      ...canonicalLocation,
       administrativeProcess: process.trim(),
       modality: modality.trim(),
       biddingNumber: biddingNumber.trim(),
@@ -215,7 +223,9 @@ export function PublicContractsPanel({
   const startEdit = (record: PublicContractRecord) => {
     setEditingId(record.id);
     setLocation(null);
-    setCustomerId(record.certameCustomerId || customers.find(item=>item.name===record.client)?.id || "");
+    const existingId=record.certameCustomerId||record.customerId||"";
+    const verifiedId=customers.filter(item=>item.id===existingId).length===1 && (!record.certameCustomerId||!record.customerId||record.certameCustomerId===record.customerId) ? existingId : "";
+    setCustomerId(verifiedId);
     setProcess(record.administrativeProcess || "");
     setModality(record.modality || "");
     setBiddingNumber(record.biddingNumber || "");
@@ -228,7 +238,7 @@ export function PublicContractsPanel({
     setStatus((record.status as CertameStatus) || "Em vigência");
     setItems((record.certameItems || []).length ? (record.certameItems || []).map(item=>({code:item.code||"",description:item.description||"",unit:item.unit||"UN",contractedQuantity:String(item.contractedQuantity||""),unitValue:String(item.unitValue??"")})) : [emptyItem()]);
     setCreating(true);
-    setMessage(`Editando ${record.name}.`);
+    setMessage(verifiedId?`Editando ${record.name}.`:`Cadastro legado de ${record.name}: selecione o cliente pelo cadastro principal. Nenhum vínculo é inferido pelo nome.`);
   };
   const requestDelete = (record: PublicContractRecord) => {
     const hasMovements=(record.certameItems||[]).some(item=>(item.movements||[]).length>0);

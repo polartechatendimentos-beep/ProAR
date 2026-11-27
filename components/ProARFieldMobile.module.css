@@ -227,3 +227,19 @@
 .app[data-mobile-theme="light"]:not(.sunlightMode) :is(.osIdentity,.osActions){background:#f7fbff;border-color:#bdcfe0}
 .app.sunlightMode :is(.osIdentity,.osActions){background:#fff;color:#0b1830;border-color:#293b57}
 @media(max-width:360px){.osStepNav button{font-size:.78em}}
+
+/* Shortcuts in Execution use a single content panel and leave room for the footer. */
+.osStepNav{scroll-margin-top:calc(94px + env(safe-area-inset-top))}
+.osFunctionNav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin:6px 0 12px;scroll-margin-block:100px 78px}
+.osFunctionNav button{display:flex;align-items:center;justify-content:center;gap:4px;min-height:44px;border:1px solid #466b8b;background:transparent;color:inherit;border-radius:8px;padding:4px;font:inherit;font-weight:650;font-size:.84em;cursor:pointer;min-width:0}
+.osFunctionNav button svg,.osSaveAction svg{flex-shrink:0}
+.osFunctionNav button[aria-pressed="true"]{border-color:#67cbf7;background:#173d5e;color:#fff}
+.osFunctionNav button:focus-visible,.osSaveAction:focus-visible{outline:2px solid #62cfff;outline-offset:2px}
+.osFunctionPanel{min-width:0}
+.osFunctionPanel[hidden]{display:none}
+.osFunctionPanel textarea{min-height:68px}
+.osActions[data-compact="true"]{flex-direction:row;align-items:stretch;gap:8px;padding-top:6px}
+.orderEditor .osActions[data-compact="true"] :is(.primaryAction,.finishAction){flex:1 1 0;width:auto;min-width:0;padding:8px 5px;font-size:.88em;white-space:normal}
+.osSaveAction{display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:4px 8px;color:inherit;border:1px solid #466b8b;background:transparent;border-radius:8px;min-height:44px;font:inherit;font-size:.84em;cursor:pointer}
+.osSaveAction:disabled,.osFunctionNav button:disabled{opacity:.55;cursor:default}
+@media(max-width:365px){.osFunctionNav button{flex-direction:column;font-size:.78em;padding:3px}}

@@ -1,8 +1,9 @@
+import * as equipmentResultHelpers from "../lib/mobile-equipment-results.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
-import { automaticFieldEvidence, fieldOrderStepFor, fieldOrderSteps } from "../lib/mobile-order-steps.ts";
+import { automaticFieldEvidence, fieldOrderFunctionFor, fieldOrderFunctions, fieldOrderStepFor, fieldOrderSteps } from "../lib/mobile-order-steps.ts";
 import { mobileChecklist } from "../lib/mobile-service-checklists.ts";
 
 test("requisitos continuam acessíveis na etapa certa e sem confirmação manual duplicada",()=>{
@@ -28,7 +29,8 @@ test("editor mantém um botão de check-in, etapas ocultáveis e a confirmação
  for(const id of fieldOrderSteps.map(step=>step.id))assert.ok(source.includes('hidden={step!=="'+id+'"||review}'));
  assert.equal((source.match(/execute\("start"\)/g)||[]).length,1);
  assert.equal((source.match(/execute\("finish"\)/g)||[]).length,1);
- assert.match(source,/setStep\(fieldOrderStepFor\(key\)\)/);
+ assert.match(source,/const targetStep=fieldOrderStepFor\(key\)/);
+ assert.match(source,/setWorkFunction\(fieldOrderFunctionFor\(key\)\)/);
  assert.match(source,/await saveOrderDraft\(scope,order\.id/);
  assert.match(source,/orderSubmissionConfirmed\(sent,body\)/);
  assert.match(source,/if\(pendingRequirements\.length\)jumpTo/);
@@ -43,20 +45,23 @@ test("o editor real renderiza a etapa de chegada ou execução conforme o check-
  const content=readFileSync(new URL("../components/FieldOrderEditor.tsx",import.meta.url),"utf8");
  const output=ts.transpileModule(content,{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true,target:ts.ScriptTarget.ES2022}}).outputText;
  const named={
-  "@/lib/mobile-order-steps":{fieldOrderSteps,fieldOrderStepFor,automaticFieldEvidence},
+  "@/lib/mobile-equipment-results":equipmentResultHelpers,
+  "@/lib/mobile-order-steps":{fieldOrderSteps,fieldOrderStepFor,automaticFieldEvidence,fieldOrderFunctions,fieldOrderFunctionFor},
   "@/lib/mobile-service-checklists":{mobileChecklist},
   "@/lib/mobile-experience":{equipmentInspection:()=>[]},
   "@/lib/mobile-report-details":{fieldMeasurements:[],reportTemplates:[]},
  };
  const component=Object.fromEntries(["FieldServicePicker","FieldPhotoComparison","LocalFieldAssistant","FieldPhotoCollection","FieldAttendanceControls","FieldOrderTools"].map(name=>[name,()=>null]));
+ let functionShown="relatorio";
  const module={exports:{}};
  runInNewContext(output,{exports:module.exports,module,require:name=>{
-  if(name==="react"||name==="react/jsx-runtime"||name==="lucide-react")return require(name);
+  if(name==="react")return {...React,useState(initial){const state=React.useState(initial);return initial==="relatorio"?[functionShown,state[1]]:state;}};
+  if(name==="react/jsx-runtime"||name==="lucide-react")return require(name);
   if(name.endsWith(".module.css"))return {__esModule:true,default:new Proxy({},{get:(_,key)=>String(key)})};
   return named[name]||component;
  }});
  const order={id:"OS-demo",service:"Instalação",equipmentIds:[],equipmentOptions:[],evidence:{}};
- const render=checkInAt=>renderToStaticMarkup(React.createElement(module.exports.FieldOrderEditor,{order:{...order,checkInAt},scope:"fixture",requiresJourney:true,canApprove:false,onSaved:async()=>{}}));
+ const render=(checkInAt,extra={})=>renderToStaticMarkup(React.createElement(module.exports.FieldOrderEditor,{order:{...order,checkInAt,...extra},scope:"fixture",requiresJourney:true,canApprove:false,onSaved:async()=>{}}));
  const first=render(undefined);
  assert.match(first,/<section class="osStepPanel" aria-label="Chegada">/);
  assert.match(first,/<section hidden="" class="osStepPanel" aria-label="Execução">/);
@@ -65,4 +70,27 @@ test("o editor real renderiza a etapa de chegada ou execução conforme o check-
  assert.match(begun,/<section class="osStepPanel" aria-label="Execução">/);
  assert.match(begun,/<section hidden="" class="osStepPanel" aria-label="Conclusão">/);
  assert.match(begun,/>Ir para conclusão<\/button>/);
+ assert.match(begun,/id="field-OS-demo-funcao-relatorio" class="osFunctionPanel"/);
+ const multi=render("2026-11-26T19:00:00Z",{equipmentIds:["EQ-1","EQ-2"],equipmentOptions:[{id:"EQ-1",label:"Sala frontal"},{id:"EQ-2",label:"Quarto masculino"}],equipmentResults:[{equipmentId:"EQ-1",status:"completed",note:"Revisado"},{equipmentId:"EQ-2",status:"pending",note:"Faltou fluido compatível"}],photoCounts:{before:1,after:1}});
+ assert.match(multi,/aria-label="Resultado por aparelho"/);
+ assert.match(multi,/<legend>Quarto masculino<\/legend>/);
+ assert.match(multi,/Faltou fluido compatível/);
+ assert.match(multi,/Revisar resultado por aparelho/);
+
+ for (const [key,label] of [["fotos","Fotos e identificação"],["checklist","Checklist do serviço"]]) {
+  functionShown=key;
+  const selected=render("2026-11-26T19:00:00Z");
+  assert.ok(selected.includes(`id="field-OS-demo-funcao-${key}" class="osFunctionPanel" aria-label="${label}"`));
+  assert.match(selected,/id="field-OS-demo-funcao-relatorio" hidden=""/);
+  assert.ok(selected.includes(`aria-pressed="true" aria-controls="field-OS-demo-funcao-${key}"`));
+ }
+});
+
+test("pendências apontam para a função certa sem exigir caça em rolagem",()=>{
+ assert.equal(fieldOrderFunctionFor("diagnosis"),"relatorio");
+ assert.equal(fieldOrderFunctionFor("executedService"),"relatorio");
+ assert.equal(fieldOrderFunctionFor("equipmentLabel"),"fotos");
+ assert.equal(fieldOrderFunctionFor("beforePhoto"),"fotos");
+ assert.equal(fieldOrderFunctionFor("vacuum"),"checklist");
+ assert.equal(fieldOrderStepFor("afterPhoto"),"conclusao");
 });
