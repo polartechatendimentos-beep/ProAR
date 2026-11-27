@@ -1,7 +1,8 @@
 import './mercadopago.css';
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import "./proar-keyboard-palette.css";
 import "./proar-unified-layout.css";
 import "./global-feedback.css";
 import "./experience-design.css";
@@ -22,6 +23,8 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
+
+export const viewport: Viewport = { themeColor: "#243746" };
 
 export const metadata: Metadata = {
   title: "ProAR Gestão de Serviços — BY TAV's",

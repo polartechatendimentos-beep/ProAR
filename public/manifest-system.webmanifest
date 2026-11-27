@@ -5,8 +5,8 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#050a14",
-  "theme_color": "#081120",
+  "background_color": "#0f151d",
+  "theme_color": "#243746",
   "lang": "pt-BR",
   "categories": [
     "business",

@@ -231,3 +231,23 @@
 .agenda .event[draggable="true"]:active{cursor:grabbing}
 .agenda .day.dropTarget{background:#123a58!important;outline:2px dashed #5ec8f4;outline-offset:-4px}
 .agenda .day.dropTarget:after{content:"Solte para escolher a nova data";display:block;margin:7px;padding:10px;border:1px dashed #5ec8f4;border-radius:8px;color:#aee9ff;font-size:10px;text-align:center}
+
+/* Shared neutral chrome; service chips keep their category colours. */
+:global(.proar-full-system) .agenda {
+  --line:var(--ux-border);--muted:var(--ux-muted);--blue:var(--ux-cyan);
+  background:var(--ux-surface);color:var(--ux-text);border-color:var(--ux-border);
+}
+:global(.proar-full-system) .agenda .hero {background:var(--ux-header)}
+:global(.proar-full-system) .agenda .hero .primary {background:var(--kbd-action)!important;color:var(--kbd-on-action)!important;border-color:var(--kbd-control)!important}
+:global(.proar-full-system) .agenda :is(.filters,.modes,.calendarScroll,.calendarHeader,.activeFilters button) {
+  background:var(--ux-card)!important;color:var(--ux-text)!important;border-color:var(--ux-border)!important;
+}
+:global(.proar-full-system) .agenda .modes button[aria-pressed=true] {background:var(--ux-primary)!important;color:var(--kbd-on-action)!important;border-color:var(--ux-primary)!important}
+:global(.proar-full-system) .agenda.agenda .filters label {color:var(--ux-muted)!important}
+:global(.proar-full-system) .agenda .filters :is(input,select) {-webkit-text-fill-color:var(--ux-text)!important;color-scheme:inherit!important}
+:global(.proar-full-system) .agenda .filters input::placeholder {-webkit-text-fill-color:var(--ux-muted)!important}
+:global(.proar-full-system) .agenda :is(.day,.day:nth-child(7n+1),.day:nth-child(7n),.day:has(.event)) {
+  background:var(--ux-card)!important;color:var(--ux-text);border-color:var(--ux-border);
+}
+:global(.proar-full-system) .agenda :is(.day.outside,.day.today,.day.today:has(.event)) {background:var(--ux-soft)!important}
+:global(.proar-full-system) .agenda .today {box-shadow:inset 0 3px var(--ux-cyan)}

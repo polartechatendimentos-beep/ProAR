@@ -34,3 +34,13 @@
 .statusMessage{background:#123d36;color:#a8f0d0}.error{background:#512a32;color:#ffd0d0}
 .foot{color:#8eabc6}
 @media(max-width:460px){.card{padding:13px}.heading{align-items:flex-start;flex-direction:column}.date{align-items:flex-start;flex-direction:column}.date input{max-width:none}.actions button{flex:1}}
+
+/* Inherit the field palette only when rendered within ProAR Mobile. */
+.card {background:var(--field-card,#102b46);color:var(--field-text,#eaf4ff);border-color:var(--field-line,#36516d)}
+.card :is(.heading small,.foot,.notice,.location,.date,.summary span,.list time,.list small,.corrections p,.review span,.review p,.correctionForm label) {color:var(--field-muted,#bfd0e3)}
+.card :is(.date input,.correctionForm input,.correctionForm select,.correctionForm textarea) {
+  background:var(--field-base,#0b1d31);color:var(--field-text,#edf6ff);border-color:var(--field-control,#496887);
+}
+.card :is(.actions button:not(.secondary),.correctionForm button,.review button:not(.secondary)) {background:var(--field-action,#345d80);color:#fff}
+.card :is(.secondary,.summary button) {background:var(--field-soft,#244564);color:var(--field-text,#eaf4ff)}
+.card :is(.summary,.list li,.correctionForm,.corrections,.review) {border-color:var(--field-line,#36516d)}

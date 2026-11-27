@@ -243,3 +243,52 @@
 .osSaveAction{display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:4px 8px;color:inherit;border:1px solid #466b8b;background:transparent;border-radius:8px;min-height:44px;font:inherit;font-size:.84em;cursor:pointer}
 .osSaveAction:disabled,.osFunctionNav button:disabled{opacity:.55;cursor:default}
 @media(max-width:365px){.osFunctionNav button{flex-direction:column;font-size:.78em;padding:3px}}
+
+/* Keyboard palette. The outdoor high-contrast profile is deliberately separate. */
+.app:not(.sunlightMode) {
+  --field-bg:var(--kbd-bg);--field-card:var(--kbd-card);--field-soft:var(--kbd-soft);
+  --field-text:var(--kbd-text);--field-muted:var(--kbd-muted);--field-line:var(--kbd-line);
+  --field-accent:var(--kbd-accent);--field-control:var(--kbd-control);
+  --field-base:var(--kbd-surface);--field-hover:var(--kbd-hover);
+  --field-action:var(--kbd-action);--field-action-hover:var(--kbd-action-hover);--field-header:var(--kbd-header);
+  --mobile-muted:var(--field-muted);--mobile-border:var(--field-line);--mobile-surface:var(--field-card);
+  background:var(--field-bg);color:var(--field-text);
+}
+.app[data-mobile-theme="light"]:not(.sunlightMode) {
+  --field-bg:var(--kbd-light-bg);--field-card:var(--kbd-light-card);--field-soft:var(--kbd-light-soft);
+  --field-text:var(--kbd-light-text);--field-muted:var(--kbd-light-muted);--field-line:var(--kbd-light-line);
+  --field-accent:var(--kbd-light-accent);--field-control:var(--kbd-light-control);
+  --field-base:var(--kbd-light-surface);--field-hover:var(--kbd-light-hover);
+  --field-action:var(--kbd-light-action);--field-action-hover:var(--kbd-light-action-hover);--field-header:var(--kbd-light-header);
+}
+.app:not(.sunlightMode) :is(.shell,.header,.bottomNav,.footer) {
+  background:var(--field-base);color:var(--field-text);border-color:var(--field-line);
+}
+.app:not(.sunlightMode) .brandIcon {background:var(--field-action);color:var(--kbd-on-action);box-shadow:none}
+.app:not(.sunlightMode) .brand b {color:var(--field-accent)}
+.app:not(.sunlightMode) :is(.hero,.hero>span,.heroTop) {color:var(--kbd-on-action)}
+.app:not(.sunlightMode) .hero {background:var(--field-header);border-color:var(--field-control)}
+.app:not(.sunlightMode) .hero>span:not(.heroTop),.app:not(.sunlightMode) .heroBottom {color:var(--kbd-muted)}
+.app:not(.sunlightMode) :is(.detailCard,.orderCard,.profile,.dayPicker,.search,.journeyPanel,.empty,.osIdentity,.osActions,.editorFields,.orderEditor,.libraryTable,.metrics>div) {
+  background:var(--field-card);color:var(--field-text);border-color:var(--field-line);
+}
+.app:not(.sunlightMode) :is(.metrics>div,.profile,.orderCard) :is(strong,span):not(.status,.statusDone,.statusActive,.statusAlert,.statusPending) {color:var(--field-text)}
+.app:not(.sunlightMode) :is(.formLabel,.subtitle,.orderMuted,.orderBottom,.detailList dt,.brand small,.navItem,.footer,.disclaimer,.detailCard p) {
+  color:var(--field-muted);border-color:var(--field-line);
+}
+.app:not(.sunlightMode) :is(.eyebrow,.titleAccent,.navActive,.back,.orderTop strong,.journeyPanel summary,.sectionHeading button) {color:var(--field-accent)}
+.app:not(.sunlightMode) :is(.secondaryAction,.iconButton,.osQuietAction,.osPhotoButton,.orderToolbar button,.filterChips button,.avatar) {
+  background:var(--field-soft);color:var(--field-text)!important;border-color:var(--field-control);
+}
+.app:not(.sunlightMode) :is(.primaryAction,.osStepNav button[aria-current="step"],.filterChips button[aria-pressed="true"]) {
+  background:var(--field-action);color:var(--kbd-on-action)!important;border-color:var(--field-action);
+}
+.app:not(.sunlightMode) :is(.primaryAction,.osStepNav button[aria-current="step"],.filterChips button[aria-pressed="true"]):hover:not(:disabled) {
+  background:var(--field-action-hover);
+}
+.app:not(.sunlightMode) :is(.orderCard,.secondaryAction,.iconButton):hover:not(:disabled) {
+  background:var(--field-hover);border-color:var(--field-control);
+}
+.app:not(.sunlightMode) :is(.osStepNav button,.osDisclosure,.osPhotos,.detailList>div) {border-color:var(--field-line)}
+.app:not(.sunlightMode) :is(button,a,input,select,textarea,summary):focus-visible,
+.app:not(.sunlightMode) .osPhotoLabel:focus-within .osPhotoButton {outline:3px solid var(--field-accent);outline-offset:2px}

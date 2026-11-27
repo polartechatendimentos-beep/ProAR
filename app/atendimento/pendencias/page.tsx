@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { ConversationBottlenecks, DailyActionableDigest } from "../../../lib/daily-actionable-digest";
 import type { OperationalPendingSummary } from "../../../lib/operational-pending-center";
 import styles from "../workspace.module.css";
+import { useAttendancePalette } from "../useAttendancePalette";
 
 const dayLabel = (day: string) => day.split("-").reverse().join("/");
 const timeLabel = (instant: string) => new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" }).format(new Date(instant));
@@ -24,6 +25,7 @@ function BottleneckCounts({ heading, counts }: { heading: string; counts: Conver
 }
 
 export default function DailyPendingDigestPage() {
+  const { darkMode } = useAttendancePalette();
   const [refresh, setRefresh] = useState(0);
   const [data, setData] = useState<(DailyActionableDigest & {operations?:OperationalPendingSummary}) | null>(null);
   const [error, setError] = useState("");
@@ -66,7 +68,7 @@ export default function DailyPendingDigestPage() {
     {key:"integrity",heading:"Estoque, fiscal e financeiro · integridade",href:"/?tab=integridade",...data.operations.integrity},
   ]:[];
   const hasItems = [...sections,...operational].some(item => item.total > 0);
-  return <main className={styles.workspace}>
+  return <main className={`${styles.workspace} ${darkMode ? styles.workspaceDark : ""}`}>
     <div className={styles.content}>
       <header className={styles.header}>
         <div><Link href="/atendimento">Voltar ao Atendimento</Link><h1>Central de Pendências</h1><p>Mensagens, agenda, ordens de serviço e integridade da operação. Nenhuma mensagem ou nota é enviada por esta tela.</p></div>
