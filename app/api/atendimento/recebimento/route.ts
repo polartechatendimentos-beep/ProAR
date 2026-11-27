@@ -5,6 +5,7 @@ import { requiredSecret } from "../../../../lib/security-env";
 import { assertActiveWhatsAppCompany, evolutionConnection } from "../../../../lib/evolution-tenant";
 import { evolutionRequestWithConfig } from "../../../../lib/proar-evolution";
 import { tenantSlugFromHost } from "../../../../lib/tenant-host";
+import { readPilotQueueSummary } from "../../../../lib/chatdesk-pilot-queue";
 export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
   if (request.headers.get("sec-fetch-site") !== "same-origin" || (request.headers.get("origin") && request.headers.get("origin") !== request.nextUrl.origin)) return NextResponse.json({ error: "Origem inválida." }, { status: 403 });
@@ -35,4 +36,14 @@ export async function POST(request: NextRequest) {
     if (webhook.enabled !== true || webhook.url !== url || webhook.headers?.["x-proar-webhook-secret"] !== token || !Array.isArray(webhook.events) || !events.every(event => webhook.events.includes(event))) throw new Error("O servidor não confirmou o recebimento seguro. Confira a configuração.");
     return NextResponse.json({ configured: true }, { headers: { "Cache-Control": "no-store, private" } });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Não foi possível ativar o recebimento." }, { status: 502 }); }
+}
+
+export async function GET(request: NextRequest) {
+  const access=chatAccess(request);
+  const response=(value:unknown,status=200)=>NextResponse.json(value,{status,headers:{"Cache-Control":"private, no-store"}});
+  if(!access?.actor.admin)return response({error:"Acesso restrito ao administrador da empresa."},403);
+  const slug=tenantSlugFromHost(request.nextUrl.hostname);
+  if(slug&&access.session.companySlug&&slug!==access.session.companySlug)return response({error:"Sessão não pertence a esta empresa."},403);
+  try{return response(await readPilotQueueSummary(access.companyId));}
+  catch{return response({error:"Não foi possível conferir a fila de mensagens."},503);}
 }

@@ -25,7 +25,8 @@ test('first-response eligibility excludes old, future, media-only, and courtesy 
 
 test('authenticated arrival can answer immediately with the reminders switch off', async () => {
   const file = new URL('../app/api/whatsapp/web/events/[companyId]/route.ts', import.meta.url);
-  const source = stripTypeScriptTypes(await readFile(file, 'utf8')).replace(/^import .*;$/gm, '').replace(/^export /gm, '');
+  const worker = await readFile(new URL('../lib/chatdesk-inbound-worker.ts', import.meta.url),'utf8');
+  const source = stripTypeScriptTypes(worker+'\n'+await readFile(file, 'utf8')).replace(/^import .*;$/gm, '').replace(/^export /gm, '');
   const secret = 'fixture-only-secret'.repeat(2);
   const tenant = 'fixture-a', instance = 'fixture-instance';
   const pilotPhone = '5517999990000', otherPhone = '5517999990001';
@@ -242,7 +243,8 @@ test('authenticated arrival can answer immediately with the reminders switch off
 
 test('provisioning verifies the tenant origin and leaves other provider instances unchanged', async () => {
   const file = new URL('../app/api/atendimento/recebimento/route.ts', import.meta.url);
-  const source = stripTypeScriptTypes(await readFile(file, 'utf8')).replace(/^import .*;$/gm, '').replace(/^export /gm, '');
+  const worker = await readFile(new URL('../lib/chatdesk-inbound-worker.ts', import.meta.url),'utf8');
+  const source = stripTypeScriptTypes(worker+'\n'+await readFile(file, 'utf8')).replace(/^import .*;$/gm, '').replace(/^export /gm, '');
   let lastWebhook, writeCount=0;
   const handle = runInNewContext(source+'\nPOST', {
     URL, process:{env:{PROAR_WHATSAPP_WEBHOOK_BASE_URL:'https://proar.online'}}, tenantSlugFromHost, chatWebhookToken,
