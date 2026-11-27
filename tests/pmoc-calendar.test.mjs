@@ -9,7 +9,14 @@ test('PMOC: rejeita datas e intervalos inválidos; periodicidade personalizada u
 });
 import {prepareOperationalState} from '../lib/operational-ledger.ts';
 test('PMOC: servidor recusa última manutenção futura e calendário inválido',()=>{
- const base={customers:[],serviceOrders:[],moduleRecords:{}},next=structuredClone(base),actor={username:'rt',can:()=>true};next.moduleRecords.PMOC=[{...plan('2026-01-15'),lastServiceAt:'2026-10-16'}];
+ const base={customers:[{id:'C-1',name:'Teste'}],serviceOrders:[],moduleRecords:{
+  'Unidades e setores':[{id:'U-1',name:'Unidade',customerId:'C-1',category:'Unidade'},{id:'R-1',name:'Sala',customerId:'C-1',category:'Sala',parentId:'U-1'}],
+  Equipamentos:[{id:'E-1',name:'Aparelho',customerId:'C-1',roomId:'R-1'}],
+ }},next=structuredClone(base),actor={username:'rt',can:()=>true};
+ const linked={customerId:'C-1',unitId:'U-1',roomId:'R-1',structureId:'R-1',equipmentIds:['E-1']};
+ next.moduleRecords.PMOC=[{...plan('2026-01-15'),...linked,lastServiceAt:'2026-10-16'}];
  assert.throws(()=>prepareOperationalState(base,next,actor,'2026-10-15T12:00:00Z'),/última manutenção/);
- next.moduleRecords.PMOC=[plan('2026-02-30')];assert.throws(()=>prepareOperationalState(base,next,actor,'2026-10-15T12:00:00Z'),/periodicidade/);
+ next.moduleRecords.PMOC=[{...plan('2026-02-30'),...linked}];assert.throws(()=>prepareOperationalState(base,next,actor,'2026-10-15T12:00:00Z'),/periodicidade/);
+ next.moduleRecords.PMOC=[{...plan('2026-02-28'),...linked}];
+ assert.equal(prepareOperationalState(base,next,actor,'2026-10-15T12:00:00Z').moduleRecords.PMOC[0].roomId,'R-1');
 });

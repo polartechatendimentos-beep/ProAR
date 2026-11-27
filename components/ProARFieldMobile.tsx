@@ -221,6 +221,7 @@ export function ProARFieldMobile() {
                   {current.checkInAt && <div><dt>Check-in registrado</dt><dd>{current.checkInAt}</dd></div>}
                   {!isOpenMobileOrder(current.status)&&<><div><dt>Diagnóstico</dt><dd>{current.diagnosis||"Não informado"}</dd></div><div><dt>Serviço executado</dt><dd>{current.executedService||"Não informado"}</dd></div></>}
                 </dl>
+                {Boolean(current.equipmentResults?.length)&&<section aria-label="Resultados registrados por aparelho"><h3>Resultados registrados por aparelho</h3><ul>{current.equipmentResults?.map(item=><li key={item.equipmentId}><strong>{current.equipmentOptions?.find(option=>option.id===item.equipmentId)?.label||item.equipmentId}</strong> • {item.status==="completed"?"Concluído":"Pendente"}{item.note?` • ${item.note}`:""}{item.photo?` • Foto ${item.photo.phase==="before"?"antes":"depois"} ${item.photo.index+1}`:""}</li>)}</ul></section>}
                 {current.address&&<label className={styles.formLabel}>Aplicativo de navegação<select value={mapApp} onChange={event=>setMapApp(event.target.value)}><option value="google">Google Maps</option><option value="waze">Waze</option></select></label>}
               </details>
             </div>

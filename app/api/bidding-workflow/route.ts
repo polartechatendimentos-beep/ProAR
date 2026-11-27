@@ -5,6 +5,9 @@ import {hasPermission} from "@/lib/permissions";
 import {routeContext,routeRest} from "@/lib/work-route-store";
 import {commitNeonOperationalState,PRIMARY_DATABASE_URL} from "@/lib/supabase-rest";
 
+import {biddingTenderOptions} from "@/lib/bidding-document-store";
+import {computeBidFloor,type ApprovedFloor,type FloorInput} from "@/lib/bidding-assisted-floor";
+
 export const runtime="nodejs";
 const json=(body:unknown,status=200)=>NextResponse.json(body,{status,headers:{"Cache-Control":"private, no-store","X-Robots-Tag":"noindex"}});
 const keyFor=(company:string)=>"bidding-workflow-v1:"+createHash("sha256").update(company).digest("hex");
@@ -13,7 +16,7 @@ const trackKinds=["Sessão","Lance","Habilitação","Recurso","Adjudicação","H
 type CostLine={id:string;label:string;quantity:number;unitCost:number};
 type TrackEvent={id:string;kind:typeof trackKinds[number];date:string;value:number|null;note:string};
 type RecordValue={title?:string;status?:typeof stages[number];deadlines?:Record<string,string>;costLines?:CostLine[];taxRate?:number;targetMargin?:number;checklist?:Record<string,boolean>;tracking?:TrackEvent[];proposalNote?:string;updatedAt?:string};
-type Stored={companyId:string;_revision:number;updatedAt:string;updatedBy:string;records:Record<string,RecordValue>};
+type Stored={companyId:string;_revision:number;updatedAt:string;updatedBy:string;records:Record<string,RecordValue>;bidFloors?:Record<string,ApprovedFloor[]>};
 const dateOK=(v:string)=>!v||(/^\d{4}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(v)));
 function sanitizeRecords(value:unknown):Record<string,RecordValue>{
  if(!value||typeof value!=="object"||Array.isArray(value))throw new Error("Dados do fluxo inválidos.");
@@ -44,22 +47,62 @@ async function read(c:Awaited<ReturnType<typeof routeContext>>){
 }
 export async function GET(request:NextRequest){
  const access=procurementAccess(request);if(!access.ok)return json({error:access.error},access.status);
- try{const c=await routeContext(access.session),stored=await read(c);return json({records:stored?.records||{},revision:stored?._revision||0,canEdit:hasPermission(access.session,"licitacoes.editar")});}
+ try{
+  const c=await routeContext(access.session),stored=await read(c);
+  const revision=stored?._revision||0,canEdit=hasPermission(access.session,"licitacoes.editar"),floorTender=request.nextUrl.searchParams.get("floorTender");
+  if(floorTender!==null){
+   if(!biddingTenderOptions(c.state).some(item=>item.id===floorTender))return json({error:"Selecione um edital salvo nesta empresa."},422);
+   return json({revision,canEdit,canApprove:hasPermission(access.session,"aprovacoes.aprovar"),actor:access.session.username,floors:stored?.bidFloors&&Object.hasOwn(stored.bidFloors,floorTender)?stored.bidFloors[floorTender]:[]});
+  }
+  return json({records:stored?.records||{},revision,canEdit});
+ }
  catch{return json({error:"Não foi possível carregar o fluxo de licitações."},503);}
 }
 export async function POST(request:NextRequest){
  const access=procurementAccess(request);if(!access.ok)return json({error:access.error},access.status);
- if(!hasPermission(access.session,"licitacoes.editar"))return json({error:"Sem permissão para editar o fluxo de licitações."},403);
  if(request.headers.get("origin")!==request.nextUrl.origin)return json({error:"Origem não autorizada."},403);
  try{
   const raw=await request.text();if(raw.length>250000)return json({error:"Solicitação muito grande."},413);
   const body=JSON.parse(raw),c=await routeContext(access.session),old=await read(c),revision=Number(old?._revision||0);
   if(Number(body.expectedRevision||0)!==revision)return json({error:"O fluxo foi alterado em outra sessão. Atualize antes de salvar."},409);
-  const next:Stored={companyId:c.company,_revision:revision+1,updatedAt:new Date().toISOString(),updatedBy:access.session.username,records:sanitizeRecords(body.records)};
+  const actor=access.session.username, now=new Date().toISOString();
+  const next:Stored={companyId:c.company,_revision:revision+1,updatedAt:now,updatedBy:actor,records:old?.records||{},bidFloors:old?.bidFloors||{}};
+  if(body.action==="submit-bid-floor"||body.action==="decide-bid-floor"){
+   const id=typeof body.tenderId==="string"?body.tenderId:"";
+   if(!/^[a-zA-Z0-9._:/-]{1,160}$/.test(id)||id==="__proto__"||id==="constructor"||id==="prototype"||!biddingTenderOptions(c.state).some(item=>item.id===id))return json({error:"Identificador do certame inválido."},422);
+   const current=Object.hasOwn(next.bidFloors!,id)?next.bidFloors![id]:[];
+   if(body.action==="submit-bid-floor"){
+    if(!hasPermission(access.session,"licitacoes.editar"))return json({error:"Sem permissão para cadastrar piso."},403);
+    if(body.costsReviewed!==true)return json({error:"Confirme os custos e a unidade de preço antes de enviar o piso."},422);
+    const {scope,reference,materials,labor,travel,other,taxes,margin}=body.floor||{};
+    const str=(v:unknown)=>typeof v==="string"&&v.length<=100?v.trim():"";
+    const input:FloorInput={scope,reference:str(reference),materials:str(materials),labor:str(labor),travel:str(travel),other:str(other),taxes:str(taxes),margin:str(margin)};
+    let calc;
+    try{calc=computeBidFloor(input);}catch(error){return json({error:error instanceof Error?error.message:"Piso inválido."},422);}
+    const previous=current.find(f=>f.key===calc.key);
+    if(previous?.status==="pending")return json({error:"Este item ou lote já tem um piso aguardando revisão."},409);
+    if(!previous&&current.length>=100||!Object.hasOwn(next.bidFloors!,id)&&Object.keys(next.bidFloors!).length>=200)return json({error:"Limite de pisos do fluxo atingido."},422);
+    const floor:ApprovedFloor={...input,reference:calc.reference,key:calc.key,floorCents:calc.floorCents,breakEvenCents:calc.breakEvenCents,status:"pending",submittedBy:actor,submittedAt:now};
+    next.bidFloors={...next.bidFloors,[id]:[...current.filter(f=>f.key!==floor.key),floor]};
+   }else{
+    if(!hasPermission(access.session,"aprovacoes.aprovar"))return json({error:"Sem permissão para aprovar piso."},403);
+    const floor=current.find(f=>f.key===body.floorKey);
+    if(!floor||floor.status!=="pending")return json({error:"Piso não está aguardando decisão."},409);
+    if(floor.submittedBy===actor)return json({error:"Outra pessoa precisa revisar o piso."},403);
+    const status=body.decision,note=typeof body.note==="string"?body.note.trim():"";
+    if(!["approved","rejected"].includes(status)||note.length<5||note.length>500)return json({error:"Informe uma decisão com justificativa de 5 a 500 caracteres."},422);
+    next.bidFloors={...next.bidFloors,[id]:current.map(f=>f.key===floor.key?{...floor,status,decidedBy:actor,decidedAt:now,decisionNote:note}:f)};
+   }
+  }else{
+   if(body.action!==undefined)return json({error:"Operação inválida."},422);
+   if(!hasPermission(access.session,"licitacoes.editar"))return json({error:"Sem permissão para editar o fluxo de licitações."},403);
+   next.records=sanitizeRecords(body.records);
+  }
   const key=keyFor(c.company);let saved=false;
   if(c.db.url===PRIMARY_DATABASE_URL)saved=Boolean(await commitNeonOperationalState(key,old?revision:null,next,[]));
   else{const result=await routeRest(c.db,old?"proar_state?id=eq."+encodeURIComponent(key)+"&payload->>_revision=eq."+revision+"&select=payload":"proar_state?on_conflict=id&select=payload",{method:old?"PATCH":"POST",headers:{Prefer:old?"return=representation":"resolution=ignore-duplicates,return=representation"},body:JSON.stringify(old?{payload:next,updated_at:next.updatedAt}:{id:key,payload:next,updated_at:next.updatedAt})});saved=result.ok&&(await result.json()).length>0;}
   if(!saved)return json({error:"Alterações não salvas. Atualize e tente novamente."},409);
+  if(body.action)return json({saved:true,revision:next._revision,floors:next.bidFloors?.[body.tenderId]||[]});
   return json({saved:true,revision:next._revision,records:next.records});
  }catch(error){return json({error:error instanceof Error&&/inválid|inválida|suporta|Informe|Limite|excedido|Percentual/.test(error.message)?error.message:"Não foi possível salvar o fluxo. As informações anteriores foram preservadas."},422);}
 }

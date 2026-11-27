@@ -4,6 +4,9 @@ import { chatAccess, chatDb, chatPrefix, chatSettings } from "../../../../lib/ch
 import { databaseFetch } from "../../../../lib/supabase-rest";
 import { tenantHeaders } from "../../../../lib/tenant-rest";
 import { dailyActionableDigest, digestDayStart } from "../../../../lib/daily-actionable-digest";
+import { operationalPendingCenter } from "../../../../lib/operational-pending-center";
+import { publicOrderProjection,publicOrderIsCurrent } from "../../../../lib/service-order-public-view";
+import { publicOrderStore } from "../../../../lib/service-order-public-store";
 import type { ChatConversation } from "../../../../lib/chatdesk-local";
 import type { AccessState } from "../../../../lib/state-access";
 
@@ -51,7 +54,22 @@ export async function GET(request: NextRequest) {
     ]);
     const result: { state?: AccessState } = await stateResponse.json();
     if (!stateResponse.ok || !result.state) return reply({ error: "Não foi possível conferir orçamento e agenda da empresa." }, 503);
-    return reply(dailyActionableDigest({ ...recent, pilotPhone: settings.botTestPhone, orders: result.state.serviceOrders || [], quotes: result.state.moduleRecords?.["Orçamentos"] || [], sales: result.state.moduleRecords?.["Vendas"] || [] }, now));
+    const state=result.state,orders=state.serviceOrders||[];
+    const published=orders.flatMap(order=>{const view=publicOrderProjection(order,access.companyId);return view?[{order,view}]:[];})
+      .sort((a,b)=>String(b.order.updatedAt||b.order.fieldUpdatedAt||b.order.date||"").localeCompare(String(a.order.updatedAt||a.order.fieldUpdatedAt||a.order.date||"")));
+    const outdatedTracking: typeof orders=[];
+    let trackingComplete=published.length<=18;
+    try{
+      if(published.length){
+        const publicStore=await publicOrderStore();
+        for(let i=0;i<Math.min(18,published.length);i+=6){
+          const checks=await Promise.allSettled(published.slice(i,i+6).map(async ({order,view})=>({order,current:publicOrderIsCurrent(await publicStore.read(access.companyId,view.orderId),view)})));
+          for(const check of checks)if(check.status==="rejected")trackingComplete=false;else if(!check.value.current)outdatedTracking.push(check.value.order);
+        }
+      }
+    }catch{trackingComplete=false;}
+    const daily=dailyActionableDigest({ ...recent, pilotPhone: settings.botTestPhone, orders, quotes: state.moduleRecords?.["Orçamentos"] || [], sales: state.moduleRecords?.["Vendas"] || [] }, now);
+    return reply({...daily,operations:operationalPendingCenter({state,chats:recent.chats,pilotPhone:settings.botTestPhone,outdatedTracking,trackingComplete},now)});
   } catch {
     return reply({ error: "Não foi possível conferir todas as pendências da empresa agora." }, 503);
   }

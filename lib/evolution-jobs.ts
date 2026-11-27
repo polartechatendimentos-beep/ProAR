@@ -57,6 +57,21 @@ export async function dispatchEvolutionJob(companyId: string, sourceId: string, 
   return { status: "accepted", messageId: accepted.messageId };
 }
 
+/** A processing entry can mean the provider was called before an interruption. */
+export async function readEvolutionJobOutcome(companyId:string,sourceId:string):Promise<{status:string;messageId?:string}|null>{
+  const db=await resolveTenantDb(companyId);
+  if(!db.url||!db.key)throw new Error("Base da empresa indisponível.");
+  const result=await databaseFetch(`${db.url}/rest/v1/proar_state?select=payload&id=eq.${encodeURIComponent(evolutionJobId(companyId,sourceId))}&limit=1`,{headers:tenantHeaders(db.key),cache:"no-store"});
+  if(!result.ok)throw new Error("Não foi possível conferir o registro de envio.");
+  const rows=await result.json();
+  const job=rows[0]?.payload;
+  if(!job)return null;
+  if(job.companyId!==companyId||job.sourceId!==sourceId)throw new Error("Registro de envio incompatível.");
+  if(job.status==="accepted"&&typeof job.providerMessageId==="string"&&job.providerMessageId)return {status:"accepted",messageId:job.providerMessageId};
+  if(job.status==="blocked-context"||job.status==="blocked-optout")return {status:job.status};
+  return {status:"unknown"};
+}
+
 export async function evolutionSendHistory(companyId: string) {
   const db = await resolveTenantDb(companyId);
   if (!db.url || !db.key) throw new Error("Base da empresa indisponível.");

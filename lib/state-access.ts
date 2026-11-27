@@ -29,7 +29,7 @@ const secret=(key:string)=>{
  const name=key.replace(/[_-]/g,"").toLowerCase();
  return /password|senha/.test(name)||["secret","encryptedsecret","clientsecret","apikey","servicekey","servicerolekey"].includes(name)||/privatekey$|accesstoken$|refreshtoken$/.test(name);
 };
-const financial=(key:string)=>["total","cost","unitValue","servicesTotal","productsTotal","discount","nfseValue","costLines","costMarginPercent","costTaxPercent"].includes(key);
+const financial=(key:string)=>["total","cost","unitValue","servicesTotal","productsTotal","discount","nfseValue","costLines","costMarginPercent","costTaxPercent","commercialSnapshot","subtotal","surcharge","discountPercent","additionalCostsTotal","financeReviewRequired"].includes(key);
 function protectedField(key:string,actor:StateActor,write=false){
  return (secret(key)&&(!write||!admin(actor)))||(technician(actor)&&financial(key));
 }

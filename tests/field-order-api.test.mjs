@@ -116,3 +116,35 @@ test('GET history and receipt authorize the requested order before projecting cl
   assert.equal((await get('OS-1','receipt')).status,409);
   const receipt=await get('OS-HISTORY','receipt');assert.equal(receipt.status,200);assert.equal(receipt.body.receipt.report,'Serviço');assert.equal(receipt.body.receipt.company.name,'Empresa de teste');assert.equal(receipt.body.receipt.privateNote,undefined);
 });
+
+test("multi-appliance evidence persists without closure; missing, pending and stripped appliances are rejected",async()=>{
+  const image='data:image/png;base64,AAAA', initial=state();
+  const base={...order,customerId:"C1",checkInAt:"2026-11-27T10:00:00Z",equipmentIds:["EQ-1","EQ-2"]};
+  initial.moduleRecords.Equipamentos=base.equipmentIds.map(id=>({id,customerId:"C1",name:"Equipamento "+id}));
+  initial.serviceOrders[0]=base;
+  const api=setup({initialState:initial,session:{role:"Administrador",username:"admin"}});
+  const results=[{equipmentId:"EQ-1",status:"completed",note:"Higienizado",photo:{phase:"before",index:0}},{equipmentId:"EQ-2",status:"pending",note:"Faltou fluido compatível"}];
+  const data={...command(),expectedToken:fieldOrderFingerprint(base),equipmentIds:base.equipmentIds,equipmentResults:results,beforePhotos:[image],afterPhotos:[image],equipmentLabelAbsent:true,diagnosis:"Diagnóstico de teste",signature:image,signerName:"Nome teste",checklist:{checkin:true,equipment:true,beforePhoto:true,afterPhoto:true,signature:true,executedService:true}};
+  const badPhoto=await api.fn(request({...data,equipmentResults:[{...results[0],photo:{phase:"before",index:9}}]}));
+  assert.equal(badPhoto.status,422);
+  assert.equal((await api.fn(request({...data,equipmentResults:[{...results[0],equipmentId:"OTHER"}]}))).status,422);
+  assert.equal((await api.fn(request({...data,action:"finish",equipmentResults:undefined}))).status,409);
+  assert.equal((await api.fn(request({...data,action:"finish"}))).status,409);
+  assert.equal((await api.fn(request({...data,equipmentIds:["EQ-1"],equipmentResults:[results[0]]}))).status,409);
+  assert.equal(api.saved,undefined);
+  const saved=await api.fn(request(data));
+  assert.equal(saved.status,200,JSON.stringify(saved.body));
+  assert.deepEqual(api.saved.serviceOrders[0].fieldEquipmentResults,results);
+  assert.equal(api.saved.serviceOrders[0].status,"Aberta");
+  assert.equal(api.saved.serviceOrders[0].checkOutAt,undefined);
+  const current=api.saved.serviceOrders[0];
+  const finish={...data,requestId:"finish-multiple-fixture",action:"finish",expectedVersion:1,expectedToken:fieldOrderFingerprint(current),beforePhotos:undefined,afterPhotos:undefined};
+  assert.equal((await api.fn(request({...finish,equipmentResults:undefined}))).status,409);
+  assert.equal((await api.fn(request({...finish,equipmentResults:[results[0]]}))).status,409);
+  finish.equipmentResults=results.map(item=>({...item,status:"completed"}));
+  assert.equal((await api.fn(request({...finish,signature:undefined}))).status,409);
+  const complete=await api.fn(request(finish));
+  assert.equal(complete.status,200,JSON.stringify(complete.body));
+  assert.equal(complete.body.status,"Concluída");
+  assert.ok(complete.body.completedAt);
+});

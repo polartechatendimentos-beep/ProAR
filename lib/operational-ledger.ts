@@ -1,3 +1,6 @@
+import { buildBudgetDestination, CommercialConversionError } from "./commercial-conversion.ts";
+import { canonicalServiceLinkFingerprint, inspectCanonicalServiceLinks } from "./canonical-service-links.ts";
+import { inspectPublicInvoiceBalance } from "./public-invoice-balance.ts";
 import { calculateCatalogPrice } from "./catalog-cost-engine.ts";
 import { validateTracking, pipelineRecordId } from "./tender-pipeline.ts";
 import { nextPmocDate, type PmocPlan } from "./technical-compliance.ts";
@@ -132,7 +135,19 @@ function auditChanges(before: ErpRecord[], after: ErpRecord[], module: string, a
 }
 
 /** Validate a complete request against the persisted version, never trusting client totals or audit actors. */
-export function prepareOperationalState(previous: ErpState | null, incoming: ErpState, actor: Actor, now = new Date().toISOString()): ErpState {
+// A client with an older form cannot erase the progress kept by the field app.
+function protectFieldEquipmentProgress(before:ErpRecord|undefined,next:ErpRecord) {
+  const tracked=list(before?.fieldEquipmentResults);
+  const updated=list(next.fieldEquipmentResults);
+  if(tracked.length&&tracked.some(row=>!updated.some(current=>current.equipmentId===row.equipmentId))){
+    throw new OperationError("Resultados por aparelho já registrados devem ser preservados.",409);
+  }
+  if(!/conclu[ií]d/i.test(String(before?.status||""))&&/conclu[ií]d/i.test(String(next.status||""))&&updated.some(row=>row.status==="pending")){
+    throw new OperationError("Ainda há aparelho pendente nesta OS. Confirme o resultado no Mobile antes de concluir.",409);
+  }
+}
+
+export function prepareOperationalState(previous: ErpState | null, incoming: ErpState, actor: Actor, now = new Date().toISOString(), conversion?: { sourceId:string; destinationId:string }): ErpState {
   if (!incoming || typeof incoming !== "object" || !Array.isArray(incoming.customers) || !Array.isArray(incoming.serviceOrders) || !incoming.moduleRecords || typeof incoming.moduleRecords !== "object" || Array.isArray(incoming.moduleRecords)) throw new OperationError("A base enviada está incompleta.");
   const old: ErpState = previous || { customers: [], serviceOrders: [], moduleRecords: {} };
   const next: ErpState = structuredClone(incoming);
@@ -142,10 +157,42 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
   for (const [module, records] of Object.entries(modules)) if (!Array.isArray(records)) throw new OperationError(`Lista inválida: ${module}.`);
   validateRecords(list(old.customers), list(next.customers), "Clientes", { ...actor, can: permission => actor.can(permission === "configuracoes.editar" ? "clientes.editar" : permission) });
   validateRecords(list(old.serviceOrders), list(next.serviceOrders), "OS", { ...actor, can: permission => actor.can(permission === "configuracoes.editar" ? "os.editar" : permission) });
+  for(const row of list(next.serviceOrders))protectFieldEquipmentProgress(list(old.serviceOrders).find(item=>item.id===row.id),row);
   const managed = new Set(["Razão financeiro", "Livro de estoque", "Auditoria operacional"]);
   for (const module of new Set([...Object.keys(oldModules), ...Object.keys(modules)])) {
     if (managed.has(module) || module === "Auditoria") continue;
     validateRecords(list(oldModules[module]), list(modules[module]), module, actor);
+  }
+  if (previous) {
+    // New conversion provenance can only be written by the transactional command.
+    for (const [beforeRows, afterRows] of [[list(old.serviceOrders),list(next.serviceOrders)], [list(oldModules.Vendas),list(modules.Vendas)]] as const) {
+      const beforeById = new Map(beforeRows.map(row=>[row.id,row]));
+      for (const row of afterRows) {
+        const before = beforeById.get(row.id);
+        const changedLink = ["sourceBudgetId", "budgetId", "commercialSnapshot"].some(field => !same(row[field], before?.[field]));
+        if (changedLink && !(conversion && !before && row.id === conversion.destinationId && row.sourceBudgetId === conversion.sourceId)) {
+          throw new OperationError("O vínculo da conversão de orçamento é imutável. Use o fluxo de conversão.", 409);
+        }
+        if (before?.commercialSnapshot) {
+          if (["discount","surcharge","subtotal","value","total","servicesTotal","productsTotal","financeReviewRequired","client","customerId","unit","unitId","sectorId","roomId","structureId"].some(field => !same(row[field], before[field]))) {
+            throw new OperationError("Os valores e o cliente da conversão precisam ser revisados no documento de origem.", 409);
+          }
+          const pricedLines = (value: ErpRecord) => list(value.purchaseItems ?? value.catalogItems).map(item =>
+            Object.fromEntries(["id","productId","commercialLineId","quantity","kind","unitOfMeasure","unitValue","discountPercent","description"].map(field => [field,item[field]]))
+          ).sort((a,b) => String(a.commercialLineId || a.id).localeCompare(String(b.commercialLineId || b.id)));
+          if (!same(pricedLines(before),pricedLines(row))) throw new OperationError("Os itens convertidos não podem ser regravados sem revisão do documento de origem.",409);
+        }
+      }
+    }
+    const budgetsById = new Map(list(oldModules.Orçamentos).map(row=>[row.id,row]));
+    for (const budget of list(modules.Orçamentos)) {
+      const before = budgetsById.get(budget.id);
+      const changedLink = ["budgetConversion","convertedOrderId","convertedSaleId"].some(field => !same(budget[field],before?.[field]));
+      if (changedLink && conversion?.sourceId !== budget.id) throw new OperationError("O destino desta conversão não pode ser substituído.", 409);
+      if (before?.budgetConversion && ["purchaseItems","subtotal","value","discount","discountValue","discountPercent","surcharge","client","customerId","unitId","sectorId","roomId","structureId"].some(field => !same(budget[field],before[field]))) {
+        throw new OperationError("Este orçamento já foi convertido. Crie uma revisão em um novo orçamento para alterar itens ou valores.", 409);
+      }
+    }
   }
   for (const module of ["Produtos","Serviços"]) for(const record of list(modules[module])) {
     const before=list(oldModules[module]).find(item=>item.id===record.id);
@@ -168,9 +215,16 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
   }
   for (const record of list(modules.PMOC)) {
     const before = list(oldModules.PMOC).find(item => item.id === record.id);
-    if (same(before, record) || (!record.startsAt && !record.lastServiceAt)) continue;
-    if (!nextPmocDate(record as PmocPlan)) throw new OperationError("Revise a data e a periodicidade do plano PMOC.");
-    if (record.lastServiceAt && (record.lastServiceAt > brazilDay(new Date(now)) || record.startsAt && record.lastServiceAt < record.startsAt)) throw new OperationError("A última manutenção deve estar entre o início do plano e hoje.");
+    if (same(before, record)) continue;
+    if (record.startsAt || record.lastServiceAt) {
+      if (!nextPmocDate(record as PmocPlan)) throw new OperationError("Revise a data e a periodicidade do plano PMOC.");
+      if (record.lastServiceAt && (record.lastServiceAt > brazilDay(new Date(now)) || record.startsAt && record.lastServiceAt < record.startsAt)) throw new OperationError("A última manutenção deve estar entre o início do plano e hoje.");
+    }
+    const declaresLinks = Boolean(record.customerId || record.client || record.structureId || record.unitId || record.roomId || list(record.equipmentIds).length);
+    if (declaresLinks && (!before || canonicalServiceLinkFingerprint(before) !== canonicalServiceLinkFingerprint(record))) {
+      const checked = inspectCanonicalServiceLinks(record, list(next.customers) as {id:string;name:string}[], list(modules["Unidades e setores"]), list(modules.Equipamentos));
+      if (checked.issues.length) throw new OperationError(checked.issues.join(" "));
+    }
   }
   for (const record of list(modules["Acompanhamento de licitações"])) {
     const before = list(oldModules["Acompanhamento de licitações"]).find(item=>item.id===record.id);
@@ -288,16 +342,64 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
     }
     if (/conclu[ií]da/i.test(order.status || "") && !/conclu[ií]da/i.test(before?.status || "")) {
       const fiscalQueue = modules["Central Fiscal"] ||= [];
-      if (Number(order.total || order.nfseValue || 0) > 0 && !fiscalQueue.some(item=>item.serviceOrderId===order.id)) fiscalQueue.push({ id:`FISC-OS-${order.id}`, name:`Preparar documento fiscal • ${order.id}`, client:order.client, serviceOrderId:order.id, status:"Pendente", category:"NFS-e", value:Number(order.total || order.nfseValue || 0), createdAt:now, automation:"OS concluída → preparar fiscal" });
+      if (!order.certameId && !order.financeReviewRequired && Number(order.total || order.nfseValue || 0) > 0 && !fiscalQueue.some(item=>item.serviceOrderId===order.id)) fiscalQueue.push({ id:`FISC-OS-${order.id}`, name:`Preparar documento fiscal • ${order.id}`, client:order.client, serviceOrderId:order.id, status:"Pendente", category:"NFS-e", value:Number(order.total || order.nfseValue || 0), createdAt:now, automation:"OS concluída → preparar fiscal" });
       const reminders = modules.Lembretes ||= [];
       const reminderDate = String(order.reminderDate || order.nextMaintenanceDate || "").slice(0,10);
       if (reminderDate && !reminders.some(item=>item.serviceOrderId===order.id && item.date===reminderDate)) reminders.push({ id:`REM-OS-${order.id}-${reminderDate}`, name:`Retorno preventivo • ${order.client}`, client:order.client, serviceOrderId:order.id, status:"Pendente", date:reminderDate, description:order.reminderMessage || "Entrar em contato para manutenção preventiva / pós-venda.", createdAt:now, automation:"OS concluída → lembrete futuro" });
     }
   }
   assertAppendOnly(list(oldModules["Conciliações"]), list(modules["Conciliações"]), "Conciliações");
+  const commitmentRows = list(modules.Empenhos);
+  const checkedCommitment = (commitment: ErpRecord) => {
+    const balance = inspectPublicInvoiceBalance(commitment, commitmentRows, list(modules.Certames), list(next.serviceOrders), list(next.customers));
+    const persisted = inspectPublicInvoiceBalance(commitment, commitmentRows, list(oldModules.Certames), list(old.serviceOrders), list(old.customers));
+    if (!balance.ok) throw new OperationError(balance.reason);
+    if (!persisted.ok || persisted.invoiceableValue !== balance.invoiceableValue) throw new OperationError("Confirme a execução contratual persistida antes de faturar.");
+    return balance.invoiceableValue;
+  };
+  const frozenCommitmentStatuses = ["Pronto para faturar", "Faturado", "Recebido"];
+  for (const before of list(oldModules.Empenhos).filter(item=>frozenCommitmentStatuses.includes(item.status))) {
+    const target = commitmentRows.find(item=>item.id===before.id);
+    if (!target || !frozenCommitmentStatuses.includes(target.status)
+      || ["certameId","value","empenhoAllocations"].some(field=>!same(before[field],target[field]))) {
+      throw new OperationError("Empenho já encaminhado ao faturamento. Preserve os vínculos e use correção fiscal autorizada.");
+    }
+  }
+  for (const before of list(oldModules.Financeiro).filter(item=>item.empenhoId)) {
+    const source = list(oldModules.Empenhos).find(item=>item.id===before.empenhoId);
+    if (!source || !frozenCommitmentStatuses.includes(source.status)) continue;
+    const target = financial.find(item=>item.id===before.id);
+    if (!target || target.empenhoId!==before.empenhoId || /cancelad/i.test(target.status || "") && !/cancelad/i.test(before.status || "")) {
+      throw new OperationError("Preserve a origem e o título preparado para faturamento público.");
+    }
+  }
+  for (const commitment of commitmentRows) {
+    const before = list(oldModules.Empenhos).find(item => item.id === commitment.id);
+    if (before?.status === commitment.status || !frozenCommitmentStatuses.includes(commitment.status)) continue;
+    const expectedPrevious: Record<string,string> = {"Pronto para faturar":"Empenho recebido", Faturado:"Pronto para faturar", Recebido:"Faturado"};
+    if (before?.status !== expectedPrevious[commitment.status]) throw new OperationError("Respeite as etapas de recebimento e faturamento do Empenho.");
+    if (["certameId","value","empenhoAllocations"].some(field => !same(before[field],commitment[field]))) {
+      throw new OperationError("Salve os vínculos e valores do Empenho antes de encaminhar ao faturamento.");
+    }
+    if (commitment.status === "Recebido") continue;
+    const value = checkedCommitment(commitment);
+    const titles = financial.filter(title=>title.empenhoId===commitment.id && !/cancelad/i.test(title.status || ""));
+    if (titles.length !== 1 || cents(titles[0].value) !== cents(value) || titles[0].transactionType !== "Receber"
+      || (commitment.status === "Faturado" && (!titles[0].invoiceNumber || !titles[0].invoiceIssuedAt))) {
+      throw new OperationError("O título de faturamento precisa corresponder ao valor executado e ao Empenho.");
+    }
+  }
   for (const record of financial) {
     const oldRecord = list(oldModules.Financeiro).find(item => item.id === record.id);
     const key = sourceKey(record);
+    if (record.empenhoId && ["empenhoId", "value", "transactionType", "invoiceNumber", "invoiceIssuedAt"].some(field => !same(oldRecord?.[field],record[field]))) {
+      const commitment = commitmentRows.find(row=>row.id===record.empenhoId);
+      if (!commitment || !["Pronto para faturar","Faturado"].includes(commitment.status) || record.transactionType!=="Receber"
+        || cents(record.value)!==cents(checkedCommitment(commitment))
+        || ((record.invoiceNumber || record.invoiceIssuedAt) && (commitment.status !== "Faturado" || !record.invoiceNumber || !record.invoiceIssuedAt))) {
+        throw new OperationError("Confira o saldo executado e o vínculo ao Empenho antes de faturar.");
+      }
+    }
     if (key && (!oldRecord || sourceKey(oldRecord) !== key) && financial.some(item => item.id !== record.id && sourceKey(item) === key)) throw new OperationError("Título já gerado para esta origem e parcela.");
     if (record.fiscalDocumentKey && financial.some(item => item.id !== record.id && item.fiscalDocumentKey === record.fiscalDocumentKey && payable(item) === payable(record) && Number(item.installmentNumber || 1) === Number(record.installmentNumber || 1))) throw new OperationError("Documento fiscal já lançado nesta parcela.");
   }
@@ -560,15 +662,45 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
   }
   const next = structuredClone(state);
   const modules = next.moduleRecords ||= {};
-  const module = ["settle", "reverse", "cancel", "dates"].includes(command.action) ? "Financeiro" : command.action === "receive" ? "Compras" : command.action === "account" ? "Contas financeiras" : ["stock","stock-transfer"].includes(command.action) ? "Estoque" : command.action === "tool" ? "Ferramentas" : command.action === "reconcile" ? "Conciliações" : command.action === "approval-decide" ? "Aprovações" : "";
+  const module = command.action === "budget-convert" ? "Orçamentos" : ["settle", "reverse", "cancel", "dates"].includes(command.action) ? "Financeiro" : command.action === "receive" ? "Compras" : command.action === "account" ? "Contas financeiras" : ["stock","stock-transfer"].includes(command.action) ? "Estoque" : command.action === "tool" ? "Ferramentas" : command.action === "reconcile" ? "Conciliações" : command.action === "approval-decide" ? "Aprovações" : "";
   if (!module) throw new OperationError("Operação desconhecida.");
   const records = modules[module] ||= [];
   const record = records.find(item => item.id === command.recordId);
   if (command.expectedRecord && !same(record, command.expectedRecord)) throw new OperationError("Registro alterado por outro usuário. Atualize antes de continuar.", 409);
   const data = command.data || {};
-  if (["settle", "reverse", "cancel", "dates", "receive", "approval-decide"].includes(command.action) && !record) throw new OperationError("Registro não encontrado.", 404);
+  if (["settle", "reverse", "cancel", "dates", "receive", "approval-decide", "budget-convert"].includes(command.action) && !record) throw new OperationError("Registro não encontrado.", 404);
   const operationId = `OP-${command.idempotencyKey}`;
+  let conversion: { sourceId:string; destinationId:string } | undefined;
   switch (command.action) {
+    case "budget-convert": {
+      requireAction(actor, "comercial.editar");
+      if (data.target === "Ordem de serviço") requireAction(actor, "os.editar");
+      if (!command.expectedRecord) throw new OperationError("Atualize o orçamento antes de converter.", 409);
+      if (Object.keys(data).some(key => key !== "target")) throw new OperationError("A conversão usa apenas os dados persistidos do orçamento.");
+      const destinationId = data.target === "Ordem de serviço"
+        ? `#OS-${String(1 + list(next.serviceOrders).reduce((largest, order) => {
+            const match = /^#?OS-(\d{1,12})$/i.exec(String(order.id));
+            return match ? Math.max(largest, Number(match[1])) : largest;
+          },15499)).padStart(5,"0")}`
+        : `VEN-${command.idempotencyKey}`;
+      try {
+        const result = buildBudgetDestination(next,record!,data.target,now,destinationId);
+        const destinations = result.target === "Pedido" ? (modules.Vendas ||= []) : (next.serviceOrders ||= []);
+        if (destinations.some(row => row.id === destinationId)) throw new OperationError("Já existe um registro com este identificador de destino.",409);
+        destinations.unshift(result.destination);
+        const sourceId = String(record!.id);
+        conversion = { sourceId,destinationId };
+        Object.assign(record!, {
+          status:result.target === "Pedido" ? "Convertido em pedido" : "Convertido em OS",
+          budgetConversion:{ target:result.target, destinationId, convertedAt:now, convertedBy:actor.username },
+          ...(result.target === "Pedido" ? { convertedSaleId:destinationId } : { convertedOrderId:destinationId, serviceOrderId:destinationId }),
+        });
+      } catch (error) {
+        if (error instanceof CommercialConversionError) throw new OperationError(error.message,error.status);
+        throw error;
+      }
+      break;
+    }
     case "settle": {
       requireAction(actor, "financeiro.baixar");
       const principal = cents(data.principal);
@@ -646,7 +778,7 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
   const effectiveActor: Actor = command.action === "approval-decide"
     ? { ...actor, can: permission => actor.can(permission) || ["compras.editar","comercial.editar"].includes(permission) }
     : actor;
-  const prepared = prepareOperationalState(state, next, effectiveActor, now);
+  const prepared = prepareOperationalState(state, next, effectiveActor, now, conversion);
   prepared._operations[command.idempotencyKey] = { fingerprint, createdAt: now, user: actor.username };
   return { state: prepared, replay: false };
 }
@@ -661,6 +793,6 @@ export function independentOperationalRows(companyId: string, state: ErpState, p
   });
   append("Clientes", list(state.customers));
   append("OS", list(state.serviceOrders));
-  for (const module of ["Financeiro", "Contas financeiras", "Razão financeiro", "Livro de estoque", "Produtos", "Compras", "Equipamentos", "Auditoria operacional", "Aprovações", "Central Fiscal", "Lembretes"]) append(module, list(state.moduleRecords?.[module]));
+  for (const module of ["Orçamentos", "Vendas", "Financeiro", "Contas financeiras", "Razão financeiro", "Livro de estoque", "Produtos", "Compras", "Equipamentos", "Auditoria operacional", "Aprovações", "Central Fiscal", "Lembretes"]) append(module, list(state.moduleRecords?.[module]));
   return result;
 }

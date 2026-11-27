@@ -34,6 +34,8 @@ export function parseEvolutionInbound(value: unknown, expectedInstance: string) 
   });
 }
 
+export type EvolutionInboundEvent = ReturnType<typeof parseEvolutionInbound>[number];
+
 // Separate the tenant's first-response setting from its background reminder
 // setting. The platform kill switch remains in force for both paths.
 export function canReplyToNewInbound(
