@@ -676,3 +676,17 @@
   .workspace .nextChat {display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px}
   .workspace .nextChat button {grid-column:2;justify-self:start}
 }
+
+/* The conversation name stays visible even when a profile photo is private. */
+.workspace .contact .contactIdentity {display:flex;align-items:center;gap:9px;max-height:none;margin:0 0 4px}
+.contactIdentity strong {min-width:0}
+.chatIdentity {display:flex;align-items:center;gap:11px;flex:1 1 170px;min-width:0}
+.chatIdentity>div {min-width:0;overflow-wrap:anywhere}
+.workspace .clientAvatar {
+  position:relative;display:grid;place-items:center;flex:none;overflow:hidden;
+  width:32px;height:32px;max-height:none;margin:0;border-radius:50%;
+  border:1px solid var(--line);background:var(--blue-soft);color:var(--ink);
+  font-size:11px;font-weight:750;line-height:1;
+}
+.workspace .clientAvatarLarge {width:42px;height:42px;font-size:13px}
+.clientAvatar img {position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit}
