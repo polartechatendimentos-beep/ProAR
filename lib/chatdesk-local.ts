@@ -1,3 +1,4 @@
+import { firstUnansweredChatMessage } from "./chatdesk-next-action.ts";
 import type { DeliveryStatus, PendingDeliveryReceipt } from "./chatdesk-delivery";
 
 export const chatSectors = ["Geral", "Técnico", "Financeiro", "Comercial", "PMOC"] as const;
@@ -26,7 +27,7 @@ export type ServiceIntake = {
   responses?: {key:string; text:string; at:string}[];
 };
 export type ChatMessage = { id: string; direction: "in" | "out" | "note" | "event"; text: string; at: string; actor?: string; status?: string; providerMessageId?: string; assistantReplyKey?: string; assistantNudge?: boolean; hoursNoticeFor?: string; pilotTurn?: boolean; replyToId?: string; mediaKind?: "foto" | "áudio" | "vídeo" | "documento"; deliveryStatus?: DeliveryStatus };
-export type ChatConversation = { tags?:string[]; companyId: string; phone: string; name: string; sector: ChatSector; stage: ChatStage; assignee: string; revision: number; botPaused: boolean; optOut: boolean; messages: ChatMessage[]; requests: string[]; updatedAt: string; orderId?: string; assistantHandoffAt?: string; mediaTrial?: Partial<Record<"foto"|"áudio",{id:string;at:string;state:string}>>; intake?: ServiceIntake; pendingDeliveryReceipts?: PendingDeliveryReceipt[]; queueActivity?: { urgent?: boolean; incoming?: ChatMessage; humanReplyAt?: string; lastOutbound?: Pick<ChatMessage, "at" | "status" | "deliveryStatus"> } };
+export type ChatConversation = { tags?:string[]; companyId: string; phone: string; name: string; sector: ChatSector; stage: ChatStage; assignee: string; revision: number; botPaused: boolean; optOut: boolean; messages: ChatMessage[]; requests: string[]; updatedAt: string; orderId?: string; assistantHandoffAt?: string; mediaTrial?: Partial<Record<"foto"|"áudio",{id:string;at:string;state:string}>>; intake?: ServiceIntake; pendingDeliveryReceipts?: PendingDeliveryReceipt[]; queueActivity?: { unansweredSince?: string | null; urgent?: boolean; incoming?: ChatMessage; humanReplyAt?: string; lastOutbound?: Pick<ChatMessage, "at" | "status" | "deliveryStatus"> } };
 export type ChatActor = { username: string; displayName: string; role: string; sectors: ChatSector[]; writeSectors: ChatSector[]; canWrite: boolean; admin: boolean };
 export type LocalChatSettings = { companyId: string; revision: number; botEnabled: boolean; botActivatedAt?: string; botTestPhone?: string; companyName: string; greeting: string; quickReplies?: ChatQuickReply[]; flows?: ChatAutomationFlow[]; businessHours?: BusinessDay[]; followUp?: {enabled:boolean;delayMinutes:number;enabledAt:string} };
 const normalized = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -734,5 +735,5 @@ export function chatQueueSummary(chat: ChatConversation): ChatConversation {
   const incoming = chat.messages.findLast(message => message.direction === "in");
   const outbound = chat.messages.findLast(message => message.direction === "out");
   const lastOutbound = outbound && { at: outbound.at, status: outbound.status, deliveryStatus: outbound.deliveryStatus };
-  return { ...visible, messages: chat.messages.filter(message=>message.direction==="in"||message.direction==="out").slice(-1), requests: [], queueActivity: { urgent:intake?.urgent, incoming, humanReplyAt: lastHumanReplyAt(chat), lastOutbound } };
+  return { ...visible, messages: chat.messages.filter(message=>message.direction==="in"||message.direction==="out").slice(-1), requests: [], queueActivity: { unansweredSince: firstUnansweredChatMessage(chat.messages), urgent:intake?.urgent, incoming, humanReplyAt: lastHumanReplyAt(chat), lastOutbound } };
 }

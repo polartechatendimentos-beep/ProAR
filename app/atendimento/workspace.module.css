@@ -658,3 +658,21 @@
   outline:3px solid var(--blue)!important;outline-offset:2px!important;
 }
 .workspace.workspace .header :is(button,a):focus-visible,.workspace .rail :is(button,a):focus-visible {outline-color:var(--kbd-accent)!important}
+
+.workspace .nextChat {
+  display:flex;align-items:center;gap:12px;margin:0 0 12px;padding:10px 12px;
+  border:1px solid var(--line);border-inline-start:3px solid var(--desk-control);
+  border-radius:10px;background:var(--surface);color:var(--ink);min-width:0;
+}
+.workspace .nextChat>div {flex:1;min-width:0;overflow-wrap:anywhere}
+.workspace .nextChat h2 {margin:0;color:var(--ink);font-size:13px;font-weight:750}
+.workspace .nextChat p {margin:1px 0;color:var(--muted);font-size:12px}
+.workspace .nextChat p strong {color:var(--ink)}
+.workspace .nextChat small {font-size:10px}
+.nextChatIcon {display:grid;place-items:center;width:32px;height:32px;flex:none;border-radius:8px;background:var(--desk-ghost);color:var(--blue)}
+.workspace.workspace .nextChat button {flex:none;background:var(--desk-action);border-color:var(--desk-control);color:var(--kbd-on-action);white-space:nowrap}
+.workspace.workspace .nextChat button:hover {background:var(--desk-action-hover)}
+@media(max-width:500px) {
+  .workspace .nextChat {display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px}
+  .workspace .nextChat button {grid-column:2;justify-self:start}
+}

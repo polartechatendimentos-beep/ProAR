@@ -28,6 +28,12 @@ test("editor mantém um botão de check-in, etapas ocultáveis e a confirmação
  for(const id of fieldOrderSteps.map(step=>step.id))assert.ok(source.includes('hidden={step!=="'+id+'"||review}'));
  assert.equal((source.match(/execute\("start"\)/g)||[]).length,1);
  assert.equal((source.match(/execute\("finish"\)/g)||[]).length,1);
+ assert.equal((source.match(/execute\("save"\)/g)||[]).length,1);
+ assert.match(source,/if\(action!=="start"&&!order\.checkInAt\)/);
+ assert.match(source,/if\(!report\.trim\(\)\)\{jumpTo\("executedService"\);return;\}if\(!online\)\{changeStep\("conclusao"\);return;\}void execute\("save"\)/);
+ assert.match(source,/sent\.command\.action==="save"\?"conclusao":undefined/);
+ const shell=readFileSync(new URL("../components/ProARFieldMobile.tsx",import.meta.url),"utf8");
+ assert.match(shell,/initialStep=\{executionSavedFor===current.id\?"conclusao":undefined\}/);
  assert.match(source,/setStep\(fieldOrderStepFor\(key\)\)/);
  assert.match(source,/await saveOrderDraft\(scope,order\.id/);
  assert.match(source,/orderSubmissionConfirmed\(sent,body\)/);
@@ -56,13 +62,21 @@ test("o editor real renderiza a etapa de chegada ou execução conforme o check-
   return named[name]||component;
  }});
  const order={id:"OS-demo",service:"Instalação",equipmentIds:[],equipmentOptions:[],evidence:{}};
- const render=checkInAt=>renderToStaticMarkup(React.createElement(module.exports.FieldOrderEditor,{order:{...order,checkInAt},scope:"fixture",requiresJourney:true,canApprove:false,onSaved:async()=>{}}));
+ const render=(checkInAt,extra={},viewProps={})=>renderToStaticMarkup(React.createElement(module.exports.FieldOrderEditor,{order:{...order,checkInAt,...extra},scope:"fixture",requiresJourney:true,canApprove:false,onSaved:async()=>{},...viewProps}));
  const first=render(undefined);
  assert.match(first,/<section class="osStepPanel" aria-label="Chegada">/);
  assert.match(first,/<section hidden="" class="osStepPanel" aria-label="Execução">/);
- assert.equal((first.match(/>Fazer check-in<\/button>/g)||[]).length,1);
+ assert.equal((first.match(/>Iniciar<\/button>/g)||[]).length,1);
  const begun=render("2026-11-26T19:00:00Z");
  assert.match(begun,/<section class="osStepPanel" aria-label="Execução">/);
  assert.match(begun,/<section hidden="" class="osStepPanel" aria-label="Conclusão">/);
- assert.match(begun,/>Ir para conclusão<\/button>/);
+ assert.match(begun,/>Registrar execução<\/button>/);
+ const primaryBar = html => html.match(/aria-label="Próxima ação da OS">([\s\S]*?)<\/div>/)?.[1] || "";
+ for(const view of [first,begun,render("2026-11-26T19:00:00Z",{},{"initialStep":"conclusao"})]) {
+  assert.equal((primaryBar(view).match(/<button /g)||[]).length,1);
+ }
+ assert.match(first,/disabled="">2\. Execução/);
+ assert.match(primaryBar(render("2026-11-26T19:00:00Z",{},{"initialStep":"conclusao"})),/>Concluir<\/button>/);
+ assert.match(primaryBar(render("2026-11-26T19:00:00Z",{},{online:false})),/Sem conexão: continue com o rascunho/);
+ assert.match(primaryBar(render(undefined,{},{initialStep:"conclusao"})),/>Iniciar<\/button>/);
 });

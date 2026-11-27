@@ -83,6 +83,7 @@ export function ProARFieldMobile() {
   const setGroupOrders=(group:boolean)=>preferences.update({group});
   const [showMoreOrderFilters,setShowMoreOrderFilters]=useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const [executionSavedFor,setExecutionSavedFor]=useState<string|null>(null);
   const [day, setDay] = useState(todayISO);
   const [agendaMode,setAgendaMode]=useState<"day"|"week">("day");
   const [mapApp,setMapApp]=useState("google");
@@ -162,7 +163,7 @@ export function ProARFieldMobile() {
     return()=>{cancelled=true;};
   },[pendingScope,selected,data?.lastReadAt]);
   async function signOutMobile(){
-    setError("");try{const response=await fetch("/api/auth",{method:"DELETE",credentials:"same-origin",cache:"no-store"});if(!response.ok)throw new Error("Não foi possível encerrar a sessão. Tente novamente com conexão.");generation.current++;requestAbort.current?.abort();setLoading(false);clearOfflineSnapshotLease(localStorage);try{clearOfflineLease(sessionStorage);}catch{}try{if(data?.user.scope)await clearOfflineSnapshot(data.user.scope);}catch{}setData(null);setRecovery(null);setSelected(null);setCompletion(null);setTab("inicio");setQuery("");setOrderFilter("open");setLoginRequired(true);}catch(error){setError(error instanceof Error?error.message:"Não foi possível sair.");}
+    setError("");try{const response=await fetch("/api/auth",{method:"DELETE",credentials:"same-origin",cache:"no-store"});if(!response.ok)throw new Error("Não foi possível encerrar a sessão. Tente novamente com conexão.");generation.current++;requestAbort.current?.abort();setLoading(false);clearOfflineSnapshotLease(localStorage);try{clearOfflineLease(sessionStorage);}catch{}try{if(data?.user.scope)await clearOfflineSnapshot(data.user.scope);}catch{}setData(null);setRecovery(null);setSelected(null);setCompletion(null);setExecutionSavedFor(null);setTab("inicio");setQuery("");setOrderFilter("open");setLoginRequired(true);}catch(error){setError(error instanceof Error?error.message:"Não foi possível sair.");}
   }
   async function checkVersion(){try{const response=await fetch("/api/mobile/version",{cache:"no-store"});if(!response.ok)throw new Error();const result=await response.json();const changed=result.version!==MOBILE_RELEASE;setUpdateAvailable(changed);setVersionNotice(changed?"Nova versão disponível. Seus rascunhos permanecem neste aparelho.":"Você está usando a versão atual.");}catch{setVersionNotice("Não foi possível consultar a versão. Tente novamente com conexão.");}}
   const openOrders = useMemo(() => openFieldWorkQueue(orders,todayISO()), [orders]);
@@ -207,7 +208,7 @@ export function ProARFieldMobile() {
           {tab==="central"&&!current&&data.user.manager&&<section className={styles.detailCard}><h2>Solicitações e atrasos de atendimento</h2>{orders.filter(order=>order.requests?.some(item=>item.status==="Pendente")||order.delay).map(order=><button key={order.id} type="button" className={styles.secondaryAction} onClick={()=>setSelected(order.id)}>Revisar {order.id} • {order.delay?`Atraso ${order.delay.minutes} min`:"Solicitação pendente"}</button>)}{!orders.some(order=>order.requests?.some(item=>item.status==="Pendente")||order.delay)&&<p>Nenhuma solicitação ou atraso registrado.</p>}</section>}
           {tab==="central"&&!current&&data.user.canApprove&&<section className={styles.detailCard}><h2>Exceções de OS aguardando aprovação</h2>{orders.filter(order=>order.fieldExceptions?.some(item=>item.status==="Pendente")).map(order=><button key={order.id} type="button" className={styles.secondaryAction} onClick={()=>setSelected(order.id)}>Revisar {order.id} • {order.client}</button>)}{!orders.some(order=>order.fieldExceptions?.some(item=>item.status==="Pendente"))&&<p>Nenhuma solicitação pendente.</p>}</section>}
           {current ? <section className={styles.screen}>
-            <button type="button" className={styles.back} onClick={()=>setSelected(null)}><ArrowLeft size={18}/> Voltar</button>
+            <button type="button" className={styles.back} onClick={()=>{setSelected(null);setExecutionSavedFor(null);}}><ArrowLeft size={18}/> Voltar</button>
             <div className={styles.osIdentity}>
               <div className={styles.osTitleRow}><h1 className={styles.title}>{current.id}</h1><span className={`${styles.status} ${statusTone(current.status)}`}>{current.status || "Sem status"}</span></div>
               <h2>{current.service || "Atendimento técnico"}</h2>
@@ -226,7 +227,7 @@ export function ProARFieldMobile() {
             </div>
             {!isOpenMobileOrder(current.status)&&<p className={styles.disclaimer}>OS encerrada: consulta do histórico. Os dados de execução permanecem preservados.</p>}
             {!data.user.canEdit && <p role="alert" className={styles.warning}>Seu perfil não tem permissão para alterar esta OS. Solicite a liberação ao administrador.</p>}
-            {data.user.canEdit && isOpenMobileOrder(current.status) && <FieldOrderEditor key={`${current.id}:${current.fieldVersion}:${current.editToken}`} scope={data.user.scope} canApprove={data.user.canApprove} order={current} requiresJourney={/tecnico|prestador/i.test(data.user.role.normalize("NFD").replace(/[\u0300-\u036f]/g,""))} onSaved={async result=>{if(result){setCompletion(result);setSelected(null);setTab("ordens");setData(previous=>previous?{...previous,orders:previous.orders.filter(order=>order.id!==result.orderId)}:previous);}if(result){try{await removeDayOrder(data.user.scope,result.orderId);}catch{try{clearOfflineLease(sessionStorage);}catch{}}}await refresh();}}/>}
+            {data.user.canEdit && isOpenMobileOrder(current.status) && <FieldOrderEditor key={`${current.id}:${current.fieldVersion}:${current.editToken}`} scope={data.user.scope} canApprove={data.user.canApprove} order={current} initialStep={executionSavedFor===current.id?"conclusao":undefined} online={online&&!offlineCopy} requiresJourney={/tecnico|prestador/i.test(data.user.role.normalize("NFD").replace(/[\u0300-\u036f]/g,""))} onSaved={async (result,nextStep)=>{if(nextStep==="conclusao")setExecutionSavedFor(current.id);if(result){setCompletion(result);setSelected(null);setExecutionSavedFor(null);setTab("ordens");setData(previous=>previous?{...previous,orders:previous.orders.filter(order=>order.id!==result.orderId)}:previous);}if(result){try{await removeDayOrder(data.user.scope,result.orderId);}catch{try{clearOfflineLease(sessionStorage);}catch{}}}await refresh();}}/>}
 
           </section> : <>
             {tab === "inicio" && <section className={styles.screen}>
