@@ -1,7 +1,7 @@
 import { UserSession } from "./proar-auth";
 
 export function assertCompanyAccess(session: UserSession, targetCompanyId?: number | null): number {
-  const userCompanyId = session.companyId || 1;
+  const userCompanyId = session.companyId ?? (() => { throw new Error('Sessão sem empresa vinculada.'); })();
 
   if (session.role === "superadmin" || session.role === "manager") {
     return targetCompanyId ? Number(targetCompanyId) : userCompanyId;
@@ -18,5 +18,5 @@ export function getEffectiveCompanyId(session: UserSession, requestedCompanyId?:
   if ((session.role === "superadmin" || session.role === "manager") && requestedCompanyId) {
     return Number(requestedCompanyId);
   }
-  return session.companyId || 1;
+  return session.companyId ?? (() => { throw new Error('Sessão sem empresa vinculada.'); })();
 }
