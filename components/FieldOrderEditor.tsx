@@ -1,9 +1,9 @@
 "use client";
 import {FieldServicePicker} from "./FieldServicePicker";
-import {automaticFieldEvidence, fieldOrderStepFor, fieldOrderSteps, type FieldOrderStep} from "@/lib/mobile-order-steps";
+import {automaticFieldEvidence, fieldOrderFunctionFor, fieldOrderFunctions, fieldOrderStepFor, fieldOrderSteps, type FieldOrderFunction, type FieldOrderStep} from "@/lib/mobile-order-steps";
 import {reportConsistency} from "@/lib/mobile-workflow-insights";
 import { useEffect, useRef, useState } from "react";
-import { PhoneCall } from "lucide-react";
+import { Camera, ClipboardCheck, FileText, PhoneCall, Save } from "lucide-react";
 import type { MobileFieldOrder } from "@/lib/mobile-field";
 import {equipmentInspection} from "@/lib/mobile-experience";
 import {FieldPhotoComparison} from "./FieldPhotoComparison";
@@ -30,6 +30,8 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
   const mediaBusy=photoProcessing.before||photoProcessing.after||photoProcessing.equipmentLabel;
   const [equipmentIds,setEquipmentIds]=useState(order.equipmentIds);
   const [step,setStep]=useState<FieldOrderStep>(order.checkInAt?"execucao":"chegada");
+  const [workFunction,setWorkFunction]=useState<FieldOrderFunction>("relatorio");
+  const functionNav=useRef<HTMLElement|null>(null);
   const [focusKey,setFocusKey]=useState<{key:string}|null>(null);
   const stageNav=useRef<HTMLElement|null>(null);
   const reviewPanel=useRef<HTMLElement|null>(null);
@@ -75,7 +77,16 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
     setStep(next);setReview(false);
     requestAnimationFrame(()=>stageNav.current?.scrollIntoView({block:"start"}));
   }
-  function jumpTo(key:string){setReview(false);setStep(fieldOrderStepFor(key));setFocusKey({key});}
+  function changeFunction(next:FieldOrderFunction){
+    setWorkFunction(next);
+    requestAnimationFrame(()=>functionNav.current?.scrollIntoView({block:"nearest"}));
+  }
+  function jumpTo(key:string){
+    const targetStep=fieldOrderStepFor(key);
+    setReview(false);setStep(targetStep);
+    if(targetStep==="execucao")setWorkFunction(fieldOrderFunctionFor(key));
+    setFocusKey({key});
+  }
   useEffect(()=>{
     if(!focusKey)return;
     const frame=requestAnimationFrame(()=>{
@@ -177,23 +188,35 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
     <button type="button" className={styles.secondaryAction} onClick={()=>{const popup=window.open(`/api/mobile/orders/contact?orderId=${encodeURIComponent(order.id)}`,"_blank");if(popup)popup.opener=null;else setNotice("Permita a abertura de nova aba para acessar o WhatsApp.");}}><PhoneCall size={18} aria-hidden="true"/> WhatsApp</button>
     </section>
     <section hidden={step!=="execucao"||review} className={styles.osStepPanel} aria-label="Execução">
-    <label id={`field-${order.id}-diagnosis`} className={styles.formLabel}>{diagnosisFieldLabel}<small>{isCorrectiveOrDiagnostic?"Descreva o sintoma, o que foi verificado e a causa provável (se identificada).":"Registre o estado do equipamento antes do serviço e qualquer irregularidade observada."}</small><textarea value={diagnosis} onChange={event=>setDiagnosis(event.target.value)} maxLength={4000} placeholder={isCorrectiveOrDiagnostic?"Sintoma relatado:\nVerificações realizadas:\nCausa provável ou situação:":"Estado inicial:\nIrregularidades observadas:"}/></label>
-    <label id={`field-${order.id}-executedService`} className={styles.formLabel}>Serviço executado<textarea value={report} onChange={event=>setReport(event.target.value)} maxLength={8000} placeholder="Ex.: limpeza realizada, dreno desobstruído, teste funcional concluído."/></label>
-    <details className={styles.osDisclosure}><summary>Observações, medições e modelo</summary>
+      <nav ref={functionNav} className={styles.osFunctionNav} aria-label="Funções da execução">
+        {fieldOrderFunctions.map(({id,label})=>{
+          const Icon=id==="relatorio"?FileText:id==="fotos"?Camera:ClipboardCheck;
+          return <button key={id} type="button" aria-pressed={workFunction===id} aria-controls={`field-${order.id}-funcao-${id}`} onClick={()=>changeFunction(id)}><Icon size={17} aria-hidden="true"/>{label}</button>;
+        })}
+      </nav>
+      <section id={`field-${order.id}-funcao-relatorio`} hidden={workFunction!=="relatorio"} className={styles.osFunctionPanel} aria-label="Relatório técnico">
+    <label id={`field-${order.id}-diagnosis`} className={styles.formLabel}>{diagnosisFieldLabel}<textarea value={diagnosis} onChange={event=>setDiagnosis(event.target.value)} maxLength={4000} placeholder={isCorrectiveOrDiagnostic?"Sintoma, verificações e causa, se identificada.":"Como você encontrou o aparelho?"}/></label>
+    <label id={`field-${order.id}-executedService`} className={styles.formLabel}>Serviço executado<textarea value={report} onChange={event=>setReport(event.target.value)} maxLength={8000} placeholder="O que foi feito?"/></label>
+    <details className={styles.osDisclosure}><summary>Detalhes do relatório</summary>
     <label className={styles.formLabel}>Modelo de relatório<select value={template} onChange={e=>setTemplate(e.target.value)}><option value="">Selecionar modelo</option>{reportTemplates.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select></label><button type="button" className={styles.secondaryAction} disabled={!template||busy} onClick={()=>{const chosen=reportTemplates.find(item=>item.id===template);if(chosen)setReport(previous=>[previous,chosen.text].filter(Boolean).join("\n\n").slice(0,8000));}}>Inserir modelo para preencher</button>
     <label className={styles.formLabel}>Observações adicionais • opcional<textarea maxLength={4000} value={observations} onChange={e=>setObservations(e.target.value)}/></label>
     <h3>Medições técnicas do equipamento <small>preencha quando aplicável</small></h3><p>Informe os valores realmente medidos nos campos correspondentes: pressão, temperatura, tensão e corrente. Os campos ficam separados do texto de diagnóstico.</p><div className={styles.measurementGrid}>{fieldMeasurements.map(item=><label key={item.key} className={styles.formLabel}>{item.label} ({item.unit})<input type="number" inputMode="decimal" step="any" min={item.min} max={item.max} value={measurements[item.key]||""} onChange={e=>setMeasurements({...measurements,[item.key]:e.target.value})}/></label>)}</div>
     </details>
+    </section>
+    <section id={`field-${order.id}-funcao-fotos`} hidden={workFunction!=="fotos"} className={styles.osFunctionPanel} aria-label="Fotos e identificação">
+    <section id={`field-${order.id}-equipmentLabel`} className={styles.progressPanel}><h3>Etiqueta do aparelho</h3><FieldPhotoCollection compact label="Foto da etiqueta" onProcessing={value=>setPhotoProcessing(current=>({...current,equipmentLabel:value}))} photos={equipmentLabelPhotos} onChange={values=>{setEquipmentLabelPhotos(values);if(values.length)setEquipmentLabelAbsent(false);}} disabled={busy||equipmentLabelAbsent} existingCount={order.photoCounts?.equipmentLabel||0}/><label className={styles.checkLabel}><input type="checkbox" checked={equipmentLabelAbsent} disabled={busy||Boolean(order.photoCounts?.equipmentLabel)||equipmentLabelPhotos.length>0} onChange={event=>setEquipmentLabelAbsent(event.target.checked)}/> Etiqueta ausente</label>{equipmentLabelAbsent&&<label className={styles.formLabel}>Motivo (opcional)<input maxLength={300} value={equipmentLabelAbsentReason} onChange={event=>setEquipmentLabelAbsentReason(event.target.value)} placeholder="Ex.: etiqueta removida ou ilegível"/></label>}</section>
+    <div id={`field-${order.id}-beforePhoto`}><FieldPhotoCollection compact label="Fotos antes" onProcessing={value=>setPhotoProcessing(current=>({...current,before:value}))} photos={[...(before?[before]:[]),...beforePhotos]} onChange={values=>{setBefore("");setBeforePhotos(values);}} disabled={busy} existingCount={order.photoCounts?.before||0}/></div>
     <details className={styles.osDisclosure} id={`field-${order.id}-equipment`}><summary>Equipamentos vinculados (opcional)</summary>
     {(order.equipmentOptions || []).map(item=><label key={item.id} className={styles.checkLabel}><input type="checkbox" checked={equipmentIds.includes(item.id)} disabled={busy} onChange={event=>setEquipmentIds(event.target.checked?[...equipmentIds,item.id]:equipmentIds.filter(id=>id!==item.id))}/>{item.label}</label>)}
     {!order.equipmentOptions?.length&&!equipmentIds.length&&<p className={styles.warning}>Sem equipamentos cadastrados neste local. O vínculo é opcional.</p>}
     </details>
-    {checklistItems.some(item=>!automaticFieldEvidence.has(item.key))&&<div className={styles.osChecklist}><h3>Verificações do serviço</h3>
+    </section>
+    <section id={`field-${order.id}-funcao-checklist`} hidden={workFunction!=="checklist"} className={styles.osFunctionPanel} aria-label="Checklist do serviço">
+    {checklistItems.some(item=>!automaticFieldEvidence.has(item.key))?<div className={styles.osChecklist}>
       <div className={styles.checklistGrid}>{checklistItems.filter(item=>!automaticFieldEvidence.has(item.key)&&item.required).map(item=><label id={`field-${order.id}-${item.key}`} key={item.key} className={styles.checkLabel}><input type="checkbox" checked={Boolean(done[item.key as keyof typeof done])} onChange={event=>setChecklist({...checklist,[item.key]:event.target.checked})}/>{item.label}</label>)}</div>
       {checklistItems.some(item=>!automaticFieldEvidence.has(item.key)&&!item.required)&&<details className={styles.osDisclosure}><summary>Verificações opcionais</summary>{checklistItems.filter(item=>!automaticFieldEvidence.has(item.key)&&!item.required).map(item=><label id={`field-${order.id}-${item.key}`} key={item.key} className={styles.checkLabel}><input type="checkbox" checked={Boolean(done[item.key as keyof typeof done])} onChange={event=>setChecklist({...checklist,[item.key]:event.target.checked})}/>{item.label}</label>)}</details>}
-    </div>}
-    <section id={`field-${order.id}-equipmentLabel`} className={styles.progressPanel}><h3>Etiqueta do aparelho</h3><FieldPhotoCollection compact label="Foto da etiqueta" onProcessing={value=>setPhotoProcessing(current=>({...current,equipmentLabel:value}))} photos={equipmentLabelPhotos} onChange={values=>{setEquipmentLabelPhotos(values);if(values.length)setEquipmentLabelAbsent(false);}} disabled={busy||equipmentLabelAbsent} existingCount={order.photoCounts?.equipmentLabel||0}/><label className={styles.checkLabel}><input type="checkbox" checked={equipmentLabelAbsent} disabled={busy||Boolean(order.photoCounts?.equipmentLabel)||equipmentLabelPhotos.length>0} onChange={event=>setEquipmentLabelAbsent(event.target.checked)}/> Etiqueta ausente</label>{equipmentLabelAbsent&&<label className={styles.formLabel}>Motivo (opcional)<input maxLength={300} value={equipmentLabelAbsentReason} onChange={event=>setEquipmentLabelAbsentReason(event.target.value)} placeholder="Ex.: etiqueta removida ou ilegível"/></label>}</section>
-    <div id={`field-${order.id}-beforePhoto`}><FieldPhotoCollection compact label="Fotos antes" onProcessing={value=>setPhotoProcessing(current=>({...current,before:value}))} photos={[...(before?[before]:[]),...beforePhotos]} onChange={values=>{setBefore("");setBeforePhotos(values);}} disabled={busy} existingCount={order.photoCounts?.before||0}/></div>
+    </div>:<p>Nenhuma verificação extra para este serviço.</p>}
+    </section>
     </section>
     <section hidden={step!=="conclusao"||review} className={styles.osStepPanel} aria-label="Conclusão">
       <details className={styles.osDisclosure}><summary>{pendingRequirements.length?"O que falta ("+pendingRequirements.length+")":"Requisitos preenchidos"}</summary>
@@ -216,8 +239,8 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
     <FieldServicePicker order={order} busy={busy||mediaBusy||!draftReady||Boolean(olderDraft)||Boolean(pendingSubmission)||confirmed} send={sendExtra}/>
     <FieldOrderTools scope={scope} order={order} busy={busy||mediaBusy||!draftReady||Boolean(olderDraft)} canApprove={canApprove} send={sendExtra}/>
     </details>}
-    {!review&&!pendingSubmission&&!confirmed&&<div className={styles.osActions}>
-      {step!=="chegada"&&<button type="button" className={styles.osQuietAction} disabled={busy||mediaBusy} onClick={()=>void execute("save")}>Salvar no servidor</button>}
+    {!review&&!pendingSubmission&&!confirmed&&<div className={styles.osActions} data-compact="true">
+      {step!=="chegada"&&<button type="button" className={styles.osSaveAction} disabled={busy||mediaBusy} onClick={()=>void execute("save")} aria-label="Salvar no servidor"><Save size={17} aria-hidden="true"/> Salvar</button>}
       {step==="chegada"?<button id={`field-${order.id}-checkin`} className={styles.primaryAction} type="button" disabled={busy||mediaBusy} onClick={()=>order.checkInAt?changeStep("execucao"):void execute("start")}>{order.checkInAt?"Continuar execução":"Fazer check-in"}</button>
        :step==="execucao"?<button className={styles.primaryAction} type="button" disabled={busy||mediaBusy} onClick={()=>changeStep("conclusao")}>Ir para conclusão</button>
        :<button className={styles.finishAction} type="button" disabled={busy||mediaBusy} onClick={()=>{if(pendingRequirements.length)jumpTo(pendingRequirements[0].key);else setReview(true);}}>{pendingRequirements.length?`Resolver próxima pendência (${pendingRequirements.length})`:"Revisar e concluir OS"}</button>}

@@ -10,3 +10,16 @@ export function fieldOrderStepFor(requirement: string): FieldOrderStep {
   return "execucao";
 }
 export const automaticFieldEvidence = new Set(["equipment", "equipmentLabel", "checkin", "beforePhoto", "afterPhoto", "signature", "executedService", "diagnosis"]);
+
+export const fieldOrderFunctions = [
+  { id: "relatorio", label: "Relatório" },
+  { id: "fotos", label: "Fotos" },
+  { id: "checklist", label: "Checklist" },
+] as const;
+export type FieldOrderFunction = typeof fieldOrderFunctions[number]["id"];
+
+export function fieldOrderFunctionFor(requirement: string): FieldOrderFunction {
+  if (["equipment", "equipmentLabel", "beforePhoto"].includes(requirement)) return "fotos";
+  if (["diagnosis", "executedService"].includes(requirement)) return "relatorio";
+  return "checklist";
+}
