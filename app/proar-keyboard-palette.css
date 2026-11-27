@@ -1,0 +1,64 @@
+/* PolarTech • teclado de referência: grafite, azul-ardósia, teclas foscas.
+   Tokens semânticos compartilhados. Cores de status não fazem parte da decoração. */
+:root {
+  --kbd-bg:#0f151d;
+  --kbd-surface:#1b2935;
+  --kbd-card:#243746;
+  --kbd-soft:#344b5d;
+  --kbd-hover:#415b71;
+  --kbd-line:#516a80;
+  --kbd-control:#7792a8;
+  --kbd-action:#345d80;
+  --kbd-action-hover:#3e688c;
+  --kbd-accent:#b4dbf7;
+  --kbd-text:#f7f9fb;
+  --kbd-muted:#c9d6e0;
+  --kbd-on-action:#fff;
+  --kbd-header:linear-gradient(150deg,#345d80,#233746 80%);
+  --kbd-rail:linear-gradient(165deg,#233746,#0f151d 78%);
+
+  --kbd-light-bg:#e9eff4;
+  --kbd-light-surface:#f4f7fa;
+  --kbd-light-card:#ffffff;
+  --kbd-light-soft:#dce7ef;
+  --kbd-light-hover:#d1dfeb;
+  --kbd-light-line:#adc0cf;
+  --kbd-light-control:#647f95;
+  --kbd-light-action:#345d80;
+  --kbd-light-action-hover:#234969;
+  --kbd-light-accent:#284e6e;
+  --kbd-light-text:#182a39;
+  --kbd-light-muted:#455d70;
+  --kbd-light-header:linear-gradient(150deg,#3b6282,#283e50 80%);
+  --kbd-light-rail:linear-gradient(165deg,#2b4358,#152432 78%);
+}
+
+@media screen {
+  /* Shared shells outside the main ERP (auth, customer and manager views). */
+  :is(.auth-flow,.login-page,.login-blocked-page,.manager-root,.manager-dashboard,.payment-page,.public-map-page) {
+    background:var(--kbd-rail)!important;
+  }
+  :is(.auth-flow,.login-page,.login-blocked-page,.manager-root,.payment-page) :is(.auth-card,.login-panel,.login-blocked-panel,.manager-login-card,.payment-card) {
+    border-color:var(--kbd-light-line)!important;
+  }
+  :is(.auth-flow,.login-page,.login-blocked-page,.manager-root,.manager-dashboard,.payment-page,.public-map-page)
+    :is(a,button,input,textarea,select):focus-visible {
+    outline:3px solid var(--kbd-light-accent);outline-offset:3px;
+  }
+  :is(.login-page,.auth-flow,.manager-root,.payment-page) :is(.login-submit,button[type="submit"],.payment-primary) {
+    background:var(--kbd-action)!important;color:var(--kbd-on-action)!important;
+  }
+}
+
+@media screen {
+  .manager-dashboard :is(.manager-shell,.manager-panel,.manager-audit-panel,.manager-receivables-panel,.manager-observability-panel,.manager-plan-card,.manager-table-wrap) {
+    background:var(--kbd-light-card)!important;color:var(--kbd-light-text)!important;border-color:var(--kbd-light-line)!important;
+  }
+  .manager-dashboard .manager-header,
+  .public-map-page>header {
+    background:var(--kbd-header)!important;color:var(--kbd-on-action)!important;border-color:var(--kbd-line)!important;
+  }
+  .manager-dashboard .manager-header :is(h1,h2,b,p,small),
+  .public-map-page>header :is(h1,p,span) {color:var(--kbd-text)!important}
+  .manager-root .manager-login-card {background:var(--kbd-card)!important;color:var(--kbd-text)!important;border-color:var(--kbd-line)!important}
+}

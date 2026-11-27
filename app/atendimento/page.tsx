@@ -9,7 +9,9 @@ import { WhatsAppWebConnection } from "../../components/WhatsAppWebConnection";
 import { ChatAutomationBuilder } from "../../components/ChatAutomationBuilder";
 import { chatSectors, chatStages, localTriage, localOrderDraft, chatQueuePriority, sortChatQueue, defaultChatQuickReplies, type ChatActor, type ChatConversation, type LocalChatSettings } from "../../lib/chatdesk-local";
 import {chatdeskSummary} from "../../lib/chatdesk-summary";
+import {chatWaitingLabel, nextUnansweredChat} from "../../lib/chatdesk-next-action";
 import styles from "./workspace.module.css";
+import { useAttendancePalette } from "./useAttendancePalette";
 
 type HistoryItem = { status: string; recipient: string; createdAt: string; error?: string };
 type Queue = { companyId: string; actor: ChatActor; items: ChatConversation[]; hasMore: boolean; nextOffset: number; settings: LocalChatSettings; history: HistoryItem[] };
@@ -26,7 +28,7 @@ const deliveryLabel = (value?: string) => value === "delivered" ? "Entrega confi
 const statusLabel = (value?: string) => value === "accepted" ? "Enviada ao WhatsApp; entrega não confirmada" : value === "processing" ? "Em processamento" : value === "blocked-optout" ? "Bloqueado por pedido do cliente" : value === "disconnected" ? "Desconectado; confira antes de reenviar" : value ? "Sem confirmação; conferir" : "";
 export default function Atendimento() {
   const [tab, setTab] = useState<typeof tabs[number]>("Atendimentos");
-  const [darkMode,setDarkMode] = useState(false);
+  const { darkMode, toggleTheme } = useAttendancePalette();
   const [queue, setQueue] = useState<Queue | null>(null);
   const [selected, setSelected] = useState("");
   const [assistantOpen, setAssistantOpen] = useState(true);
@@ -58,8 +60,6 @@ export default function Atendimento() {
   const selection = useRef("");
   const pending = useRef<{ key: string; id: string } | null>(null);
   const companyId = queue?.companyId || "";
-  useEffect(()=>{ try {setDarkMode(window.localStorage.getItem("proar-chatdesk-theme")==="dark");} catch { /* Storage unavailable: keep light mode. */ } },[]);
-  function toggleTheme(){setDarkMode(current=>{const next=!current;try{window.localStorage.setItem("proar-chatdesk-theme",next?"dark":"light");}catch{/* Session-only preference */}return next;});}
   const requestHeaders = useCallback((): Record<string, string> => companyId ? { "X-Proar-Company-ID": companyId } : {}, [companyId]);
   const loadQueue = useCallback(async (offset = 0) => {
     try {
@@ -92,6 +92,7 @@ export default function Atendimento() {
   }, [loadQueue, loadChat, selected]);
   const filtered = useMemo(() => sortChatQueue((queue?.items || []).filter(item => (!mine || item.assignee === queue?.actor.username) && (!waitingOnly || needsAttention(item, queueClock)) && (sector === "Todos" || item.sector === sector) && `${item.name} ${item.phone} ${item.orderId || ""} ${item.messages.at(-1)?.text || ""}`.toLowerCase().includes(search.toLowerCase())),queueClock), [queue, mine, sector, search,waitingOnly,queueClock]);
   const queueSummary=chatdeskSummary(queue?.items||[],queueClock);
+  const nextChat=useMemo(()=>nextUnansweredChat(filtered,queueClock),[filtered,queueClock]);
   const filteredHistory = (queue?.history || []).filter(item => (!historyFilter.trim() || item.recipient.toLowerCase().includes(historyFilter.trim().toLowerCase())) && (!historyDate || new Date(item.createdAt).toISOString().slice(0, 10) === historyDate));
   const assistant = localTriage(chat?.messages.filter(item => item.direction === "in").at(-1)?.text || "");
   const quickReplies = (queue?.settings.quickReplies ?? defaultChatQuickReplies).filter(reply=>reply.sector==="Todos" || reply.sector===chat?.sector);
@@ -196,7 +197,12 @@ export default function Atendimento() {
     {loadError && <p className={styles.loadError} role="alert">{loadError}</p>}
     {feedback && <p className={styles.feedback} role="status">{feedback}</p>}
     {!queue && <section className={styles.loginEmpty}><span className={styles.emptyIcon}><Headphones size={30}/></span><h2>{loading ? "Preparando sua central" : "Seu atendimento começa aqui"}</h2><p>{loading ? "Carregando as configurações da empresa e suas permissões de atendimento." : "Entre com sua conta para acessar as conversas, os lembretes e as configurações da sua empresa."}</p>{!loading && <Link href="/">Acessar o ProAR <ChevronRight size={15}/></Link>}</section>}
-    {queue && tab === "Atendimentos" && <><nav className={styles.mobileNav} aria-label="Visão do atendimento"><button aria-pressed={mobilePane==="fila"} onClick={()=>setMobilePane("fila")}>Fila {filtered.length}</button><button disabled={!selected} aria-pressed={mobilePane==="conversa"} onClick={()=>setMobilePane("conversa")}>Conversa</button><button disabled={!chat} aria-pressed={mobilePane==="ficha"} onClick={()=>{setAssistantOpen(true);setMobilePane("ficha");}}>Ficha</button></nav><div data-pane={mobilePane} className={`${styles.desk} ${!chat ? styles.deskIdle : ""} ${!assistantOpen ? styles.deskCollapsed : ""}`}>
+    {queue && tab === "Atendimentos" && <>{nextChat && !loadError && !focused && <section className={styles.nextChat} aria-label="Próxima ação no atendimento">
+      <span className={styles.nextChatIcon} aria-hidden="true"><MessageSquare size={17}/></span>
+      <div><h2>Conversa mais antiga sem resposta</h2><p><strong>{nextChat.chat.name || "Contato sem nome"}</strong> · {nextChat.chat.sector} · {chatWaitingLabel(nextChat.elapsedMinutes)}</p>
+        {queue.hasMore && <small>Entre as conversas carregadas com os filtros atuais.</small>}</div>
+      <button type="button" onClick={()=>selectConversation(nextChat.chat.phone)}>Abrir conversa <ChevronRight size={15} aria-hidden="true"/></button>
+    </section>}<nav className={styles.mobileNav} aria-label="Visão do atendimento"><button aria-pressed={mobilePane==="fila"} onClick={()=>setMobilePane("fila")}>Fila {filtered.length}</button><button disabled={!selected} aria-pressed={mobilePane==="conversa"} onClick={()=>setMobilePane("conversa")}>Conversa</button><button disabled={!chat} aria-pressed={mobilePane==="ficha"} onClick={()=>{setAssistantOpen(true);setMobilePane("ficha");}}>Ficha</button></nav><div data-pane={mobilePane} className={`${styles.desk} ${!chat ? styles.deskIdle : ""} ${!assistantOpen ? styles.deskCollapsed : ""}`}>
       <aside className={styles.queue}><div className={styles.queueTitle}><div><span className={styles.eyebrow}>CAIXA DE ENTRADA</span><h2>Conversas <span>{filtered.length}</span></h2></div><Inbox size={20}/></div><div className={styles.queueTabs} role="group" aria-label="Filtro da fila"><button aria-pressed={!mine&&!waitingOnly} onClick={()=>{setMine(false);setWaitingOnly(false);}}>Geral</button><button aria-pressed={mine} onClick={()=>{setMine(true);setWaitingOnly(false);}}>Meus</button><button aria-pressed={waitingOnly} onClick={()=>{setMine(false);setWaitingOnly(true);}}>Aguardando</button></div><label className={styles.searchField}><Search size={16}/><input aria-label="Buscar atendimento" value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar cliente, telefone ou OS"/></label>{(queue.actor.admin || queue.actor.writeSectors.includes("Geral")) && <form className={styles.newContact} onSubmit={event=>void startConversation(event)}>
           <label htmlFor="chatdesk-new-phone">Nova conversa por número</label>
           <div className={styles.newContactRow}>

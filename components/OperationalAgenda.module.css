@@ -231,3 +231,34 @@
 .agenda .event[draggable="true"]:active{cursor:grabbing}
 .agenda .day.dropTarget{background:#123a58!important;outline:2px dashed #5ec8f4;outline-offset:-4px}
 .agenda .day.dropTarget:after{content:"Solte para escolher a nova data";display:block;margin:7px;padding:10px;border:1px dashed #5ec8f4;border-radius:8px;color:#aee9ff;font-size:10px;text-align:center}
+
+/* Shared neutral chrome; service chips keep their category colours. */
+:global(.proar-full-system) .agenda {
+  --line:var(--ux-border);--muted:var(--ux-muted);--blue:var(--ux-cyan);
+  background:var(--ux-surface);color:var(--ux-text);border-color:var(--ux-border);
+}
+:global(.proar-full-system) .agenda .hero {background:var(--ux-header)}
+:global(.proar-full-system) .agenda .hero .primary {background:var(--kbd-action)!important;color:var(--kbd-on-action)!important;border-color:var(--kbd-control)!important}
+:global(.proar-full-system) .agenda :is(.filters,.modes,.calendarScroll,.calendarHeader,.activeFilters button) {
+  background:var(--ux-card)!important;color:var(--ux-text)!important;border-color:var(--ux-border)!important;
+}
+:global(.proar-full-system) .agenda .modes button[aria-pressed=true] {background:var(--ux-primary)!important;color:var(--kbd-on-action)!important;border-color:var(--ux-primary)!important}
+:global(.proar-full-system) .agenda.agenda .filters label {color:var(--ux-muted)!important}
+:global(.proar-full-system) .agenda .filters :is(input,select) {-webkit-text-fill-color:var(--ux-text)!important;color-scheme:inherit!important}
+:global(.proar-full-system) .agenda .filters input::placeholder {-webkit-text-fill-color:var(--ux-muted)!important}
+:global(.proar-full-system) .agenda :is(.day,.day:nth-child(7n+1),.day:nth-child(7n),.day:has(.event)) {
+  background:var(--ux-card)!important;color:var(--ux-text);border-color:var(--ux-border);
+}
+:global(.proar-full-system) .agenda :is(.day.outside,.day.today,.day.today:has(.event)) {background:var(--ux-soft)!important}
+:global(.proar-full-system) .agenda .today {box-shadow:inset 0 3px var(--ux-cyan)}
+
+.agenda .todayIssues{margin:12px 0;padding:12px 14px;border:1px solid var(--ux-border,#c8d9eb);border-inline-start:4px solid var(--ux-cyan,#1d66bd);border-radius:10px;background:var(--ux-card,#fff);color:var(--ux-text,#173957)}
+.agenda .todayIssues h3{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin:0 0 6px;font-size:14px!important;color:inherit!important}
+.agenda .todayIssues h3 b{padding:2px 6px;border-radius:5px;background:var(--ux-soft,#eaf2fc)}
+.agenda .todayIssues ul{list-style:none;margin:0;padding:0}
+.agenda .todayIssues li{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--ux-border,#dbe6f1)}
+.agenda .todayIssues li>div{display:flex;min-width:0;flex-wrap:wrap;align-items:baseline;gap:2px 10px;overflow-wrap:anywhere}
+.agenda .todayIssues li span{color:var(--ux-muted,#526b85)!important;font-size:12px!important}
+.agenda .todayIssues li button{flex:none;min-height:36px}
+.agenda .todayIssues summary{cursor:pointer;padding:6px 0;min-height:30px;font-size:12px;text-decoration:underline}
+.agenda .todayIssues :is(button,summary):focus-visible{outline:2px solid var(--kbd-focus,#155ed1);outline-offset:2px}

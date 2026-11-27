@@ -1,67 +1,11 @@
-/* Paleta global refinada: azul-petróleo, slate dessaturado e ciano cerúleo. */
+/* Adaptadores para componentes legados do ERP. */
 .proar-full-system {
-  --ux-bg:#0b1720;
-  --ux-surface:#132330;
-  --ux-card:#192d3b;
-  --ux-soft:#22394a;
-  --ux-border:#3b5263;
-  --ux-border2:#587185;
-  --ux-hover:#2b4658;
-  --ux-primary:#1689c5;
-  --ux-primary2:#126f9d;
-  --ux-cyan:#45c3e7;
-  --ux-text:#e8f0f5;
-  --ux-muted:#b4c1ca;
-  --ux-good:#7bd9b6;
-  --ux-warn:#f5c56b;
-  --ux-danger:#ff8294;
-  --navy:#0b1720;
-  --navy2:#132330;
-  --navy3:#192d3b;
-  --blue:#1689c5;
-  --blue2:#229ed2;
-  --cyan:#45c3e7;
-  --ink:#e8f0f5;
-  --muted:#b4c1ca;
-  --line:#3b5263;
-  --bg:#0b1720;
-  --white:#132330;
-  --panel:#132330;
-  --panel2:#192d3b;
-  --panel3:#22394a;
-  color-scheme:dark;
-}
-html[data-proar-system-theme="light"] .proar-full-system {
-  --ux-bg:#eef3f7;
-  --ux-surface:#ffffff;
-  --ux-card:#ffffff;
-  --ux-soft:#e6eef4;
-  --ux-border:#c4d1dc;
-  --ux-border2:#9db0bf;
-  --ux-hover:#deebf3;
-  --ux-primary:#167bb3;
-  --ux-primary2:#12658d;
-  --ux-cyan:#168fa8;
-  --ux-text:#17334a;
-  --ux-muted:#536b7e;
-  --ux-good:#087e60;
-  --ux-warn:#815609;
-  --ux-danger:#a42f44;
-  --navy:#eef3f7;
-  --navy2:#ffffff;
-  --navy3:#e6eef4;
-  --blue:#167bb3;
-  --blue2:#168fa8;
-  --cyan:#168fa8;
-  --ink:#17334a;
-  --muted:#536b7e;
-  --line:#c4d1dc;
-  --bg:#eef3f7;
-  --white:#ffffff;
-  --panel:#ffffff;
-  --panel2:#ffffff;
-  --panel3:#e6eef4;
-  color-scheme:light;
+  --navy:var(--ux-bg);--navy2:var(--ux-surface);--navy3:var(--ux-card);
+  --blue:var(--ux-primary);--blue2:var(--ux-primary2);--cyan:var(--ux-cyan);
+  --ink:var(--ux-text);--muted:var(--ux-muted);--line:var(--ux-border);
+  --bg:var(--ux-bg);--white:var(--ux-surface);--panel:var(--ux-surface);
+  --panel2:var(--ux-card);--panel3:var(--ux-soft);
+  color-scheme:inherit;
 }
 .proar-full-system,
 .proar-full-system :is(.app-shell,.main,.page-content) {
@@ -69,9 +13,9 @@ html[data-proar-system-theme="light"] .proar-full-system {
   color:var(--ux-text)!important;
 }
 .proar-full-system .topbar {
-  background:linear-gradient(105deg,#17465f 0%,#126f82 100%)!important;
+  background:var(--ux-header)!important;
   color:#f0f6f9!important;
-  border-color:#3b7186!important;
+  border-color:var(--ux-border)!important;
 }
 .proar-full-system :is(.panel,.module-page,.module-hero,.management-hero,.settings-card,.settings-nav,.erp-card,.detail-header,.orders-panel,.customer-panel,.pmoc-panel,.os-tracking-panel,.os-status-panel,.os-contract-panel,.assistance-panel,.order-items-panel,.houses-hero,.bidding-hero,.budget-pdv-hero,.settings-health,.settings-security-note,.settings-switch,.stat-card,.modal,.modal-card,.dialog,.dialog-card,.proar-side-drawer) {
   background:var(--ux-card)!important;
@@ -105,7 +49,7 @@ html[data-proar-system-theme="light"] .proar-full-system {
   border-color:transparent!important;
 }
 .proar-full-system :is(.primary-btn,.os-primary-button,.settle-button):hover:not(:disabled) {
-  background:linear-gradient(135deg,#209dd3,#147cae)!important;
+  background:var(--ux-primary2)!important;
 }
 .proar-full-system :is(.outline-btn,.secondary-btn,.os-secondary-button,.icon-btn,.filter-btn,.os-icon-button) {
   border-color:var(--ux-border2)!important;
@@ -122,13 +66,13 @@ html[data-proar-system-theme="light"] .proar-full-system {
 .proar-full-system th {color:var(--ux-muted)!important}
 .proar-full-system td {color:var(--ux-text)!important}
 .proar-full-system tbody tr:hover {background:var(--ux-hover)!important}
-.proar-full-system .sidebar {background:linear-gradient(180deg,#0e1e2b,#0b1720)!important;color:var(--ux-text)!important}
+.proar-full-system .sidebar {background:var(--ux-rail)!important;color:var(--ux-text)!important}
 .proar-full-system .nav-group button.active {
-  background:linear-gradient(110deg,#126b9d,#157eae)!important;
+  background:var(--kbd-action)!important;
   color:#f7fbfd!important;
-  border-color:#4c9eb8!important;
+  border-color:var(--kbd-control)!important;
 }
-.proar-full-system .company-context {background:#132b3a!important;color:var(--ux-text)!important;border-color:var(--ux-border)!important}
+.proar-full-system .company-context {background:var(--kbd-surface)!important;color:var(--ux-text)!important;border-color:var(--ux-border)!important}
 .proar-full-system footer {color:var(--ux-muted)!important;border-color:var(--ux-border)!important}
 @media (prefers-reduced-motion:reduce) {
   .proar-full-system * {scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}

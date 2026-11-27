@@ -167,10 +167,7 @@
 .footer {display:flex;align-items:center;justify-content:space-between;gap:14px;padding-top:14px;color:#9aa8b8;font-size:9px}
 .footer span:last-child {display:flex;align-items:center;gap:5px}
 .srOnly {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
-@media(prefers-color-scheme:dark) {
-  .workspace {--desk-bg:#0e1926;--surface:#172737;--surface-soft:#1b2d40;--ink:#e0e9f3;--muted:#9cacc0;--line:#2c4054;--blue-soft:#203e5c;color-scheme:dark}
-  .header h1,.chatEmpty h2 {color:#deebf8}.company {color:#b8d1eb}.avatar {background:#234260;border-color:#355776;color:#bfdef8}.tabs button[aria-current=page] {border-color:#355775;color:#c3e0fa}.tabCount {background:#284f72;color:#c3e0fa}.queue h2 span {background:#243b51;color:#b4cde5}.queueEmpty>span {background:#21394f}.queueEmpty b {color:#b2cce4}.queueEmpty button {background:#1c344b;border-color:#34546e;color:#badcfa}.chatEmpty {background:radial-gradient(ellipse at center,#25486c55,transparent 75%)}.emptyIllustration>span {background:#213c57;border-color:#2e506f}.emptyIllustration>svg {background:#264966;color:#a6d3fc}.emptyIllustration>i {background:#1d4d40;color:#81cbb2}.messages {background-color:#112a2d;background-image:radial-gradient(#78929122 .7px,transparent .7px)}.incoming {background:#1c3447;border-color:#2e495d}.outgoing {background:#1a493e;border-color:#286251}.note {background:#484024;border-color:#655934}.event {background:#23394bbf;border-color:#3a4e5f}.composer .actions button[aria-pressed=true] {background:#214b3e;border-color:#336b59;color:#b5e0d0}.assistant {background:linear-gradient(165deg,var(--surface) 45%,#18324a)}.botIcon {background:#213f5a;border-color:#365772;color:#a0c6ed}.badge {background:#233c53;border-color:#36536c;color:#a0bfdd}.assistant blockquote {background:#223d56;border-color:#35546d;color:#c0d4e8}.assistantEmpty b {color:#a6c3df}.assistantEmpty>div>span {background:#20394f;border-color:#35546d}.kanban>section {background:#1c3044}.kanban h3 small {background:#294358}.feedback {background:#1e405d;border-color:#355976;color:#bfdbf7!important}.loadError {background:#492d2a;border-color:#6a423d;color:#f1c2bb!important}.warning {background:#4a3b23;color:#e8d0a1!important;border-color:#6b5633}.loginEmpty>a {color:#fff}
-}
+
 @media(max-width:1240px) {.desk{grid-template-columns:240px minmax(300px,1fr) 250px;gap:12px}.content{padding:20px}.headerActions{gap:11px}.company{display:none}.assistant{padding:16px 13px}.assistantTitle h2{font-size:11px}.botIcon{height:33px;width:33px}.emptyFeatures{gap:9px}.emptyFeatures span{font-size:8px}}
 @media(max-width:1100px) {.desk{grid-template-columns:250px minmax(300px,1fr);height:auto;max-height:none}.queue,.conversation{min-height:480px;max-height:720px}.assistant{grid-column:1/-1;display:block}.assistantEmpty{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.assistantEmpty>p:first-child,.assistantFoot{grid-column:1/-1}.assistantEmpty>div{border-top:0}.privateBadge{display:none}.header h1{font-size:23px}.operator{border:0;padding-left:0}.kanban{grid-template-columns:repeat(5,190px)}.chatEmpty{min-height:440px}.messages{height:350px;flex:auto}.footer{font-size:8px}}
 @media(max-width:700px) {.rail{width:50px;padding:15px 5px;gap:12px}.rail button,.rail a{width:34px;min-height:36px;border-radius:9px}.rail .brandMark{font-size:20px}.railActive:before{left:-5px;height:17px;top:9px}.content{margin-left:50px;padding:16px 12px}.header{gap:12px;align-items:flex-start;flex-direction:column;margin-bottom:16px}.header h1{font-size:22px}.header p{font-size:11px;max-width:300px}.headerActions{width:100%;justify-content:space-between}.operator{padding:0}.avatar{width:29px;height:29px;font-size:10px}.header .refresh{height:31px;min-height:31px;padding:6px 10px}.tabs{margin-bottom:13px;padding-bottom:10px}.tabs button{font-size:11px;padding:8px 10px;min-height:36px;gap:6px}.tabs svg{width:15px;height:15px}.desk{grid-template-columns:1fr;gap:13px}.queue{min-height:0;max-height:350px;padding:15px}.queueTitle{margin-bottom:13px}.queueEmpty{padding:16px 20px}.queueEmpty>span{height:40px;width:40px;margin-bottom:10px}.queueEmpty p{max-width:240px;margin-bottom:12px}.conversation{min-height:380px;max-height:none}.chatEmpty{min-height:360px;padding:28px 16px}.chatEmpty h2{font-size:19px}.chatEmpty>p{font-size:11px!important}.emptyFeatures{gap:10px;margin-top:20px;padding-top:15px}.emptyFeatures span{font-size:8px}.assistant{grid-column:auto;padding:17px}.assistantEmpty{display:block}.assistantEmpty>div{border-top:1px solid var(--line);padding:12px 0}.assistantEmpty .assistantFoot{padding-top:15px}.chatHeader{padding:13px;flex-wrap:wrap}.messages{padding:13px;height:380px}.messages article{max-width:93%;padding:10px 12px}.messages p{font-size:12px!important}.composer{padding:11px}.sendBar{flex-wrap:wrap}.panel,.crmPanel{padding:18px 14px}.panel h2,.crmPanel h2{font-size:19px}.footer{flex-direction:column;align-items:flex-start;gap:5px;font-size:8px}.breadcrumb{font-size:9px}.loginEmpty{padding:33px 20px;margin:22px auto}.loginEmpty h2{font-size:21px}}
@@ -262,7 +259,7 @@
 .workspaceFocused .breadcrumb,.workspaceFocused .header>div>p {display:none}
 .workspaceFocused .header h1 {font-size:21px}
 .workspaceFocused .desk {height:calc(100dvh - 158px)}
-@media(prefers-color-scheme:dark){.contact .urgentBadge{background:#582b2b;color:#ffd3cb}.contact .waitingBadge{color:#d9c47d}}
+
 @media(max-width:700px){.focusToggle span{display:none}.replyEditorRow{grid-template-columns:1fr}.replyEditorRow .replyText{grid-column:auto}.workspaceFocused .desk{height:auto}.sectorPills button{min-height:30px}.queueTabs button{font-size:11px}}
 
 /* PolarTech workspace: clear surfaces and operational hierarchy. */
@@ -291,10 +288,7 @@
 .chatEmpty{padding:25px 20px;background:transparent;gap:10px}.chatEmpty>svg{color:#286daa}.chatEmpty h2{font-size:23px;margin:0;color:#183f65}.chatEmpty>p{color:#45627e!important;max-width:440px}.chatEmpty>small{font-size:11px;color:#4c6882}
 .queueSummary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;width:100%;max-width:550px;margin:18px 0 6px}.queueSummary article{background:#d3e3f3;border:1px solid #a8c4df;border-radius:10px;padding:18px 10px}.queueSummary article:first-child{background:#ffefce;border-color:#dec288}.queueSummary strong{display:block;font-size:27px;color:#164c7d}.queueSummary span{font-size:11px;color:#355673}
 .mobileNav{display:none}.footer{color:#4e6880}
-@media(prefers-color-scheme:dark){
- .workspace{--desk-bg:#102235;--surface:#19334c;--surface-soft:#203e58;--line:#3c5c76;--ink:#e2edf8;--muted:#b5c9db;--blue-soft:#274e72}
- .queue{background:#19334c}.contact strong{color:#e3edf8}.contact span,.contact small,.queueScope{color:#b9cbdd}.workspace .contact.selected{background:#254f78!important}.conversation,.messages{background:#122b42}.chatHeader{background:#203f5c;border-color:#3b5f7e}.chatHeader p{color:#c2d6e9!important}.incoming{background:#23435f;border-color:#3c607f}.outgoing{background:#244e79;border-color:#406e9a}.note{background:#4b4125;border-color:#857141}.event{background:#263f55}.messages article small,.messages time{color:#bcd1e4}.composer{background:#19364f}.composerNote{background:#493c22}.assistant{background:#203d56}.assistantTitle h2,.contextPanel strong,.contextPanel h3{color:#d8eafa}.assistantTitle span:not(.botIcon),.contextPanel p{color:#b8cfe2!important}.contextTabs button{background:#294c69;color:#d5e5f3}.contextTabs button[aria-pressed=true]{background:#1d65ad}.contextPanel blockquote,.customerContext{background:#23445f;border-color:#406784;color:#daebf8}.contextPanel summary{color:#c3dff7}.chatEmpty h2{color:#d8eafa}.chatEmpty>p,.chatEmpty>small{color:#b7ccdf!important}.queueSummary article{background:#254966;border-color:#436c8d}.queueSummary article:first-child{background:#4c4125;border-color:#82703f}.queueSummary strong,.queueSummary span{color:#deebf8}.footer{color:#a8bfd2}
-}
+
 @media(max-width:1240px){.desk,.deskIdle{grid-template-columns:270px minmax(0,1fr) 250px}.deskCollapsed{grid-template-columns:270px minmax(0,1fr) 58px}}
 @media(min-width:701px) and (max-width:1100px){.desk,.deskIdle,.deskCollapsed{grid-template-columns:250px minmax(0,1fr);height:auto}.assistant{grid-column:1/-1}.queue,.conversation{max-height:740px}.messages{height:340px}.contextTabs{justify-content:flex-start}}
 @media(max-width:700px){
@@ -608,3 +602,77 @@
 .workspaceDark .similarCustomers article {background:#172b41!important;color:#eaf4ff!important;border-color:#705a2a!important}
 .workspaceDark .similarCustomers article>small {color:#d4c79f!important}
 @media(max-width:600px){.similarCustomers article{grid-template-columns:minmax(0,1fr)}.similarCustomers article button{grid-column:1;grid-row:auto;justify-self:start}}
+
+/* Chatdesk uses the same keyboard palette as ERP and Mobile. */
+.workspace {
+  --desk-bg:var(--kbd-light-bg);--surface:var(--kbd-light-card);--surface-soft:var(--kbd-light-surface);
+  --ink:var(--kbd-light-text);--muted:var(--kbd-light-muted);--line:var(--kbd-light-line);
+  --blue:var(--kbd-light-accent);--blue-soft:var(--kbd-light-soft);
+  --desk-hover:var(--kbd-light-hover);--desk-control:var(--kbd-light-control);
+  --desk-action:var(--kbd-light-action);--desk-action-hover:var(--kbd-light-action-hover);
+  --desk-header:var(--kbd-light-header);--desk-rail:var(--kbd-light-rail);
+  --desk-ghost:var(--kbd-light-soft);
+  background:var(--desk-bg);
+}
+.workspace.workspaceDark {
+  --desk-bg:var(--kbd-bg);--surface:var(--kbd-card);--surface-soft:var(--kbd-surface);
+  --ink:var(--kbd-text);--muted:var(--kbd-muted);--line:var(--kbd-line);
+  --blue:var(--kbd-accent);--blue-soft:var(--kbd-soft);
+  --desk-hover:var(--kbd-hover);--desk-control:var(--kbd-control);
+  --desk-action:var(--kbd-action);--desk-action-hover:var(--kbd-action-hover);
+  --desk-header:var(--kbd-header);--desk-rail:var(--kbd-rail);
+  --desk-ghost:var(--kbd-soft);
+  background:var(--desk-bg)!important;
+}
+.workspace .header {background:var(--desk-header)}
+.workspace .rail {background:var(--desk-rail);border-color:var(--kbd-line)}
+.workspace .rail :is(.brandMark,.railActive),.workspace .rail :is(button,a):hover {background:var(--kbd-action);color:var(--kbd-on-action)}
+.workspace :is(.railActive):before {background:var(--kbd-accent)}
+.workspace.workspace :is(.queue,.conversation,.assistant,.panel,.crmPanel,.customerContext,.tableWrap,.kanban>section,.loginEmpty,.actionReview) {
+  background:var(--surface)!important;color:var(--ink)!important;border-color:var(--line)!important;
+}
+.workspace.workspace :is(.tabs,.queueTitle,.queueTabs,.newContact,.chatHeader,.composer,.sendBar,.actions,.mobileNav,.chatEmpty,.messages,.footer,.assistantEmpty,.assistant blockquote,.assistant pre,.voiceCapture) {
+  background:var(--surface-soft)!important;color:var(--ink)!important;border-color:var(--line)!important;
+}
+.workspace.workspace :is(.queueSummary article,.emptyFeatures span,.botIcon,.tabCount,.queue h2 span,.queueEmpty>span) {
+  background:var(--blue-soft)!important;color:var(--ink)!important;border-color:var(--line)!important;
+}
+.workspace.workspace :is(.chatEmpty,.queueTitle,.queueSummary,.emptyFeatures,.newContact,.assistant,.chatHeader)
+  :is(h1,h2,h3,p,span,small,label,strong,b,summary):not(.urgentBadge,.waitingBadge) {color:var(--ink)!important}
+.workspace.workspace .contact:not(.selected) {background:var(--surface)!important;color:var(--ink)!important;border-color:var(--line)!important}
+.workspace.workspace .contact:is(:hover:not(:disabled),.selected) {background:var(--desk-hover)!important;border-color:var(--desk-control)!important}
+.workspace.workspace .contact :is(strong,small,span):not(.urgentBadge,.waitingBadge) {color:var(--ink)!important}
+.workspace.workspace .messages :is(.incoming,.event) {background:var(--surface)!important;color:var(--ink)!important;border-color:var(--line)!important}
+.workspace.workspace .messages .outgoing {background:var(--desk-action)!important;color:var(--kbd-on-action)!important;border-color:var(--desk-control)!important}
+.workspace.workspace .messages :is(.incoming,.outgoing,.event) :is(p,small,time) {color:inherit!important}
+.workspace.workspace .content :is(input:not([type=checkbox]),select,textarea) {background:var(--surface-soft)!important;color:var(--ink)!important;border-color:var(--desk-control)!important}
+.workspace.workspace .content :is(input,textarea)::placeholder {color:var(--muted)!important}
+.workspace.workspace .content :is(.sendBar button,.newContactRow button,.voiceCapture>button,.voiceButtons button,.addressLookup>button,
+  .queueTabs button[aria-pressed=true],.contextTabs button[aria-pressed=true],.mobileNav button[aria-pressed=true],.tabs button[aria-current=page]) {
+  background:var(--desk-action)!important;color:var(--kbd-on-action)!important;border-color:var(--desk-control)!important;
+}
+.workspace.workspace .content :is(.tabs,.queueTabs,.contextTabs,.mobileNav) button:not([aria-pressed=true],[aria-current=page]) {
+  background:var(--surface-soft);color:var(--muted)!important;border-color:var(--line);
+}
+.workspace.workspace :is(button,a,input,select,textarea,summary,[tabindex]):focus-visible {
+  outline:3px solid var(--blue)!important;outline-offset:2px!important;
+}
+.workspace.workspace .header :is(button,a):focus-visible,.workspace .rail :is(button,a):focus-visible {outline-color:var(--kbd-accent)!important}
+
+.workspace .nextChat {
+  display:flex;align-items:center;gap:12px;margin:0 0 12px;padding:10px 12px;
+  border:1px solid var(--line);border-inline-start:3px solid var(--desk-control);
+  border-radius:10px;background:var(--surface);color:var(--ink);min-width:0;
+}
+.workspace .nextChat>div {flex:1;min-width:0;overflow-wrap:anywhere}
+.workspace .nextChat h2 {margin:0;color:var(--ink);font-size:13px;font-weight:750}
+.workspace .nextChat p {margin:1px 0;color:var(--muted);font-size:12px}
+.workspace .nextChat p strong {color:var(--ink)}
+.workspace .nextChat small {font-size:10px}
+.nextChatIcon {display:grid;place-items:center;width:32px;height:32px;flex:none;border-radius:8px;background:var(--desk-ghost);color:var(--blue)}
+.workspace.workspace .nextChat button {flex:none;background:var(--desk-action);border-color:var(--desk-control);color:var(--kbd-on-action);white-space:nowrap}
+.workspace.workspace .nextChat button:hover {background:var(--desk-action-hover)}
+@media(max-width:500px) {
+  .workspace .nextChat {display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px}
+  .workspace .nextChat button {grid-column:2;justify-self:start}
+}

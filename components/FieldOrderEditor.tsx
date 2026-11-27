@@ -22,14 +22,14 @@ async function gps(){const cap=(window as unknown as {Capacitor?:{isNativePlatfo
   if(cap?.isNativePlatform?.()&&cap.isPluginAvailable?.("WorkRoute")&&cap.nativePromise)return cap.nativePromise("WorkRoute","position",{});
   return new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(p=>resolve({id:crypto.randomUUID(),capturedAt:new Date(p.timestamp).toISOString(),latitude:p.coords.latitude,longitude:p.coords.longitude,accuracy:p.coords.accuracy}),reject,{enableHighAccuracy:true,timeout:15000,maximumAge:0}));
 }
-export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove}:{order:MobileFieldOrder;requiresJourney:boolean;scope:string;canApprove:boolean;onSaved:(result?:{orderId:string;completedAt:string})=>Promise<void>}){
+export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove,initialStep,online=true}:{order:MobileFieldOrder;requiresJourney:boolean;scope:string;canApprove:boolean;initialStep?:FieldOrderStep;online?:boolean;onSaved:(result?:{orderId:string;completedAt:string},nextStep?:FieldOrderStep)=>Promise<void>}){
   const [report,setReport]=useState(order.executedService||""),[diagnosis,setDiagnosis]=useState(order.diagnosis||""),[checklist,setChecklist]=useState(order.mobileChecklist||{});
   const [before,setBefore]=useState(""),[after,setAfter]=useState(""),[signature,setSignature]=useState(""),[signerName,setSignerName]=useState(""),[busy,setBusy]=useState(false),[notice,setNotice]=useState("");
   const [observations,setObservations]=useState(order.observations||""),[measurements,setMeasurements]=useState<FieldMeasurements>(order.measurements||{}),[beforePhotos,setBeforePhotos]=useState<string[]>([]),[afterPhotos,setAfterPhotos]=useState<string[]>([]),[equipmentLabelPhotos,setEquipmentLabelPhotos]=useState<string[]>([]),[equipmentLabelAbsent,setEquipmentLabelAbsent]=useState(Boolean(order.equipmentLabelAbsent)),[equipmentLabelAbsentReason,setEquipmentLabelAbsentReason]=useState(order.equipmentLabelAbsentReason||""),[template,setTemplate]=useState("");
   const [photoProcessing,setPhotoProcessing]=useState({before:false,after:false,equipmentLabel:false});
   const mediaBusy=photoProcessing.before||photoProcessing.after||photoProcessing.equipmentLabel;
   const [equipmentIds,setEquipmentIds]=useState(order.equipmentIds);
-  const [step,setStep]=useState<FieldOrderStep>(order.checkInAt?"execucao":"chegada");
+  const [step,setStep]=useState<FieldOrderStep>(order.checkInAt?(initialStep==="conclusao"?"conclusao":"execucao"):"chegada");
   const [focusKey,setFocusKey]=useState<{key:string}|null>(null);
   const stageNav=useRef<HTMLElement|null>(null);
   const reviewPanel=useRef<HTMLElement|null>(null);
@@ -124,7 +124,7 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
       if(!orderSubmissionConfirmed(sent,body))throw new Error("Resposta incompleta. Consulte novamente o mesmo envio para confirmar.");
       suppressDraft.current=true;await clearOrderDraft(scope,order.id);submissionRef.current=undefined;setPendingSubmission(undefined);
       setConfirmed(true);setNotice("OS confirmada no servidor.");
-      await onSaved(sent.command.action==="finish"?{orderId:order.id,completedAt:body.completedAt}:undefined);
+      await onSaved(sent.command.action==="finish"?{orderId:order.id,completedAt:body.completedAt}:undefined,sent.command.action==="save"?"conclusao":undefined);
     } catch(error) {
       const failed=orderSubmissionFailure(sent,error instanceof Error?error.message:"Resposta não recebida. Consulte novamente este envio.");
       await persistSubmission(failed);setNotice(failed.error!);
@@ -137,6 +137,7 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
   }
   async function execute(action:"start"|"save"|"finish"){
     if(operationLock.current||submissionRef.current||confirmed||mediaBusy||!draftReady||olderDraft)return;
+    if(action!=="start"&&!order.checkInAt){setNotice("Registre o check-in antes de gravar a execução ou concluir.");jumpTo("checkin");return;}
     if(action==="finish" && (pendingRequirements.length || (signature&&!signerName.trim()))){setReview(false);setNotice("Preencha os requisitos indicados e identifique quem assina antes de concluir.");return;}
     operationLock.current=true;setBusy(true);setNotice("");
     try{
@@ -166,14 +167,14 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
     {olderDraft&&!pendingSubmission&&<button type="button" className={styles.secondaryAction} onClick={()=>{restoreDraft(olderDraft);setOlderDraft(null);}}>Recuperar rascunho para revisão</button>}
     {olderDraft&&!pendingSubmission&&<button type="button" className={styles.secondaryAction} onClick={()=>{suppressDraft.current=true;void clearOrderDraft(scope,order.id).then(()=>{latestDraft.current=null;suppressDraft.current=false;setOlderDraft(null);setDraftNotice("Rascunho anterior descartado.");}).catch(()=>{suppressDraft.current=false;setNotice("Não foi possível descartar o rascunho.");});}}>Descartar rascunho anterior</button>}
     <nav ref={stageNav} className={styles.osStepNav} aria-label="Etapas da ordem de serviço">
-      {fieldOrderSteps.map((item,index)=><button key={item.id} type="button" aria-current={step===item.id?"step":undefined} onClick={()=>changeStep(item.id)}>{index+1}. {item.label}</button>)}
+      {fieldOrderSteps.map((item,index)=><button key={item.id} type="button" aria-current={step===item.id?"step":undefined} disabled={item.id!=="chegada"&&!order.checkInAt} onClick={()=>changeStep(item.id)}>{index+1}. {item.label}</button>)}
     </nav>
     {notice&&<p ref={noticeRef} role="alert" className={styles.warning}>{notice}</p>}
     <fieldset className={styles.editorFields} disabled={busy||confirmed||!draftReady||Boolean(olderDraft)||Boolean(pendingSubmission)}>
     <section hidden={step!=="chegada"||review} className={styles.osStepPanel} aria-label="Chegada">
       <h3>Check-in</h3>
       <p>{order.checkInAt?"Check-in registrado. Você já pode continuar a execução.":"Quando chegar ao local, registre o check-in para iniciar."}</p>
-      {requiresJourney&&!order.checkInAt&&<small>Mantenha a jornada ativa para gravar o check-in.</small>}
+      {requiresJourney&&!order.checkInAt&&<small>Mantenha a jornada ativa. Ao tocar em Iniciar, o ProAR registra o check-in.</small>}
     <button type="button" className={styles.secondaryAction} onClick={()=>{const popup=window.open(`/api/mobile/orders/contact?orderId=${encodeURIComponent(order.id)}`,"_blank");if(popup)popup.opener=null;else setNotice("Permita a abertura de nova aba para acessar o WhatsApp.");}}><PhoneCall size={18} aria-hidden="true"/> WhatsApp</button>
     </section>
     <section hidden={step!=="execucao"||review} className={styles.osStepPanel} aria-label="Execução">
@@ -216,11 +217,10 @@ export function FieldOrderEditor({order,requiresJourney,onSaved,scope,canApprove
     <FieldServicePicker order={order} busy={busy||mediaBusy||!draftReady||Boolean(olderDraft)||Boolean(pendingSubmission)||confirmed} send={sendExtra}/>
     <FieldOrderTools scope={scope} order={order} busy={busy||mediaBusy||!draftReady||Boolean(olderDraft)} canApprove={canApprove} send={sendExtra}/>
     </details>}
-    {!review&&!pendingSubmission&&!confirmed&&<div className={styles.osActions}>
-      {step!=="chegada"&&<button type="button" className={styles.osQuietAction} disabled={busy||mediaBusy} onClick={()=>void execute("save")}>Salvar no servidor</button>}
-      {step==="chegada"?<button id={`field-${order.id}-checkin`} className={styles.primaryAction} type="button" disabled={busy||mediaBusy} onClick={()=>order.checkInAt?changeStep("execucao"):void execute("start")}>{order.checkInAt?"Continuar execução":"Fazer check-in"}</button>
-       :step==="execucao"?<button className={styles.primaryAction} type="button" disabled={busy||mediaBusy} onClick={()=>changeStep("conclusao")}>Ir para conclusão</button>
-       :<button className={styles.finishAction} type="button" disabled={busy||mediaBusy} onClick={()=>{if(pendingRequirements.length)jumpTo(pendingRequirements[0].key);else setReview(true);}}>{pendingRequirements.length?`Resolver próxima pendência (${pendingRequirements.length})`:"Revisar e concluir OS"}</button>}
+    {!review&&!pendingSubmission&&!confirmed&&<div className={styles.osActions} role="group" aria-label="Próxima ação da OS">
+      {step==="chegada"?<button id={`field-${order.id}-checkin`} className={styles.primaryAction} type="button" disabled={busy||mediaBusy} onClick={()=>order.checkInAt?changeStep("execucao"):void execute("start")}>{order.checkInAt?"Registrar execução":"Iniciar"}</button>
+       :step==="execucao"?<><p className={styles.osNextHint}>{!online?"Sem conexão: continue com o rascunho neste aparelho.":report.trim()?"Salva o relatório no servidor sem concluir a OS.":"Informe o serviço executado antes de registrar."}</p><button className={styles.primaryAction} type="button" disabled={busy||mediaBusy} onClick={()=>{if(!report.trim()){jumpTo("executedService");return;}if(!online){changeStep("conclusao");return;}void execute("save");}}>Registrar execução</button></>
+       :<><p className={styles.osNextHint}>{pendingRequirements.length?`${pendingRequirements.length} pendência(s). O botão leva à primeira.`:"Revise os dados antes de confirmar a conclusão."}</p><button className={styles.finishAction} type="button" disabled={busy||mediaBusy} onClick={()=>{if(pendingRequirements.length)jumpTo(pendingRequirements[0].key);else setReview(true);}}>Concluir</button></>}
     </div>}
     </fieldset>
     {confirmed&&<button type="button" className={styles.secondaryAction} onClick={()=>void onSaved()}>Atualizar dados após gravação</button>}

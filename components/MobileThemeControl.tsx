@@ -4,16 +4,18 @@ import { normalizeMobileTheme, resolveMobileTheme, type MobileTheme } from "@/li
 import styles from "./ProARFieldMobile.module.css";
 
 /** Mounted only inside /mobile; never changes the full-system theme. */
+const fromStorage = (theme: string | null): MobileTheme => theme === null ? "dark" : normalizeMobileTheme(theme);
+
 export function useMobileTheme() {
-  const [theme,setTheme] = useState<MobileTheme>("auto");
+  const [theme,setTheme] = useState<MobileTheme>("dark");
   const [systemDark,setSystemDark] = useState(true);
   const [storageNotice,setStorageNotice] = useState("");
   useEffect(()=>{
-    try { setTheme(normalizeMobileTheme(localStorage.getItem("proar-mobile-theme"))); }
+    try { setTheme(fromStorage(localStorage.getItem("proar-mobile-theme"))); }
     catch { setStorageNotice("A preferência será mantida apenas nesta sessão."); }
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const update = ()=>setSystemDark(media.matches);
-    const stored = (event:StorageEvent)=>{if(event.key==="proar-mobile-theme")setTheme(normalizeMobileTheme(event.newValue));};
+    const stored = (event:StorageEvent)=>{if(event.key==="proar-mobile-theme")setTheme(fromStorage(event.newValue));};
     update(); media.addEventListener("change",update); window.addEventListener("storage",stored);
     return ()=>{media.removeEventListener("change",update);window.removeEventListener("storage",stored);};
   },[]);
