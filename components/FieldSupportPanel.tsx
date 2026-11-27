@@ -8,7 +8,7 @@ type SupportData={records:Item[];manager:boolean;scope:string;employee:{employee
 async function post(command:QueuedFieldCommand){const response=await fetch("/api/mobile/support",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(command)});const body=await response.json();if(!response.ok){const error=new Error(body.error||"Registro não confirmado.") as Error & {permanent:boolean};error.permanent=response.status<500;throw error;}}
 function position(){return new Promise<Item>((resolve,reject)=>navigator.geolocation.getCurrentPosition(p=>resolve({latitude:p.coords.latitude,longitude:p.coords.longitude,accuracy:p.coords.accuracy,capturedAt:new Date(p.timestamp).toISOString()}),reject,{enableHighAccuracy:true,timeout:10000,maximumAge:0}));}
 function FieldInput({label,value,onChange,type="text"}:{label:string;value:string;onChange:(value:string)=>void;type?:string}){return <label className={styles.formLabel}>{label}<input type={type} step={type==="number"?"any":undefined} min={type==="number"?0:undefined} value={value} onChange={event=>onChange(event.target.value)} required /></label>;}
-export function FieldSupportPanel({visible}:{visible:boolean}) {
+export function FieldSupportPanel({visible,showSosButton}:{visible:boolean;showSosButton:boolean}) {
   const [data,setData]=useState<SupportData|null>(null),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false),[pending,setPending]=useState(0);
   const [vehicleId,setVehicleId]=useState(""),[km,setKm]=useState(""),[liters,setLiters]=useState(""),[amount,setAmount]=useState(""),[station,setStation]=useState(""),[fullTank,setFullTank]=useState(false),[notes,setNotes]=useState("");
   const [checks,setChecks]=useState<Record<string,string>>({}),[plate,setPlate]=useState(""),[vehicleName,setVehicleName]=useState(""),[employeeId,setEmployeeId]=useState(""),[maintenanceKm,setMaintenanceKm]=useState("");
@@ -36,7 +36,7 @@ export function FieldSupportPanel({visible}:{visible:boolean}) {
   const sosEvents=records.filter(item=>item.kind==="sos"&&!records.some(ack=>ack.kind==="sos-ack"&&ack.sosId===item.id&&ack.decision==="resolved"));
   const requests=records.filter(item=>item.kind==="point-adjustment"&&!records.some(decision=>decision.kind==="adjustment-decision"&&decision.adjustmentId===item.id));
   return <>
-    {data?.employee&&<button className={styles.sosButton} disabled={busy} onClick={()=>void run(sos)}>SOS • Pedir ajuda</button>}
+    {showSosButton&&data?.employee&&<button className={styles.sosButton} disabled={busy} onClick={()=>void run(sos)}>SOS • Pedir ajuda</button>}
     {data?.manager&&sosEvents.length>0&&<div role="alert" className={styles.error}>{sosEvents.length} pedido(s) SOS aguardando atendimento na Central.</div>}
     <section hidden={!visible} className={styles.screen}>
       <p className={styles.eyebrow}>CENTRAL DE CAMPO</p><h1 className={styles.title}>{data?.manager?"Gestão e operação":"Frota e jornada"}</h1>
