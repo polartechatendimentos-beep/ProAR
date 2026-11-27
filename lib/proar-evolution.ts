@@ -23,13 +23,13 @@ export async function evolutionRequest(companyId: string, path: string, body?: u
   return evolutionRequestWithConfig(config, path, body);
 }
 
-export async function evolutionRequestWithConfig(config: EvolutionConfig, path: string, body?: unknown) {
+export async function evolutionRequestWithConfig(config: EvolutionConfig, path: string, body?: unknown, timeoutMs = 15_000) {
   const url = new URL(`${path}/${encodeURIComponent(config.instance)}`, `${config.base.href.replace(/\/$/, "")}/`);
   const response = await fetch(url, {
     method: body === undefined ? "GET" : "POST",
     headers: { apikey: config.key, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15000),
+    cache: "no-store", redirect: "error", signal: AbortSignal.timeout(timeoutMs),
   });
   if (!response.ok) throw new EvolutionError(response.status);
   return response.json();
