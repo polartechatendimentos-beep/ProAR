@@ -21,14 +21,14 @@
   --ux-z-toast: 150;
 }
 html[data-proar-system-theme="dark"] {
-  --ux-bg: #050a14;
-  --ux-surface: #081120;
-  --ux-card: #0b1628;
-  --ux-text: #e5edf7;
-  --ux-muted: #a8b7ca;
-  --ux-border: #29405c;
-  --ux-accent: #3b82f6;
-  --ux-focus: #38bdf8;
+  --ux-bg: var(--kbd-bg);
+  --ux-surface: var(--kbd-surface);
+  --ux-card: var(--kbd-card);
+  --ux-text: var(--kbd-text);
+  --ux-muted: var(--kbd-muted);
+  --ux-border: var(--kbd-line);
+  --ux-accent: var(--kbd-action);
+  --ux-focus: var(--kbd-accent);
   --ux-shadow-1: 0 1px 3px rgb(0 0 0 / 22%);
   --ux-shadow-2: 0 8px 24px rgb(0 0 0 / 28%);
   --ux-shadow-3: 0 18px 48px rgb(0 0 0 / 36%);

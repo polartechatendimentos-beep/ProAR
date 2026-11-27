@@ -1,19 +1,21 @@
 /* Aliases de tema do ERP; a paleta real está em proar-keyboard-palette.css. */
-:root {
+:root, :root[data-proar-system-theme="dark"]:not([data-proar-high-contrast="true"]) {
   --ux-bg:var(--kbd-bg);--ux-surface:var(--kbd-surface);--ux-card:var(--kbd-card);
   --ux-soft:var(--kbd-soft);--ux-border:var(--kbd-line);--ux-border2:var(--kbd-control);
   --ux-hover:var(--kbd-hover);--ux-primary:var(--kbd-action);--ux-primary2:var(--kbd-action-hover);
   --ux-cyan:var(--kbd-accent);--ux-text:var(--kbd-text);--ux-muted:var(--kbd-muted);
   --ux-header:var(--kbd-header);--ux-rail:var(--kbd-rail);
+  --ux-accent:var(--kbd-action);--ux-focus:var(--kbd-accent);
   --ux-good:#72d6ae;--ux-warn:#fbbf24;--ux-danger:#fb7185;
 }
 :root[data-proar-system-theme="dark"] {color-scheme:dark}
-:root[data-proar-system-theme="light"] {
+:root[data-proar-system-theme="light"]:not([data-proar-high-contrast="true"]) {
   --ux-bg:var(--kbd-light-bg);--ux-surface:var(--kbd-light-surface);--ux-card:var(--kbd-light-card);
   --ux-soft:var(--kbd-light-soft);--ux-border:var(--kbd-light-line);--ux-border2:var(--kbd-light-control);
   --ux-hover:var(--kbd-light-hover);--ux-primary:var(--kbd-light-action);--ux-primary2:var(--kbd-light-action-hover);
   --ux-cyan:var(--kbd-light-accent);--ux-text:var(--kbd-light-text);--ux-muted:var(--kbd-light-muted);
   --ux-header:var(--kbd-light-header);--ux-rail:var(--kbd-light-rail);
+  --ux-accent:var(--kbd-light-action);--ux-focus:var(--kbd-light-accent);
   --ux-good:#087e60;--ux-warn:#815609;--ux-danger:#a42f44;
   color-scheme:light;
 }
@@ -22,7 +24,7 @@
   background:var(--ux-bg)!important;
   color:var(--ux-text)!important;
 }
-.proar-full-system .topbar {
+.proar-full-system.proar-full-system .topbar {
   background:var(--ux-header)!important;
   color:#f4f9ff!important;
   border-color:#3b7890!important;
@@ -470,6 +472,12 @@ html[data-proar-system-theme="light"] body .proar-full-system :is([data-tone="da
 html[data-proar-system-theme="light"] body .proar-full-system :is([data-tone="info"],.status-info,.badge-info,.text-info) {color:#176ec0!important}
 
 @media screen {
+  .proar-full-system .financial-module {
+    --fin-bg:var(--ux-bg);--fin-surface:var(--ux-surface);--fin-card:var(--ux-card);
+    --fin-soft:var(--ux-soft);--fin-border:var(--ux-border);--fin-border-light:var(--ux-border2);
+    --fin-hover:var(--ux-hover);--fin-primary:var(--ux-primary);--fin-cyan:var(--ux-cyan);
+    color:var(--ux-text)!important;
+  }
   .proar-full-system :is(.dashboard-hero,.fiscal-hero,.bidding-hero,.budget-pdv-hero,.management-hero) {
     background:var(--ux-card)!important;color:var(--ux-text)!important;border-color:var(--ux-border)!important;
   }
