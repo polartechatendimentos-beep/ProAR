@@ -11,6 +11,7 @@ import { ChatAutomationBuilder } from "../../components/ChatAutomationBuilder";
 import { chatSectors, chatStages, localTriage, localOrderDraft, chatQueuePriority, sortChatQueue, defaultChatQuickReplies, type ChatActor, type ChatConversation, type LocalChatSettings } from "../../lib/chatdesk-local";
 import {chatdeskSummary} from "../../lib/chatdesk-summary";
 import styles from "./workspace.module.css";
+import { useAttendancePalette } from "./useAttendancePalette";
 
 type HistoryItem = { status: string; recipient: string; createdAt: string; error?: string };
 type Queue = { companyId: string; actor: ChatActor; items: ChatConversation[]; hasMore: boolean; nextOffset: number; settings: LocalChatSettings; history: HistoryItem[] };
@@ -27,7 +28,7 @@ const deliveryLabel = (value?: string) => value === "delivered" ? "Entrega confi
 const statusLabel = (value?: string) => value === "accepted" ? "Enviada ao WhatsApp; entrega não confirmada" : value === "processing" ? "Em processamento" : value === "blocked-optout" ? "Bloqueado por pedido do cliente" : value === "disconnected" ? "Desconectado; confira antes de reenviar" : value ? "Sem confirmação; conferir" : "";
 export default function Atendimento() {
   const [tab, setTab] = useState<typeof tabs[number]>("Atendimentos");
-  const [darkMode,setDarkMode] = useState(false);
+  const { darkMode, toggleTheme } = useAttendancePalette();
   const [queue, setQueue] = useState<Queue | null>(null);
   const [selected, setSelected] = useState("");
   const [assistantOpen, setAssistantOpen] = useState(true);
@@ -59,8 +60,6 @@ export default function Atendimento() {
   const selection = useRef("");
   const pending = useRef<{ key: string; id: string } | null>(null);
   const companyId = queue?.companyId || "";
-  useEffect(()=>{ try {setDarkMode(window.localStorage.getItem("proar-chatdesk-theme")==="dark");} catch { /* Storage unavailable: keep light mode. */ } },[]);
-  function toggleTheme(){setDarkMode(current=>{const next=!current;try{window.localStorage.setItem("proar-chatdesk-theme",next?"dark":"light");}catch{/* Session-only preference */}return next;});}
   const requestHeaders = useCallback((): Record<string, string> => companyId ? { "X-Proar-Company-ID": companyId } : {}, [companyId]);
   const loadQueue = useCallback(async (offset = 0) => {
     try {
