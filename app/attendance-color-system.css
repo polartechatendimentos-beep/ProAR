@@ -500,3 +500,18 @@ html[data-proar-system-theme="light"] body .proar-full-system :is([data-tone="in
   .proar-full-system .sidebar :is(.nav-item.active,.nav-item[aria-current="page"],button.active),
   .proar-full-system .topbar :is(a,button,[tabindex]):focus-visible {outline-color:var(--kbd-accent)!important}
 }
+
+@media screen {
+  .proar-full-system .topbar.topbar-user-only .top-actions-user-only {
+    background:var(--kbd-surface)!important;border-color:var(--kbd-control)!important;color:var(--kbd-text)!important;
+  }
+  .proar-full-system .topbar.topbar-user-only :is(.eyebrow span,.eyebrow b,.eyebrow i,.eyebrow svg,.profile small) {
+    color:var(--kbd-muted)!important;
+  }
+  .proar-full-system .financial .finance-total {
+    background:var(--kbd-header)!important;color:var(--kbd-on-action)!important;
+  }
+  .proar-full-system :is(.orders-panel,.alerts) .linked-empty {
+    background:var(--ux-surface)!important;color:var(--ux-text)!important;border-color:var(--ux-border)!important;
+  }
+}
