@@ -169,6 +169,7 @@ export function ProARFieldMobile() {
   const week=useMemo(()=>mobileWeekDates(day),[day]);
   const agendaOrders = useMemo(() => orders.filter(order => agendaMode==="week"?week.includes(order.date):order.date === day), [orders, day,agendaMode,week]);
   const current = orders.find(order => order.id === selected)||pendingOrders.find(order=>order.id===selected)||(recovery?.scope===data?.user.scope&&recovery?.order.id===selected?recovery.order:undefined);
+  const editingOrder=Boolean(current&&data?.user.canEdit&&isOpenMobileOrder(current.status));
   const supervision=mobileSupervision(orders,todayISO());
   const firstName = data?.user.displayName?.split(" ")[0] || "equipe";
   const tabs: { id: Tab; label: string; icon: typeof Home }[] = [
@@ -191,43 +192,42 @@ export function ProARFieldMobile() {
       </header>
       <main className={styles.content}>
         {offlineNotice&&<p role="status" className={styles.syncBanner}>{offlineCopy?"Leitura offline • ":""}{offlineNotice}</p>}
-        {!online && <div className={styles.warning}><CloudOff size={19}/>Sem conexão. Você pode preencher o rascunho da OS neste aparelho. Você também pode deixar o envio preparado e sincronizar ao retornar a conexão. A conclusão só é confirmada pelo servidor.</div>}
+        {!online && <div className={styles.warning}><CloudOff size={19}/>{current?"Offline: rascunho no aparelho. A conclusão depende da sincronização.":"Sem conexão. Você pode preencher o rascunho da OS neste aparelho. Você também pode deixar o envio preparado e sincronizar ao retornar a conexão. A conclusão só é confirmada pelo servidor."}</div>}
         {completion&&<div role="status" className={styles.successPanel}><h2>OS concluída • {completion.orderId}</h2><p>Confirmada no servidor em {new Date(completion.completedAt).toLocaleString("pt-BR")}.</p><FieldOrderReceipt orderId={completion.orderId}/><button type="button" className={styles.secondaryAction} onClick={()=>setCompletion(null)}>Fechar confirmação</button></div>}
         {error && !loginRequired && <div role="alert" className={styles.error}>{error}<button type="button" onClick={()=>void refresh()}>Tentar novamente</button><button type="button" onClick={()=>{setData(null);setSelected(null);setLoginRequired(true);}}>Entrar com outra conta</button></div>}
         {loginRequired&&!data&&<MobileLogin onAuthenticated={refresh}/>}
         {loading && !data && <div role="status" aria-label="Carregando atendimentos" className={styles.skeletonGrid}><p>Conectando aos atendimentos reais do ProAR...</p>{[1,2,3].map(i=><div key={i} className={styles.skeletonCard} aria-hidden="true"/>)}</div>}
         {data && <>
           {pendingOrders.length>0&&!current&&<section className={styles.pendingPanel}><h2>{pendingOrders.length} envio(s) aguardando confirmação</h2><p>Retome cada envio para sincronizar ou consultar a confirmação, sem duplicar o registro.</p>{pendingOrders.map(order=><button key={order.id} type="button" className={styles.secondaryAction} onClick={()=>setSelected(order.id)}>Retomar envio • {order.id}</button>)}</section>}
-          <button type="button" className={styles.secondaryAction} onClick={()=>{setSelected(null);setTab("mais");}}>Central de sincronização • pacote offline e rascunhos</button>
-          <details className={styles.journeyPanel}><summary>Ponto e jornada • entrada, pausa e saída</summary><MobilePunchClock scope={data.user.scope} employeeId={data.user.employeeId} employeeName={data.user.employeeName} manager={data.user.manager}/><details className={styles.journeyPanel}><summary>Acompanhamento de rota • GPS informado e visível</summary><MobileRouteControls /></details></details>
+          {!current&&<button type="button" className={styles.secondaryAction} onClick={()=>{setSelected(null);setTab("mais");}}>Central de sincronização • pacote offline e rascunhos</button>}
+          <details className={styles.journeyPanel}><summary>{current?"Jornada de trabalho":"Ponto e jornada • entrada, pausa e saída"}</summary><MobilePunchClock scope={data.user.scope} employeeId={data.user.employeeId} employeeName={data.user.employeeName} manager={data.user.manager}/><details className={styles.journeyPanel}><summary>Acompanhamento de rota • GPS informado e visível</summary><MobileRouteControls /></details></details>
           {tab === "central" && !current && data.user.manager && <section className={styles.detailCard}><h2>Supervisão • ordens autorizadas</h2><p>Resumo da última leitura do servidor. Envios locais aparecem separadamente e não representam a fila dos outros aparelhos.</p><div className={styles.metrics}>{Object.entries({"Em aberto":supervision.open,"Atrasadas":supervision.overdue,"Com check-in":supervision.active,"Hoje":supervision.today}).map(([label,count])=><div key={label}><strong>{count}</strong><span>{label}</span></div>)}</div><p>{pendingOrders.length} envio(s) pendente(s) neste aparelho e usuário.</p></section>}
           {tab==="acervo"&&!current&&<MobileTechnicalLibrary key={data.user.scope} scope={data.user.scope}/>}
-          <FieldSupportPanel visible={tab === "central" && !current}/>
+          <FieldSupportPanel visible={tab === "central" && !current} showSosButton={!current}/>
           {tab==="central"&&!current&&data.user.manager&&<section className={styles.detailCard}><h2>Solicitações e atrasos de atendimento</h2>{orders.filter(order=>order.requests?.some(item=>item.status==="Pendente")||order.delay).map(order=><button key={order.id} type="button" className={styles.secondaryAction} onClick={()=>setSelected(order.id)}>Revisar {order.id} • {order.delay?`Atraso ${order.delay.minutes} min`:"Solicitação pendente"}</button>)}{!orders.some(order=>order.requests?.some(item=>item.status==="Pendente")||order.delay)&&<p>Nenhuma solicitação ou atraso registrado.</p>}</section>}
           {tab==="central"&&!current&&data.user.canApprove&&<section className={styles.detailCard}><h2>Exceções de OS aguardando aprovação</h2>{orders.filter(order=>order.fieldExceptions?.some(item=>item.status==="Pendente")).map(order=><button key={order.id} type="button" className={styles.secondaryAction} onClick={()=>setSelected(order.id)}>Revisar {order.id} • {order.client}</button>)}{!orders.some(order=>order.fieldExceptions?.some(item=>item.status==="Pendente"))&&<p>Nenhuma solicitação pendente.</p>}</section>}
           {current ? <section className={styles.screen}>
             <button type="button" className={styles.back} onClick={()=>setSelected(null)}><ArrowLeft size={18}/> Voltar</button>
-            <p className={styles.eyebrow}>ORDEM DE SERVIÇO</p>
-            <h1 className={styles.title}>{current.id}</h1>
-            <div className={styles.detailCard}>
-              <span className={`${styles.status} ${statusTone(current.status)}`}>{current.status || "Sem status"}</span>
+            <div className={styles.osIdentity}>
+              <div className={styles.osTitleRow}><h1 className={styles.title}>{current.id}</h1><span className={`${styles.status} ${statusTone(current.status)}`}>{current.status || "Sem status"}</span></div>
               <h2>{current.service || "Atendimento técnico"}</h2>
-              <dl className={styles.detailList}>
-                <div><dt>Cliente</dt><dd>{current.client || "Não informado"}</dd></div>
-                <div><dt>Unidade</dt><dd>{current.unit || "Não informada"}</dd></div>
-                <div><dt>Data e horário</dt><dd>{formatDate(current.date)} · {displayTime(current.time)}</dd></div>
-                <div><dt>Técnico responsável</dt><dd>{current.tech || "Não definido"}</dd></div>
-                <div><dt>Endereço</dt><dd>{current.address || "Não informado"}</dd></div>
-                <div><dt>Equipamentos vinculados</dt><dd>{current.equipmentIds.length ? current.equipmentIds.join(", ") : "Nenhum vínculo informado"}</dd></div>
-                {current.checkInAt && <div><dt>Check-in registrado</dt><dd>{current.checkInAt}</dd></div>}
-                {!isOpenMobileOrder(current.status)&&<><div><dt>Diagnóstico</dt><dd>{current.diagnosis||"Não informado"}</dd></div><div><dt>Serviço executado</dt><dd>{current.executedService||"Não informado"}</dd></div></>}
-              </dl>
+              <p><strong>{current.client || "Cliente não informado"}</strong> · {formatDate(current.date)} · {displayTime(current.time)}</p>
+              {current.address&&<div className={styles.osRoute}><p>{current.address}</p><a className={styles.secondaryAction} href={mapApp==="waze"?`https://www.waze.com/ul?q=${encodeURIComponent(current.address)}&navigate=yes`:`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(current.address)}`} target="_blank" rel="noopener noreferrer"><MapPin size={16}/> Abrir rota</a></div>}
+              <details className={styles.osDisclosure}><summary>Detalhes da OS</summary>
+                <dl className={styles.detailList}>
+                  <div><dt>Unidade</dt><dd>{current.unit || "Não informada"}</dd></div>
+                  <div><dt>Técnico responsável</dt><dd>{current.tech || "Não definido"}</dd></div>
+                  <div><dt>Equipamentos vinculados</dt><dd>{current.equipmentIds.length ? current.equipmentIds.join(", ") : "Nenhum vínculo informado"}</dd></div>
+                  {current.checkInAt && <div><dt>Check-in registrado</dt><dd>{current.checkInAt}</dd></div>}
+                  {!isOpenMobileOrder(current.status)&&<><div><dt>Diagnóstico</dt><dd>{current.diagnosis||"Não informado"}</dd></div><div><dt>Serviço executado</dt><dd>{current.executedService||"Não informado"}</dd></div></>}
+                </dl>
+                {current.address&&<label className={styles.formLabel}>Aplicativo de navegação<select value={mapApp} onChange={event=>setMapApp(event.target.value)}><option value="google">Google Maps</option><option value="waze">Waze</option></select></label>}
+              </details>
             </div>
-            {current.address && <><label className={styles.formLabel}>Aplicativo de navegação<select value={mapApp} onChange={e=>setMapApp(e.target.value)}><option value="google">Google Maps</option><option value="waze">Waze</option></select></label><a className={styles.primaryAction} href={mapApp==="waze"?`https://www.waze.com/ul?q=${encodeURIComponent(current.address)}&navigate=yes`:`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(current.address)}`} target="_blank" rel="noopener noreferrer"><MapPin size={18}/> Abrir navegação <ArrowRight size={18}/></a></>}
             {!isOpenMobileOrder(current.status)&&<p className={styles.disclaimer}>OS encerrada: consulta do histórico. Os dados de execução permanecem preservados.</p>}
             {!data.user.canEdit && <p role="alert" className={styles.warning}>Seu perfil não tem permissão para alterar esta OS. Solicite a liberação ao administrador.</p>}
             {data.user.canEdit && isOpenMobileOrder(current.status) && <FieldOrderEditor key={`${current.id}:${current.fieldVersion}:${current.editToken}`} scope={data.user.scope} canApprove={data.user.canApprove} order={current} requiresJourney={/tecnico|prestador/i.test(data.user.role.normalize("NFD").replace(/[\u0300-\u036f]/g,""))} onSaved={async result=>{if(result){setCompletion(result);setSelected(null);setTab("ordens");setData(previous=>previous?{...previous,orders:previous.orders.filter(order=>order.id!==result.orderId)}:previous);}if(result){try{await removeDayOrder(data.user.scope,result.orderId);}catch{try{clearOfflineLease(sessionStorage);}catch{}}}await refresh();}}/>}
-            <p className={styles.disclaimer}>Alterações são confirmadas no banco. Durante a pausa ou fora da jornada, técnicos podem apenas consultar.</p>
+
           </section> : <>
             {tab === "inicio" && <section className={styles.screen}>
               <p className={styles.eyebrow}>PAINEL OPERACIONAL</p>
@@ -292,9 +292,9 @@ export function ProARFieldMobile() {
           </>}
         </>}
       </main>
-      <nav className={styles.bottomNav} aria-label="Navegação ProAR Mobile">
+      {!editingOrder&&<nav className={styles.bottomNav} aria-label="Navegação ProAR Mobile">
         {tabs.map(item=>{const Icon=item.icon;return <button key={item.id} type="button" aria-current={tab===item.id&&!selected?"page":undefined} className={`${styles.navItem} ${tab===item.id&&!selected?styles.navActive:""}`} onClick={()=>{setSelected(null);setTab(item.id)}}><Icon size={22}/><span>{item.label}</span></button>})}
-      </nav>
+      </nav>}
       <footer className={styles.footer}><span><Wifi size={12}/> {online ? "Rede disponível" : "Offline"}</span><span>ProAR Mobile · operação integrada</span></footer>
     </div>
   </div>;
