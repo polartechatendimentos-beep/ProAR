@@ -6,15 +6,27 @@ import {routeContext,routeRest} from "@/lib/work-route-store";
 import {commitNeonOperationalState,PRIMARY_DATABASE_URL} from "@/lib/supabase-rest";
 import {loadBiddingDocument,biddingTenderOptions} from "@/lib/bidding-document-store";
 import {DOCUMENT_CATEGORIES} from "@/lib/bidding-documents";
+import {assessBiddingEvidence,type EvidenceRequirement} from "@/lib/bidding-evidence";
 import {getOpenAiCredential,safeCompanyId} from "@/lib/openai-credential";
-import {calculateBiddingFinancialRatios,type FinancialInputs,type FinancialRatio} from "@/lib/bidding-financial-audit";
+import {brazilDay} from "@/lib/procurement-readiness";
+import {biddingFinancialApprovalIssue,calculateBiddingFinancialRatios,type FinancialInputs,type FinancialOperator,type FinancialRatio} from "@/lib/bidding-financial-audit";
 export const runtime="nodejs";
 export const maxDuration=60;
 const json=(body:unknown,status=200)=>NextResponse.json(body,{status,headers:{"Cache-Control":"private, no-store","X-Robots-Tag":"noindex"}});
-type Requirement={id:string;category:string;description:string;threshold:string;unit:string;documentId:string;sourcePage?:number;sourceQuote?:string;phase?:string;dueDate?:string;technicalEvidence?:{issuer:string;service:string;quantity:string;unit:string;startDate:string;endDate:string;professionalRecord:string}};
+type Requirement=EvidenceRequirement;
 type Approval={status:"pending"|"approved"|"rejected";submittedAt:string;submittedBy:string;reviewedAt?:string;reviewedBy?:string;note?:string};
 type FinancialAuditRecord=FinancialInputs&{ratios:FinancialRatio[];updatedAt:string;updatedBy:string};
 type Stored={companyId:string;tenderId:string;_revision:number;updatedAt:string;updatedBy:string;requirements:Requirement[];approval?:Approval;financialAudit?:FinancialAuditRecord};
+const FINANCIAL_DOCUMENT_CATEGORIES = ["Balanço Patrimonial","DRE","Índices econômico-financeiros"];
+async function financialDocumentsReady(db:Parameters<typeof loadBiddingDocument>[0],company:string,tenderId:string,documentIds:string[]){
+ if(!Array.isArray(documentIds)||!documentIds.length)return false;
+ const today=brazilDay();
+ for(const id of documentIds){
+  const doc=await loadBiddingDocument(db,company,id);
+  if(!doc?.uploaded||doc.tenderId&&doc.tenderId!==tenderId||!FINANCIAL_DOCUMENT_CATEGORIES.includes(doc.category)||doc.review!=="approved"||doc.validUntil&&doc.validUntil<today)return false;
+ }
+ return true;
+}
 const keyFor=(company:string,tenderId:string)=>"bidding-requirements-v1:"+createHash("sha256").update(company+":"+tenderId).digest("hex");
 const readList=(value:unknown):Requirement[]=>{
  if(!Array.isArray(value)||value.length>100)throw new Error("Informe até 100 exigências do edital.");
@@ -25,10 +37,11 @@ const readList=(value:unknown):Requirement[]=>{
   if(!DOCUMENT_CATEGORIES.includes(category as typeof DOCUMENT_CATEGORIES[number]))throw new Error("Categoria inválida.");
   if(threshold.length>80||unit.length>40)throw new Error("Limite excedido em quantidade ou unidade.");
   const sourcePage=Number(item.sourcePage||0),sourceQuote=String(item.sourceQuote||"").trim(),phase=String(item.phase||""),dueDate=String(item.dueDate||"");
-   if(sourcePage&&!Number.isSafeInteger(sourcePage))throw new Error("Página de referência inválida.");
+   if(sourcePage&&(!Number.isSafeInteger(sourcePage)||sourcePage<1||sourcePage>10000))throw new Error("Página de referência inválida.");
    if(sourceQuote.length>500||phase.length>60||dueDate&&(!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)||!Number.isFinite(Date.parse(dueDate))))throw new Error("Referência ou prazo inválido.");
+   const evidenceRevision=typeof item.evidenceRevision==="number"&&Number.isSafeInteger(item.evidenceRevision)&&item.evidenceRevision>0?item.evidenceRevision:undefined;
    const t=(item.technicalEvidence||{}) as Record<string,unknown>,technicalEvidence={issuer:String(t.issuer||"").trim().slice(0,200),service:String(t.service||"").trim().slice(0,500),quantity:String(t.quantity||"").trim().slice(0,80),unit:String(t.unit||"").trim().slice(0,40),startDate:String(t.startDate||"").slice(0,10),endDate:String(t.endDate||"").slice(0,10),professionalRecord:String(t.professionalRecord||"").trim().slice(0,120)};
-   return {id:/^[0-9a-f-]{36}$/.test(String(item.id||""))?String(item.id):randomUUID(),category,description,threshold,unit,documentId,sourcePage:sourcePage||undefined,sourceQuote:sourceQuote||undefined,phase:phase||undefined,dueDate:dueDate||undefined,technicalEvidence:category==="Atestado técnico"?technicalEvidence:undefined};
+   return {id:/^[0-9a-f-]{36}$/.test(String(item.id||""))?String(item.id):randomUUID(),category,description,threshold,unit,documentId,evidenceRevision,sourcePage:sourcePage||undefined,sourceQuote:sourceQuote||undefined,phase:phase||undefined,dueDate:dueDate||undefined,technicalEvidence:category==="Atestado técnico"?technicalEvidence:undefined};
  });
 };
 export async function GET(request:NextRequest){
@@ -40,7 +53,7 @@ export async function GET(request:NextRequest){
   if(!result.ok)throw new Error("Consulta indisponível");
   const stored=(await result.json())[0]?.payload as Stored|undefined;
   if(stored&&(stored.companyId!==c.company||stored.tenderId!==tenderId))return json({error:"Vínculo de empresa inválido."},403);
-  return json({requirements:stored?.requirements||[],revision:stored?._revision||0,approval:stored?.approval||null,financialAudit:stored?.financialAudit||null,canEdit:hasPermission(access.session,"licitacoes.editar"),canApprove:hasPermission(access.session,"aprovacoes.aprovar")});
+  return json({requirements:stored?.requirements||[],revision:stored?._revision||0,approval:stored?.approval||null,financialAudit:stored?.financialAudit?{...stored.financialAudit,ratios:calculateBiddingFinancialRatios(stored.financialAudit)}:null,canEdit:hasPermission(access.session,"licitacoes.editar"),canApprove:hasPermission(access.session,"aprovacoes.aprovar")});
  }catch{return json({error:"Não foi possível carregar as exigências do edital."},503);}
 }
 export async function POST(request:NextRequest){
@@ -96,32 +109,27 @@ export async function POST(request:NextRequest){
     const rawInput=(body.financial||{}) as Record<string,unknown>;
     const parseNumber=(rawValue:string)=>Number(rawValue.includes(",")?rawValue.replace(/\\./g,"").replace(",", "."):rawValue);
     const numeric=(key:string)=>{const rawValue=String(rawInput[key]??"").trim();if(!rawValue)throw new Error("Preencha todos os valores do balanço.");const value=parseNumber(rawValue);if(!Number.isFinite(value)||value<0||value>1e15)throw new Error("Valor financeiro inválido: "+key);return value;};
-    const minimum=(key:string)=>{const value=String(rawInput[key]||"").trim();if(!value)return "";const parsed=parseNumber(value);if(!Number.isFinite(parsed)||parsed<0||parsed>1e6)throw new Error("Índice mínimo inválido: "+key);return String(parsed);};
+    const operator=(key:string):FinancialOperator|undefined=>{const value=rawInput[key];if(value===undefined||value===null||value==="")return undefined;if(value==="gt"||value==="gte"||value==="not_required")return value;throw new Error("Operador de índice inválido.");};
+    const minimum=(key:string,op:FinancialOperator|undefined)=>{const value=String(rawInput[key]??"").trim();if(op==="not_required"||!value)return "";if(!/^\d{1,7}(?:[.,]\d{1,8})?$/.test(value)||parseNumber(value)>1e6)throw new Error("Índice mínimo inválido: "+key);return value.replace(",", ".");};
+    const operatorCurrent=operator("operatorCurrent"),operatorGeneral=operator("operatorGeneral"),operatorSolvency=operator("operatorSolvency");
     const documentIds=Array.isArray(rawInput.documentIds)?rawInput.documentIds.slice(0,20).map(String):[];
     if(!documentIds.length)return json({error:"Vincule ao menos um balanço ou DRE antes de salvar a auditoria."},422);
-    for(const id of documentIds){const doc=await loadBiddingDocument(c.db,c.company,id);if(!doc||!doc.uploaded||doc.tenderId&&doc.tenderId!==tenderId||!["Balanço Patrimonial","DRE","Índices econômico-financeiros"].includes(doc.category))return json({error:"Vincule balanço/DRE real desta empresa e edital."},422);}
-    const input:FinancialInputs={currentAssets:numeric("currentAssets"),currentLiabilities:numeric("currentLiabilities"),realizableLongTerm:numeric("realizableLongTerm"),longTermLiabilities:numeric("longTermLiabilities"),totalAssets:numeric("totalAssets"),minimumCurrent:minimum("minimumCurrent"),minimumGeneral:minimum("minimumGeneral"),minimumSolvency:minimum("minimumSolvency"),sourceNote:String(rawInput.sourceNote||"").trim().slice(0,1000),documentIds};
+    for(const id of documentIds){const doc=await loadBiddingDocument(c.db,c.company,id);if(!doc||!doc.uploaded||doc.tenderId&&doc.tenderId!==tenderId||!FINANCIAL_DOCUMENT_CATEGORIES.includes(doc.category))return json({error:"Vincule balanço/DRE real desta empresa e edital."},422);}
+    const input:FinancialInputs={currentAssets:numeric("currentAssets"),currentLiabilities:numeric("currentLiabilities"),realizableLongTerm:numeric("realizableLongTerm"),longTermLiabilities:numeric("longTermLiabilities"),totalAssets:numeric("totalAssets"),minimumCurrent:minimum("minimumCurrent",operatorCurrent),minimumGeneral:minimum("minimumGeneral",operatorGeneral),minimumSolvency:minimum("minimumSolvency",operatorSolvency),operatorCurrent,operatorGeneral,operatorSolvency,sourceNote:String(rawInput.sourceNote||"").trim().slice(0,1000),documentIds};
     const financialAudit={...input,ratios:calculateBiddingFinancialRatios(input),updatedAt:now,updatedBy:actor};
     next={...old,_revision:revision+1,updatedAt:now,updatedBy:actor,financialAudit,approval:undefined};
    }else if(body.action==="submit"){
    if(!old)return json({error:"Salve primeiro as exigências deste edital."},404);
    if(!hasPermission(access.session,"licitacoes.editar"))return json({error:"Sem permissão para enviar o dossiê."},403);
+   if(body.matrixAcknowledged!==true)return json({error:"Confirme a cobertura das exigências do edital, anexos e retificações antes de enviar."},422);
    if(!old.requirements.length)return json({error:"Inclua ao menos uma exigência antes de enviar o dossiê."},422);
-   const requiresFinancial=old.requirements.some(req=>["Balanço Patrimonial","DRE","Índices econômico-financeiros"].includes(req.category));
-   if(requiresFinancial&&!old.financialAudit)return json({error:"Complete a auditoria econômico-financeira exigida nesta matriz antes de enviar."},422);
-   if(old.financialAudit?.ratios.some(ratio=>ratio.status==="below"||ratio.status==="undefined"))return json({error:"Há índice abaixo do mínimo informado ou sem denominador válido. Revise o balanço e o edital."},422);
-   if(requiresFinancial)for(const id of old.financialAudit?.documentIds||[]){const doc=await loadBiddingDocument(c.db,c.company,id);if(!doc||!doc.uploaded||doc.review!=="approved"||doc.validUntil&&doc.validUntil<now.slice(0,10))return json({error:"A auditoria financeira tem documento pendente ou vencido."},422);}
+   const financialIssue=biddingFinancialApprovalIssue(old.financialAudit,old.requirements);
+   if(financialIssue)return json({error:financialIssue},422);
+   if(old.financialAudit&&!await financialDocumentsReady(c.db,c.company,tenderId,old.financialAudit.documentIds))return json({error:"A auditoria financeira tem documento ausente, pendente, vencido ou de outro edital."},422);
    for(const req of old.requirements){
-    if(!req.documentId)return json({error:"Vincule uma evidência para cada exigência antes de enviar à aprovação gerencial."},422);
-    const doc=await loadBiddingDocument(c.db,c.company,req.documentId);
-    if(!doc||!doc.uploaded||doc.tenderId&&doc.tenderId!==tenderId||doc.review!=="approved"||doc.validUntil&&doc.validUntil<now.slice(0,10))return json({error:"Há evidência ausente, não aprovada, vencida ou vinculada a outro edital."},422);
-    if(req.category==="Atestado técnico"){
-     const evidence=req.technicalEvidence,actual=Number(String(evidence?.quantity||"").replace(",", ".")),required=Number(String(req.threshold||"").replace(",", "."));
-     if(!evidence?.issuer||!evidence.service||!evidence.unit||!evidence.startDate||!evidence.endDate||!evidence.professionalRecord||!Number.isFinite(actual)||actual<=0)return json({error:"Complete emitente, serviço, quantidade, unidade, período e CREA/CFT ou ART/CAT/TRT do atestado."},422);
-     if(evidence.endDate<evidence.startDate)return json({error:"Período do atestado inválido."},422);
-     if(Number.isFinite(required)&&required>0&&req.unit&&evidence.unit.trim().toLocaleLowerCase("pt-BR")!==req.unit.trim().toLocaleLowerCase("pt-BR"))return json({error:"A unidade comprovada do atestado difere da unidade exigida."},422);
-     if(Number.isFinite(required)&&required>0&&actual<required)return json({error:"A quantidade registrada no atestado é menor que o mínimo digitado para este edital."},422);
-    }
+    const doc=req.documentId?await loadBiddingDocument(c.db,c.company,req.documentId):null;
+    const evidence=assessBiddingEvidence(req,doc,tenderId);
+    if(evidence.status!=="comprovado")return json({error:req.description+": "+evidence.detail},422);
    }
    next={...old,_revision:revision+1,updatedAt:now,updatedBy:actor,approval:{status:"pending",submittedAt:now,submittedBy:actor}};
   }else if(body.action==="decision"){
@@ -132,14 +140,14 @@ export async function POST(request:NextRequest){
    const decision=String(body.decision) as Approval["status"],note=String(body.note||"").trim();
    if(!["approved","rejected"].includes(decision)||note.length<5||note.length>1000)return json({error:"Informe uma decisão e justificativa de 5 a 1000 caracteres."},422);
    if(decision==="approved"){
-     const requiresFinancial=old.requirements.some(req=>["Balanço Patrimonial","DRE","Índices econômico-financeiros"].includes(req.category));
-     if(requiresFinancial&&!old.financialAudit)return json({error:"Auditoria econômico-financeira ausente; a gestão não pode aprovar este dossiê."},422);
-     if(old.financialAudit?.ratios.some(ratio=>ratio.status==="below"||ratio.status==="undefined"))return json({error:"Revise os índices econômico-financeiros antes da aprovação."},422);
-     for(const id of old.financialAudit?.documentIds||[]){const doc=await loadBiddingDocument(c.db,c.company,id);if(!doc||!doc.uploaded||doc.review!=="approved"||doc.validUntil&&doc.validUntil<now.slice(0,10))return json({error:"Um documento financeiro do dossiê está pendente ou vencido."},422);}
+     const financialIssue=biddingFinancialApprovalIssue(old.financialAudit,old.requirements);
+     if(financialIssue)return json({error:financialIssue},422);
+     if(old.financialAudit&&!await financialDocumentsReady(c.db,c.company,tenderId,old.financialAudit.documentIds))return json({error:"A auditoria financeira tem documento ausente, pendente, vencido ou de outro edital."},422);
     }
     if(decision==="approved")for(const req of old.requirements){
     const doc=req.documentId?await loadBiddingDocument(c.db,c.company,req.documentId):null;
-    if(!doc||doc.review!=="approved"||!doc.uploaded||doc.validUntil&&doc.validUntil<now.slice(0,10))return json({error:"O dossiê tem evidência pendente ou vencida. Reenvie para análise após corrigir."},422);
+    const evidence=assessBiddingEvidence(req,doc,tenderId);
+    if(evidence.status!=="comprovado")return json({error:req.description+": "+evidence.detail},422);
    }
    next={...old,_revision:revision+1,updatedAt:now,updatedBy:actor,approval:{...old.approval,status:decision,reviewedAt:now,reviewedBy:actor,note}};
   }else{
@@ -157,5 +165,5 @@ export async function POST(request:NextRequest){
   else{const result=await routeRest(c.db,old?"proar_state?id=eq."+encodeURIComponent(key)+"&payload->>_revision=eq."+revision+"&select=payload":"proar_state?on_conflict=id&select=payload",{method:old?"PATCH":"POST",headers:{Prefer:old?"return=representation":"resolution=ignore-duplicates,return=representation"},body:JSON.stringify(old?{payload:next,updated_at:next.updatedAt}:{id:key,payload:next,updated_at:next.updatedAt})});saved=result.ok&&(await result.json()).length>0;}
   if(!saved)return json({error:"Exigências não salvas. Atualize e tente novamente."},409);
   return json({saved:true,revision:next._revision,requirements:next.requirements,approval:next.approval||null,financialAudit:next.financialAudit||null});
- }catch(error){return json({error:error instanceof Error&&/Exigência|exigência|Categoria|Limite|quantidade|Documento|edital|Vínculo/.test(error.message)?error.message:"Não foi possível salvar as exigências. Os dados anteriores foram preservados."},422);}
+ }catch(error){return json({error:error instanceof Error&&/Exigência|exigência|Categoria|Limite|quantidade|Documento|edital|Vínculo|Valor financeiro|Índice mínimo|Operador de índice/.test(error.message)?error.message:"Não foi possível salvar as exigências. Os dados anteriores foram preservados."},422);}
 }
