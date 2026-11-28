@@ -5,6 +5,7 @@ import { nextPmocDate, type PmocPlan } from "./technical-compliance.ts";
 import { validateProcurementData, priceComposition, qualificationReadiness, brazilDay } from "./procurement-readiness.ts";
 import { prepareOrderSignatures, safeSignatureImage } from "./service-order-signatures.ts";
 import { expandTechnicalSheet } from "./catalog-quantity-pricing.ts";
+import {PdvDraftValidationError,PDV_REVIEW_STATUS,pdvDraftIdValid,pdvNeedsReview,validatePdvProposal} from "./pdv-offline.ts";
 /* eslint-disable @typescript-eslint/no-explicit-any, @next/next/no-assign-module-variable */
 // Dynamic records retain the fields of the historical ERP snapshots.
 export type ErpRecord = Record<string, any>;
@@ -506,8 +507,21 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
   for (const sale of list(modules.Vendas)) {
     const before = list(oldModules.Vendas).find(item=>item.id===sale.id);
     const tracked = stock.some(row=>row.saleId===sale.id && /^(SALE-STOCK-|CONSUMPTION-)/.test(String(row.id)));
+    if(before && !pdvNeedsReview(before.status) && pdvNeedsReview(sale.status))throw new OperationError("Não devolva um pedido confirmado para conferência. Cancele com motivo, se necessário.");
+    if(pdvNeedsReview(before?.status)&&!pdvNeedsReview(sale.status)&&!canceled(sale)){
+      if(sale.status!=="Pedido confirmado")throw new OperationError("Conclua o pedido somente após a conferência online.");
+      const items=list(sale.purchaseItems).map(item=>({id:item.productId||item.id,quantity:item.quantity,unitPrice:item.unitValue}));
+      const declaredDiscount=items.reduce((sum,item)=>sum+cents(Number(item.unitPrice)*Number(item.quantity)),0)-cents(sale.value);
+      try {
+        const review=validatePdvProposal({items,customerId:sale.customerId,structureId:sale.structureId,discount:cash(declaredDiscount),paymentMethod:sale.paymentMethod},list(next.customers),list(modules.Produtos),list(modules.Serviços),list(modules["Unidades e setores"]));
+        if(review.discount>0)requireAction(actor,"comercial.desconto.liberar");
+      }catch(error){
+        if(error instanceof PdvDraftValidationError)throw new OperationError(error.message,422,error.code);
+        throw error;
+      }
+    }
     // Historical sales without ledger entries must not consume stock retroactively.
-    if (before && !tracked || same(before,sale)) continue;
+    if (pdvNeedsReview(sale.status) || (before && !tracked && !pdvNeedsReview(before.status)) || same(before,sale)) continue;
     if (canceled(sale) && !canceled(before||{}) && tracked && !String(sale.changeReason || sale.cancellationReason || "").trim()) throw new OperationError("Informe o motivo do cancelamento para estornar os materiais.");
     const definitions = list(sale.purchaseItems).map(item=>{
       const productId=String(item.productId||item.id);
@@ -560,6 +574,7 @@ export type OperationalCommand = { idempotencyKey: string; action: string; recor
 export function applyOperationalCommand(state: ErpState, command: OperationalCommand, actor: Actor, now = new Date().toISOString()) {
   if (!/^[a-zA-Z0-9_-]{8,100}$/.test(command.idempotencyKey || "")) throw new OperationError("Identificador idempotente inválido.");
   const fingerprint = JSON.stringify({ action: command.action, recordId: command.recordId, data: command.data });
+  if(command.action==="pdv-sync-draft")requireAction(actor,"comercial.editar");
   const existing = state._operations?.[command.idempotencyKey];
   if (existing) {
     if (existing.fingerprint !== fingerprint) throw new OperationError("Identificador já usado para outra operação.", 409);
@@ -567,7 +582,7 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
   }
   const next = structuredClone(state);
   const modules = next.moduleRecords ||= {};
-  const module = ["settle", "reverse", "cancel", "dates"].includes(command.action) ? "Financeiro" : command.action === "receive" ? "Compras" : command.action === "account" ? "Contas financeiras" : ["stock","stock-transfer"].includes(command.action) ? "Estoque" : command.action === "tool" ? "Ferramentas" : command.action === "reconcile" ? "Conciliações" : command.action === "approval-decide" ? "Aprovações" : "";
+  const module = ["settle", "reverse", "cancel", "dates"].includes(command.action) ? "Financeiro" : command.action === "receive" ? "Compras" : command.action === "account" ? "Contas financeiras" : ["stock","stock-transfer"].includes(command.action) ? "Estoque" : command.action === "tool" ? "Ferramentas" : command.action === "reconcile" ? "Conciliações" : command.action === "approval-decide" ? "Aprovações" : command.action === "pdv-sync-draft" ? "Vendas" : "";
   if (!module) throw new OperationError("Operação desconhecida.");
   const records = modules[module] ||= [];
   const record = records.find(item => item.id === command.recordId);
@@ -576,6 +591,28 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
   if (["settle", "reverse", "cancel", "dates", "receive", "approval-decide"].includes(command.action) && !record) throw new OperationError("Registro não encontrado.", 404);
   const operationId = `OP-${command.idempotencyKey}`;
   switch (command.action) {
+    case "pdv-sync-draft": {
+      if(!pdvDraftIdValid(command.recordId)||command.recordId!==command.idempotencyKey)throw new OperationError("Identificador do rascunho inválido.");
+      if(record){
+        // The normal online sale may have reached the DB before its response was lost.
+        // The same ID and exact business fields allow recovery without rewriting it.
+        const expectedLines=(items:unknown)=>list(items).map(item=>[String(item.productId||item.id),Number(item.quantity),cents(item.unitValue??item.unitPrice)]).sort((a,b)=>String(a[0]).localeCompare(String(b[0])));
+        const expectedDiscount=expectedLines(data.items).reduce((sum,item)=>sum+Math.round(Number(item[1])*Number(item[2])),0)-cents(record.value);
+        if(list(data.items).length>0&&same(expectedLines(record.purchaseItems),expectedLines(data.items))&&String(record.customerId||"")===String(data.customerId||"")&&String(record.structureId||"")===String(data.structureId||"")&&String(record.paymentMethod||"")===String(data.paymentMethod||"")&&expectedDiscount===cents(data.discount)){
+          return {state,replay:true};
+        }
+        throw new OperationError("Este identificador já consta no histórico com dados diferentes. Confira o pedido antes de descartar a cópia local.",409);
+      }
+      try{
+        const sale=validatePdvProposal(data,list(state.customers),list(modules.Produtos),list(modules.Serviços),list(modules["Unidades e setores"]));
+        if(sale.discount>0&&!actor.can("comercial.desconto.liberar"))throw new PdvDraftValidationError("Este desconto exige autorização. Remova o desconto ou solicite liberação.");
+        records.push({id:command.recordId,name:`Venda • ${sale.client}`,...sale,status:PDV_REVIEW_STATUS,category:"Venda PDV",description:`Subtotal R$ ${sale.subtotal.toFixed(2).replace(".",",")} • desconto R$ ${sale.discount.toFixed(2).replace(".",",")}`, createdAt:now,date:now.slice(0,10)});
+      }catch(error){
+        if(error instanceof PdvDraftValidationError)throw new OperationError(error.message,422,error.code);
+        throw error;
+      }
+      break;
+    }
     case "settle": {
       requireAction(actor, "financeiro.baixar");
       const principal = cents(data.principal);
@@ -668,6 +705,6 @@ export function independentOperationalRows(companyId: string, state: ErpState, p
   });
   append("Clientes", list(state.customers));
   append("OS", list(state.serviceOrders));
-  for (const module of ["Financeiro", "Contas financeiras", "Razão financeiro", "Livro de estoque", "Produtos", "Compras", "Equipamentos", "Auditoria operacional", "Aprovações", "Central Fiscal", "Lembretes"]) append(module, list(state.moduleRecords?.[module]));
+  for (const module of ["Financeiro", "Contas financeiras", "Razão financeiro", "Livro de estoque", "Produtos", "Compras", "Equipamentos", "Auditoria operacional", "Aprovações", "Central Fiscal", "Lembretes", "Vendas"]) append(module, list(state.moduleRecords?.[module]));
   return result;
 }

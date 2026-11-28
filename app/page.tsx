@@ -1,4 +1,5 @@
 "use client";
+import {enteredPdvPayments,newPdvDraftId,pdvDraftCommand,pdvDraftKey,pdvNeedsReview,readPdvDrafts,storePdvDraft,type PdvDraft} from "@/lib/pdv-offline";
 import { CompanyReportLetterhead } from "@/components/CompanyReportLetterhead";
 import {CustomerAddressFields} from "@/components/CustomerAddressFields";
 import type {CustomerAddress} from "@/lib/customer-address";
@@ -14,6 +15,10 @@ import { employeePasswordIssue } from "@/lib/employee-password-validation";
 import { orderCreationIssue } from "@/lib/order-create-validation";
 import { orderSectorLocationOptions, orderSectorUnitSelection } from "@/lib/order-location-options";
 import { isQuoteApproved, validOperationalRecordId } from "@/lib/operational-follow-through";
+import {readDesktopAccessCache,writeDesktopAccessCache} from "@/lib/desktop-access-cache";
+import { prepareSystemShell } from "@/lib/mobile-shell";
+import { DesktopOsDrafts } from "@/components/DesktopOsDrafts";
+import { desktopOsQueuePrefix,nextDesktopOsId,readDesktopOsDrafts,reviseDesktopOsDraft,saveDesktopOsDraft,syncDesktopOsDraft,type DesktopOsDraft } from "@/lib/desktop-os-offline";
 import { desktopOperationChanges,desktopQueuePrefix,enqueueDesktopOperation,legacyDesktopOperationsCount,readDesktopOperations,syncDesktopOperations,type DesktopOfflineOperation } from "@/lib/desktop-offline-operations";
 import { stateSaveOutcome, type ConfirmedState } from "@/lib/state-save-confirmation";
 import type { CostLine } from "@/lib/catalog-cost-engine";
@@ -51,6 +56,7 @@ import "./catalog-pricing.css";
 import "./google-calendar.css";
 import "./usability-hardening.css";
 import "./fiscal-workspace.css";
+import "./pdv-polartech.css";
 import "./responsive-hardening.css";
 import "./resilience-status.css";
 import "./proar-petroleum-palette.css";
@@ -73,7 +79,8 @@ import {
   CreditCard, Keyboard, Menu, Minus, MoreHorizontal, Package, Phone, Plus, ReceiptText, ScanBarcode, School, Search, Settings,
   ShieldCheck, ShoppingBag, ShoppingCart, Store, TrendingUp, UserCheck, UserRound, Save,
   MessageCircle, PenTool, Tag, Trash2, Database, LockKeyhole, UnlockKeyhole, ImagePlus,
-  UsersRound, WalletCards, Warehouse, Wrench, X, Zap, House, History, ImageIcon, RefreshCw, Sparkles, Stethoscope, Smartphone
+  UsersRound, WalletCards, Warehouse, Wrench, X, Zap, House, History, ImageIcon, RefreshCw, Sparkles, Stethoscope, Smartphone,
+  QrCode,
 } from "lucide-react";
 import { PublicContractsPanel, type PublicContractRecord } from "@/components/PublicContractsPanel";
 import { PublicCommitmentsPanel, type PublicCommitmentRecord } from "@/components/PublicCommitmentsPanel";
@@ -419,26 +426,6 @@ const DEFAULT_COMPANY: TenantCompany = {
 };
 
 const companyStorageKey = (companyId: string, resource: string) => `proar-v4:${companyId}:${resource}`;
-const legacyStorageKeys: Record<string, string> = {
-  "service-orders": "proar-v3-service-orders",
-  customers: "proar-v3-customers",
-  "module-records": "proar-v3-module-records",
-};
-
-function readCompanyStorage(companyId: string, resource: string, fallback: unknown) {
-  try {
-    const current = localStorage.getItem(companyStorageKey(companyId, resource));
-    // Dados legados globais só podem ser usados na empresa principal. Em tenants, nunca cruzar caches.
-    const allowLegacy = companyId === DEFAULT_COMPANY.id || companyId === "main";
-    const legacy = allowLegacy && legacyStorageKeys[resource] ? localStorage.getItem(legacyStorageKeys[resource]) : null;
-    const raw = current ?? legacy;
-    if (!raw) return fallback;
-    return JSON.parse(raw);
-  } catch (error) {
-    console.warn(`[ProAR Cache] Não foi possível ler o cache de ${resource}; usando o padrão seguro.`, error);
-    return fallback;
-  }
-}
 const normalizeCnpj = (value: string) => value.replace(/\D/g, "").slice(0, 14);
 const customerDocumentError = (value?: string) => {
   const digits = String(value ?? "").replace(/\D/g, "");
@@ -500,6 +487,7 @@ type ModuleRecord = {
   purchaseItems?: PurchaseItem[];
   paymentType?: "À vista" | "A prazo";
   paymentMethod?: string;
+  pdvPaymentIntent?: {method:string;amount:number;status:string}[];
   installments?: number;
   firstDueDate?: string;
   paymentInstallments?: PurchaseInstallment[];
@@ -1489,7 +1477,7 @@ function CommercialRecordsManager({ title, records, onConvert, onDelete, onEdit 
   return <section className="commercial-manager panel"><header><div><span className="section-kicker"><FileChartColumn size={12}/> GERENCIADOR DE {title.toUpperCase()}</span><h3>Controle comercial</h3><p>{onEdit ? "Dê dois cliques no pedido para editar os dados e itens." : "Consulte, filtre e acompanhe todos os registros sem precisar abrir um por um."}</p></div><div className="commercial-kpis"><span><small>REGISTROS</small><b>{records.length}</b></span><span><small>VALOR FILTRADO</small><b>R$ {total.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></span><span><small>APROVADOS / CONCLUÍDOS</small><b>{approved}</b></span></div></header><div className="commercial-manager-toolbar"><label><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder={`Pesquisar ${title.toLowerCase()} por cliente, número ou unidade...`}/></label><select value={status} onChange={event=>setStatus(event.target.value)}>{statuses.map(item=><option key={item}>{item}</option>)}</select></div>{visible.length?<div className="table-wrap"><table><thead><tr><th>NÚMERO</th><th>CLIENTE / UNIDADE</th><th>SITUAÇÃO</th><th>ITENS</th><th>VALOR</th><th>DATA</th><th>AÇÕES</th></tr></thead><tbody>{visible.map(record=><tr key={record.id} className={onEdit ? "editable-row" : ""} onDoubleClick={()=>onEdit?.(record)} title={onEdit ? "Dê dois cliques para alterar este pedido" : undefined}><td><b className="order-id">{record.id}</b></td><td><strong>{record.client||"—"}</strong><small className="table-description">{record.unit||"Matriz"}</small></td><td><span className={`workflow-status ${/aprov|confirm|convert|fatur|conclu/i.test(record.status||"")?"done":/cancel|reprov|vencid/i.test(record.status||"")?"blocked":""}`}>{record.status||"Registrado"}</span></td><td>{record.purchaseItems?.length??0}</td><td><b>R$ {(record.value??0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></td><td>{record.date?new Date(`${record.date}T12:00:00`).toLocaleDateString("pt-BR"):record.createdAt}</td><td><div className="record-actions">{onEdit&&<button title="Alterar pedido" onClick={event=>{event.stopPropagation();onEdit(record)}}><Edit3 size={14}/></button>}{title==="Orçamentos"&&onConvert&&<><button title="Converter em venda" onClick={()=>onConvert(record,"Pedido")}><ShoppingBag size={14}/></button><button title="Converter em OS" onClick={()=>onConvert(record,"Ordem de serviço")}><ClipboardList size={14}/></button></>}<button title="Imprimir" onClick={()=>window.print()}><ReceiptText size={14}/></button>{onDelete&&<button className="danger" title="Excluir" onClick={()=>onDelete(record)}><Trash2 size={14}/></button>}</div></td></tr>)}</tbody></table></div>:<div className="linked-empty compact"><Search size={20}/><h4>Nenhum registro encontrado</h4><p>Altere os filtros para consultar outros registros.</p></div>}</section>;
 }
 
-function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert, onDelete, onCreateCustomer, onCreateStructure, focusedId }: { focusedId?:string; customers: Customer[]; structures: ModuleRecord[]; catalog: ModuleRecord[]; budgets: ModuleRecord[]; onSave: (record: ModuleRecord) => Promise<boolean>; onConvert: (record: ModuleRecord, target: "Pedido" | "Ordem de serviço") => void; onDelete: (record: ModuleRecord) => void; onCreateCustomer: (draft: CustomerDraft) => Promise<Customer|null>; onCreateStructure: (draft: StructureDraft & { client: string }) => Promise<ModuleRecord|null> }) {
+function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert, onDelete, onCreateCustomer, onCreateStructure, focusedId, offlineScope, offline, canCreateOffline }: { focusedId?:string; offlineScope:string; offline:boolean; canCreateOffline:boolean; customers: Customer[]; structures: ModuleRecord[]; catalog: ModuleRecord[]; budgets: ModuleRecord[]; onSave: (record: ModuleRecord) => Promise<boolean>; onConvert: (record: ModuleRecord, target: "Pedido" | "Ordem de serviço") => void; onDelete: (record: ModuleRecord) => void; onCreateCustomer: (draft: CustomerDraft) => Promise<Customer|null>; onCreateStructure: (draft: StructureDraft & { client: string }) => Promise<ModuleRecord|null> }) {
   const [tab,setTab]=useState<"novo"|"lista">(focusedId?"lista":"novo");
   useEffect(()=>{
     if(!focusedId)return;
@@ -1519,6 +1507,29 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
   const [budgetError,setBudgetError]=useState("");
   const budgetSaveLock=useRef(false);
   const newBudgetId=useRef<string|null>(null);
+  const [localBudgetDrafts,setLocalBudgetDrafts]=useState<ModuleRecord[]>([]);
+  const [localBudgetError,setLocalBudgetError]=useState("");
+  const restoredBudgetId=useRef<string|null>(null);
+  const localBudgetPrefix=offlineScope?"budget-draft:"+offlineScope:"";
+  const readLocalBudgets=useCallback(()=>{
+    setLocalBudgetError("");
+    if(!localBudgetPrefix){setLocalBudgetDrafts([]);return;}
+    try{
+      const records=Array.from({length:localStorage.length},(_,i)=>localStorage.key(i))
+        .filter((key):key is string=>Boolean(key?.startsWith(localBudgetPrefix))).map(key=>{
+          const row=JSON.parse(localStorage.getItem(key)||"null") as ModuleRecord;
+          if(!row||typeof row.id!=="string"||key!==localBudgetPrefix+row.id||row.status!=="Em elaboração"||!Array.isArray(row.purchaseItems))throw new Error();
+          return row;
+        });
+      setLocalBudgetDrafts(records);
+    }catch{setLocalBudgetError("Há rascunhos de orçamento que não puderam ser lidos. Nenhum foi removido.");}
+  },[localBudgetPrefix]);
+  useEffect(()=>{
+    readLocalBudgets();
+    const onStorage=(event:StorageEvent)=>{if(localBudgetPrefix&&event.key?.startsWith(localBudgetPrefix))readLocalBudgets();};
+    window.addEventListener("storage",onStorage);
+    return()=>window.removeEventListener("storage",onStorage);
+  },[localBudgetPrefix,readLocalBudgets]);
   const budgetCustomerField=useRef<HTMLDivElement>(null);
   const budgetItemsField=useRef<HTMLDivElement>(null);
 
@@ -1548,13 +1559,14 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
     setSearch("");
   };
   const update = (id: string, changes: Partial<PurchaseItem>) => setCart(current => current.map(item => item.id === id ? { ...item, ...changes } : item));
-  const clearDraft=()=>{newBudgetId.current=null;setBudgetError("");setCart([]);setDiscount(0);setSurcharge(0);setObservations("");setUnit("");setReference("");setSearch("");setEditingBudgetId(null);setEditingEndDate(null);};
-  const editBudget=(record:ModuleRecord)=>{
+  const clearDraft=()=>{restoredBudgetId.current=null;newBudgetId.current=null;setBudgetError("");setCart([]);setDiscount(0);setSurcharge(0);setObservations("");setUnit("");setReference("");setSearch("");setEditingBudgetId(null);setEditingEndDate(null);};
+  const editBudget=(record:ModuleRecord, local=false)=>{
     if(budgetSaveLock.current)return;
-    newBudgetId.current=null;
+    restoredBudgetId.current=local?record.id:null;
+    newBudgetId.current=local?record.id:null;
     setBudgetError("");
     setBudgetCustomerId(record.customerId || "");
-    setEditingBudgetId(record.id);
+    setEditingBudgetId(local?null:record.id);
     setEditingEndDate(record.endDate || null);
     setCustomer(record.client || "");
     setUnit(record.structureId || "");
@@ -1571,7 +1583,7 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
       setValidity([7,15,30,60].reduce((best,value)=>Math.abs(value-days)<Math.abs(best-days)?value:best,7));
     }
     setTab("novo");
-    setNotice(`Alterando ${record.id}. Salve para confirmar as mudanças.`);
+    setNotice(local?"Rascunho reaberto deste aparelho. Confira os valores e salve quando tiver conexão.":`Alterando ${record.id}. Salve para confirmar as mudanças.`);
   };
 
   const save = async (status:"Em elaboração"|"Enviado") => {
@@ -1584,6 +1596,13 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
       target?.scrollIntoView({block:"nearest"});
       target?.querySelector<HTMLElement>("input,button,select")?.focus();
       return;
+    }
+    if(offline && (status!=="Em elaboração"||editingBudgetId||!localBudgetPrefix||!canCreateOffline)){
+      setBudgetError("Sem conexão: somente rascunhos novos podem ser guardados neste aparelho. Não houve envio.");
+      return;
+    }
+    if(!offline&&restoredBudgetId.current&&budgets.some(row=>row.id===restoredBudgetId.current)){
+      setBudgetError("O banco já tem um orçamento com esta referência. Confira o registro salvo antes de descartar a cópia local.");return;
     }
     let budgetLocation:HierarchySelection | undefined;
     const selectedCustomer=customers.find(item=>item.id===budgetCustomerId) || customers.find(item=>item.name===customer);
@@ -1619,12 +1638,26 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
       paymentMethod:payment,
       ...(budgetLocation || {}),
     };
+    if(offline){
+      try{
+        const key=localBudgetPrefix+record.id,data=JSON.stringify(record);
+        if(data.length>70_000||(!localStorage.getItem(key)&&localBudgetDrafts.length>=24))throw new Error();
+        localStorage.setItem(key,data);
+        restoredBudgetId.current=record.id;
+        readLocalBudgets();
+        setNotice("Orçamento guardado neste aparelho. Ainda não foi sincronizado nem enviado ao cliente.");
+      }catch{setBudgetError("Não foi possível guardar o orçamento neste aparelho. Os campos continuam na tela.");}
+      return;
+    }
     budgetSaveLock.current=true;
     setBudgetSaving(true);
     try {
       if(!await onSave(record)) {
         setBudgetError("O banco não confirmou o orçamento. Os campos foram mantidos. Verifique a conexão ou as permissões e tente novamente.");
         return;
+      }
+      if(localBudgetPrefix&&restoredBudgetId.current===record.id){
+        try{localStorage.removeItem(localBudgetPrefix+record.id);readLocalBudgets();}catch{/* o banco já confirmou */}
       }
       clearDraft();
       setNotice(status==="Em elaboração" ? `${record.id} salvo como rascunho.` : `${record.id} finalizado e salvo com sucesso.`);
@@ -1691,6 +1724,17 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
       </section>
 
       {budgetError && <div role="alert" className="pdv-notice"><AlertTriangle size={16}/>{budgetError}</div>}
+      {(localBudgetDrafts.length>0||localBudgetError)&&<section className="panel" aria-label="Orçamentos guardados neste aparelho">
+        <h3>Orçamentos guardados neste aparelho</h3>
+        {localBudgetError&&<p role="alert">{localBudgetError}</p>}
+        {localBudgetDrafts.map(row=><p key={row.id}>{row.client} • {row.id} • Não sincronizado{" "}
+          <button type="button" className="outline-btn" disabled={budgetSaving} onClick={()=>editBudget(row,true)}>Reabrir rascunho</button>{" "}
+          <button type="button" className="outline-btn" disabled={budgetSaving} onClick={()=>{
+            if(!window.confirm("Descartar apenas esta cópia do aparelho?"))return;
+            try{localStorage.removeItem(localBudgetPrefix+row.id);readLocalBudgets();}catch{setLocalBudgetError("Não foi possível remover a cópia.");}
+          }}>Descartar cópia</button>
+        </p>)}
+      </section>}
       {notice && <div className="pdv-notice" role="status"><CheckCircle2 size={15}/>{notice}<button onClick={() => setNotice("")}><X size={13}/></button></div>}
 
       <section className="budget-item-entry panel" ref={budgetItemsField} inert={budgetSaving}>
@@ -1719,7 +1763,7 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
           <div><small>DESCONTO</small><b>- R$ {discount.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></div>
           <div><small>ACRÉSCIMO</small><b>R$ {surcharge.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></div>
           <div className="budget-grand-total"><small>TOTAL DO ORÇAMENTO</small><strong>R$ {total.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div>
-          <div className="budget-final-actions"><button className="outline-btn" disabled={budgetSaving} onClick={()=>void save("Em elaboração")}><Save size={15}/> Salvar rascunho</button><button className="primary-btn" disabled={budgetSaving} onClick={()=>void save("Enviado")}><CheckCircle2 size={16}/> {budgetSaving?"Confirmando no banco…":"Finalizar orçamento"}</button></div>
+          <div className="budget-final-actions"><button className="outline-btn" disabled={budgetSaving||(offline&&!canCreateOffline)} onClick={()=>void save("Em elaboração")}><Save size={15}/> {offline?"Guardar neste aparelho":"Salvar rascunho"}</button><button className="primary-btn" disabled={budgetSaving||offline} onClick={()=>void save("Enviado")}><CheckCircle2 size={16}/> {budgetSaving?"Confirmando no banco…":"Finalizar orçamento"}</button></div>
         </div>
       </section>
     </> : <>
@@ -1892,13 +1936,35 @@ function BiddingModule({ onOpen, imported, onImport, qualificationDocuments, onM
     </section><TenderPipelinePanel company={{name:company.legalName,cnpj:company.cnpj,address:company.address,email:company.email}} tenders={visible} records={trackingRecords} documents={qualificationDocuments} diagnostics={diagnostics} onSave={record=>onSaveTracking(record)} onOpen={item=>void openDetail(item)}/><details className="panel"><summary style={{padding:16,cursor:"pointer",fontWeight:600}}>Análise de edital com IA, portais e ferramentas de apoio</summary><BiddingOperationsWorkspace documents={qualificationDocuments} onManageDocuments={onManageDocuments} diagnostics={diagnostics} tenders={visible} onOpen={item=>{void openDetail(item);onOpen(item);}}/></details><div className="bidding-summary"><article><small>OPORTUNIDADES LOCALIZADAS</small><strong>{visible.length}</strong></article><article><small>RAIO DESDE MIRASSOL</small><strong>{radius} km</strong></article><article><small>ÚLTIMA BUSCA AUTOMÁTICA</small><strong>{lastScan?new Date(lastScan).toLocaleString("pt-BR"):"Aguardando"}</strong></article></div>{loading&&<div className="bidding-loading"><RefreshCw size={24}/>Consultando os portais públicos...</div>}{selected&&<div className="modal-layer tender-detail-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" aria-label="Fechar" onClick={()=>setSelected(null)}/><div className="modal tender-detail-modal"><div className="modal-head"><div><span>FICHA DA LICITAÇÃO</span><h2>{selected.modalidadeNome||"Licitação pública"}</h2><p>{selected.numeroControlePNCP||"Número PNCP não informado"}</p></div><button onClick={()=>setSelected(null)}><X size={18}/></button></div><div className="tender-detail-grid"><label className="wide"><small>OBJETO</small><strong>{selected.objetoCompra||"Não informado"}</strong></label><label><small>ÓRGÃO</small><strong>{selected.orgaoEntidade?.razaoSocial||"Não informado"}</strong></label><label><small>CNPJ DO ÓRGÃO</small><strong>{selected.orgaoEntidade?.cnpj||"Não informado"}</strong></label><label><small>UNIDADE</small><strong>{selected.unidadeOrgao?.nomeUnidade||"Não informada"}</strong></label><label><small>MUNICÍPIO</small><strong>{selected.unidadeOrgao?.municipioNome||"Não informado"}/{selected.unidadeOrgao?.ufSigla||""}</strong></label><label><small>PUBLICAÇÃO</small><strong>{selected.dataPublicacaoPncp?new Date(selected.dataPublicacaoPncp).toLocaleString("pt-BR"):"Não informada"}</strong></label><label><small>ENCERRAMENTO</small><strong>{selected.dataEncerramentoProposta?new Date(selected.dataEncerramentoProposta).toLocaleString("pt-BR"):"Não informado"}</strong></label><label><small>VALOR ESTIMADO</small><strong>{selected.valorTotalEstimado!==undefined?`R$ ${selected.valorTotalEstimado.toLocaleString("pt-BR",{minimumFractionDigits:2})}`:"Não informado pela fonte"}</strong></label><label><small>DISTÂNCIA</small><strong>{selected.distanciaMirassol!==undefined?`${selected.distanciaMirassol} km de Mirassol`:"A confirmar"}</strong></label></div><section className="tender-documents"><header><div><FileText size={17}/><span><b>Edital e documentos</b><small>Documentos oficiais vinculados à contratação.</small></span></div>{documentLoading&&<RefreshCw size={16}/>}</header>{detailWarning&&<div className="bidding-warning"><AlertTriangle size={14}/>{detailWarning}</div>}{documents.length?<div>{documents.map((doc,index)=>{const url=doc.url||doc.uri;return <article key={`${doc.sequencialDocumento||index}-${doc.titulo||"documento"}`}><span><b>{doc.titulo||doc.tipoDocumentoNome||`Documento ${index+1}`}</b><small>{doc.tipoDocumentoNome||"Documento PNCP"}{doc.dataPublicacaoPncp?` • ${new Date(doc.dataPublicacaoPncp).toLocaleDateString("pt-BR")}`:""}</small></span>{url&&<a href={url} target="_blank" rel="noreferrer"><FileText size={14}/> Baixar / abrir</a>}</article>})}</div>:!documentLoading&&<p className="tender-no-docs">Nenhum documento retornado automaticamente. O portal de origem continua disponível abaixo.</p>}</section><div className="modal-actions"><button className="outline-btn" onClick={()=>setSelected(null)}>Fechar</button><TenderPortalLinks tender={selected}/></div></div></div>}</section>;
 }
 
-type SaleItem = { id: string; name: string; code: string; price: number; basePrice?: number; wholesalePrice?: number; wholesaleMinimumQuantity?: number; kind: "Produto" | "Serviço"; unit: string; image?: string };
+type SaleItem = { id: string; name: string; code: string; price: number; basePrice?: number; wholesalePrice?: number; wholesaleMinimumQuantity?: number; kind: "Produto" | "Serviço"; unit: string; image?: string; category?:string; barcode?:string; sku?:string; stock?:number };
 type CartItem = SaleItem & { quantity: number };
+type PdvResume = {cart:CartItem[];discount:number;customer:string;location:HierarchySelection|null;unit:string;payment:string;payments:{method:string;amount:number}[];priceTable:string};
 
-function SalesPDV({ customers, structures, records, sales, onSave, onDelete }: { customers: Customer[]; structures: ModuleRecord[]; records: ModuleRecord[]; sales: ModuleRecord[]; onSave: (record: ModuleRecord) => void; onDelete: (record: ModuleRecord) => void }) {
+function SalesPDV({ customers, structures, records, sales, onSave, onDelete, draftStoreKey, onSyncDraft, canEdit, bankAvailable }: { customers: Customer[]; structures: ModuleRecord[]; records: ModuleRecord[]; sales: ModuleRecord[]; onSave: (record: ModuleRecord) => Promise<boolean>; onDelete: (record: ModuleRecord) => void; draftStoreKey:string; onSyncDraft:(command:OperationalCommand,isMounted:()=>boolean)=>Promise<void>; canEdit:boolean; bankAvailable:boolean }) {
+  const [drafts,setDrafts]=useState<PdvDraft<PdvResume>[]>([]);
+  const [draftStoreAvailable,setDraftStoreAvailable]=useState(false);
+  const [currentDraft,setCurrentDraft]=useState("");
+  const [networkOnline,setNetworkOnline]=useState(true);
+  const online=bankAvailable&&networkOnline;
+  const [syncing,setSyncing]=useState("");
+  const saleBusy=useRef(false);
+  const pdvMounted=useRef(false);
+  const [saving,setSaving]=useState(false);
+  useEffect(()=>{
+    const refreshDrafts=()=>{
+      try{setDrafts(readPdvDrafts<PdvResume>(localStorage,draftStoreKey));setDraftStoreAvailable(true);}
+      catch{setDraftStoreAvailable(false);}
+    };
+    const updateConnection=()=>setNetworkOnline(navigator.onLine);
+    const syncTabs=(event:StorageEvent)=>{if(event.key===draftStoreKey)refreshDrafts();};
+    pdvMounted.current=true;refreshDrafts();updateConnection();
+    window.addEventListener("storage",syncTabs);window.addEventListener("online",updateConnection);window.addEventListener("offline",updateConnection);
+    return ()=>{pdvMounted.current=false;window.removeEventListener("storage",syncTabs);window.removeEventListener("online",updateConnection);window.removeEventListener("offline",updateConnection);};
+  },[draftStoreKey]);
   const [salesView, setSalesView] = useState<"nova" | "historico" | "caixa">("nova");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [search, setSearch] = useState("");
+  const [catalogCategory,setCatalogCategory]=useState("Todos");
   const [activeTab, setActiveTab] = useState<"itens" | "cliente" | "pagamento" | "opcoes">("itens");
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [discount, setDiscount] = useState(0);
@@ -1921,12 +1987,44 @@ function SalesPDV({ customers, structures, records, sales, onSave, onDelete }: {
   const [editingSale, setEditingSale] = useState<ModuleRecord | null>(null);
   const pdvRef = useRef<HTMLElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const quickSaleCatalog: SaleItem[] = records.filter(item => (item.kind === "Produto" || item.kind === "Serviço") && item.status !== "Inativo").map(item => ({ id:item.id, name:item.name, code:item.id, price:item.value ?? 0, basePrice:item.value ?? 0, wholesalePrice:item.wholesalePrice, wholesaleMinimumQuantity:item.wholesaleMinimumQuantity, kind:item.kind!, unit:item.unitOfMeasure || (item.kind === "Serviço" ? "serviço" : "un"), image:item.catalogImage }));
-  const filteredCatalog = quickSaleCatalog.filter(item => `${item.name} ${item.code} ${item.kind}`.toLowerCase().includes(search.toLowerCase()));
+  const quickSaleCatalog: SaleItem[] = records.filter(item => (item.kind === "Produto" || item.kind === "Serviço") && item.status !== "Inativo").map(item => ({ id:item.id, name:item.name, code:item.id, price:item.value ?? 0, basePrice:item.value ?? 0, wholesalePrice:item.wholesalePrice, wholesaleMinimumQuantity:item.wholesaleMinimumQuantity, kind:item.kind!, unit:item.unitOfMeasure || (item.kind === "Serviço" ? "serviço" : "un"), image:item.catalogImage, category:item.category?.trim(), barcode:item.barcode, sku:item.sku, stock:item.stockCurrent }));
+  const catalogCategories=[...new Set(quickSaleCatalog.map(item=>item.category).filter((x):x is string=>Boolean(x)&&!["Todos","Produtos","Serviços"].includes(x!)))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+  const normalizeSaleSearch=(value:string)=>value.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
+  const filteredCatalog = quickSaleCatalog.filter(item => (catalogCategory==="Todos"||catalogCategory==="Produtos"&&item.kind==="Produto"||catalogCategory==="Serviços"&&item.kind==="Serviço"||item.category===catalogCategory)
+    && normalizeSaleSearch(`${item.name} ${item.code} ${item.kind} ${item.category||""} ${item.barcode||""} ${item.sku||""}`).includes(normalizeSaleSearch(search)));
   const subtotal = centsToMoney(cart.reduce((sum, item) => sum + moneyToCents(item.price * item.quantity), 0));
   const mobileSale = typeof window !== "undefined" && (window.location.pathname==="/mobile" || window.location.pathname.startsWith("/mobile/"));
   const effectiveDiscount = centsToMoney(moneyToCents(mobileSale ? allowedMobileDiscount(discount,subtotal,5,false) : discount));
-  const startMobileScan=async()=>{if(!scannerVideoRef.current)return;if(!barcodeScannerSupported()){setScannerNotice("Leitura automática não suportada neste navegador. Use o campo de busca/código.");searchRef.current?.focus();return}try{const stop=await openRearCamera(scannerVideoRef.current);setScannerNotice("Aponte a câmera para o código.");const timer=window.setInterval(async()=>{const hit=await scanBarcodeFromVideo(scannerVideoRef.current!);if(hit){setSearch(hit.value);setScannerNotice(`Código ${hit.value} identificado.`);window.clearInterval(timer);stop();setScannerOpen(false);searchRef.current?.focus()}},450);window.setTimeout(()=>{window.clearInterval(timer);stop()},20000)}catch{setScannerNotice("Não foi possível acessar a câmera. Verifique a permissão do aparelho.")}};
+  const shutdownCamera=useRef<()=>void>(()=>{});
+  useEffect(()=>()=>shutdownCamera.current(),[scannerOpen]);
+  const startMobileScan=async()=>{
+    const video=scannerVideoRef.current;
+    if(!video)return;
+    if(!barcodeScannerSupported()){setScannerNotice("Leitura automática indisponível. Use a busca ou um leitor USB.");return;}
+    shutdownCamera.current();
+    const attempt={cancelled:false};
+    shutdownCamera.current=()=>{attempt.cancelled=true;};
+    try{
+      const stop=await openRearCamera(video);
+      if(attempt.cancelled){stop();return;}
+      setScannerNotice("Aponte a câmera para o código.");
+      let looking=false;
+      const timer=window.setInterval(async()=>{
+        if(looking||attempt.cancelled)return;
+        looking=true;
+        try{
+          const hit=await scanBarcodeFromVideo(video);
+          if(!hit||attempt.cancelled)return;
+          setSearch(hit.value);setScannerOpen(false);
+          setNotice("Código lido. Confira o item antes de adicionar.");
+          shutdownCamera.current();requestAnimationFrame(()=>searchRef.current?.focus());
+        }catch{/* sem leitura, tente o próximo quadro */}
+        finally{looking=false;}
+      },650);
+      const timeout=window.setTimeout(()=>{shutdownCamera.current();setScannerNotice("Tempo de leitura encerrado. Tente novamente ou use a busca.");},45000);
+      shutdownCamera.current=()=>{attempt.cancelled=true;clearInterval(timer);clearTimeout(timeout);stop();};
+    }catch(error){if(!attempt.cancelled)setScannerNotice(error instanceof Error?error.message:"Não foi possível iniciar a câmera.");}
+  };
   const prepareMobilePayment=()=>{try{const intent=createMobilePaymentIntent(editingSale?.id||`VENDA-${Date.now()}`,total,payment==="PIX"?"PIX":payment==="Dinheiro"?"Dinheiro":"Cartão");setPaymentNotice(paymentStatusLabel(intent.status))}catch(error){setPaymentNotice(error instanceof Error?error.message:"Não foi possível preparar o pagamento.")}};
   const total = Math.max(0, centsToMoney(moneyToCents(subtotal) - moneyToCents(effectiveDiscount)));
   const paidTotal = centsToMoney(payments.reduce((sum, entry) => sum + Math.max(0, moneyToCents(entry.amount)), 0));
@@ -1961,9 +2059,10 @@ function SalesPDV({ customers, structures, records, sales, onSave, onDelete }: {
     if (!command) return;
     const match = command.match(/^(\d+(?:[.,]\d+)?)\s*(?:x|\*)\s*(.+)$/i);
     const quantity = match ? Number(match[1].replace(",", ".")) : 1;
-    const term = (match?.[2] ?? command).trim().toLocaleLowerCase("pt-BR");
-    const item = quickSaleCatalog.find(record => `${record.code} ${record.name}`.toLocaleLowerCase("pt-BR") === term)
-      ?? quickSaleCatalog.find(record => `${record.code} ${record.name}`.toLocaleLowerCase("pt-BR").includes(term));
+    const term=normalizeSaleSearch(match?.[2]??command);
+    const item=quickSaleCatalog.find(record=>[record.code,record.sku,record.barcode].some(value=>value&&normalizeSaleSearch(value)===term))
+      ?? filteredCatalog.find(record=>normalizeSaleSearch(`${record.code} ${record.name} ${record.sku||""} ${record.barcode||""}`).includes(term))
+      ?? quickSaleCatalog.find(record=>normalizeSaleSearch(`${record.code} ${record.name}`).includes(term));
     if (!item) { setNotice("Produto ou serviço não encontrado."); return; }
     addItem(item, quantity);
     setSearch("");
@@ -1982,7 +2081,61 @@ function SalesPDV({ customers, structures, records, sales, onSave, onDelete }: {
     const quantity = raw === undefined ? item.quantity : Number(raw.trim().replace(",", "."));
     setQuantityDrafts(current => ({ ...current, [item.id]: Number.isFinite(quantity) && quantity > 0 ? formatQuantity(Math.round(quantity * 1000) / 1000) : formatQuantity(item.quantity) }));
   };
-  const finishSale = () => {
+  const resetSale=()=>{
+    setCart([]);setQuantityDrafts({});setDiscount(0);setPayments([]);setCustomer("");setSaleLocation(null);setUnit("");setActiveTab("itens");setEditingSale(null);setCurrentDraft("");
+  };
+  const makeDraft=(row:string,attempted=false):PdvDraft<PdvResume>=>{
+    const proposal={items:cart.map(item=>({id:item.id,quantity:item.quantity,unitPrice:item.price})),customerId:selectedCustomer?.id||"",structureId:saleLocation?.structureId||"",discount:effectiveDiscount,paymentMethod:payment,plannedPayments:enteredPdvPayments(payments)};
+    const form={cart:cart.map(item=>({...item,image:undefined})),discount,customer,location:saleLocation,unit,payment,payments:enteredPdvPayments(payments),priceTable};
+    return {id:row,updatedAt:new Date().toISOString(),proposal,form,attempted};
+  };
+  const saveLocalDraft=()=>{
+    if(!canEdit||!cart.length||editingSale||mobileSale)return;
+    if(customer&&!selectedCustomer?.id){setNotice("Confira o cadastro do cliente antes de salvar o rascunho.");return;}
+    const row=currentDraft||newPdvDraftId();
+    try{
+      setDrafts(storePdvDraft(localStorage,draftStoreKey,makeDraft(row),row));
+      resetSale();
+      setNotice("Rascunho salvo neste computador. Nenhum pagamento, estoque ou nota foi confirmado.");
+    }catch(error){setNotice(error instanceof Error?error.message:"Não foi possível salvar o rascunho neste navegador.");}
+  };
+  const resumeDraft=(row:PdvDraft<PdvResume>,replacePrices=false)=>{
+    if(!canEdit||row.attempted||saleBusy.current)return;
+    if(cart.length&&currentDraft!==row.id&&!window.confirm("Abrir este rascunho e descartar o carrinho atual não salvo?"))return;
+    const {form}=row;
+    const refreshed=replacePrices?form.cart.map(item=>{
+      const catalogItem=quickSaleCatalog.find(current=>current.id===item.id);
+      if(!catalogItem)return item;
+      const price=quantityPrice(catalogItem.price,item.quantity,catalogItem.wholesalePrice!=null&&catalogItem.wholesaleMinimumQuantity?[{unitPrice:catalogItem.wholesalePrice,minimumQuantity:catalogItem.wholesaleMinimumQuantity}]:[]).unitPrice;
+      return {...catalogItem,quantity:item.quantity,price};
+    }):form.cart;
+    setEditingSale(null);setCurrentDraft(row.id);setCart(refreshed);setQuantityDrafts({});setDiscount(form.discount);setCustomer(form.customer);
+    setSaleLocation(form.location);setUnit(form.unit);setPayment(form.payment);setPayments(form.payments);setPriceTable(form.priceTable);setSalesView("nova");setActiveTab("itens");
+    setNotice(replacePrices?"Confira os preços atualizados e salve o rascunho antes de sincronizar.":"Rascunho aberto. Salve para manter as alterações neste computador.");
+  };
+  const syncDraft=async(row:PdvDraft<PdvResume>)=>{
+    if(!canEdit||!online||!navigator.onLine||saleBusy.current||currentDraft===row.id)return;
+    saleBusy.current=true;setSyncing(row.id);
+    try{
+      const stored=readPdvDrafts<PdvResume>(localStorage,draftStoreKey).find(item=>item.id===row.id);
+      if(!stored)throw Error("Rascunho não encontrado neste navegador.");
+      const pending={...stored,attempted:true};
+      setDrafts(storePdvDraft(localStorage,draftStoreKey,pending,row.id));
+      try{await onSyncDraft(pdvDraftCommand(pending),()=>pdvMounted.current);}
+      catch(error){
+        // Only a definitive server business rejection allows editing this payload.
+        if(error instanceof Error&&"editable" in error&&error.editable)setDrafts(storePdvDraft(localStorage,draftStoreKey,{...pending,attempted:false},row.id));
+        throw error;
+      }
+      try{setDrafts(storePdvDraft<PdvResume>(localStorage,draftStoreKey,null,row.id));}catch{/* Same ID can be retried if local cleanup failed. */}
+      setNotice("Pedido localizado ou sincronizado. Confira a situação no Histórico. Nenhum pagamento ou documento fiscal foi confirmado por esta consulta.");
+    }catch(error){setNotice(error instanceof Error?error.message:"Não foi possível confirmar o envio. Tente novamente com o mesmo rascunho.");}
+    finally{saleBusy.current=false;setSyncing("");}
+  };
+  const finishSale = async () => {
+    if(!canEdit||saleBusy.current)return;
+    if(!online||!navigator.onLine){setNotice("Sem conexão. Use “Salvar rascunho neste computador”. Nenhum pedido ou pagamento foi confirmado.");return;}
+    if(currentDraft){setNotice("Salve as alterações do rascunho e sincronize o pedido antes de finalizar.");return;}
     if (!cart.length) {
       setNotice("Adicione pelo menos um item à venda.");
       return;
@@ -1991,19 +2144,45 @@ function SalesPDV({ customers, structures, records, sales, onSave, onDelete }: {
     if (nonCashOverpayment) { setNotice("Valor informado superior ao total da venda. Ajuste o pagamento."); setActiveTab("pagamento"); return; }
     if (selectedCustomer?.financialStatus === "Bloqueado") { setNotice("Cliente bloqueado pelo financeiro. A venda não pode ser concluída."); return; }
     if (selectedCustomer?.creditLimit && (selectedCustomer.balancePosted ?? 0) + total > selectedCustomer.creditLimit && payment === "Boleto") { setNotice("Limite de crédito excedido para venda a prazo. Solicite liberação do financeiro."); return; }
+    if(customer&&!selectedCustomer?.id){setNotice("Confira o cadastro do cliente antes de concluir o pedido.");return;}
+    const recoverable=!editingSale&&!mobileSale;
+    const saleId=editingSale?.id??(recoverable?newPdvDraftId():`VEN-${Date.now().toString().slice(-6)}`);
     const sale: ModuleRecord = {
-      ...(editingSale ?? {}), id: editingSale?.id ?? `VEN-${Date.now().toString().slice(-6)}`, name:`Venda • ${customer || "Consumidor final"}`, client:customer || "Consumidor final", unit, paymentMethod:payment, value:total, status:editingSale?.status || "Pedido confirmado", category:"Venda PDV", description:`Subtotal R$ ${subtotal.toLocaleString("pt-BR",{minimumFractionDigits:2})} • desconto R$ ${effectiveDiscount.toLocaleString("pt-BR",{minimumFractionDigits:2})}`, serviceOrderId:mobileOsLink || undefined, purchaseItems:cart.map(item=>({id:item.id,productId:item.id,description:item.name,quantity:item.quantity,unitValue:item.price,kind:item.kind,priceRule:item.wholesaleMinimumQuantity&&item.quantity>=item.wholesaleMinimumQuantity?`Atacado a partir de ${item.wholesaleMinimumQuantity}`:"Varejo"})), createdAt:editingSale?.createdAt ?? new Date().toLocaleString("pt-BR"), date:editingSale?.date ?? new Date().toISOString().slice(0,10),
+      ...(editingSale ?? {}), id:saleId, name:`Venda • ${customer || "Consumidor final"}`, client:customer || "Consumidor final", unit, paymentMethod:payment, value:total, status:pdvNeedsReview(editingSale?.status) ? "Pedido confirmado" : editingSale?.status || "Pedido confirmado", category:"Venda PDV", description:`Subtotal R$ ${subtotal.toLocaleString("pt-BR",{minimumFractionDigits:2})} • desconto R$ ${effectiveDiscount.toLocaleString("pt-BR",{minimumFractionDigits:2})}`, serviceOrderId:mobileOsLink || undefined, purchaseItems:cart.map(item=>({id:item.id,productId:item.id,description:item.name,quantity:item.quantity,unitValue:item.price,kind:item.kind,priceRule:item.wholesaleMinimumQuantity&&item.quantity>=item.wholesaleMinimumQuantity?`Atacado a partir de ${item.wholesaleMinimumQuantity}`:"Varejo"})), createdAt:editingSale?.createdAt ?? new Date().toLocaleString("pt-BR"), date:editingSale?.date ?? new Date().toISOString().slice(0,10),
     };
     Object.assign(sale,saleLocation || (editingSale && editingSale.client===customer ? {} : {customerId:undefined,structureId:undefined,unitId:undefined,sectorId:undefined,roomId:undefined,sector:undefined,room:undefined}));
-    onSave(sale);
-    setCart([]); setDiscount(0); setPayments([]); setCustomer(""); setSaleLocation(null); setUnit("Matriz"); setActiveTab("itens"); setEditingSale(null);
-    setNotice(editingSale ? `Pedido ${sale.id} atualizado e sincronizado.` : `Venda ${sale.id} finalizada e sincronizada — R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.`);
+    if(selectedCustomer?.id)sale.customerId=selectedCustomer.id;
+    if(pdvNeedsReview(editingSale?.status)&&!window.confirm("Você conferiu o recebimento por um meio independente (app bancário, maquininha ou caixa)? O ProAR não verificou o pagamento nem emitirá nota fiscal."))return;
+    saleBusy.current=true;setSaving(true);
+    try{
+      if(recoverable){
+        try{setDrafts(storePdvDraft(localStorage,draftStoreKey,makeDraft(saleId,true),saleId));}
+        catch{setNotice("Não foi possível gravar a cópia de segurança neste computador. Não enviamos o pedido; mantenha o carrinho aberto.");return;}
+      }
+      if(!await onSave(sale)){
+        if(recoverable){resetSale();setNotice("Banco não confirmou o pedido. Use “Conferir envio” para recuperar a mesma venda sem duplicar.");}
+        else setNotice("O pedido não foi confirmado. Seus itens continuam no carrinho; confira o histórico antes de tentar novamente.");
+        return;
+      }
+      if(recoverable)try{setDrafts(storePdvDraft<PdvResume>(localStorage,draftStoreKey,null,saleId));}catch{/* Recovery remains safe under the same order ID. */}
+      resetSale();
+      setNotice(`Pedido ${sale.id} confirmado no sistema. Nenhuma nota fiscal foi emitida nesta etapa.`);
+    }catch{
+      if(recoverable){resetSale();setNotice("Resultado inconclusivo. Recuperação disponível em “Conferir envio”, com o mesmo identificador.");}
+      else setNotice("O pedido não foi confirmado. Confira o histórico antes de tentar novamente.");
+    }
+    finally{saleBusy.current=false;setSaving(false);}
   };
   const editSavedSale = (sale: ModuleRecord) => {
+    if(!canEdit||!online||saleBusy.current){setNotice("O histórico é somente leitura sem conexão.");return;}
+    if(cart.length&&!window.confirm("Abrir este pedido e descartar o carrinho atual não salvo?"))return;
+    setCurrentDraft("");setSalesView("nova");setPayments([]);setQuantityDrafts({});
     setSaleLocation(null); setEditingSale(sale); setCustomer(sale.client === "Consumidor final" ? "" : sale.client); setUnit(sale.unit || ""); setPayment(sale.paymentMethod || "PIX");
     const match = sale.description?.match(/desconto R\$ ([\d.,]+)/i); setDiscount(match ? Number(match[1].replace(".","").replace(",",".")) || 0 : 0);
     setCart((sale.purchaseItems ?? []).map(item => ({ id:item.productId || item.id, name:item.description, code:item.productId || item.id, price:item.unitValue, quantity:item.quantity, kind:item.kind === "Serviço" ? "Serviço" : "Produto", unit:records.find(record => record.id === (item.productId || item.id))?.unitOfMeasure || "un" })));
-    setActiveTab("itens"); setNotice(`Editando ${sale.id}. Ajuste os itens e clique em “Atualizar pedido”.`);
+    setActiveTab("itens"); setNotice(pdvNeedsReview(sale.status)
+      ? `Pedido ${sale.id} aguarda conferência. ${sale.pdvPaymentIntent?.length ? "Indicações não verificadas: "+sale.pdvPaymentIntent.map(item=>item.method+" "+item.amount.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})).join(", ")+". " : ""}Confira o pagamento de forma independente antes de confirmar.`
+      : `Editando ${sale.id}. Ajuste os itens e clique em “Atualizar pedido”.`);
   };
 
   useEffect(() => {
@@ -2030,41 +2209,51 @@ function SalesPDV({ customers, structures, records, sales, onSave, onDelete }: {
     if (!document.fullscreenElement) { await pdvRef.current?.requestFullscreen(); setFullScreen(true); }
     else { await document.exitFullscreen(); setFullScreen(false); }
   };
-  return <section className={`pdv-page ${fullScreen ? "pdv-fullscreen" : ""}`} ref={pdvRef}>
-    <div className="sales-top"><h2>Vendas</h2><button className="primary-btn" onClick={()=>{setSalesView("nova");searchRef.current?.focus();}}><Plus size={15}/> Nova venda</button></div>
+  return <section className={`pdv-page pdv-polartech ${fullScreen ? "pdv-fullscreen" : ""}`} ref={pdvRef}>
+    <div className="sales-top"><div className="pdv-brand"><span className="pdv-brand-icon"><ShoppingBag size={22}/></span><div><small>POLARTECH • PONTO DE VENDA</small><h2>PDV ProAR</h2></div></div><span className="pdv-connection" data-online={online}><i/>{online?"Conectado":networkOnline?"Em contingência":"Sem conexão"}</span></div>
     <nav className="sales-mode-tabs"><button className={salesView === "nova" ? "active" : ""} onClick={()=>setSalesView("nova")}>Nova venda</button><button className={salesView === "historico" ? "active" : ""} onClick={()=>setSalesView("historico")}>Histórico</button><button className={salesView === "caixa" ? "active" : ""} onClick={()=>setSalesView("caixa")}>Caixa</button></nav>
-    {salesView === "historico" ? <CommercialRecordsManager title="Vendas" records={sales} onEdit={editSavedSale} onDelete={onDelete}/> : salesView === "caixa" ? <div className="panel pdv-cash-panel"><h3>Caixa</h3><p>Acompanhe as vendas confirmadas e os recebimentos do turno.</p><strong>R$ {sales.filter(item=>item.status !== "Cancelada").reduce((sum,item)=>sum+(item.value??0),0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div> : <>
+    {!mobileSale&&<div className="panel pdv-notice pdv-offline-strip" role="region" aria-label="Rascunhos locais do PDV">
+      <div><strong>{online?"Rascunhos locais":"PDV sem conexão"}</strong><p>{draftStoreAvailable?"Rascunhos ficam neste computador e não entram no caixa nem confirmam Pix, cartão, estoque ou nota.": "O armazenamento do navegador está indisponível. Não feche a tela se houver itens no carrinho."}</p></div>
+      {drafts.map(row=><div className="row-actions" key={row.id}><span>{row.form.customer||"Consumidor final"} · {row.proposal.items.length} item(ns) · {new Date(row.updatedAt).toLocaleString("pt-BR")} {row.attempted?"· envio a conferir":""}</span><button className="outline-btn" type="button" disabled={!canEdit||!!syncing||row.attempted} onClick={()=>resumeDraft(row)}>Retomar</button><button className="outline-btn" type="button" disabled={!canEdit||!online||!!syncing||row.attempted} onClick={()=>resumeDraft(row,true)}>Recarregar preços</button><button className="outline-btn" type="button" disabled={!canEdit||!online||!!syncing||currentDraft===row.id} onClick={()=>void syncDraft(row)}>{syncing===row.id?"Conferindo…":row.attempted?"Conferir envio":"Sincronizar pedido"}</button><button className="outline-btn" type="button" disabled={!canEdit||!!syncing||row.attempted||currentDraft===row.id} onClick={()=>{if(window.confirm("Descartar este rascunho deste computador?"))try{setDrafts(storePdvDraft<PdvResume>(localStorage,draftStoreKey,null,row.id));}catch{setNotice("Não foi possível descartar o rascunho.");}}}>Descartar</button></div>)}
+    </div>}
+    {notice&&<div className="pdv-notice" role="status">{notice}<button type="button" aria-label="Fechar aviso" onClick={()=>setNotice("")}><X size={13}/></button></div>}
+    {salesView === "historico" ? <CommercialRecordsManager title="Vendas" records={sales} onEdit={editSavedSale} onDelete={onDelete}/> : salesView === "caixa" ? <div className="panel pdv-cash-panel"><h3>Caixa</h3><p>Acompanhe as vendas confirmadas e os recebimentos do turno.</p><strong>R$ {sales.filter(item=>item.status !== "Cancelada" && !pdvNeedsReview(item.status)).reduce((sum,item)=>sum+(item.value??0),0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div> : <>
     <div className="pdv-command">{mobileSale&&<div className="pdv-mobile-actions"><button onClick={()=>setScannerOpen(v=>!v)}><ScanBarcode size={15}/> Ler código</button><label>Vincular OS<input value={mobileOsLink} onChange={e=>setMobileOsLink(e.target.value)} placeholder="OS-0001"/></label>{cart.length>0&&<button onClick={()=>{const txt=receiptText({id:editingSale?.id||"VENDA",customer:customer||"Consumidor final",total,payment,items:cart.map(i=>({name:i.name,quantity:i.quantity}))});window.open(whatsappReceiptUrl(selectedCustomer?.phone||"",txt),"_blank","noopener,noreferrer")}}><MessageCircle size={15}/> Comprovante</button>}</div>}{scannerOpen&&<div className="pdv-mobile-scanner"><Camera size={18}/><b>Leitor por câmera</b><video ref={scannerVideoRef} playsInline muted/><small>{scannerNotice||"Aponte a câmera para EAN, UPC, Code 128 ou QR."}</small><button onClick={startMobileScan}>Iniciar câmera</button><button onClick={()=>{setScannerOpen(false);searchRef.current?.focus()}}>Busca manual</button></div>}
-      <div><span className="section-kicker"><ShoppingBag size={12}/> VENDA RÁPIDA</span><h2>PDV ProAR</h2><p>Produtos e serviços em um fluxo direto, sem campos desnecessários.</p></div>
-      <div className="pdv-shortcuts"><button onClick={toggleFullScreen}><Grid2X2 size={14}/>{fullScreen ? "Sair da tela cheia" : "Maximizar PDV"}</button><button onClick={() => setShortcutsOpen(true)}><Keyboard size={14}/><kbd>F1</kbd> Atalhos</button><span>Caixa aberto</span></div>
+      <div><span className="section-kicker">VENDA ATUAL</span><h3>Produtos e serviços</h3></div>
+      <div className="pdv-shortcuts"><button onClick={toggleFullScreen}><Grid2X2 size={14}/>{fullScreen ? "Sair da tela cheia" : "Maximizar PDV"}</button><button onClick={() => setShortcutsOpen(true)}><Keyboard size={14}/><kbd>F2</kbd> Atalhos</button></div>
     </div>
     <div className="pdv-context"><label>Cliente<CustomerSearchSelect customers={customers} value={customer} locationId={saleLocation?.structureId} onLocationChange={selection=>{setSaleLocation(selection);setUnit(selection.unit);}} emptyValue="" emptyLabel="Consumidor final" onChange={value=>{setCustomer(value);const root=customers.find(item=>item.name===value);setSaleLocation(root?hierarchySelection(root,[]):null);setUnit("");}} /></label><label>Tabela de preço<select value={priceTable} onChange={event=>setPriceTable(event.target.value)}><option>Padrão</option><option>Varejo</option><option>Atacado</option><option>Construtora</option><option>Cliente especial</option></select></label><div className="pdv-top-total"><small>TOTAL DA VENDA</small><strong>R$ {total.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div><button className="outline-btn" onClick={()=>setShortcutsOpen(true)}><Keyboard size={14}/> Atalhos</button><button className="outline-btn" onClick={()=>setActiveTab("opcoes")}><MoreHorizontal size={14}/> Mais opções</button></div>
-    {notice && <div className="pdv-notice"><CheckCircle2 size={15}/>{notice}<button onClick={() => setNotice("")}><X size={13}/></button></div>}
     <nav className="pdv-tabs" aria-label="Etapas da venda">
-      <button className={activeTab === "itens" ? "active" : ""} onClick={() => setActiveTab("itens")}><ScanBarcode size={15}/><span>Itens</span><kbd>F2</kbd></button>
-      <button className={activeTab === "cliente" ? "active" : ""} onClick={() => setActiveTab("cliente")}><UserRound size={15}/><span>Cliente</span><kbd>F3</kbd></button>
-      <button className={activeTab === "pagamento" ? "active" : ""} onClick={() => setActiveTab("pagamento")}><CreditCard size={15}/><span>Pagamento</span><kbd>F4</kbd></button>
-      <button className={activeTab === "opcoes" ? "active" : ""} onClick={() => setActiveTab("opcoes")}><MoreHorizontal size={15}/><span>Mais opções</span><kbd>F8</kbd></button>
+      <button type="button" aria-pressed={activeTab === "itens"} className={activeTab === "itens" ? "active" : ""} onClick={() => setActiveTab("itens")}><ScanBarcode size={15}/><span>Itens</span><kbd>F2</kbd></button>
+      <button type="button" aria-pressed={activeTab === "cliente"} className={activeTab === "cliente" ? "active" : ""} onClick={() => setActiveTab("cliente")}><UserRound size={15}/><span>Cliente</span><kbd>F3</kbd></button>
+      <button type="button" aria-pressed={activeTab === "pagamento"} className={activeTab === "pagamento" ? "active" : ""} onClick={() => setActiveTab("pagamento")}><CreditCard size={15}/><span>Pagamento</span><kbd>F4</kbd></button>
+      <button type="button" aria-pressed={activeTab === "opcoes"} className={activeTab === "opcoes" ? "active" : ""} onClick={() => setActiveTab("opcoes")}><MoreHorizontal size={15}/><span>Mais opções</span><kbd>F8</kbd></button>
     </nav>
+    <a className="pdv-cart-jump" href="#polartech-carrinho"><ShoppingCart size={17}/> Ver carrinho <b>{formatQuantity(cart.reduce((sum,item)=>sum+item.quantity,0))} item(ns) • {total.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</b></a>
     <div className="pdv-operational-grid pdv-operational-grid-modern"><div className="pdv-layout">
       <div className="pdv-workspace panel">
         {activeTab === "itens" && <>
-          <label className="pdv-search"><Search size={19}/><input ref={searchRef} autoFocus value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event=>{if(event.key==="Enter"){event.preventDefault();launchCommand();}}} placeholder="Código, produto ou 10xCÓDIGO"/><kbd>F6</kbd></label>
+          <div className="pdv-find"><label className="pdv-search"><Search size={20}/><input ref={searchRef} autoFocus value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event=>{if(event.key==="Enter"){event.preventDefault();launchCommand();}}} aria-label="Buscar no catálogo" placeholder="Buscar por nome, referência ou código de barras"/><kbd>F6</kbd></label>
+            <button type="button" className="outline-btn pdv-scan" aria-label="Ler código" aria-expanded={scannerOpen} onClick={()=>setScannerOpen(value=>!value)}><ScanBarcode size={20}/><span>Ler código</span></button></div>
+          <div className="pdv-category-row" role="group" aria-label="Categorias do catálogo">{["Todos","Produtos","Serviços",...catalogCategories].map(name=><button key={name} type="button" aria-pressed={catalogCategory===name} onClick={()=>setCatalogCategory(name)}>{name==="Todos"?<Grid2X2 size={15}/>:name==="Produtos"?<Package size={15}/>:name==="Serviços"?<Wrench size={15}/>:null}{name}</button>)}</div>
+          <p className="pdv-catalog-count" aria-live="polite">{filteredCatalog.length} {filteredCatalog.length===1?"item":"itens"}</p>
           <div className="pdv-catalog">{filteredCatalog.map(item => <button key={item.id} onClick={() => addItem(item)}>
-            <span className={`pdv-catalog-thumb ${item.kind === "Serviço" ? "service" : "product"}`}>{item.image?<img src={item.image} alt={item.name}/>:item.kind === "Serviço" ? <Wrench size={17}/> : <Package size={17}/>}</span>
-            <div><small>{item.code} • {item.kind}</small><strong>{item.name}</strong></div>
-            <b>R$ {item.price.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} / {item.unit}</b><Plus size={16}/>
+            <span className={`pdv-catalog-thumb ${item.kind === "Serviço" ? "service" : "product"}`}>{item.kind==="Serviço"?<Wrench size={28}/>:<Package size={28}/>}
+              {item.image&&<img src={item.image} alt="" loading="lazy" onError={event=>{event.currentTarget.hidden=true;}}/>}</span>
+            <div className="pdv-catalog-meta"><small>{item.sku||item.code} • {item.kind}</small><strong>{item.name}</strong>
+              <b>{item.price.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})} <small>/ {item.unit}</small></b>
+              {item.kind==="Produto"&&typeof item.stock==="number"&&Number.isFinite(item.stock)&&<small>Estoque {online?"":"do último acesso "}{formatQuantity(item.stock)} {item.unit}</small>}</div><span className="pdv-tile-add"><Plus size={16}/></span>
           </button>)}</div>
-          {!filteredCatalog.length && <div className="linked-empty"><Package size={23}/><h4>Nenhum produto ou serviço cadastrado</h4><p>Cadastre os itens reais nos módulos Produtos e Serviços.</p></div>}
+          {!filteredCatalog.length && <div className="linked-empty"><Package size={23}/><h4>{quickSaleCatalog.length?"Nenhum item encontrado":"Nenhum produto ou serviço disponível"}</h4><p>{quickSaleCatalog.length?"Tente outro nome, código ou categoria.":"Confira o catálogo de Produtos e Serviços."}</p></div>}
         </>}
         {activeTab === "cliente" && <div className="pdv-hidden-panel"><div className="pdv-panel-title"><UserRound size={20}/><div><h3>Cliente da venda</h3><p>Opcional para vendas rápidas.</p></div></div><label>Selecionar cliente<CustomerSearchSelect customers={customers} value={customer} locationId={saleLocation?.structureId} onLocationChange={selection=>{setSaleLocation(selection);setUnit(selection.unit);}} emptyValue="" emptyLabel="Consumidor final" onChange={value=>{setCustomer(value);const root=customers.find(item=>item.name===value);setSaleLocation(root?hierarchySelection(root,[]):null);setUnit("");}} /></label>{customer && <>{customerUnits.length ? <label>Unidade / filial / setor<select value={unit} onChange={event=>setUnit(event.target.value)}>{customerUnits.map(item=><option key={item.name} value={item.name}>{item.name} • {item.category || "Unidade"}</option>)}</select></label> : <p className="field-hint">Nenhuma unidade/filial/setor cadastrado para este cliente.</p>}<div className={`credit-check ${selectedCustomer?.financialStatus === "Bloqueado" ? "blocked" : ""}`}><CircleDollarSign size={17}/><div><b>Crédito</b><small>Disponível R$ {Math.max(0,(selectedCustomer?.creditLimit ?? 0)-(selectedCustomer?.balancePosted ?? 0)).toLocaleString("pt-BR",{minimumFractionDigits:2})}</small></div><strong>{selectedCustomer?.financialStatus ?? "Liberado"}</strong></div></>}<button className="outline-btn"><Plus size={14}/> Cadastro rápido</button></div>}
         {activeTab === "pagamento" && <div className="pdv-hidden-panel"><div className="pdv-panel-title"><CreditCard size={20}/><div><h3>Pagamentos</h3><p>Informe uma ou mais formas de pagamento.</p></div></div><div className="payment-grid">{["PIX", "Dinheiro", "Cartão de débito", "Cartão de crédito", "Boleto", "Outros"].map(option => <button className={payment === option ? "active" : ""} key={option} onClick={() => { setPayment(option); setPayments(current => current.some(item => item.method === option) ? current : [...current, {method:option, amount:0}]); }}>{option}</button>)}</div><div className="pdv-payment-lines">{payments.map((entry,index)=><label key={`${entry.method}-${index}`}>{entry.method}<CurrencyInput aria-label={"Valor pago em " + entry.method} value={entry.amount} onValueChange={amount=>setPayments(current=>current.map((item,i)=>i===index?{...item,amount}:item))}/><button type="button" onClick={()=>setPayments(current=>current.filter((_,i)=>i!==index))}><X size={13}/></button></label>)}</div><div className="pdv-payment-check"><span>Total da venda <b>R$ {total.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></span><span>Total informado <b>R$ {paidTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></span><span>Falta pagar <b>R$ {remaining.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></span><span>Troco <b>R$ {change.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></span>{nonCashOverpayment && <em>Valor informado superior ao total da venda. Ajuste o pagamento.</em>}</div></div>}
         {activeTab === "opcoes" && <div className="pdv-hidden-panel"><div className="pdv-panel-title"><Tag size={20}/><div><h3>Opções da venda</h3><p>Recursos menos utilizados ficam ocultos aqui.</p></div></div><label>Desconto em reais<CurrencyInput aria-label="Desconto em reais" value={discount} onValueChange={setDiscount} maxLength={18}/>{mobileSale&&discount>effectiveDiscount&&<small>Limite operacional mobile aplicado: 5% sem autorização gerencial.</small>}</label><label>Observações<textarea placeholder="Informações adicionais para o comprovante..."/></label></div>}
       </div>
-      <aside className="pdv-cart panel">
-        <div className="pdv-cart-head"><div><ReceiptText size={17}/><span><strong>Venda atual</strong><small>{formatQuantity(cart.reduce((sum, item) => sum + item.quantity, 0))} item(ns)</small></span></div>{cart.length > 0 && <button onClick={() => setCart([])}><Trash2 size={13}/> Limpar</button>}</div>
+      <aside className="pdv-cart panel" id="polartech-carrinho">
+        <div className="pdv-cart-head"><div><ReceiptText size={17}/><span><strong>Carrinho da venda</strong><small>{formatQuantity(cart.reduce((sum, item) => sum + item.quantity, 0))} item(ns)</small></span></div>{cart.length > 0 && <button onClick={() => setCart([])}><Trash2 size={13}/> Limpar</button>}</div>
         <div className="pdv-cart-items">{cart.length ? cart.map(item => <article className={`${selectedItemId===item.id?"selected":""} ${recentItemId===item.id?"recent":""}`} key={item.id} onClick={()=>setSelectedItemId(item.id)}><div><small>{item.code}</small><strong>{item.name}</strong><span>R$ {item.price.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} / {item.unit}</span>{item.wholesaleMinimumQuantity&&item.quantity>=item.wholesaleMinimumQuantity&&item.basePrice!==item.price&&<small className="pdv-price-rule">Atacado aplicado • mínimo {formatQuantity(item.wholesaleMinimumQuantity)} {item.unit}</small>}</div><div className="quantity"><button onClick={event => { event.stopPropagation(); changeQuantity(item.id, -1); }} aria-label="Diminuir quantidade"><Minus size={12}/></button><label><input className="quantity-input" inputMode="decimal" value={quantityDrafts[item.id] ?? formatQuantity(item.quantity)} onClick={event=>event.stopPropagation()} onChange={event => typeQuantity(item.id, event.target.value)} onBlur={() => confirmQuantity(item)} aria-label={`Quantidade de ${item.name}`}/><small>{item.unit}</small></label><button onClick={event => { event.stopPropagation(); changeQuantity(item.id, 1); }} aria-label="Aumentar quantidade"><Plus size={12}/></button></div><b>R$ {(item.price * item.quantity).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></article>) : <div className="pdv-empty"><ShoppingCart size={29}/><strong>Carrinho vazio</strong><p>Leia um código ou pesquise um produto para iniciar.</p></div>}</div>
-        <div className="pdv-summary"><p><span>Subtotal</span><b>R$ {subtotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></p>{discount > 0 && <p className="discount"><span>Desconto</span><b>− R$ {discount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></p>}<div><span>TOTAL</span><strong>R$ {total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></div><small>{customer || "Consumidor final"} • {payment}</small><button className="finish-sale" disabled={!cart.length} onClick={finishSale}><CheckCircle2 size={17}/>{editingSale ? "Atualizar pedido" : "Finalizar venda"}<kbd>F10</kbd></button></div>
+        <div className="pdv-summary"><p><span>Subtotal</span><b>R$ {subtotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></p>{discount > 0 && <p className="discount"><span>Desconto</span><b>− R$ {discount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></p>}<div><span>TOTAL DA VENDA</span><strong>R$ {total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></div><small>{customer || "Consumidor final"} • {payment}</small><button className="finish-sale" disabled={!canEdit||!cart.length||!online||saving||!!syncing||Boolean(currentDraft)} onClick={()=>void finishSale()}><CheckCircle2 size={17}/>{saving?"Validando…":pdvNeedsReview(editingSale?.status)?"Confirmar após conferência":editingSale?"Atualizar pedido":"Finalizar venda"}</button><div className="pdv-tender-shortcuts" role="group" aria-label="Formas de pagamento">{[{label:"Dinheiro",value:"Dinheiro",icon:WalletCards},{label:"Cartão",value:"Cartão de crédito",icon:CreditCard},{label:"Pix",value:"PIX",icon:QrCode},{label:"Outros",value:"Outros",icon:MoreHorizontal}].map(({label,value,icon:Icon})=><button key={value} type="button" aria-pressed={payment===value} onClick={()=>{setPayment(value);setActiveTab("pagamento");}}><Icon size={19}/>{label}</button>)}</div>{!mobileSale&&!editingSale&&<button type="button" className="outline-btn" disabled={!canEdit||!draftStoreAvailable||!cart.length||saving||!!syncing} onClick={saveLocalDraft}>{currentDraft?"Salvar alterações do rascunho":"Salvar rascunho neste computador"}</button>}</div>
       </aside>
     </div></div>
     {shortcutsOpen && <div className="shortcut-layer" role="dialog" aria-modal="true" aria-label="Atalhos do PDV"><button className="modal-backdrop" onClick={() => setShortcutsOpen(false)} aria-label="Fechar atalhos"/><div className="shortcut-card"><div><span><Keyboard size={19}/></span><div><small>PDV PROAR</small><h3>Atalhos de teclado</h3></div><button onClick={() => setShortcutsOpen(false)} aria-label="Fechar"><X size={16}/></button></div>{[["F1","Abrir esta ajuda"],["F2","Pesquisar produto ou serviço"],["F3","Selecionar cliente"],["F4","Forma de pagamento"],["F8","Desconto e outras opções"],["F10","Finalizar a venda"],["ESC","Fechar janela"]].map(([key,label]) => <p key={key}><kbd>{key}</kbd><span>{label}</span></p>)}</div></div>}
@@ -3528,7 +3717,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
   </main>;
 }
 
-function Modal({ title, initialOrderSeed, customers, structures, catalogRecords, supplierRecords, employeeRecords, equipmentRecords, serviceOrders, close, onSave, onCreateCustomer, canCreateCustomer, onCreateStructure }: { title: string; initialOrderSeed?:OrderScheduleSeed; customers: Customer[]; structures: ModuleRecord[]; catalogRecords: ModuleRecord[]; supplierRecords: ModuleRecord[]; employeeRecords: ModuleRecord[]; equipmentRecords: ModuleRecord[]; serviceOrders:ServiceOrder[]; close: () => void; onSave: (data: ModalSave) => void | Promise<void>; canCreateCustomer:boolean; onCreateCustomer:(draft:CustomerDraft & {address:string;organizationType:Customer["organizationType"]})=>Promise<Customer|null>; onCreateStructure: (draft: StructureDraft & { client: string }) => Promise<ModuleRecord|null> | Promise<ModuleRecord | null> }) {
+function Modal({ title, offlineOrderDraft=false, initialOrderSeed, customers, structures, catalogRecords, supplierRecords, employeeRecords, equipmentRecords, serviceOrders, close, onSave, onCreateCustomer, canCreateCustomer, onCreateStructure }: { title: string; offlineOrderDraft?:boolean; initialOrderSeed?:OrderScheduleSeed; customers: Customer[]; structures: ModuleRecord[]; catalogRecords: ModuleRecord[]; supplierRecords: ModuleRecord[]; employeeRecords: ModuleRecord[]; equipmentRecords: ModuleRecord[]; serviceOrders:ServiceOrder[]; close: () => void; onSave: (data: ModalSave) => void | Promise<void>; canCreateCustomer:boolean; onCreateCustomer:(draft:CustomerDraft & {address:string;organizationType:Customer["organizationType"]})=>Promise<Customer|null>; onCreateStructure: (draft: StructureDraft & { client: string }) => Promise<ModuleRecord|null> | Promise<ModuleRecord | null> }) {
   const isLinkedStructure = title.startsWith("Nova unidade, filial ou setor") || title.startsWith("Novo setor") || title.startsWith("Nova sala") || title.startsWith("Nova sala ou ambiente");
   const isNewOrder = title === "Nova ordem de serviço";
   const isNewCustomer = title === "Novo cliente";
@@ -4118,10 +4307,10 @@ function Modal({ title, initialOrderSeed, customers, structures, catalogRecords,
 
         {orderSaveError&&<p role="alert" style={{color:"#991b1b",background:"#fef2f2",border:"1px solid #f87171",padding:12,margin:"0 20px"}}><strong>Não foi salvo.</strong> {orderSaveError}</p>}
         <footer className="os-create-footer">
-          <div className="os-create-footer-secondary"><button type="button" className="outline-btn os-create-cancel" onClick={requestClose}>Cancelar</button><button type="button" className="outline-btn os-create-draft-action" disabled={orderSaveBusy||quickSectorBusy||quickCustomerBusy} onClick={() => void saveNewOrder("Rascunho")} aria-label="Revisar rascunho">Rascunho</button></div>
-          <div className="os-create-footer-summary"><span className="os-create-item-count">{selectedOrderItems.length} item(ns) • {selectedEquipmentIds.length} equipamento(s)</span><strong>R$ {orderTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong><button type="button" className="primary-btn os-create-schedule-action" disabled={orderSaveBusy||quickSectorBusy||quickCustomerBusy} onClick={() => void saveNewOrder("Agendada")}>{orderSaveBusy ? <><svg className="h-4 w-4 animate-spin shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Salvando...</> : <><CheckCircle2 size={15}/>Revisar e agendar OS</>}</button></div>
+          <div className="os-create-footer-secondary"><button type="button" className="outline-btn os-create-cancel" onClick={requestClose}>Cancelar</button><button type="button" className="outline-btn os-create-draft-action" disabled={orderSaveBusy||quickSectorBusy||quickCustomerBusy} onClick={() => void saveNewOrder("Rascunho")} aria-label={offlineOrderDraft?"Revisar rascunho neste aparelho":"Revisar rascunho"}>{offlineOrderDraft?"Rascunho neste aparelho":"Rascunho"}</button></div>
+          <div className="os-create-footer-summary"><span className="os-create-item-count">{selectedOrderItems.length} item(ns) • {selectedEquipmentIds.length} equipamento(s)</span><strong>R$ {orderTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong><button type="button" className="primary-btn os-create-schedule-action" disabled={orderSaveBusy||quickSectorBusy||quickCustomerBusy} onClick={() => void saveNewOrder("Agendada")}>{orderSaveBusy ? <><svg className="h-4 w-4 animate-spin shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Salvando...</> : <><CheckCircle2 size={15}/>{offlineOrderDraft?"Revisar e guardar pedido":"Revisar e agendar OS"}</>}</button></div>
         </footer>
-        {reviewStatus&&<div className="os-review-overlay" role="dialog" aria-modal="true" aria-labelledby="os-review-title"><section className="os-review-card"><span>CONFERÊNCIA FINAL • ORDEM DE SERVIÇO</span><h2 id="os-review-title">Confira os dados antes de salvar</h2><div className="os-review-grid"><div><small>CLIENTE</small><strong>{selectedClient||"Não informado"}</strong></div><div><small>UNIDADE / SETOR</small><strong>{[unit,sector,room].filter(Boolean).join(" • ")||"Endereço do cliente"}</strong></div><div className="wide"><small>ENDEREÇO DO ATENDIMENTO</small><strong>{orderAddress||"Não informado"}</strong></div><div><small>DATA E HORÁRIO</small><strong>{date?new Date(`${date}T12:00:00`).toLocaleDateString("pt-BR"):"Não definida"}{reviewStatus==="Agendada"?` • ${time||"Sem horário"}`:" • Rascunho"}</strong></div><div><small>TÉCNICO</small><strong>{tech||"A definir"}</strong></div><div className="wide"><small>SERVIÇO</small><strong>{description||selectedOrderItems.map(item=>item.name).join(", ")||"Não informado"}</strong></div><div><small>ITENS E EQUIPAMENTOS</small><strong>{selectedOrderItems.length} item(ns) • {selectedEquipmentIds.length} equipamento(s)</strong></div><div><small>VALOR ESTIMADO</small><strong>R$ {orderTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div></div>{reviewStatus==="Agendada"&&(()=>{const warnings=getScheduleWarnings();return <>{warnings.overlaps.length>0&&<div className="os-review-warning"><b>Conflito de agenda</b>{warnings.overlaps.map(({item})=><small key={item.id}>O técnico já tem a OS {item.id} às {item.time} • {item.address||item.client}.</small>)}</div>}{warnings.travel.length>0&&<div className="os-review-warning travel"><b>Confira o deslocamento</b>{warnings.travel.map(({item})=><small key={item.id}>Há menos de 30 minutos entre endereços diferentes envolvendo a OS {item.id}. Confira a rota antes de confirmar.</small>)}</div>}</>;})()}<div className="os-review-actions"><button type="button" className="outline-btn" disabled={orderSaveBusy} onClick={()=>setReviewStatus(null)}>Voltar e corrigir</button><button type="button" className="primary-btn" disabled={orderSaveBusy} onClick={()=>{const status=reviewStatus;setReviewStatus(null);if(status)void saveNewOrder(status,true);}}>{orderSaveBusy?"Salvando…":reviewStatus==="Agendada"?"Confirmar e agendar":"Confirmar e salvar rascunho"}</button></div></section></div>}
+        {reviewStatus&&<div className="os-review-overlay" role="dialog" aria-modal="true" aria-labelledby="os-review-title"><section className="os-review-card"><span>CONFERÊNCIA FINAL • ORDEM DE SERVIÇO</span><h2 id="os-review-title">Confira os dados antes de salvar</h2><div className="os-review-grid"><div><small>CLIENTE</small><strong>{selectedClient||"Não informado"}</strong></div><div><small>UNIDADE / SETOR</small><strong>{[unit,sector,room].filter(Boolean).join(" • ")||"Endereço do cliente"}</strong></div><div className="wide"><small>ENDEREÇO DO ATENDIMENTO</small><strong>{orderAddress||"Não informado"}</strong></div><div><small>DATA E HORÁRIO</small><strong>{date?new Date(`${date}T12:00:00`).toLocaleDateString("pt-BR"):"Não definida"}{reviewStatus==="Agendada"?` • ${time||"Sem horário"}`:" • Rascunho"}</strong></div><div><small>TÉCNICO</small><strong>{tech||"A definir"}</strong></div><div className="wide"><small>SERVIÇO</small><strong>{description||selectedOrderItems.map(item=>item.name).join(", ")||"Não informado"}</strong></div><div><small>ITENS E EQUIPAMENTOS</small><strong>{selectedOrderItems.length} item(ns) • {selectedEquipmentIds.length} equipamento(s)</strong></div><div><small>VALOR ESTIMADO</small><strong>R$ {orderTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div></div>{reviewStatus==="Agendada"&&(()=>{const warnings=getScheduleWarnings();return <>{warnings.overlaps.length>0&&<div className="os-review-warning"><b>Conflito de agenda</b>{warnings.overlaps.map(({item})=><small key={item.id}>O técnico já tem a OS {item.id} às {item.time} • {item.address||item.client}.</small>)}</div>}{warnings.travel.length>0&&<div className="os-review-warning travel"><b>Confira o deslocamento</b>{warnings.travel.map(({item})=><small key={item.id}>Há menos de 30 minutos entre endereços diferentes envolvendo a OS {item.id}. Confira a rota antes de confirmar.</small>)}</div>}</>;})()}<div className="os-review-actions"><button type="button" className="outline-btn" disabled={orderSaveBusy} onClick={()=>setReviewStatus(null)}>Voltar e corrigir</button><button type="button" className="primary-btn" disabled={orderSaveBusy} onClick={()=>{const status=reviewStatus;setReviewStatus(null);if(status)void saveNewOrder(status,true);}}>{orderSaveBusy?"Salvando…":offlineOrderDraft?"Guardar neste aparelho":reviewStatus==="Agendada"?"Confirmar e agendar":"Confirmar e salvar rascunho"}</button></div></section></div>}
       </section>
     </div>
     {servicePickerOpen && <div className="service-picker-layer" role="dialog" aria-modal="true" aria-label="Selecionar serviços"><button type="button" className="service-picker-backdrop" aria-label="Fechar seleção de serviços" onClick={() => setServicePickerOpen(false)}/><section className="service-picker"><header><div><span>CATÁLOGO DE SERVIÇOS</span><h3>Selecionar vários serviços</h3><p>Pesquise e marque todos os itens necessários para esta ordem.</p></div><button type="button" aria-label="Fechar" onClick={() => setServicePickerOpen(false)}><X size={17}/></button></header><label className="service-picker-search"><Search size={17}/><input autoFocus value={serviceSearch} onChange={event => setServiceSearch(event.target.value)} placeholder="Pesquisar por nome ou categoria..."/><small>{visibleServiceOptions.length} resultado(s)</small></label><div className="service-picker-grid">{visibleServiceOptions.map(item => <label key={item.id} className={servicePickerIds.includes(item.id) ? "selected" : ""}><input type="checkbox" checked={servicePickerIds.includes(item.id)} onChange={() => setServicePickerIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])}/><span><Wrench size={17}/></span><div><b>{item.name}</b><small>{item.category || item.description || "Serviço cadastrado"}</small></div><CheckCircle2 size={16}/></label>)}</div>{!visibleServiceOptions.length && <div className="catalog-empty"><Search size={18}/><span>Nenhum serviço encontrado para esta pesquisa.</span></div>}<footer><span><b>{servicePickerIds.length}</b> serviço(s) marcado(s)</span><div><button type="button" className="outline-btn" onClick={() => setServicePickerOpen(false)}>Cancelar</button><button type="button" className="primary-btn" onClick={() => { setSelectedCatalogIds(current => [...current.filter(id => !serviceRecords.some(item => item.id === id)), ...servicePickerIds]); setServicePickerIds([]); setServicePickerOpen(false); }}><CheckCircle2 size={15}/> Aplicar seleção</button></div></footer></section></div>}
@@ -4388,6 +4577,18 @@ export default function Home() {
   const [syncPhase, setSyncPhase] = useState<"idle" | "syncing" | "complete">("idle");
   const [databaseMode, setDatabaseMode] = useState<"online" | "degraded" | "offline">("online");
   const [lastSuccessfulSyncAt, setLastSuccessfulSyncAt] = useState("");
+  const [systemShellStatus,setSystemShellStatus]=useState<"idle"|"preparing"|"ready"|"failed">("idle");
+  const prepareOfflineSystem=useCallback(async()=>{
+    if(!navigator.onLine)return;
+    setSystemShellStatus("preparing");
+    setSystemShellStatus(await prepareSystemShell()?"ready":"failed");
+  },[]);
+  const systemUser=authenticatedUser?.username;
+  useEffect(()=>{
+    if(!systemUser||!online||isMobileInterfacePath(window.location.pathname))return;
+    const timer=window.setTimeout(()=>void prepareOfflineSystem(),750);
+    return()=>window.clearTimeout(timer);
+  },[systemUser,online,prepareOfflineSystem]);
   const primaryTenantAccess = isPrimaryPolartechClient(authenticatedUser);
   const effectiveEntitledModules = useMemo(() => primaryTenantAccess ? navigationModuleNames() : authenticatedUser?.entitledModules, [primaryTenantAccess, authenticatedUser?.entitledModules]);
   useEffect(() => {
@@ -4473,14 +4674,28 @@ export default function Home() {
     setBootRunId(runId); setBootError(""); setCheckingSession(true);
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 12000);
-    fetch("/api/auth", { cache: "no-store", signal: controller.signal }).then(async response => response.ok ? response.json() : null).then(result => {
+    const reopenLocalSession=()=>{
+      try{
+        const cached=JSON.parse(localStorage.getItem("proar-offline-session")||"null");
+        const trialEnd=cached?.user?.trialExpiresAt ? Date.parse(cached.user.trialExpiresAt) : Infinity;
+        if(!cached?.user?.username || !Number.isFinite(cached.expiresAt) || Math.min(cached.expiresAt,trialEnd)<=Date.now() || Number.isNaN(trialEnd))return false;
+        setAuthenticatedUser(cached.user);
+        return true;
+      }catch{return false;}
+    };
+    fetch("/api/auth", { cache: "no-store", signal: controller.signal }).then(async response => {
+      if(response.status===401||response.status===403){
+        localStorage.removeItem("proar-offline-session");
+        return null;
+      }
+      if(response.status>=500) throw new Error("Sessão indisponível");
+      return response.ok ? response.json() : null;
+    }).then(result => {
       if (result?.authenticated) handleLogin({ username: result.username, displayName: result.displayName, role: result.role, permissions: result.permissions, companyId: result.companyId, companySlug: result.companySlug, trialExpiresAt: result.trialExpiresAt, entitledModules: result.entitledModules });
     }).catch(error => {
-      if (!navigator.onLine) {
-        try { const cached = JSON.parse(localStorage.getItem("proar-offline-session") || "null"); if (cached?.user && cached.expiresAt > Date.now()) { setAuthenticatedUser(cached.user); return; } } catch {}
-      }
+      if(reopenLocalSession())return;
       if (error instanceof DOMException && error.name === "AbortError") setBootError("A verificação da sessão excedeu 12 segundos.");
-      else setBootError("Não foi possível validar a sessão do ProAR.");
+      else setBootError("Conecte-se para entrar e preparar este aparelho para uso offline.");
     }).finally(() => { window.clearTimeout(timeout); setCheckingSession(false); });
     return () => { window.clearTimeout(timeout); controller.abort(); window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); };
   }, [bootAttempt]);
@@ -4531,14 +4746,32 @@ export default function Home() {
     const visibleModules = navigationModuleNames().filter(name=>canNavigateModule(name,authenticatedUser,effectiveEntitledModules));
     if (visibleModules.length && !visibleModules.includes(current)) setCurrent(visibleModules[0]);
   }, [authenticatedUser, current, effectiveEntitledModules]);
+  type DesktopView={customers:Customer[];serviceOrders:ServiceOrder[];moduleRecords:Record<string,ModuleRecord[]>};
+  const readDesktopView=()=>readDesktopAccessCache<DesktopView>(localStorage,activeCompany.id,authenticatedUser);
+  const cacheDesktopView=(customers:Customer[],serviceOrders:ServiceOrder[],moduleRecords:Record<string,ModuleRecord[]>)=>{
+    const cachedAt=writeDesktopAccessCache(localStorage,activeCompany.id,authenticatedUser,{customers,serviceOrders,moduleRecords});
+    if(cachedAt)setLastSuccessfulSyncAt(cachedAt);
+  };
   useEffect(() => {
     if (!authenticatedUser) return;
+    if(authenticatedUser.companyId && authenticatedUser.companyId!==activeCompany.id){
+      setServiceOrders([]);setCustomerRecords([]);setModuleRecords({});setLastSuccessfulSyncAt("");
+      return;
+    }
+    const controller=new AbortController();
     const loadSharedState = async () => {
       try {
         if (activeCompany.status === "Bloqueada") throw new Error("blocked");
         if (!navigator.onLine) throw new Error("offline");
-        const response = await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { cache: "no-store" });
+        const response = await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { cache: "no-store",signal:controller.signal });
+        if(controller.signal.aborted)return;
+        if(response.status===401||response.status===403){
+          localStorage.removeItem("proar-offline-session");
+          setServiceOrders([]);setCustomerRecords([]);setModuleRecords({});setLastSuccessfulSyncAt("");
+          setAuthenticatedUser(null);setBootError("O servidor não autorizou esta sessão. Entre novamente.");return;
+        }
         const sharedResult=await response.json().catch(()=>({}));
+        if(controller.signal.aborted)return;
         if (!response.ok) {
           const error=new Error(typeof sharedResult.error==="string"?sharedResult.error:"Não foi possível carregar a base compartilhada.");
           (error as Error & {code?:string}).code=typeof sharedResult.code==="string"?sharedResult.code:undefined;
@@ -4555,34 +4788,23 @@ export default function Home() {
           const employees = realEmployees;
           const migratedModules = { ...loadedModules, Funcionários: employees };
           setModuleRecords(migratedModules);
-          localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(state.serviceOrders ?? []));
-          localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(state.customers ?? []));
-          localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(migratedModules));
-          const syncedAt=new Date().toISOString();
-          localStorage.setItem(companyStorageKey(activeCompany.id, "last-successful-sync"), syncedAt);
-          setLastSuccessfulSyncAt(syncedAt);
+          cacheDesktopView(state.customers ?? [],state.serviceOrders ?? [],migratedModules);
           setDatabaseMode("online");
           return;
         }
-        const localState = {
-          serviceOrders: readCompanyStorage(activeCompany.id, "service-orders", []),
-          customers: readCompanyStorage(activeCompany.id, "customers", []),
-          moduleRecords: mergeImportedServices(readCompanyStorage(activeCompany.id, "module-records", {}) as Record<string, ModuleRecord[]>),
-        };
-        const initialResponse=await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({...localState,_baseRevision:0}) });
-        const initialResult=await initialResponse.json();if(initialResponse.ok)setStateRevision(Number(initialResult.state?._revision||1));
-        setServiceOrders(localState.serviceOrders);
-        setCustomerRecords(localState.customers);
-        setModuleRecords(localState.moduleRecords);
+        // An empty server tenant is not restored from another user's browser data.
+        setStateRevision(0);
+        setServiceOrders([]);setCustomerRecords([]);setModuleRecords({});
+        cacheDesktopView([],[],{});
+        setDatabaseMode("online");
       } catch (error) {
+        if(controller.signal.aborted)return;
         const errorCode=String((error as Error & {code?:string})?.code||"");
-        const localOrders = readCompanyStorage(activeCompany.id, "service-orders", []) as ServiceOrder[];
-        const localCustomers = readCompanyStorage(activeCompany.id, "customers", []) as Customer[];
-        const localModules = mergeImportedServices(readCompanyStorage(activeCompany.id, "module-records", {}) as Record<string, ModuleRecord[]>);
-        const cachedAt = localStorage.getItem(companyStorageKey(activeCompany.id, "last-successful-sync")) || "";
-        setServiceOrders(localOrders);
-        setCustomerRecords(localCustomers);
-        setModuleRecords({ ...localModules, Funcionários: localModules.Funcionários ?? [] });
+        const copied=readDesktopView();
+        const localModules=mergeImportedServices(copied?.view.moduleRecords??{});
+        const cachedAt=copied?.stamp||"";
+        setServiceOrders(copied?.view.serviceOrders??[]);setCustomerRecords(copied?.view.customers??[]);
+        setModuleRecords({...localModules,Funcionários:localModules.Funcionários??[]});
         setLastSuccessfulSyncAt(cachedAt);
         if (navigator.onLine) {
           setDatabaseMode("degraded");
@@ -4596,7 +4818,24 @@ export default function Home() {
       }
     };
     loadSharedState();
+    return ()=>controller.abort();
   }, [authenticatedUser, activeCompany.id]);
+  useEffect(()=>{
+    if(!systemUser || databaseMode==="online")return;
+    const check=()=>{
+      try{
+        const session=JSON.parse(localStorage.getItem("proar-offline-session")||"null");
+        const trialEnd=session?.user?.trialExpiresAt?Date.parse(session.user.trialExpiresAt):Infinity;
+        if(session?.user?.username===systemUser && Math.min(session.expiresAt,trialEnd)>Date.now())return;
+      }catch{}
+      setAuthenticatedUser(null);
+      setBootError("O acesso offline deste aparelho expirou. Conecte-se para entrar novamente.");
+    };
+    check();
+    const timer=window.setInterval(check,30000);
+    window.addEventListener("focus",check);
+    return()=>{window.clearInterval(timer);window.removeEventListener("focus",check);};
+  },[systemUser,databaseMode]);
   const [feedbackTone, setFeedbackTone] = useState<FeedbackTone>("info");
   const [desktopPending,setDesktopPending]=useState<DesktopOfflineOperation[]>([]);
   const [legacyDesktopPending,setLegacyDesktopPending]=useState(0);
@@ -4624,6 +4863,19 @@ export default function Home() {
     window.addEventListener("storage",handle);
     return()=>window.removeEventListener("storage",handle);
   },[localScope,refreshDesktopQueue]);
+  const osDraftScope=desktopOsQueuePrefix(localScope);
+  const [osLocal,setOsLocal]=useState<{scope:string;drafts:DesktopOsDraft[];error?:string}>({scope:"",drafts:[]});
+  const [osLocalBusy,setOsLocalBusy]=useState("");
+  const refreshOsDrafts=useCallback(()=>{
+    try{setOsLocal({scope:osDraftScope,drafts:osDraftScope?readDesktopOsDrafts(localStorage,osDraftScope):[]});}
+    catch{setOsLocal({scope:osDraftScope,drafts:[],error:"Não foi possível ler os rascunhos locais de OS. Nenhum dado foi removido."});}
+  },[osDraftScope]);
+  useEffect(()=>{
+    refreshOsDrafts();
+    const handle=(event:StorageEvent)=>{if(osDraftScope&&(!event.key||event.key.startsWith(osDraftScope)))refreshOsDrafts();};
+    window.addEventListener("storage",handle);
+    return()=>window.removeEventListener("storage",handle);
+  },[osDraftScope,refreshOsDrafts]);
   const showFeedback = (message: string, tone: FeedbackTone = "info", duration = 3200, actions?: FeedbackAction[]) => {
     setFeedbackTone(tone);
     notifyFeedback({ message, tone, duration, actions });
@@ -4655,7 +4907,7 @@ export default function Home() {
     const applyConfirmed=(state:{customers?:unknown;serviceOrders?:unknown;moduleRecords?:unknown;_revision?:unknown})=>{
       const confirmedCustomers=state.customers as Customer[],confirmedOrders=state.serviceOrders as ServiceOrder[],confirmedModules=mergeImportedServices(state.moduleRecords as Record<string,ModuleRecord[]>);
       setCustomerRecords(confirmedCustomers);setServiceOrders(confirmedOrders);setModuleRecords(confirmedModules);setStateRevision(Number(state._revision||0));
-      try{localStorage.setItem(companyStorageKey(activeCompany.id,"customers"),JSON.stringify(confirmedCustomers));localStorage.setItem(companyStorageKey(activeCompany.id,"service-orders"),JSON.stringify(confirmedOrders));localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(confirmedModules));}catch{/* Server confirmation remains valid if the local cache is full. */}
+      cacheDesktopView(confirmedCustomers,confirmedOrders,confirmedModules);
     };
     setSyncPhase("syncing");setSavedMessage("Enviando alterações para confirmação no banco…");
     try{
@@ -4672,11 +4924,19 @@ export default function Home() {
     }catch(error){setSavedMessage(friendlyErrorMessage(error,{fallback:"Não foi salvo: falha de conexão. Os campos permanecem em edição."}));setSyncPhase("idle");return false;}finally{desktopWriteLock.current=false;}
   };
   const pullFromDatabase = async () => {
+    if(!localScope||activeQueueScope.current!==localScope)return;
     if (!online) { setSavedMessage("Sem internet. Não foi possível atualizar do banco."); return; }
     setSyncing(true); setSyncPhase("syncing");
     try {
       const response = await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}&refresh=${Date.now()}`, { cache: "no-store" });
       const result = await response.json().catch(()=>({}));
+      if(activeQueueScope.current!==localScope)return;
+      if(response.status===401||response.status===403){
+        localStorage.removeItem("proar-offline-session");
+        setCustomerRecords([]);setServiceOrders([]);setModuleRecords({});setLastSuccessfulSyncAt("");
+        setAuthenticatedUser(null);setBootError("O servidor não autorizou esta sessão. Entre novamente.");
+        setSyncPhase("idle");return;
+      }
       if (!response.ok || !result.state) {
         const error=new Error(typeof result.error==="string"?result.error:"Não foi possível atualizar os dados.");
         (error as Error & {code?:string}).code=typeof result.code==="string"?result.code:undefined;
@@ -4685,17 +4945,15 @@ export default function Home() {
       const nextCustomers = result.state.customers ?? []; const nextOrders = result.state.serviceOrders ?? []; const nextModules = mergeImportedServices(result.state.moduleRecords ?? {});
       setStateRevision(Number(result.state._revision||0));
       setCustomerRecords(nextCustomers); setServiceOrders(nextOrders); setModuleRecords(nextModules);
-      localStorage.setItem(companyStorageKey(activeCompany.id,"customers"),JSON.stringify(nextCustomers)); localStorage.setItem(companyStorageKey(activeCompany.id,"service-orders"),JSON.stringify(nextOrders)); localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(nextModules));
-      const syncedAt=new Date().toISOString();
-      localStorage.setItem(companyStorageKey(activeCompany.id,"last-successful-sync"),syncedAt);
-      setLastSuccessfulSyncAt(syncedAt);
+      cacheDesktopView(nextCustomers,nextOrders,nextModules);
       setDatabaseMode("online");
       setSyncPhase("complete");
       window.setTimeout(() => setSyncPhase("idle"), 1000);
     } catch (error) {
+      if(activeQueueScope.current!==localScope)return;
       setSyncPhase("idle");
       const errorCode=String((error as Error & {code?:string})?.code||"");
-      const cachedAt=localStorage.getItem(companyStorageKey(activeCompany.id,"last-successful-sync"))||lastSuccessfulSyncAt;
+      const cachedAt=readDesktopView()?.stamp||lastSuccessfulSyncAt;
       setLastSuccessfulSyncAt(cachedAt);
       setDatabaseMode(navigator.onLine?"degraded":"offline");
       setSavedMessage(navigator.onLine
@@ -4705,6 +4963,33 @@ export default function Home() {
         : "Sem internet. Os dados deste aparelho foram mantidos.");
     }
     finally { setSyncing(false); }
+  };
+  const transmitOsDraft=async(draft:DesktopOsDraft)=>{
+    if(!online||!osDraftScope||activeQueueScope.current!==localScope||desktopWriteLock.current||desktopSyncLock.current||!hasAction("Ordens de serviço","Criar"))return;
+    const id=draft.intent.creationRequestId, endpoint=`/api/state?company=${encodeURIComponent(desktopCompany)}`;
+    desktopSyncLock.current=true;setOsLocalBusy(id);
+    const run=()=>syncDesktopOsDraft({
+      store:localStorage,prefix:osDraftScope,id,active:()=>activeQueueScope.current===localScope && navigator.onLine,
+      read:async()=>{const response=await fetch(endpoint,{cache:"no-store"});return response.ok?(await response.json()).state:null;},
+      write:async state=>{const response=await fetch(endpoint,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({customers:state.customers,serviceOrders:state.serviceOrders,moduleRecords:state.moduleRecords,_baseRevision:state._revision})});return {status:response.status,body:await response.json().catch(()=>null)};},
+    });
+    try{
+      const saved=typeof navigator.locks?.request==="function"?await navigator.locks.request(osDraftScope,{ifAvailable:true},lock=>lock?run():Promise.resolve(null)):await run();
+      if(activeQueueScope.current!==localScope)return;
+      if(saved){await pullFromDatabase();if(activeQueueScope.current===localScope)setSavedMessage(`O.S. ${saved.id} confirmada pelo banco.`);}
+      else setSavedMessage("O banco ainda não confirmou a OS. O pedido continua neste aparelho.");
+    }catch{
+      if(activeQueueScope.current===localScope)setSavedMessage("Não foi possível enviar a OS. O pedido continua neste aparelho.");
+    }finally{
+      desktopSyncLock.current=false;setOsLocalBusy("");
+      if(activeQueueScope.current===localScope)refreshOsDrafts();
+    }
+  };
+  const discardOsDraft=(draft:DesktopOsDraft)=>{
+    if(!osDraftScope||activeQueueScope.current!==localScope||desktopSyncLock.current)return;
+    if(!window.confirm("Descartar somente o rascunho deste aparelho? Se uma tentativa perdeu a resposta do banco, confira antes se a OS já foi criada."))return;
+    try{localStorage.removeItem(osDraftScope+draft.intent.creationRequestId);refreshOsDrafts();}
+    catch{setSavedMessage("Não foi possível descartar o rascunho deste aparelho.");}
   };
   const synchronizeDesktopQueue=useCallback(async()=>{
     if(!online || !localScope || desktopWriteLock.current || desktopSyncLock.current)return;
@@ -4750,6 +5035,13 @@ export default function Home() {
     document.addEventListener("visibilitychange", refresh);
     return () => { window.clearInterval(timer); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
   }, [online, authenticatedUser, activeCompany.id, syncing]);
+  const wasOnline=useRef(true);
+  useEffect(()=>{
+    if(!wasOnline.current&&online&&authenticatedUser&&localScope&&!desktopWriteLock.current){
+      void pullFromDatabase();
+    }
+    wasOnline.current=online;
+  },[online,localScope,authenticatedUser]);
   const updateServiceOrder = async (updatedOrder: ServiceOrder) => {
     const previousOrder = serviceOrders.find(order => order.id === updatedOrder.id);
     if (!previousOrder) {
@@ -4984,13 +5276,13 @@ export default function Home() {
     } else if (data.title === "Nova ordem de serviço") {
       const alreadySaved=data.creationRequestId?serviceOrders.find(order=>order.creationRequestId===data.creationRequestId):undefined;
       if(alreadySaved){
+        if(osDraftScope&&activeQueueScope.current===localScope){try{localStorage.removeItem(osDraftScope+data.creationRequestId);refreshOsDrafts();}catch{/* The same token remains protected by the bank. */}}
         setSelectedOrder(alreadySaved);setCurrent("Ordens de serviço");setModal("");setOrderSeed(undefined);
         showFeedback(`O.S. ${alreadySaved.id} já confirmada. Nenhuma cópia foi criada.`, "success");
         return;
       }
-      const sequence = Math.max(15499, ...serviceOrders.map(order => Number(order.id.replace(/\D/g, "")) || 0)) + 1;
       const newOrder: ServiceOrder = {
-        id: `#OS-${String(sequence).padStart(5, "0")}`,
+        id: nextDesktopOsId(serviceOrders),
         creationRequestId:data.creationRequestId,
         client: data.client,
         customerId: data.customerId || customerRecords.find(customer => customer.name === data.client)?.id,
@@ -5034,9 +5326,27 @@ export default function Home() {
         reviewPeriodMonths: 6,
         notifyDaysBefore: 15,
       };
+      const deferOs=()=>{
+        if(!osDraftScope||activeQueueScope.current!==localScope)throw new Error("Sem sessão local desta empresa. A OS permanece em edição.");
+        saveDesktopOsDraft(localStorage,osDraftScope,{...newOrder});
+        refreshOsDrafts();
+      };
+      if(!navigator.onLine||databaseMode!=="online"){
+        if(!hasAction("Ordens de serviço","Criar"))throw new Error("Sem permissão para criar ordem de serviço.");
+        deferOs();
+        setCurrent("Ordens de serviço");setModal("");setOrderSeed(undefined);
+        showFeedback("OS guardada neste aparelho. Horário e técnico ainda não estão reservados. Envie quando a conexão voltar.","info",6000);
+        return;
+      }
       const updatedOrders = [newOrder, ...serviceOrders];
       const updatedModules=appendAudit(moduleRecords,"OS criada",`Ordens de serviço • ${newOrder.id}`,"Nova ordem de serviço cadastrada.",{moduleName:"Ordens de serviço",recordId:newOrder.id,after:newOrder as unknown as Record<string,unknown>});
-      if(!await persistSharedState(customerRecords, updatedOrders, updatedModules,false))throw new Error("O banco não confirmou a OS. Os campos estão preservados. Confira a conexão antes de tentar novamente.");
+      if(!await persistSharedState(customerRecords, updatedOrders, updatedModules,false,receipt=>receipt.serviceOrders.some(row=>row.id===newOrder.id&&row.creationRequestId===newOrder.creationRequestId))){
+        // The response may have been lost after the commit. Preserve the original creation token.
+        let keptLocally=false;
+        if(osDraftScope&&activeQueueScope.current===localScope){try{deferOs();keptLocally=true;}catch{/* The form still has the full attempt. */}}
+        throw new Error(keptLocally?"O banco não confirmou a OS. Há uma cópia em Ordens guardadas neste aparelho; nenhum horário foi confirmado.":"O banco não confirmou a OS. Os campos estão preservados. Confira a conexão antes de tentar novamente.");
+      }
+      if(osDraftScope&&activeQueueScope.current===localScope&&newOrder.creationRequestId){try{localStorage.removeItem(osDraftScope+newOrder.creationRequestId);refreshOsDrafts();}catch{/* A later review can reconcile it by creation token. */}}
       setCurrent("Ordens de serviço");
       showFeedback(`O.S. ${newOrder.id} aberta com sucesso!`, "success", 6000, [{label:"Imprimir Ordem",onClick:()=>{void quickPrintServiceOrder(newOrder,activeCompany);}}]);
     } else {
@@ -5404,9 +5714,7 @@ export default function Home() {
       setServiceOrders(confirmedOrders);
       setModuleRecords(confirmedModules);
       setStateRevision(Number(result.state._revision || stateRevision + 1));
-      localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(confirmedCustomers));
-      localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(confirmedOrders));
-      localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(confirmedModules));
+      cacheDesktopView(confirmedCustomers,confirmedOrders,confirmedModules);
       setSyncPhase("complete");
       window.setTimeout(() => setSyncPhase("idle"), 1000);
       showFeedback(`${prepared.record.hierarchyLevel || prepared.record.category || "Estrutura"} vinculada a ${customer.name} com sucesso.`, "success");
@@ -5431,24 +5739,27 @@ export default function Home() {
   };
 
   const operationalRetryRef = useRef<{ fingerprint: string; key: string } | null>(null);
-  const runOperationalCommand = async (command: OperationalCommand) => {
+  const runOperationalCommand = async (command: OperationalCommand, isCurrent?:()=>boolean) => {
     const fingerprint = JSON.stringify({ action: command.action, recordId: command.recordId, data: command.data });
     if (operationalRetryRef.current?.fingerprint === fingerprint) command = { ...command, idempotencyKey: operationalRetryRef.current.key };
     else operationalRetryRef.current = { fingerprint, key: command.idempotencyKey };
     if (!navigator.onLine) throw new Error("Esta operação precisa de conexão com o banco online.");
     const response = await fetch("/api/operations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(command) });
     const result = await response.json();
-    if (!response.ok || !result.state) throw new Error(result.error || "Operação não confirmada.");
+    if (!response.ok || !result.state){
+      const error=new Error(result.error || "Operação não confirmada.");
+      if(command.action==="pdv-sync-draft")Object.assign(error,{editable:result.code==="PDV_DRAFT_REVIEW"});
+      throw error;
+    }
+    if(command.action==="pdv-sync-draft"&&isCurrent&&!isCurrent())throw new Error("A tela mudou durante o envio. Reabra o PDV e confira o pedido pelo mesmo identificador.");
     operationalRetryRef.current = null;
     const confirmedCustomers = result.state.customers ?? customerRecords;
     const confirmedOrders = result.state.serviceOrders ?? serviceOrders;
     const confirmedModules = mergeImportedServices(result.state.moduleRecords ?? moduleRecords);
     setCustomerRecords(confirmedCustomers); setServiceOrders(confirmedOrders); setModuleRecords(confirmedModules);
     setStateRevision(Number(result.state._revision || 0));
-    localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(confirmedCustomers));
-    localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(confirmedOrders));
-    localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(confirmedModules));
-    showFeedback("Operação confirmada no banco e registrada na auditoria.", "success");
+    cacheDesktopView(confirmedCustomers,confirmedOrders,confirmedModules);
+    if(command.action!=="pdv-sync-draft")showFeedback("Operação confirmada no banco e registrada na auditoria.", "success");
   };
   useEffect(()=>{
     if(!linkedOrderId || current!=="Ordens de serviço" || !authenticatedUser || !canNavigateModule(current,authenticatedUser,effectiveEntitledModules))return;
@@ -5519,6 +5830,12 @@ export default function Home() {
         {online && <button type="button" onClick={()=>void pullFromDatabase()} disabled={syncing}><RefreshCw size={14}/> Testar novamente</button>}
       </div>}
 
+      {(current==="Vendas"||current==="Ordens de serviço"||current==="Painel inicial")&&databaseMode==="online"&&<details className="panel" style={{padding:12,marginBlock:8}}>
+        <summary><strong>Continuidade sem internet</strong>{systemShellStatus==="ready"&&lastSuccessfulSyncAt?" • aparelho preparado":""}</summary>
+        <p role="status">{systemShellStatus==="preparing"?"Preparando a tela neste aparelho…":systemShellStatus==="ready"&&lastSuccessfulSyncAt?`Tela preparada. Últimos dados: ${new Date(lastSuccessfulSyncAt).toLocaleString("pt-BR")}.`:systemShellStatus==="failed"?"Não foi possível preparar a tela. Tente novamente antes de sair da rede.":"Conecte-se para carregar a tela e os dados autorizados neste aparelho."}</p>
+        <button type="button" className="outline-btn" disabled={systemShellStatus==="preparing"} onClick={()=>void prepareOfflineSystem()}>Preparar este aparelho</button>
+        <p>Use em dispositivo confiável. Salvar um rascunho local não confirma venda, pagamento, imposto nem agendamento.</p>
+      </details>}
       {(desktopPending.length>0 || legacyDesktopPending>0 || desktopQueueError)&&<details className="panel" style={{padding:12,marginBlock:8}}>
         <summary><strong>Alterações neste aparelho</strong> • {desktopPending.length} sem confirmação</summary>
         {desktopQueueError&&<p role="alert">{desktopQueueError}</p>}
@@ -5532,10 +5849,10 @@ export default function Home() {
       </details>}
       <div className="company-context"><Building2 size={13}/><span>{activeCompany.tradeName}</span><small>{activeCompany.cnpj || "CNPJ pendente"} • {activeCompany.city}/{activeCompany.state}</small></div>
       {current === "PMOC e conformidade" && !planBlocked ? <TechnicalCompliancePanel plans={(moduleRecords.PMOC ?? []) as any} fluids={(moduleRecords.Refrigerantes ?? []) as any} documents={(moduleRecords["Documentação / Habilitação"] ?? []) as any} onSave={(module,record)=>saveConfirmedModuleRecord(module,record)} onDelete={(module,record)=>deleteModuleRecord(module,record as ModuleRecord)}/> : null}
-      <div className="page-content">{planBlocked ? <section className="mobile-module-blocked"><LockKeyhole size={28}/><h2>Módulo não contratado</h2><p>Este módulo não faz parte do plano ativo desta empresa. A liberação é feita pelo ProAR Manager conforme o contrato.</p><button className="primary-btn" onClick={()=>setCurrent(effectiveEntitledModules?.[0]||"Painel inicial")}>Voltar para módulos liberados</button></section> : mobileBlocked ? <section className="mobile-module-blocked"><ShieldCheck size={28}/><h2>Módulo disponível no computador</h2><p>No celular e tablet o ProAR é focado na operação de trabalho. Para gestão administrativa completa, utilize a versão desktop.</p><button className="primary-btn" onClick={()=>setCurrent("Painel inicial")}>Voltar para operação</button></section> : current === "PMOC e conformidade" ? null : current === "Integridade do Sistema" ? <IntegrityAudit/> : current === "Atividades" ? <ActivityCenter records={moduleRecords["Auditoria operacional"] ?? []}/> : current === "Painel inicial" && mobileExperience ? <MobileToday manager={mobileManager}/> : current === "Painel inicial" ? <DashboardWorkspace onNavigate={setCurrent} onPendingSelect={openPending} serviceOrders={serviceOrders} modules={moduleRecords} role={authenticatedUser.role} isAdmin={authenticatedUser.role==="Administrador" || Boolean(authenticatedUser.permissions?.includes("*"))} /> : current === "Central de pendências" ? <OperationsActionCenter serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} modules={moduleRecords as unknown as Record<string,Record<string,unknown>[]>} onNavigate={setCurrent} onPendingSelect={openPending}/> : current === "Clientes" ? <Customers onOpen={name => { setModal(""); window.setTimeout(() => setModal(name), 0); }} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={saveCustomerStructure} onDeleteStructure={deleteCustomerStructure} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Agenda" ? <Agenda companyId={activeCompany.id} serviceOrders={serviceOrders} onOpen={(name,seed)=>{setOrderSeed(seed);setModal(name);}} onSelect={setSelectedOrder} onScheduleUpdate={hasAction("Ordens de serviço","Editar")?updateServiceOrder:undefined} customers={customerRecords} staff={moduleRecords["Funcionários"]||[]}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} company={activeCompany} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <LicitacoesWorkspace company={activeCompany} modules={moduleRecords} customers={customerRecords} orders={serviceOrders} onSaveRecord={(moduleName,record)=>saveConfirmedModuleRecord(moduleName,record)} onDeleteRecord={deleteModuleRecord} onReadyToInvoice={record=>saveConfirmedModuleRecord("Empenhos",{...record,status:"Pronto para faturar"},[{moduleName:"Financeiro",record:{id:`FAT-${record.id}`,name:`Faturamento • ${record.name}`,client:record.client,description:`Aguardando emissão de Nota Fiscal • ${record.empenhoProcess || "processo não informado"}`,createdAt:new Date().toLocaleString("pt-BR"),status:"Pronto para faturar",date:new Date().toISOString().slice(0,10),value:record.value??0,category:"Faturamento público",transactionType:"Receber",empenhoId:record.id}}])} onOpenTender={item=>setModal(`Análise de edital • ${item.numeroControlePNCP || item.objetoCompra || "Licitação"}`)}/> : current === "Orçamentos" ? <BudgetPDV key={focusedBudgetId||"budget-default"} focusedId={focusedBudgetId} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={async record => { const action=(moduleRecords.Orçamentos??[]).some(item=>item.id===record.id)?"Editar":"Criar"; return hasAction("Orçamentos",action) && await persistSharedState(customerRecords,serviceOrders,appendAudit({...moduleRecords,Orçamentos:[record,...(moduleRecords.Orçamentos??[]).filter(item=>item.id!==record.id)]},"Orçamento salvo",record.id,"Orçamento registrado após confirmação.",{moduleName:"Orçamentos",recordId:record.id}),false); }} onConvert={convertBudget} onDelete={record => deleteModuleRecord("Orçamentos",record)} onCreateCustomer={createQuickCustomer} onCreateStructure={createQuickStructure}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} sales={moduleRecords.Vendas ?? []} onSave={record => updateModuleRecord("Vendas",record)} onDelete={record=>deleteModuleRecord("Vendas",record)}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders} company={activeCompany}/> : current === "Diagnósticos" ? <DiagnosticManagementDashboard serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} equipment={(moduleRecords["Equipamentos"] ?? []) as unknown as Record<string,unknown>[]}/> : current === "Fiscal" ? <FiscalWorkspace modules={moduleRecords} serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} company={activeCompany} onNavigate={setCurrent}/> : current === "Base Técnica" ? <TechnicalBasePanel/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany} isAdministrator={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*"))}/> : current === "Aprovações" ? <ApprovalCenter records={moduleRecords["Aprovações"] ?? []} canApprove={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*") || authenticatedUser.permissions?.includes("aprovacoes.aprovar") || authenticatedUser.permissions?.includes("Aprovações"))} onOperation={runOperationalCommand}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} modules={moduleRecords} onOperation={runOperationalCommand} onOpen={setModal} onIssueInvoice={(record,invoiceNumber)=>{const commitment=(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId);const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Faturado"}}]:[];return saveConfirmedModuleRecord("Financeiro",{...record,status:"Em aberto",transactionType:"Receber",invoiceNumber,invoiceIssuedAt:new Date().toISOString()},related)}}/> : current === "Funcionários" ? <EmployeesWorkspace records={moduleRecords["Funcionários"] ?? []} serviceOrders={serviceOrders} onOpen={setModal} onUpdate={(moduleName,record)=>saveConfirmedModuleRecord(moduleName,record)} onDelete={deleteModuleRecord} canEdit={hasAction("Funcionários","Editar")} canManageLogin={Boolean(authenticatedUser.role==="Administrador"||authenticatedUser.permissions?.includes("*"))}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} onUpdate={updateServiceOrder} serviceOrders={serviceOrders} customers={customerRecords} company={activeCompany} role={authenticatedUser.role}/> : <>{(current === "Compras" || current === "Estoque") && <InventoryOperations mode={current} modules={moduleRecords} onOperation={runOperationalCommand}/>}<GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []} allModules={moduleRecords} serviceOrders={serviceOrders}/></>}</div>
+      <div className="page-content">{planBlocked ? <section className="mobile-module-blocked"><LockKeyhole size={28}/><h2>Módulo não contratado</h2><p>Este módulo não faz parte do plano ativo desta empresa. A liberação é feita pelo ProAR Manager conforme o contrato.</p><button className="primary-btn" onClick={()=>setCurrent(effectiveEntitledModules?.[0]||"Painel inicial")}>Voltar para módulos liberados</button></section> : mobileBlocked ? <section className="mobile-module-blocked"><ShieldCheck size={28}/><h2>Módulo disponível no computador</h2><p>No celular e tablet o ProAR é focado na operação de trabalho. Para gestão administrativa completa, utilize a versão desktop.</p><button className="primary-btn" onClick={()=>setCurrent("Painel inicial")}>Voltar para operação</button></section> : current === "PMOC e conformidade" ? null : current === "Integridade do Sistema" ? <IntegrityAudit/> : current === "Atividades" ? <ActivityCenter records={moduleRecords["Auditoria operacional"] ?? []}/> : current === "Painel inicial" && mobileExperience ? <MobileToday manager={mobileManager}/> : current === "Painel inicial" ? <DashboardWorkspace onNavigate={setCurrent} onPendingSelect={openPending} serviceOrders={serviceOrders} modules={moduleRecords} role={authenticatedUser.role} isAdmin={authenticatedUser.role==="Administrador" || Boolean(authenticatedUser.permissions?.includes("*"))} /> : current === "Central de pendências" ? <OperationsActionCenter serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} modules={moduleRecords as unknown as Record<string,Record<string,unknown>[]>} onNavigate={setCurrent} onPendingSelect={openPending}/> : current === "Clientes" ? <Customers onOpen={name => { setModal(""); window.setTimeout(() => setModal(name), 0); }} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={saveCustomerStructure} onDeleteStructure={deleteCustomerStructure} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Agenda" ? <Agenda companyId={activeCompany.id} serviceOrders={serviceOrders} onOpen={(name,seed)=>{setOrderSeed(seed);setModal(name);}} onSelect={setSelectedOrder} onScheduleUpdate={hasAction("Ordens de serviço","Editar")?updateServiceOrder:undefined} customers={customerRecords} staff={moduleRecords["Funcionários"]||[]}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} company={activeCompany} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <LicitacoesWorkspace company={activeCompany} modules={moduleRecords} customers={customerRecords} orders={serviceOrders} onSaveRecord={(moduleName,record)=>saveConfirmedModuleRecord(moduleName,record)} onDeleteRecord={deleteModuleRecord} onReadyToInvoice={record=>saveConfirmedModuleRecord("Empenhos",{...record,status:"Pronto para faturar"},[{moduleName:"Financeiro",record:{id:`FAT-${record.id}`,name:`Faturamento • ${record.name}`,client:record.client,description:`Aguardando emissão de Nota Fiscal • ${record.empenhoProcess || "processo não informado"}`,createdAt:new Date().toLocaleString("pt-BR"),status:"Pronto para faturar",date:new Date().toISOString().slice(0,10),value:record.value??0,category:"Faturamento público",transactionType:"Receber",empenhoId:record.id}}])} onOpenTender={item=>setModal(`Análise de edital • ${item.numeroControlePNCP || item.objetoCompra || "Licitação"}`)}/> : current === "Orçamentos" ? <BudgetPDV key={localScope+":"+(focusedBudgetId||"budget-default")} offlineScope={localScope} offline={!online||databaseMode!=="online"} canCreateOffline={hasAction("Orçamentos","Criar")} focusedId={focusedBudgetId} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={async record => { const action=(moduleRecords.Orçamentos??[]).some(item=>item.id===record.id)?"Editar":"Criar"; return hasAction("Orçamentos",action) && await persistSharedState(customerRecords,serviceOrders,appendAudit({...moduleRecords,Orçamentos:[record,...(moduleRecords.Orçamentos??[]).filter(item=>item.id!==record.id)]},"Orçamento salvo",record.id,"Orçamento registrado após confirmação.",{moduleName:"Orçamentos",recordId:record.id}),false); }} onConvert={convertBudget} onDelete={record => deleteModuleRecord("Orçamentos",record)} onCreateCustomer={createQuickCustomer} onCreateStructure={createQuickStructure}/> : current === "Vendas" ? <SalesPDV bankAvailable={databaseMode==="online"} key={pdvDraftKey(activeCompany.id,authenticatedUser.username)} draftStoreKey={pdvDraftKey(activeCompany.id,authenticatedUser.username)} canEdit={hasAction("Vendas","Criar")||hasAction("Vendas","Editar")||Boolean(authenticatedUser.permissions?.includes("comercial.editar"))} onSyncDraft={(command,isMounted)=>runOperationalCommand({...command,data:{...command.data,companyId:activeCompany.id}},isMounted)} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} sales={moduleRecords.Vendas ?? []} onSave={record => saveConfirmedModuleRecord("Vendas",record)} onDelete={record=>deleteModuleRecord("Vendas",record)}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders} company={activeCompany}/> : current === "Diagnósticos" ? <DiagnosticManagementDashboard serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} equipment={(moduleRecords["Equipamentos"] ?? []) as unknown as Record<string,unknown>[]}/> : current === "Fiscal" ? <FiscalWorkspace modules={moduleRecords} serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} company={activeCompany} onNavigate={setCurrent}/> : current === "Base Técnica" ? <TechnicalBasePanel/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany} isAdministrator={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*"))}/> : current === "Aprovações" ? <ApprovalCenter records={moduleRecords["Aprovações"] ?? []} canApprove={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*") || authenticatedUser.permissions?.includes("aprovacoes.aprovar") || authenticatedUser.permissions?.includes("Aprovações"))} onOperation={runOperationalCommand}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} modules={moduleRecords} onOperation={runOperationalCommand} onOpen={setModal} onIssueInvoice={(record,invoiceNumber)=>{const commitment=(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId);const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Faturado"}}]:[];return saveConfirmedModuleRecord("Financeiro",{...record,status:"Em aberto",transactionType:"Receber",invoiceNumber,invoiceIssuedAt:new Date().toISOString()},related)}}/> : current === "Funcionários" ? <EmployeesWorkspace records={moduleRecords["Funcionários"] ?? []} serviceOrders={serviceOrders} onOpen={setModal} onUpdate={(moduleName,record)=>saveConfirmedModuleRecord(moduleName,record)} onDelete={deleteModuleRecord} canEdit={hasAction("Funcionários","Editar")} canManageLogin={Boolean(authenticatedUser.role==="Administrador"||authenticatedUser.permissions?.includes("*"))}/> : current === "Ordens de serviço" ? <>{osLocal.scope===osDraftScope&&osDraftScope&&<DesktopOsDrafts key={osDraftScope} drafts={osLocal.drafts} error={osLocal.error} busy={osLocalBusy} online={online} canCreate={hasAction("Ordens de serviço","Criar")} technicians={[...new Set((moduleRecords.Funcionários||[]).filter(item=>item.name&&!/inativ/i.test(item.status||"")).map(item=>item.name))]} onSend={draft=>void transmitOsDraft(draft)} onDiscard={discardOsDraft} onRevise={(id,fields)=>{if(activeQueueScope.current!==localScope||desktopSyncLock.current)throw new Error("Não é possível ajustar este pedido agora.");reviseDesktopOsDraft(localStorage,osDraftScope,id,fields);refreshOsDrafts();}}/>}<ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} onUpdate={updateServiceOrder} serviceOrders={serviceOrders} customers={customerRecords} company={activeCompany} role={authenticatedUser.role}/></> : <>{(current === "Compras" || current === "Estoque") && <InventoryOperations mode={current} modules={moduleRecords} onOperation={runOperationalCommand}/>}<GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []} allModules={moduleRecords} serviceOrders={serviceOrders}/></>}</div>
       <footer><span>© {new Date().getFullYear()} ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
-    {modal && <div data-testid={modal === "Novo cliente" ? "customer-new-dialog" : undefined}><Modal initialOrderSeed={orderSeed} title={modal} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalogRecords={[...(moduleRecords["Serviços"] ?? []).map(item=>({...item,kind:"Serviço" as const})), ...(moduleRecords["Produtos"] ?? []).map(item=>({...item,kind:"Produto" as const}))]} supplierRecords={moduleRecords["Fornecedores"] ?? []} employeeRecords={moduleRecords["Funcionários"] ?? []} equipmentRecords={moduleRecords["Equipamentos"] ?? []} serviceOrders={serviceOrders} close={() => {setModal("");setOrderSeed(undefined);}} onSave={saveRecord} canCreateCustomer={hasAction("Clientes","Criar")} onCreateCustomer={createOrderCustomer} onCreateStructure={createOrderStructure}/></div>}
+    {modal && <div data-testid={modal === "Novo cliente" ? "customer-new-dialog" : undefined}><Modal offlineOrderDraft={!online||databaseMode!=="online"} initialOrderSeed={orderSeed} title={modal} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalogRecords={[...(moduleRecords["Serviços"] ?? []).map(item=>({...item,kind:"Serviço" as const})), ...(moduleRecords["Produtos"] ?? []).map(item=>({...item,kind:"Produto" as const}))]} supplierRecords={moduleRecords["Fornecedores"] ?? []} employeeRecords={moduleRecords["Funcionários"] ?? []} equipmentRecords={moduleRecords["Equipamentos"] ?? []} serviceOrders={serviceOrders} close={() => {setModal("");setOrderSeed(undefined);}} onSave={saveRecord} canCreateCustomer={hasAction("Clientes","Criar")} onCreateCustomer={createOrderCustomer} onCreateStructure={createOrderStructure}/></div>}
     {selectedOrder && <OrderDetail order={selectedOrder} customerPhone={(customerRecords.find(customer => customer.id === selectedOrder.customerId) || customerRecords.find(customer => customer.name === selectedOrder.client))?.phone} company={activeCompany} catalog={[...(moduleRecords["Serviços"] ?? []), ...(moduleRecords["Produtos"] ?? [])]} contracts={(moduleRecords.Certames ?? []) as PublicContractRecord[]} customers={customerRecords} employees={moduleRecords["Funcionários"] ?? []} structures={moduleRecords["Unidades e setores"] ?? []} equipment={moduleRecords["Equipamentos"] ?? []} errorCodes={[...(moduleRecords["Códigos HVAC"] ?? []), ...(moduleRecords["Códigos de erro"] ?? []), ...(moduleRecords["ErrorCode"] ?? [])]} manuals={[...(moduleRecords["Base Técnica"] ?? []), ...(moduleRecords["Manuais Técnicos"] ?? []), ...(moduleRecords["Manuais HVAC"] ?? []), ...(moduleRecords["DiagnosticManual"] ?? [])]} close={() => setSelectedOrder(null)} onUpdate={updateServiceOrder} onDelete={deleteOrder} onSyncEquipmentDiagnostic={async (equipmentId, entry) => {
     const currentEquipment=(moduleRecords["Equipamentos"] ?? []).find(item=>item.id===equipmentId);
     if(!currentEquipment)return false;
