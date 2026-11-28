@@ -193,3 +193,21 @@ html[data-proar-system-theme="light"] .pdv-polartech {
 .pdv-polartech .pdv-payment-lines .pdv-payment-line label{display:flex;flex-direction:column;flex:1;min-width:0;gap:.25rem}
 .pdv-polartech .pdv-payment-line input{width:100%;min-width:0}
 .pdv-polartech .pdv-payment-line button{min-width:2.75rem;min-height:2.75rem}
+
+.pdv-polartech .pdv-line-price[title]{cursor:pointer;text-decoration:underline dotted;text-underline-offset:.2em}
+.pdv-polartech .pdv-price-edit-trigger{display:inline-flex;align-items:center;justify-content:center;width:2.75rem;min-height:2rem}
+.pdv-polartech .pdv-cart-items .pdv-price-editor{grid-column:1/-1;display:grid;gap:.45rem;width:100%;min-width:0;padding:.5rem;border:1px solid currentColor;border-radius:.5rem}
+.pdv-polartech .pdv-price-editor label{display:grid;gap:.25rem}
+.pdv-polartech .pdv-price-editor input{width:100%;min-width:0;padding:.55rem}
+.pdv-polartech .pdv-price-editor>div{display:flex;flex-wrap:wrap;gap:.35rem}
+.pdv-polartech .pdv-price-editor button{min-height:2.5rem;padding:.35rem .5rem}
+
+.pdv-polartech .pdv-summary>.pdv-customer-totals{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;align-items:stretch;padding:8px}
+.pdv-polartech .pdv-summary>.pdv-customer-totals[data-has-change="true"]{grid-template-columns:repeat(2,minmax(0,1fr))}
+.pdv-polartech .pdv-amount-tile{display:grid;align-content:center;gap:.28rem;min-width:0;padding:.4rem}
+.pdv-polartech .pdv-amount-tile span{color:var(--pdv-strong)!important;font-size:.67rem;line-height:1.15}
+.pdv-polartech .pdv-amount-tile strong{color:var(--pdv-accent)!important;font-size:clamp(1rem,1.6vw,1.42rem);line-height:1.1;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.pdv-polartech .pdv-customer-change:empty{height:0;padding:0;margin-top:-6px}
+.pdv-polartech .pdv-customer-change:not(:empty){border:1px solid currentColor;border-radius:7px;color:#a7f3d0!important;background:#0d382f}
+.pdv-polartech .pdv-customer-change:not(:empty) :is(strong,span){color:inherit!important}
+html[data-proar-system-theme="light"] .pdv-polartech .pdv-customer-change:not(:empty){color:#166534!important;background:#ecfdf5}

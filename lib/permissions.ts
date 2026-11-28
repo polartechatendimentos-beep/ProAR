@@ -44,6 +44,7 @@ export function sessionFromRequest(request: NextRequest) {
 export function hasPermission(session: ProarSession | null, permission: Permission) {
   if (!session) return false;
   if (session.role === "Administrador" || session.permissions.includes("*")) return true;
+  if (permission === "comercial.preco.alterar") return session.permissions.includes(permission);
   const [module] = permission.split(".");
   // The employee matrix stores module:action labels. Match those exact actions
   // independently: a Visualizar grant must never imply Editar.

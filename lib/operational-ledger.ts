@@ -6,7 +6,7 @@ import { nextPmocDate, type PmocPlan } from "./technical-compliance.ts";
 import { validateProcurementData, priceComposition, qualificationReadiness, brazilDay } from "./procurement-readiness.ts";
 import { prepareOrderSignatures, safeSignatureImage } from "./service-order-signatures.ts";
 import { expandTechnicalSheet } from "./catalog-quantity-pricing.ts";
-import {PdvDraftValidationError,PDV_REVIEW_STATUS,pdvDraftIdValid,pdvNeedsReview,validatePdvProposal} from "./pdv-offline.ts";
+import {PDV_PRICE_PERMISSION,PdvDraftValidationError,PDV_REVIEW_STATUS,pdvDraftIdValid,pdvNeedsReview,validatePdvProposal} from "./pdv-offline.ts";
 /* eslint-disable @typescript-eslint/no-explicit-any, @next/next/no-assign-module-variable */
 // Dynamic records retain the fields of the historical ERP snapshots.
 export type ErpRecord = Record<string, any>;
@@ -136,7 +136,7 @@ function auditChanges(before: ErpRecord[], after: ErpRecord[], module: string, a
 }
 
 /** Validate a complete request against the persisted version, never trusting client totals or audit actors. */
-export function prepareOperationalState(previous: ErpState | null, incoming: ErpState, actor: Actor, now = new Date().toISOString()): ErpState {
+export function prepareOperationalState(previous: ErpState | null, incoming: ErpState, actor: Actor, now = new Date().toISOString(), validatedPendingPdvId?:string): ErpState {
   if (!incoming || typeof incoming !== "object" || !Array.isArray(incoming.customers) || !Array.isArray(incoming.serviceOrders) || !incoming.moduleRecords || typeof incoming.moduleRecords !== "object" || Array.isArray(incoming.moduleRecords)) throw new OperationError("A base enviada está incompleta.");
   const old: ErpState = previous || { customers: [], serviceOrders: [], moduleRecords: {} };
   const next: ErpState = structuredClone(incoming);
@@ -522,13 +522,27 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
     }
     const tracked = stock.some(row=>row.saleId===sale.id && /^(SALE-STOCK-|CONSUMPTION-)/.test(String(row.id)));
     if(before && !pdvNeedsReview(before.status) && pdvNeedsReview(sale.status))throw new OperationError("Não devolva um pedido confirmado para conferência. Cancele com motivo, se necessário.");
-    if(pdvNeedsReview(before?.status)&&!pdvNeedsReview(sale.status)&&!canceled(sale)){
+    const confirmsPending = pdvNeedsReview(before?.status) && !pdvNeedsReview(sale.status) && !canceled(sale);
+    const newPdv = !before && sale.category === "Venda PDV" && sale.status === "Pedido confirmado";
+    const manualLines = list(sale.purchaseItems).filter(item=>item.priceOverride===true);
+    const changedManual = manualLines.some(item=>!list(before?.purchaseItems).some(old=>old.priceOverride===true&&String(old.productId||old.id)===String(item.productId||item.id)&&old.unitValue===item.unitValue&&old.catalogUnitValue===item.catalogUnitValue));
+    const removedAdjustment = list(before?.purchaseItems).some(old=>old.priceOverride===true&&list(sale.purchaseItems).some(item=>String(item.productId||item.id)===String(old.productId||old.id)&&item.priceOverride!==true));
+    const validatedDraft = !before && pdvNeedsReview(sale.status) && sale.id===validatedPendingPdvId;
+    if (!same(before,sale)&&!canceled(sale)&&(changedManual||removedAdjustment)&&!newPdv&&!confirmsPending&&!validatedDraft)throw new OperationError("Ajuste o preço no carrinho antes de confirmar a venda.");
+    if (confirmsPending || newPdv) {
       if(sale.status!=="Pedido confirmado")throw new OperationError("Conclua o pedido somente após a conferência online.");
-      const items=list(sale.purchaseItems).map(item=>({id:item.productId||item.id,quantity:item.quantity,unitPrice:item.unitValue}));
+      const items=list(sale.purchaseItems).map(item=>({id:item.productId||item.id,quantity:item.quantity,unitPrice:item.unitValue,priceOverride:item.priceOverride}));
       const declaredDiscount=items.reduce((sum,item)=>sum+cents(Number(item.unitPrice)*Number(item.quantity)),0)-cents(sale.value);
       try {
-        const review=validatePdvProposal({items,customerId:sale.customerId,structureId:sale.structureId,discount:cash(declaredDiscount),paymentMethod:sale.paymentMethod,plannedPayments:sale.pdvPayments},list(next.customers),list(modules.Produtos),list(modules.Serviços),list(modules["Unidades e setores"]));
-        if(review.discount>0)requireAction(actor,"comercial.desconto.liberar");
+        const review=validatePdvProposal({items,customerId:sale.customerId,structureId:sale.structureId,discount:cash(declaredDiscount),paymentMethod:sale.paymentMethod,plannedPayments:sale.pdvPayments},list(next.customers),list(modules.Produtos),list(modules.Serviços),list(modules["Unidades e setores"]),actor.can(PDV_PRICE_PERMISSION));
+        if(confirmsPending&&review.discount>0)requireAction(actor,"comercial.desconto.liberar");
+        if(review.value!==sale.value)throw new OperationError("O total da venda mudou. Confira os itens e pagamentos.");
+        const validated = new Map(review.purchaseItems.map(item=>[item.id,item]));
+        sale.purchaseItems=list(sale.purchaseItems).map(item=>{
+          const check=validated.get(String(item.productId||item.id));
+          const {priceOverride:_override,catalogUnitValue:_reference,...rest}=item;
+          return check?.priceOverride ? {...rest,priceOverride:true,catalogUnitValue:check.catalogUnitValue,priceRule:check.priceRule}:rest;
+        });
       }catch(error){
         if(error instanceof PdvDraftValidationError)throw new OperationError(error.message,422,error.code);
         throw error;
@@ -610,7 +624,7 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
       if(record){
         // The normal online sale may have reached the DB before its response was lost.
         // The same ID and exact business fields allow recovery without rewriting it.
-        const expectedLines=(items:unknown)=>list(items).map(item=>[String(item.productId||item.id),Number(item.quantity),cents(item.unitValue??item.unitPrice)]).sort((a,b)=>String(a[0]).localeCompare(String(b[0])));
+        const expectedLines=(items:unknown)=>list(items).map(item=>[String(item.productId||item.id),Number(item.quantity),cents(item.unitValue??item.unitPrice),item.priceOverride===true]).sort((a,b)=>String(a[0]).localeCompare(String(b[0])));
         const expectedDiscount=expectedLines(data.items).reduce((sum,item)=>sum+Math.round(Number(item[1])*Number(item[2])),0)-cents(record.value);
         const submitted = summarizePdvPayments(data.plannedPayments, Number(record.value));
         const paymentMatches = record.pdvPayments === undefined || (submitted.complete && same(record.pdvPayments, submitted.net));
@@ -620,7 +634,7 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
         throw new OperationError("Este identificador já consta no histórico com dados diferentes. Confira o pedido antes de descartar a cópia local.",409);
       }
       try{
-        const sale=validatePdvProposal(data,list(state.customers),list(modules.Produtos),list(modules.Serviços),list(modules["Unidades e setores"]));
+        const sale=validatePdvProposal(data,list(state.customers),list(modules.Produtos),list(modules.Serviços),list(modules["Unidades e setores"]),actor.can(PDV_PRICE_PERMISSION));
         if(sale.discount>0&&!actor.can("comercial.desconto.liberar"))throw new PdvDraftValidationError("Este desconto exige autorização. Remova o desconto ou solicite liberação.");
         records.push({id:command.recordId,name:`Venda • ${sale.client}`,...sale,status:PDV_REVIEW_STATUS,category:"Venda PDV",description:`Subtotal R$ ${sale.subtotal.toFixed(2).replace(".",",")} • desconto R$ ${sale.discount.toFixed(2).replace(".",",")}`, createdAt:now,date:now.slice(0,10)});
       }catch(error){
@@ -706,7 +720,7 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
   const effectiveActor: Actor = command.action === "approval-decide"
     ? { ...actor, can: permission => actor.can(permission) || ["compras.editar","comercial.editar"].includes(permission) }
     : actor;
-  const prepared = prepareOperationalState(state, next, effectiveActor, now);
+  const prepared = prepareOperationalState(state, next, effectiveActor, now, command.action==="pdv-sync-draft"?command.recordId:undefined);
   prepared._operations[command.idempotencyKey] = { fingerprint, createdAt: now, user: actor.username };
   return { state: prepared, replay: false };
 }
