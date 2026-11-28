@@ -1,3 +1,4 @@
+import {summarizePdvPayments} from "./pdv-payments.ts";
 import { assertOrderScheduleChanges, OrderScheduleConflict } from "./order-schedule-validation.ts";
 import { calculateCatalogPrice } from "./catalog-cost-engine.ts";
 import { validateTracking, pipelineRecordId } from "./tender-pipeline.ts";
@@ -506,6 +507,19 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
   }
   for (const sale of list(modules.Vendas)) {
     const before = list(oldModules.Vendas).find(item=>item.id===sale.id);
+    if (pdvNeedsReview(sale.status) && sale.pdvPayments !== undefined && !same(before,sale)) {
+      throw new OperationError("O pedido ainda aguarda conferência. Registre os pagamentos na confirmação online.");
+    }
+    if (!same(before,sale) && !pdvNeedsReview(sale.status) && !canceled(sale) && (sale.pdvPayments !== undefined || before?.pdvPayments !== undefined)) {
+      const breakdown = summarizePdvPayments(sale.pdvPayments, sale.value);
+      if (!breakdown.complete) throw new OperationError("A soma das formas de pagamento deve corresponder ao total da venda.");
+      sale.pdvPayments = breakdown.net;
+      if (breakdown.net.length) sale.paymentMethod = breakdown.net[0].method;
+      if (breakdown.net.some(item=>item.method==="Boleto")) {
+        const customer=list(next.customers).find(item=>item.id===sale.customerId);
+        if(customer&&Number(customer.creditLimit||0)>0&&Number(customer.balancePosted||0)+Number(sale.value)>Number(customer.creditLimit))throw new OperationError("Limite de crédito excedido para o pedido.");
+      }
+    }
     const tracked = stock.some(row=>row.saleId===sale.id && /^(SALE-STOCK-|CONSUMPTION-)/.test(String(row.id)));
     if(before && !pdvNeedsReview(before.status) && pdvNeedsReview(sale.status))throw new OperationError("Não devolva um pedido confirmado para conferência. Cancele com motivo, se necessário.");
     if(pdvNeedsReview(before?.status)&&!pdvNeedsReview(sale.status)&&!canceled(sale)){
@@ -513,7 +527,7 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
       const items=list(sale.purchaseItems).map(item=>({id:item.productId||item.id,quantity:item.quantity,unitPrice:item.unitValue}));
       const declaredDiscount=items.reduce((sum,item)=>sum+cents(Number(item.unitPrice)*Number(item.quantity)),0)-cents(sale.value);
       try {
-        const review=validatePdvProposal({items,customerId:sale.customerId,structureId:sale.structureId,discount:cash(declaredDiscount),paymentMethod:sale.paymentMethod},list(next.customers),list(modules.Produtos),list(modules.Serviços),list(modules["Unidades e setores"]));
+        const review=validatePdvProposal({items,customerId:sale.customerId,structureId:sale.structureId,discount:cash(declaredDiscount),paymentMethod:sale.paymentMethod,plannedPayments:sale.pdvPayments},list(next.customers),list(modules.Produtos),list(modules.Serviços),list(modules["Unidades e setores"]));
         if(review.discount>0)requireAction(actor,"comercial.desconto.liberar");
       }catch(error){
         if(error instanceof PdvDraftValidationError)throw new OperationError(error.message,422,error.code);
@@ -598,7 +612,9 @@ export function applyOperationalCommand(state: ErpState, command: OperationalCom
         // The same ID and exact business fields allow recovery without rewriting it.
         const expectedLines=(items:unknown)=>list(items).map(item=>[String(item.productId||item.id),Number(item.quantity),cents(item.unitValue??item.unitPrice)]).sort((a,b)=>String(a[0]).localeCompare(String(b[0])));
         const expectedDiscount=expectedLines(data.items).reduce((sum,item)=>sum+Math.round(Number(item[1])*Number(item[2])),0)-cents(record.value);
-        if(list(data.items).length>0&&same(expectedLines(record.purchaseItems),expectedLines(data.items))&&String(record.customerId||"")===String(data.customerId||"")&&String(record.structureId||"")===String(data.structureId||"")&&String(record.paymentMethod||"")===String(data.paymentMethod||"")&&expectedDiscount===cents(data.discount)){
+        const submitted = summarizePdvPayments(data.plannedPayments, Number(record.value));
+        const paymentMatches = record.pdvPayments === undefined || (submitted.complete && same(record.pdvPayments, submitted.net));
+        if(paymentMatches&&list(data.items).length>0&&same(expectedLines(record.purchaseItems),expectedLines(data.items))&&String(record.customerId||"")===String(data.customerId||"")&&String(record.structureId||"")===String(data.structureId||"")&&String(record.paymentMethod||"")===String(data.paymentMethod||"")&&expectedDiscount===cents(data.discount)){
           return {state,replay:true};
         }
         throw new OperationError("Este identificador já consta no histórico com dados diferentes. Confira o pedido antes de descartar a cópia local.",409);

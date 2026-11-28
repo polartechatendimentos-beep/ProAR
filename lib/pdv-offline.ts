@@ -1,4 +1,6 @@
 import {quantityPrice} from "./catalog-quantity-pricing.ts";
+import {pdvMethods} from "./pdv-payments.ts";
+export {pdvMethods} from "./pdv-payments.ts";
 
 export const PDV_REVIEW_STATUS="Aguardando conferência";
 export const pdvNeedsReview=(status:unknown)=>status===PDV_REVIEW_STATUS;
@@ -9,7 +11,7 @@ type DraftLine={id:string;quantity:number;unitPrice:number};
 type DraftPayment={method:string;amount:number};
 export type PdvProposal={items:DraftLine[];customerId:string;structureId:string;discount:number;paymentMethod:string;plannedPayments?:DraftPayment[]};
 export type PdvDraft<T>={id:string;updatedAt:string;form:T;proposal:PdvProposal;attempted:boolean};
-export const pdvMethods=["PIX","Dinheiro","Cartão de débito","Cartão de crédito","Boleto","Outros"];
+
 export function readPdvDrafts<T>(storage:Pick<Storage,"getItem">, key:string):PdvDraft<T>[] {
   const raw=storage.getItem(key);
   if(!raw)return [];
@@ -62,15 +64,15 @@ export function validatePdvProposal(data:PdvRecord,customers:PdvRecord[],product
   const subtotal=purchaseItems.reduce((sum,row)=>sum+money(row.unitValue*row.quantity),0);
   const discount=typeof data.discount==="number"?money(data.discount):-1;
   if(!Number.isSafeInteger(subtotal)||!Number.isSafeInteger(discount)||discount<0||discount>subtotal)reject("O desconto excede o total ou está inválido.");
-  const paymentMethod=pdvMethods.includes(String(data.paymentMethod))?String(data.paymentMethod):"";
+  const paymentMethod=pdvMethods.some(method=>method===data.paymentMethod)?String(data.paymentMethod):"";
   if(!paymentMethod)reject("Informe a forma de pagamento pretendida.");
   const value=(subtotal-discount)/100;
   const plannedPayments=Array.isArray(data.plannedPayments)?data.plannedPayments.slice(0,pdvMethods.length).flatMap(item=>{
-    const method=item&&pdvMethods.includes(item.method)?String(item.method):"";
+    const method=item&&pdvMethods.some(method=>method===item.method)?String(item.method):"";
     const amount=item&&typeof item.amount==="number"&&Number.isFinite(item.amount)&&item.amount>0&&item.amount<=10_000_000?money(item.amount)/100:0;
     return method&&amount?[{method,amount,status:"Não verificado"}]:[];
   }):[];
-  if(paymentMethod==="Boleto"&&customer&&Number(customer.creditLimit||0)>0&&Number(customer.balancePosted||0)+value>Number(customer.creditLimit))reject("Limite de crédito excedido para o pedido.");
+  if((paymentMethod==="Boleto"||plannedPayments.some(item=>item.method==="Boleto"))&&customer&&Number(customer.creditLimit||0)>0&&Number(customer.balancePosted||0)+value>Number(customer.creditLimit))reject("Limite de crédito excedido para o pedido.");
   return {client:String(customer?.name||"Consumidor final"),...(customer?{customerId}:{}),...(structure?{structureId,unit:String(structure.name??"")}:{}),purchaseItems,subtotal:subtotal/100,discount:discount/100,paymentMethod,pdvPaymentIntent:plannedPayments,value};
 }
-export const enteredPdvPayments=(payments:DraftPayment[])=>payments.filter(item=>pdvMethods.includes(item.method)&&Number.isFinite(item.amount)&&item.amount>=0).map(({method,amount})=>({method,amount}));
+export const enteredPdvPayments=(payments:DraftPayment[])=>payments.filter(item=>pdvMethods.some(method=>method===item.method)&&Number.isFinite(item.amount)&&item.amount>=0).map(({method,amount})=>({method,amount}));
