@@ -13,7 +13,9 @@ import { EMPLOYEE_ACCESS_MODULES, EMPLOYEE_ACCESS_PROFILES, employeeAccessPreset
 import { employeePasswordIssue } from "@/lib/employee-password-validation";
 import { orderCreationIssue } from "@/lib/order-create-validation";
 import { orderSectorLocationOptions, orderSectorUnitSelection } from "@/lib/order-location-options";
-import { stateSaveOutcome } from "@/lib/state-save-confirmation";
+import { isQuoteApproved, validOperationalRecordId } from "@/lib/operational-follow-through";
+import { desktopOperationChanges,desktopQueuePrefix,enqueueDesktopOperation,legacyDesktopOperationsCount,readDesktopOperations,syncDesktopOperations,type DesktopOfflineOperation } from "@/lib/desktop-offline-operations";
+import { stateSaveOutcome, type ConfirmedState } from "@/lib/state-save-confirmation";
 import type { CostLine } from "@/lib/catalog-cost-engine";
 import { CatalogBidSimulator } from "@/components/CatalogBidSimulator";
 import { CatalogAdvancedSimulators } from "@/components/CatalogAdvancedSimulators";
@@ -52,6 +54,7 @@ import "./fiscal-workspace.css";
 import "./responsive-hardening.css";
 import "./resilience-status.css";
 import "./proar-petroleum-palette.css";
+import "./os-create-compact-mobile.css";
 import { ConnectivityBanner } from "@/components/ResponsivePrimitives";
 import { MobileToday } from "@/components/MobileToday";
 
@@ -125,7 +128,7 @@ import { createMobilePaymentIntent, paymentStatusLabel } from "@/lib/mobile-paym
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type NavItem = { icon: IconType; name: string; badge?: string };
 type GlobalSearchItem = { id: string; title: string; detail: string; module: string; kind: "Cliente" | "OS" | "Cadastro" };
-type PendingItem = { id: string; title: string; detail: string; module: string; tone: "blue" | "amber" | "red" };
+type PendingItem = { id: string; title: string; detail: string; module: string; tone: "blue" | "amber" | "red"; recordId?: string };
 
 const navGroups: { label: string; items: NavItem[] }[] = [
   { label: "OPERAÇÃO DO DIA A DIA", items: [
@@ -169,11 +172,14 @@ type ServiceOrder = {
   pmocAfterPhotosDraft?:string[];
   changeReason?: string;
   id: string; client: string; unit: string; service: string; tech: string;
+  employeeId?: string;
+  techId?: string;
   customerId?: string;
   unitId?: string;
   sectorId?: string;
   roomId?: string;
   sourceBudgetId?: string;
+  creationRequestId?: string;
   equipmentIds?: string[];
   equipmentId?: string;
   equipmentLabelCode?: string;
@@ -473,6 +479,7 @@ async function prepareCatalogImage(file: File): Promise<{dataUrl:string;name:str
 const companyIdFromCnpj = (cnpj: string) => normalizeCnpj(cnpj) || `empresa-${Date.now()}`;
 
 type ModuleRecord = {
+  sourceBudgetId?: string;
   tracking?: TenderTracking;
   procurement?: ProcurementData;
   pricing?: PricingInput;
@@ -876,7 +883,7 @@ function Sidebar({ current, setCurrent, open, close, permissions, role, entitled
   </>;
 }
 
-function CustomerDetail({ customerName, customers, structures, serviceOrders, modules, canEdit, onBack, onOpen, onUpdateStructure, onDeleteStructure }: { customerName: string; customers: Customer[]; structures: ModuleRecord[]; serviceOrders: ServiceOrder[]; modules: Record<string, ModuleRecord[]>; canEdit: boolean; onBack: () => void; onOpen: (name: string) => void; onUpdateStructure: (record: ModuleRecord) => void | boolean | Promise<boolean>; onDeleteStructure: (record: ModuleRecord) => void | boolean | Promise<boolean> }) {
+function CustomerDetail({ customerName, customers, structures, serviceOrders, modules, canEdit, onBack, onOpen, onUpdateCustomer, onUpdateStructure, onDeleteStructure }: { customerName: string; customers: Customer[]; structures: ModuleRecord[]; serviceOrders: ServiceOrder[]; modules: Record<string, ModuleRecord[]>; canEdit: boolean; onBack: () => void; onOpen: (name: string) => void; onUpdateCustomer:(customer:Customer)=>Promise<boolean>; onUpdateStructure: (record: ModuleRecord) => void | boolean | Promise<boolean>; onDeleteStructure: (record: ModuleRecord) => void | boolean | Promise<boolean> }) {
   const customer = customers.find(item => item.name === customerName);
   if (!customer) return null;
   return <CustomerProfileWorkspace
@@ -887,13 +894,13 @@ function CustomerDetail({ customerName, customers, structures, serviceOrders, mo
     canEdit={canEdit}
     onBack={onBack}
     onOpen={onOpen}
-    onUpdateCustomer={updated => window.dispatchEvent(new CustomEvent("proar:update-customer", { detail: updated }))}
+    onUpdateCustomer={updated=>onUpdateCustomer(updated as Customer)}
     onUpdateStructure={updated => onUpdateStructure(updated as ModuleRecord)}
     onDeleteStructure={record => onDeleteStructure(record as ModuleRecord)}
   />;
 }
 
-function Customers({ onOpen, onDelete, onUpdate, onUpdateStructure, onDeleteStructure, canEdit, customers, structures, serviceOrders, modules }: { onOpen: (name: string) => void; onDelete: (customer: Customer) => void; onUpdate: (customer: Customer) => void; onUpdateStructure: (record: ModuleRecord) => void | boolean | Promise<boolean>; onDeleteStructure: (record: ModuleRecord) => void | boolean | Promise<boolean>; canEdit: boolean; customers: Customer[]; structures: ModuleRecord[]; serviceOrders: ServiceOrder[]; modules: Record<string, ModuleRecord[]> }) {
+function Customers({ onOpen, onDelete, onUpdate, onUpdateStructure, onDeleteStructure, canEdit, customers, structures, serviceOrders, modules }: { onOpen: (name: string) => void; onDelete: (customer: Customer) => void; onUpdate: (customer: Customer) => Promise<boolean>; onUpdateStructure: (record: ModuleRecord) => void | boolean | Promise<boolean>; onDeleteStructure: (record: ModuleRecord) => void | boolean | Promise<boolean>; canEdit: boolean; customers: Customer[]; structures: ModuleRecord[]; serviceOrders: ServiceOrder[]; modules: Record<string, ModuleRecord[]> }) {
   const [query, setQuery] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState("");
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -903,7 +910,7 @@ function Customers({ onOpen, onDelete, onUpdate, onUpdateStructure, onDeleteStru
   const filtered = useMemo(() => customers.filter(c => `${c.name} ${c.doc} ${c.contact}`.toLowerCase().includes(query.toLowerCase())), [query, customers]);
   const customerDirty=Boolean(editingCustomer&&editingCustomerInitial&&JSON.stringify(editingCustomer)!==JSON.stringify(editingCustomerInitial));
   const openCustomerEditor=(customer:Customer)=>{setEditingCustomer(null);setEditingCustomerInitial(null);setCustomerEditError("");setSelectedCustomer(customer.name);};
-  const undoCustomerAudit=(item:ModuleRecord)=>{
+  const undoCustomerAudit=async(item:ModuleRecord)=>{
     if(!canEdit)return;
     const recordId=String(item.recordId||"");
     const before=item.auditBeforeData as Record<string,unknown>|undefined;
@@ -913,21 +920,20 @@ function Customers({ onOpen, onDelete, onUpdate, onUpdateStructure, onDeleteStru
     const canonical=(value:unknown):unknown=>Array.isArray(value)?value.map(canonical):value&&typeof value==="object"?Object.fromEntries(Object.entries(value as Record<string,unknown>).sort(([a],[b])=>a.localeCompare(b)).map(([key,entry])=>[key,canonical(entry)])):value;
     if(JSON.stringify(canonical(current))!==JSON.stringify(canonical(expected))){window.alert("O cadastro mudou depois desta alteração. Atualize o histórico antes de desfazer para evitar sobrescrever dados recentes.");return;}
     if(!window.confirm(`Restaurar os dados do cliente para o estado anterior a “${item.name}”? O ProAR registrará esta restauração no histórico.`))return;
-    onUpdate({...before,id:current.id} as unknown as Customer);
-    setHistoryCustomer(null);
+    if(await onUpdate({...before,id:current.id} as unknown as Customer))setHistoryCustomer(null);
   };
   const closeCustomerEditor=()=>{if(customerDirty&&!window.confirm("Existem alterações não salvas neste cliente. Deseja sair e descartar as alterações?"))return;setEditingCustomer(null);setEditingCustomerInitial(null);};
   useEffect(()=>{const beforeUnload=(event:BeforeUnloadEvent)=>{if(!customerDirty)return;event.preventDefault();event.returnValue=""};window.addEventListener("beforeunload",beforeUnload);return()=>window.removeEventListener("beforeunload",beforeUnload)},[customerDirty]);
-  if (selectedCustomer) return <CustomerDetail customerName={selectedCustomer} customers={customers} structures={structures} serviceOrders={serviceOrders} modules={modules} canEdit={canEdit} onUpdateStructure={onUpdateStructure} onDeleteStructure={onDeleteStructure} onBack={() => setSelectedCustomer("")} onOpen={name=>name==="Licitações"?window.dispatchEvent(new CustomEvent("proar:navigate",{detail:name})):onOpen(name)}/>;
+  if (selectedCustomer) return <CustomerDetail customerName={selectedCustomer} customers={customers} structures={structures} serviceOrders={serviceOrders} modules={modules} canEdit={canEdit} onUpdateCustomer={onUpdate} onUpdateStructure={onUpdateStructure} onDeleteStructure={onDeleteStructure} onBack={() => setSelectedCustomer("")} onOpen={name=>name==="Licitações"?window.dispatchEvent(new CustomEvent("proar:navigate",{detail:name})):onOpen(name)}/>;
   return <section className="module-page">
     <div className="module-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Pesquisar cliente, CPF ou CNPJ..." /></label><button className="outline-btn"><Filter size={14}/> Filtros</button><a className="outline-btn" href="/atendimento">Central de atendimento</a><button type="button" className="primary-btn" data-testid="customer-new-button" aria-haspopup="dialog" onClick={() => onOpen("Novo cliente")}><Plus size={16}/> Novo cliente</button></div>
     <div className="module-summary">
       <article><span><UsersRound size={19}/></span><div><small>CLIENTES ATIVOS</small><strong>{customers.filter(item => item.status === "Ativo").length}</strong><em>Cadastros reais</em></div></article>
       <article><span><Building2 size={19}/></span><div><small>UNIDADES CADASTRADAS</small><strong>{customers.reduce((total, item) => total + item.units, 0)}</strong><em>Vinculadas aos clientes</em></div></article>
-      <article><span><HandCoins size={19}/></span><div><small>FATURAMENTO NO MÊS</small><strong>R$ 0,00</strong><em>Sem vendas lançadas</em></div></article>
+      <article><span><HandCoins size={19}/></span><div><small>CADASTROS SEM TELEFONE</small><strong>{customers.filter(item=>item.status==="Ativo"&&!item.phone?.trim()).length}</strong><em>Clientes ativos sem número informado</em></div></article>
     </div>
     <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><UsersRound size={12}/> CARTEIRA</span><h2>Clientes cadastrados</h2><p>{filtered.length} registro(s) encontrado(s) • {canEdit ? "Duplo clique para alterar" : "Somente consulta"}</p></div><button>Exportar <ChevronDown size={13}/></button></div><div className="table-wrap"><table><thead><tr><th>CLIENTE</th><th>CPF / CNPJ</th><th>RESPONSÁVEL</th><th>TELEFONE</th><th>ENDEREÇO</th><th>SITUAÇÃO</th><th>AÇÕES</th></tr></thead><tbody>{filtered.map(c => <tr key={c.id} className={canEdit ? "clickable-row" : undefined} title={canEdit ? "Duplo clique para alterar o cadastro" : "Duplo clique para abrir a ficha"} onDoubleClick={() => canEdit ? openCustomerEditor(c) : setSelectedCustomer(c.name)}><td><div className="client-cell"><span>{c.name.split(" ").map(x => x[0]).slice(0,2).join("")}</span><strong>{c.name}</strong></div></td><td>{c.doc || "—"}</td><td>{c.contact || "—"}</td><td>{c.phone || "—"}</td><td>{c.address || "—"}</td><td><span className="status green"><i/> {c.status}</span></td><td><div className="row-actions"><button className="open-client" onClick={() => openCustomerEditor(c)}>Abrir <ChevronRight size={14}/></button>{canEdit && <button onClick={() => openCustomerEditor(c)} title="Alterar"><Edit3 size={14}/></button>}<button title="Histórico do cliente" onClick={()=>setHistoryCustomer(c)}><History size={14}/></button><button className="delete-action" aria-label={`Excluir ${c.name}`} onClick={() => onDelete(c)}><Trash2 size={14}/></button></div></td></tr>)}</tbody></table></div>{!filtered.length && <div className="linked-empty"><UsersRound size={22}/><h4>Nenhum cliente cadastrado</h4><p>Use “Novo cliente” para iniciar sua base real.</p></div>}</div>
-    {editingCustomer && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={closeCustomerEditor} aria-label="Fechar"/><div className="modal catalog-edit-modal"><div className="modal-head"><div><span>ALTERAR CLIENTE</span><h2>{editingCustomer.name}</h2><p>Atualize cadastro, endereço e situação.</p></div><button onClick={closeCustomerEditor}><X size={18}/></button></div><div className="catalog-edit-form"><label>Nome / razão social<input value={editingCustomer.name} onChange={event => setEditingCustomer({...editingCustomer,name:event.target.value})}/></label><label>CPF / CNPJ<input value={editingCustomer.doc} onChange={event => setEditingCustomer({...editingCustomer,doc:event.target.value})}/></label><label>Tipo de organização<select value={editingCustomer.organizationType ?? (editingCustomer.personType==="PF"?"Pessoa Física":"Empresa")} onChange={event=>setEditingCustomer({...editingCustomer,organizationType:event.target.value as Customer["organizationType"]})}><option>Empresa</option><option>Pessoa Física</option><option>Prefeitura</option><option>Órgão Público</option><option>Autarquia</option><option>Fundação</option><option>Entidade Pública</option><option>Outro</option></select></label><label>Responsável<input value={editingCustomer.contact} onChange={event => setEditingCustomer({...editingCustomer,contact:event.target.value})}/></label><label>Telefone<input value={editingCustomer.phone} onChange={event => setEditingCustomer({...editingCustomer,phone:event.target.value})}/></label><CustomerAddressFields value={editingCustomer} onChange={patch=>setEditingCustomer(current=>current?{...current,...patch}:current)}/><label>Situação<select value={editingCustomer.status} onChange={event => setEditingCustomer({...editingCustomer,status:event.target.value})}><option>Ativo</option><option>Inativo</option></select></label><label>Limite de crédito<input type="number" min="0" step="0.01" value={editingCustomer.creditLimit ?? 0} onChange={event => setEditingCustomer({...editingCustomer,creditLimit:Math.max(0,Number(event.target.value)||0)})}/></label><label>Saldo lançado<input type="number" min="0" step="0.01" value={editingCustomer.balancePosted ?? 0} onChange={event => setEditingCustomer({...editingCustomer,balancePosted:Math.max(0,Number(event.target.value)||0)})}/></label><label>Situação financeira<select value={editingCustomer.financialStatus ?? "Liberado"} onChange={event => setEditingCustomer({...editingCustomer,financialStatus:event.target.value as Customer["financialStatus"]})}><option>Liberado</option><option>Alerta</option><option>Somente à vista</option><option>Bloqueado</option></select></label></div>{customerEditError&&<p className="customer-document-error" role="alert">{customerEditError}</p>}<div className="modal-actions">{customerDirty&&<span className="unsaved-indicator"><AlertTriangle size={13}/> Alterações não salvas</span>}<button className="outline-btn" onClick={closeCustomerEditor}>Cancelar</button><button className="primary-btn" onClick={() => {const error=customerDocumentError(editingCustomer.doc);if(error){setCustomerEditError(error);return;}setCustomerEditError("");onUpdate(editingCustomer);setEditingCustomer(null);setEditingCustomerInitial(null);}}><CheckCircle2 size={15}/> Salvar alterações</button></div></div></div>}
+    {editingCustomer && <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" onClick={closeCustomerEditor} aria-label="Fechar"/><div className="modal catalog-edit-modal"><div className="modal-head"><div><span>ALTERAR CLIENTE</span><h2>{editingCustomer.name}</h2><p>Atualize cadastro, endereço e situação.</p></div><button onClick={closeCustomerEditor}><X size={18}/></button></div><div className="catalog-edit-form"><label>Nome / razão social<input value={editingCustomer.name} onChange={event => setEditingCustomer({...editingCustomer,name:event.target.value})}/></label><label>CPF / CNPJ<input value={editingCustomer.doc} onChange={event => setEditingCustomer({...editingCustomer,doc:event.target.value})}/></label><label>Tipo de organização<select value={editingCustomer.organizationType ?? (editingCustomer.personType==="PF"?"Pessoa Física":"Empresa")} onChange={event=>setEditingCustomer({...editingCustomer,organizationType:event.target.value as Customer["organizationType"]})}><option>Empresa</option><option>Pessoa Física</option><option>Prefeitura</option><option>Órgão Público</option><option>Autarquia</option><option>Fundação</option><option>Entidade Pública</option><option>Outro</option></select></label><label>Responsável<input value={editingCustomer.contact} onChange={event => setEditingCustomer({...editingCustomer,contact:event.target.value})}/></label><label>Telefone<input value={editingCustomer.phone} onChange={event => setEditingCustomer({...editingCustomer,phone:event.target.value})}/></label><CustomerAddressFields value={editingCustomer} onChange={patch=>setEditingCustomer(current=>current?{...current,...patch}:current)}/><label>Situação<select value={editingCustomer.status} onChange={event => setEditingCustomer({...editingCustomer,status:event.target.value})}><option>Ativo</option><option>Inativo</option></select></label><label>Limite de crédito<input type="number" min="0" step="0.01" value={editingCustomer.creditLimit ?? 0} onChange={event => setEditingCustomer({...editingCustomer,creditLimit:Math.max(0,Number(event.target.value)||0)})}/></label><label>Saldo lançado<input type="number" min="0" step="0.01" value={editingCustomer.balancePosted ?? 0} onChange={event => setEditingCustomer({...editingCustomer,balancePosted:Math.max(0,Number(event.target.value)||0)})}/></label><label>Situação financeira<select value={editingCustomer.financialStatus ?? "Liberado"} onChange={event => setEditingCustomer({...editingCustomer,financialStatus:event.target.value as Customer["financialStatus"]})}><option>Liberado</option><option>Alerta</option><option>Somente à vista</option><option>Bloqueado</option></select></label></div>{customerEditError&&<p className="customer-document-error" role="alert">{customerEditError}</p>}<div className="modal-actions">{customerDirty&&<span className="unsaved-indicator"><AlertTriangle size={13}/> Alterações não salvas</span>}<button className="outline-btn" onClick={closeCustomerEditor}>Cancelar</button><button className="primary-btn" onClick={() => {const error=customerDocumentError(editingCustomer.doc);if(error){setCustomerEditError(error);return;}setCustomerEditError("");void onUpdate(editingCustomer).then(saved=>{if(saved){setEditingCustomer(null);setEditingCustomerInitial(null);}else setCustomerEditError("O banco não confirmou. Os campos foram mantidos.");});}}><CheckCircle2 size={15}/> Salvar alterações</button></div></div></div>}
     {historyCustomer&&(()=>{const audit=(modules.Auditoria??[]).filter(item=>auditMatches(item as unknown as Record<string,unknown>,"Clientes",historyCustomer.id,historyCustomer.name));return <div className="modal-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" aria-label="Fechar histórico" onClick={()=>setHistoryCustomer(null)}/><div className="modal audit-history-modal"><div className="modal-head"><div><span>HISTÓRICO DO REGISTRO</span><h2>{historyCustomer.name}</h2><p>{historyCustomer.id} • alterações registradas na auditoria</p></div><button onClick={()=>setHistoryCustomer(null)}><X size={18}/></button></div><div className="record-audit-list">{audit.length?audit.map(item=><article key={item.id}><span><History size={14}/></span><div><header><b>{item.name}</b><time>{item.createdAt}</time></header><p>{item.auditDetail||item.description}</p><small>{item.auditUser||item.client||"Sistema"}</small>{canEdit&&item.auditModule==="Clientes"&&item.recordId&&item.auditBeforeData&&item.auditAfterData?<button type="button" className="outline-btn" onClick={()=>undoCustomerAudit(item)}>Desfazer edição</button>:null}{item.auditChanges?.length?<div className="record-audit-changes">{item.auditChanges.map((change,index)=><em key={index}><b>{change.field}</b> {change.before} → <strong>{change.after}</strong></em>)}</div>:null}</div></article>):<div className="entity-empty"><History size={20}/><span>Nenhuma alteração auditada para este cliente ainda.</span></div>}</div><div className="modal-actions"><button className="primary-btn" onClick={()=>setHistoryCustomer(null)}>Fechar</button></div></div></div>})()}
   </section>;
 }
@@ -947,7 +953,7 @@ async function quickPrintServiceOrder(order: ServiceOrder, company: TenantCompan
   } catch { window.alert("Não foi possível gerar o PDF da OS. Tente novamente."); }
 }
 
-function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: sourceServiceOrders, customers, company, role }: { onOpen: (name: string) => void; onSelect: (order: ServiceOrder) => void; onDelete: (order: ServiceOrder) => void; onUpdate: (order: ServiceOrder) => void; serviceOrders: ServiceOrder[]; customers: Customer[]; company: TenantCompany; role?: string }) {
+function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: sourceServiceOrders, customers, company, role }: { onOpen: (name: string) => void; onSelect: (order: ServiceOrder) => void; onDelete: (order: ServiceOrder) => void; onUpdate: (order: ServiceOrder) => Promise<ServiceOrder|null>; serviceOrders: ServiceOrder[]; customers: Customer[]; company: TenantCompany; role?: string }) {
   const [query, setQuery] = useState("");
   const technicianMode = /t[eé]cnico/i.test(role || "");
   const [visibility, setVisibility] = useState(technicianMode ? "Hoje" : "Em aberto");
@@ -1030,32 +1036,70 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: so
     const message = "Olá " + order.client + ", aqui é da PolarTech. A manutenção preventiva do equipamento " + equipment + ", na unidade " + (order.unit || "informada") + ", está prevista para " + due + ". Podemos combinar o agendamento?";
     window.open("https://wa.me/" + internationalPhone + "?text=" + encodeURIComponent(message), "_blank", "noopener,noreferrer");
   };
+  const fiscalBusy=useRef(new Set<string>());
+  const fiscalValues=useRef<Record<string,string>>({});
+  const [fiscalFeedback,setFiscalFeedback]=useState("");
+  const [issuingOrder,setIssuingOrder]=useState("");
+  const [fiscalPending,setFiscalPending]=useState<Record<string,boolean>>({});
+  const shouldReconcile=(order:ServiceOrder)=>Boolean(fiscalPending[order.id] || /^(autorizada|emitida|processando)$/i.test(order.nfseStatus || ""));
   const emitNfse = async (order: ServiceOrder) => {
-    const customer = customers.find(item => item.name === order.client);
-    if (!customer?.doc) return window.alert("Cadastre o CPF/CNPJ do cliente antes de emitir a NFS-e.");
-    const rawValue = window.prompt("Valor da NFS-e (R$):", String(order.nfseValue || ""));
-    if (rawValue === null) return;
-    const value = Number(rawValue.replace(",", "."));
-    if (!Number.isFinite(value) || value <= 0) return window.alert("Informe um valor válido.");
+    if(fiscalBusy.current.size)return;
+    const reconcile=shouldReconcile(order),alreadyAuthorized=/autorizad|emitid/i.test(order.nfseStatus||"");
+    const customer=order.customerId ? customers.find(item=>item.id===order.customerId) : customers.filter(item=>item.name===order.client).length===1 ? customers.find(item=>item.name===order.client) : undefined;
+    let value=order.nfseValue;
+    if(!reconcile){
+      if(!customer?.doc){setFiscalFeedback("Cliente: vincule o cadastro correto com CPF/CNPJ antes de emitir a NFS-e.");return;}
+      const raw=window.prompt("Valor da NFS-e (R$):",fiscalValues.current[order.id]??String(value||""));
+      if(raw===null)return;
+      value=Number(raw.replace(",","."));
+      fiscalValues.current[order.id]=raw;
+      if(!Number.isFinite(value)||value<=0){setFiscalFeedback("Valor da NFS-e: informe um valor maior que zero.");return;}
+    }
+    fiscalBusy.current.add(order.id);setIssuingOrder(order.id);setFiscalFeedback("");
+    let started=false;
     try {
-      const configResponse=await fetch("/api/fiscal-config",{cache:"no-store"});
-      const fiscal=await configResponse.json();
-      if(!configResponse.ok)throw new Error(fiscal.error||"Não foi possível carregar a configuração fiscal da empresa.");
-      const nfseConfig=fiscal.nfse||{};
-      if(!nfseConfig.serviceCode||!nfseConfig.municipalityCode)throw new Error("Configure o código do serviço e o município emissor em Configurações → Fiscal antes de preparar a NFS-e Nacional.");
-      onUpdate({ ...order, nfseStatus:"Processando", nfseValue:value });
-      const response = await fetch("/api/nfse/issue", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ serviceOrderId:order.id, customer:{ name:order.client, document:customer.doc, unit:order.unit, address:order.address }, service:{ description:nfseConfig.defaultServiceDescription||order.service, value }, nfse:{provider:"SEFIN Nacional",environment:fiscal.company?.environment||"Homologação",taxRegime:fiscal.company?.taxRegime,municipalityCode:nfseConfig.municipalityCode,serviceCode:nfseConfig.serviceCode,nbsCode:nfseConfig.nbsCode,issRate:nfseConfig.issRate,rpsSeries:nfseConfig.rpsSeries,issWithheld:nfseConfig.issWithheld,specialTaxRegime:nfseConfig.specialTaxRegime} }) });
-      const result = await response.json().catch(()=>({}));
-      if (response.status === 202 || result.status === "Processando") {
-        onUpdate({ ...order, nfseStatus:"Processando", nfseValue:value });
-        window.alert("A NFS-e foi recebida para processamento, mas ainda não está autorizada. Consulte novamente antes de enviar ao cliente.");
-        return;
+      let response:Response;
+      if(reconcile){
+        started=true;
+        response=await fetch("/api/nfse/reconcile",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({serviceOrderId:order.id})});
+      }else{
+        const configResponse=await fetch("/api/fiscal-config",{cache:"no-store"});
+        const fiscal=await configResponse.json();
+        if(!configResponse.ok)throw new Error(fiscal.error||"Não foi possível carregar a configuração fiscal da empresa.");
+        const nfseConfig=fiscal.nfse||{};
+        if(!nfseConfig.serviceCode||!nfseConfig.municipalityCode)throw new Error("Configure o código do serviço e o município em Configurações → Fiscal.");
+        started=true;
+        response=await fetch("/api/nfse/issue", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ serviceOrderId:order.id, customer:{ name:order.client, document:customer!.doc, unit:order.unit, address:order.address }, service:{ description:nfseConfig.defaultServiceDescription||order.service, value, serviceCode:nfseConfig.serviceCode }, nfse:{provider:"SEFIN Nacional",environment:fiscal.company?.environment||"Homologação",taxRegime:fiscal.company?.taxRegime,municipalityCode:nfseConfig.municipalityCode,serviceCode:nfseConfig.serviceCode,nbsCode:nfseConfig.nbsCode,issRate:nfseConfig.issRate,rpsSeries:nfseConfig.rpsSeries,issWithheld:nfseConfig.issWithheld,specialTaxRegime:nfseConfig.specialTaxRegime} }) });
       }
-      if (!response.ok || result.issued !== true || result.status !== "Autorizada") throw new Error(result.error || "A emissão não foi confirmada pela SEFIN Nacional.");
-      const provider = result.result?.result || result.result?.data || result.result || {};
-      onUpdate({ ...order, nfseStatus:"Autorizada", nfseValue:value, nfseNumber:String(provider.number || provider.numero || provider.nfseNumber || ""), nfseVerificationCode:String(provider.verificationCode || provider.codigoVerificacao || provider.chave || provider.key || ""), nfseIssuedAt:new Date().toISOString() });
-      window.alert(`NFS-e autorizada${provider.number || provider.numero ? `: ${provider.number || provider.numero}` : "."}`);
-    } catch (error) { onUpdate({ ...order, nfseStatus:"Rejeitada", nfseValue:value }); window.alert(error instanceof Error ? error.message : "Não foi possível autorizar a NFS-e."); }
+      const result=await response.json().catch(()=>({}));
+      const amount=typeof result.value==="number"&&Number.isFinite(result.value)?result.value:value;
+      if(response.status===202 && result.status==="Processando"){
+        setFiscalPending(current=>({...current,[order.id]:true}));
+        if(order.nfseStatus!=="Processando"&&!alreadyAuthorized)await onUpdate({...order,nfseStatus:"Processando",nfseValue:amount});
+        setFiscalFeedback(result.error||"NFS-e ainda sem confirmação. Use Consultar NFS-e; não reenvie.");return;
+      }
+      if(result.status==="Rejeitada" && (response.ok||response.status===422)){
+        setFiscalPending(current=>({...current,[order.id]:false}));
+        if(order.nfseStatus!=="Rejeitada"&&!alreadyAuthorized)await onUpdate({...order,nfseStatus:"Rejeitada",nfseValue:amount});
+        setFiscalFeedback(result.error||"O emissor confirmou a rejeição. Revise os dados antes de emitir novamente.");return;
+      }
+      if(response.ok&&result.issued===true&&result.status==="Autorizada"){
+        const provider=result.result||{};
+        setFiscalPending(current=>({...current,[order.id]:true}));
+        const saved=alreadyAuthorized && (order.nfseNumber||order.nfseVerificationCode) || await onUpdate({...order,nfseStatus:"Autorizada",nfseValue:amount,nfseNumber:String(provider.number||order.nfseNumber||""),nfseVerificationCode:String(provider.verificationCode||order.nfseVerificationCode||""),nfseIssuedAt:order.nfseIssuedAt||new Date().toISOString()});
+        delete fiscalValues.current[order.id];
+        setFiscalFeedback(saved?`NFS-e autorizada${provider.number?`: ${provider.number}`:"."}`:"A autorização consta no emissor, mas a OS não confirmou a atualização. Consulte novamente sem reenviar.");return;
+      }
+      const fields=Array.isArray(result.validation?.issues)?result.validation.issues.map((issue:unknown)=>typeof issue==="object" && issue && "message" in issue && "severity" in issue && issue.severity==="error" && typeof issue.message==="string"?issue.message:"").filter(Boolean).join(" "):"";
+      if(response.status>=500 || response.ok)throw new Error(result.error||"O emissor não confirmou o resultado.");
+      setFiscalFeedback(fields||result.error||"Não foi possível concluir a operação fiscal.");
+    } catch(error){
+      if(started){
+        setFiscalPending(current=>({...current,[order.id]:true}));
+        if(!reconcile && !alreadyAuthorized && order.nfseStatus!=="Processando")await onUpdate({...order,nfseStatus:"Processando",nfseValue:value});
+        setFiscalFeedback("A consulta ou emissão não foi confirmada. Use Consultar NFS-e antes de qualquer reenvio.");
+      }else setFiscalFeedback(error instanceof Error?error.message:"Não foi possível preparar a NFS-e.");
+    }finally{fiscalBusy.current.delete(order.id);setIssuingOrder("");}
   };
   const myTodayOrders = visibleOrders.filter(order => order.date === todayIso);
   return <section className={`module-page service-orders ${technicianMode ? "technician-mode" : ""}`}>
@@ -1063,6 +1107,7 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: so
       <div><span className="section-kicker"><Wrench size={12}/> MODO TÉCNICO</span><h2>Atendimentos do dia</h2><p>Abra a OS, execute o checklist, registre materiais/fotos e finalize com assinatura.</p></div>
       <div className="technician-command-grid">{myTodayOrders.map(order=><button key={order.id} onClick={()=>onSelect(order)}><span><b>{order.time || "A definir"}</b><small>{order.id}</small></span><div><strong>{order.client}</strong><small>{order.unit} • {order.service}</small></div><em>{order.status}</em><ChevronRight size={16}/></button>)}{!myTodayOrders.length&&<div className="linked-empty"><CheckCircle2 size={22}/><h4>Nenhum atendimento hoje</h4><p>Use a Agenda para consultar os próximos serviços.</p></div>}</div>
     </section>}
+    {fiscalFeedback&&<p role="status" className="pdv-notice">{fiscalFeedback}</p>}
     <div className="module-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Pesquisar por cliente, OS, CPF/CNPJ, telefone ou unidade..."/></label><label className="status-filter"><Filter size={14}/><select aria-label="Exibir ordens" value={visibility} onChange={event=>setVisibility(event.target.value)}><option>Em aberto</option><option>Programadas</option><option>Em andamento</option><option>Todas</option><option>Concluídas</option><option>Canceladas</option><option>Hoje</option></select></label><ContextReports title="Ordens de Serviço" rows={serviceOrders.map(order=>[order.id,order.client,order.status])} options={["Imprimir Ordem de Serviço","Relatório técnico","Certificado de higienização","Relatório fotográfico","Relatório da assistência técnica","Comprovante de entrega","Histórico completo da OS"]}/><button className="primary-btn" onClick={() => onOpen("Nova ordem de serviço")}><Plus size={16}/> Nova ordem de serviço</button></div>
     <div className="service-order-flow" role="group" aria-label="Fluxo das ordens de serviço">
       <button type="button" aria-pressed={visibility === "Programadas"} onClick={() => setVisibility("Programadas")}><span>1</span><div><strong>Programadas</strong><small>Fila e agenda futura</small></div><b>{stageOrders.scheduled.length}</b></button>
@@ -1076,7 +1121,7 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: so
       <article><span><Bell size={19}/></span><div><small>REVISÕES PRÓXIMAS</small><strong>{reviewAlerts.length}</strong><em>Alertas preventivos</em></div></article>
     </div>
     {pmocDueSoon.length > 0 && <section className="pmoc-due-soon-panel" aria-live="polite"><header><div><span className="section-kicker"><Bell size={12}/> PREVENTIVAS PRÓXIMAS</span><h3>PMOC com vencimento em até 5 dias</h3><p>Equipamentos e planos com data registrada nas OS.</p></div><strong>{pmocDueSoon.length} alerta(s)</strong></header><div className="pmoc-due-soon-list">{pmocDueSoon.map((item,index)=>{const customer=customers.find(entry=>entry.name===item.order.client);return <article className="pmoc-due-item urgent" key={item.order.id + "-" + item.equipment + "-" + item.date + "-" + index}><span className="pmoc-due-indicator" aria-hidden="true"/><div className="pmoc-due-copy"><small>{item.order.client} • {item.order.unit || "Unidade não informada"} • {item.order.id}</small><b>{item.equipment}</b><span>Vence {item.daysLeft === 0 ? "hoje" : "em " + item.daysLeft + " dia(s)"} • {new Date(item.date + "T12:00:00").toLocaleDateString("pt-BR")}</span></div><div className="pmoc-due-actions"><button type="button" onClick={()=>onSelect(item.order)}>Abrir OS</button>{(customer?.whatsapp || customer?.phone) && <button type="button" className="pmoc-whatsapp-action" onClick={()=>sendPmocWhatsApp(item.order,item.equipment,item.date)}>Preparar WhatsApp</button>}</div></article>})}</div></section>}
-    <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><Wrench size={12}/> OPERAÇÃO TÉCNICA</span><h2>Ordens de serviço</h2><p>Duplo clique para abrir • PDF e WhatsApp disponíveis em um clique.</p></div><button>Exportar <ChevronDown size={13}/></button></div><div className="table-wrap"><table><thead><tr><th>ORDEM</th><th>CLIENTE / LOCAL</th><th>DATA / HORÁRIO</th><th>REVISÃO</th><th>TÉCNICO</th><th>SITUAÇÃO</th><th>AÇÕES RÁPIDAS</th></tr></thead><tbody>{serviceOrders.map(order => { const reviewDate = serviceOrderReviewDate(order); return <tr className="clickable-row" title="Clique duas vezes para abrir a ordem" onDoubleClick={() => onSelect(order)} key={`manage-${order.id}`}><td><b className="order-id">{order.id}</b></td><td><div className="client-cell"><span>{order.avatar}</span><div><strong>{order.client}</strong><small>{order.unit}</small></div></div></td><td>{order.date ? new Date(`${order.date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem data"} • {order.time || "Sem horário"}</td><td>{reviewDate ? <span className="review-date"><Bell size={12}/>{new Date(`${reviewDate}T12:00:00`).toLocaleDateString("pt-BR")}</span> : "—"}</td><td><div className="tech"><span>{order.tech.split(" ").map(name => name[0]).slice(0,2).join("")}</span>{order.tech}</div></td><td><span className={`status ${order.tone}`}><i/> {order.status}</span></td><td><div className="row-actions quick-order-actions"><button title="Abrir OS" onClick={() => onSelect(order)}><Eye size={14}/></button><button title="Imprimir PDF" onClick={() => quickPrintServiceOrder(order, company)}><FileText size={14}/></button><button className="whatsapp-action" title="Enviar por WhatsApp" onClick={() => sendWhatsApp(order)}><MessageCircle size={14}/></button><button title={order.nfseStatus === "Emitida" ? `NFS-e ${order.nfseNumber || "emitida"}` : "Emitir NFS-e de serviço"} onClick={() => void emitNfse(order)}><ReceiptText size={14}/></button><button className="delete-action" aria-label={`Excluir ${order.id}`} onClick={() => onDelete(order)}><Trash2 size={14}/></button></div></td></tr>; })}</tbody></table></div>{!serviceOrders.length && <div className="linked-empty"><ClipboardList size={22}/><h4>Nenhuma ordem cadastrada</h4><p>Crie uma nova ordem para iniciar a operação.</p></div>}</div>
+    <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><Wrench size={12}/> OPERAÇÃO TÉCNICA</span><h2>Ordens de serviço</h2><p>Duplo clique para abrir • PDF e WhatsApp disponíveis em um clique.</p></div><button>Exportar <ChevronDown size={13}/></button></div><div className="table-wrap"><table><thead><tr><th>ORDEM</th><th>CLIENTE / LOCAL</th><th>DATA / HORÁRIO</th><th>REVISÃO</th><th>TÉCNICO</th><th>SITUAÇÃO</th><th>AÇÕES RÁPIDAS</th></tr></thead><tbody>{serviceOrders.map(order => { const reviewDate = serviceOrderReviewDate(order); return <tr className="clickable-row" title="Clique duas vezes para abrir a ordem" onDoubleClick={() => onSelect(order)} key={`manage-${order.id}`}><td><b className="order-id">{order.id}</b></td><td><div className="client-cell"><span>{order.avatar}</span><div><strong>{order.client}</strong><small>{order.unit}</small></div></div></td><td>{order.date ? new Date(`${order.date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem data"} • {order.time || "Sem horário"}</td><td>{reviewDate ? <span className="review-date"><Bell size={12}/>{new Date(`${reviewDate}T12:00:00`).toLocaleDateString("pt-BR")}</span> : "—"}</td><td><div className="tech"><span>{order.tech.split(" ").map(name => name[0]).slice(0,2).join("")}</span>{order.tech}</div></td><td><span className={`status ${order.tone}`}><i/> {order.status}</span></td><td><div className="row-actions quick-order-actions"><button title="Abrir OS" onClick={() => onSelect(order)}><Eye size={14}/></button><button title="Imprimir PDF" onClick={() => quickPrintServiceOrder(order, company)}><FileText size={14}/></button><button className="whatsapp-action" title="Enviar por WhatsApp" onClick={() => sendWhatsApp(order)}><MessageCircle size={14}/></button><button title={shouldReconcile(order)?"Consultar NFS-e":"Emitir NFS-e de serviço"} aria-label={shouldReconcile(order)?`Consultar NFS-e de ${order.id}`:`Emitir NFS-e de ${order.id}`} disabled={Boolean(issuingOrder)} onClick={() => void emitNfse(order)}><ReceiptText size={14}/></button><button className="delete-action" aria-label={`Excluir ${order.id}`} onClick={() => onDelete(order)}><Trash2 size={14}/></button></div></td></tr>; })}</tbody></table></div>{!serviceOrders.length && <div className="linked-empty"><ClipboardList size={22}/><h4>Nenhuma ordem cadastrada</h4><p>Crie uma nova ordem para iniciar a operação.</p></div>}</div>
   </section>;
 }
 
@@ -1483,8 +1528,14 @@ function CommercialRecordsManager({ title, records, onConvert, onDelete, onEdit 
   return <section className="commercial-manager panel"><header><div><span className="section-kicker"><FileChartColumn size={12}/> GERENCIADOR DE {title.toUpperCase()}</span><h3>Controle comercial</h3><p>{onEdit ? "Dê dois cliques no pedido para editar os dados e itens." : "Consulte, filtre e acompanhe todos os registros sem precisar abrir um por um."}</p></div><div className="commercial-kpis"><span><small>REGISTROS</small><b>{records.length}</b></span><span><small>VALOR FILTRADO</small><b>R$ {total.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></span><span><small>APROVADOS / CONCLUÍDOS</small><b>{approved}</b></span></div></header><div className="commercial-manager-toolbar"><label><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder={`Pesquisar ${title.toLowerCase()} por cliente, número ou unidade...`}/></label><select value={status} onChange={event=>setStatus(event.target.value)}>{statuses.map(item=><option key={item}>{item}</option>)}</select></div>{visible.length?<div className="table-wrap"><table><thead><tr><th>NÚMERO</th><th>CLIENTE / UNIDADE</th><th>SITUAÇÃO</th><th>ITENS</th><th>VALOR</th><th>DATA</th><th>AÇÕES</th></tr></thead><tbody>{visible.map(record=><tr key={record.id} className={onEdit ? "editable-row" : ""} onDoubleClick={()=>onEdit?.(record)} title={onEdit ? "Dê dois cliques para alterar este pedido" : undefined}><td><b className="order-id">{record.id}</b></td><td><strong>{record.client||"—"}</strong><small className="table-description">{record.unit||"Matriz"}</small></td><td><span className={`workflow-status ${/aprov|confirm|convert|fatur|conclu/i.test(record.status||"")?"done":/cancel|reprov|vencid/i.test(record.status||"")?"blocked":""}`}>{record.status||"Registrado"}</span></td><td>{record.purchaseItems?.length??0}</td><td><b>R$ {(record.value??0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></td><td>{record.date?new Date(`${record.date}T12:00:00`).toLocaleDateString("pt-BR"):record.createdAt}</td><td><div className="record-actions">{onEdit&&<button title="Alterar pedido" onClick={event=>{event.stopPropagation();onEdit(record)}}><Edit3 size={14}/></button>}{title==="Orçamentos"&&onConvert&&<><button title="Converter em venda" onClick={()=>onConvert(record,"Pedido")}><ShoppingBag size={14}/></button><button title="Converter em OS" onClick={()=>onConvert(record,"Ordem de serviço")}><ClipboardList size={14}/></button></>}<button title="Imprimir" onClick={()=>window.print()}><ReceiptText size={14}/></button>{onDelete&&<button className="danger" title="Excluir" onClick={()=>onDelete(record)}><Trash2 size={14}/></button>}</div></td></tr>)}</tbody></table></div>:<div className="linked-empty compact"><Search size={20}/><h4>Nenhum registro encontrado</h4><p>Altere os filtros para consultar outros registros.</p></div>}</section>;
 }
 
-function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert, onDelete, onCreateCustomer, onCreateStructure }: { customers: Customer[]; structures: ModuleRecord[]; catalog: ModuleRecord[]; budgets: ModuleRecord[]; onSave: (record: ModuleRecord) => void; onConvert: (record: ModuleRecord, target: "Pedido" | "Ordem de serviço") => void; onDelete: (record: ModuleRecord) => void; onCreateCustomer: (draft: CustomerDraft) => Customer | null; onCreateStructure: (draft: StructureDraft & { client: string }) => ModuleRecord | null }) {
-  const [tab,setTab]=useState<"novo"|"lista">("novo");
+function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert, onDelete, onCreateCustomer, onCreateStructure, focusedId }: { focusedId?:string; customers: Customer[]; structures: ModuleRecord[]; catalog: ModuleRecord[]; budgets: ModuleRecord[]; onSave: (record: ModuleRecord) => Promise<boolean>; onConvert: (record: ModuleRecord, target: "Pedido" | "Ordem de serviço") => void; onDelete: (record: ModuleRecord) => void; onCreateCustomer: (draft: CustomerDraft) => Promise<Customer|null>; onCreateStructure: (draft: StructureDraft & { client: string }) => Promise<ModuleRecord|null> }) {
+  const [tab,setTab]=useState<"novo"|"lista">(focusedId?"lista":"novo");
+  useEffect(()=>{
+    if(!focusedId)return;
+    const item=document.getElementById(`budget-record-${focusedId}`);
+    item?.scrollIntoView({block:"nearest"});
+    item?.focus({preventScroll:true});
+  },[focusedId,tab,budgets]);
   const [cart, setCart] = useState<PurchaseItem[]>([]);
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState<"Todos" | "Produto" | "Serviço">("Todos");
@@ -1503,6 +1554,12 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
   const [quickCreate, setQuickCreate] = useState<"customer" | "structure" | null>(null);
   const [editingBudgetId,setEditingBudgetId]=useState<string | null>(null);
   const [editingEndDate,setEditingEndDate]=useState<string | null>(null);
+  const [budgetSaving,setBudgetSaving]=useState(false);
+  const [budgetError,setBudgetError]=useState("");
+  const budgetSaveLock=useRef(false);
+  const newBudgetId=useRef<string|null>(null);
+  const budgetCustomerField=useRef<HTMLDivElement>(null);
+  const budgetItemsField=useRef<HTMLDivElement>(null);
 
   const items = catalog.filter(item => (item.kind === "Produto" || item.kind === "Serviço") && item.status !== "Inativo" && (kindFilter === "Todos" || item.kind === kindFilter) && `${item.name} ${item.id} ${item.category}`.toLowerCase().includes(search.toLowerCase()));
   const itemTotal=(item:PurchaseItem)=>item.quantity*item.unitValue*(1-Math.min(100,Math.max(0,item.discountPercent??0))/100);
@@ -1530,8 +1587,12 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
     setSearch("");
   };
   const update = (id: string, changes: Partial<PurchaseItem>) => setCart(current => current.map(item => item.id === id ? { ...item, ...changes } : item));
-  const clearDraft=()=>{setCart([]);setDiscount(0);setSurcharge(0);setObservations("");setUnit("");setReference("");setSearch("");setEditingBudgetId(null);setEditingEndDate(null);};
+  const clearDraft=()=>{newBudgetId.current=null;setBudgetError("");setCart([]);setDiscount(0);setSurcharge(0);setObservations("");setUnit("");setReference("");setSearch("");setEditingBudgetId(null);setEditingEndDate(null);};
   const editBudget=(record:ModuleRecord)=>{
+    if(budgetSaveLock.current)return;
+    newBudgetId.current=null;
+    setBudgetError("");
+    setBudgetCustomerId(record.customerId || "");
     setEditingBudgetId(record.id);
     setEditingEndDate(record.endDate || null);
     setCustomer(record.client || "");
@@ -1552,20 +1613,30 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
     setNotice(`Alterando ${record.id}. Salve para confirmar as mudanças.`);
   };
 
-  const save = (status:"Em elaboração"|"Enviado") => {
-    if (!customer || !cart.length) { setNotice("Selecione o cliente e adicione pelo menos um produto ou serviço."); return; }
+  const save = async (status:"Em elaboração"|"Enviado") => {
+    if(budgetSaveLock.current)return;
+    setNotice("");
+    setBudgetError("");
+    if (!customer || !cart.length) {
+      setBudgetError(!customer?"Selecione o cliente do orçamento.":"Adicione pelo menos um produto ou serviço.");
+      const target=!customer?budgetCustomerField.current:budgetItemsField.current;
+      target?.scrollIntoView({block:"nearest"});
+      target?.querySelector<HTMLElement>("input,button,select")?.focus();
+      return;
+    }
     let budgetLocation:HierarchySelection | undefined;
     const selectedCustomer=customers.find(item=>item.id===budgetCustomerId) || customers.find(item=>item.name===customer);
     if(selectedCustomer && isMunicipalCustomer(selectedCustomer)) {
       try { budgetLocation=hierarchySelection(selectedCustomer,customerHierarchy(selectedCustomer,structures,customers),unit); }
-      catch(error) { setNotice(error instanceof Error?error.message:"Local inválido."); return; }
+      catch(error) { setBudgetError(error instanceof Error?error.message:"Local inválido."); return; }
     }
     const validUntil = new Date(); validUntil.setDate(validUntil.getDate() + validity);
     const record: ModuleRecord = {
       ...(editingBudgetId ? budgets.find(item => item.id === editingBudgetId) : {}),
-      id:editingBudgetId || `ORC-${Date.now().toString().slice(-6)}`,
+      id:editingBudgetId || (newBudgetId.current ??= `ORC-${crypto.randomUUID().replace(/-/g,"").slice(0,12)}`),
       name:`Orçamento • ${customer}`,
       client:customer,
+      customerId:selectedCustomer?.id,
       unit:selectedBudgetStructure?.name || "",
       structureId:selectedBudgetStructure?.id,
       sector:/secretaria|setor|departamento|diretoria|órgão|area|área/i.test(`${selectedBudgetStructure?.category ?? ""} ${selectedBudgetStructure?.hierarchyLevel ?? ""}`) ? selectedBudgetStructure?.name : undefined,
@@ -1574,6 +1645,7 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
       date:new Date().toISOString().slice(0,10),
       endDate:editingEndDate || validUntil.toISOString().slice(0,10),
       status,
+      approvalStatus:editingBudgetId && budgets.find(item=>item.id===editingBudgetId)?.approvalRequired ? "Pendente" : undefined,
       value:total,
       subtotal,
       discount,
@@ -1586,12 +1658,39 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
       paymentMethod:payment,
       ...(budgetLocation || {}),
     };
-    onSave(record);
-    clearDraft();
-    setNotice(status==="Em elaboração" ? `${record.id} salvo como rascunho.` : `${record.id} finalizado e salvo com sucesso.`);
-    if(status==="Enviado") setTab("lista");
+    budgetSaveLock.current=true;
+    setBudgetSaving(true);
+    try {
+      if(!await onSave(record)) {
+        setBudgetError("O banco não confirmou o orçamento. Os campos foram mantidos. Verifique a conexão ou as permissões e tente novamente.");
+        return;
+      }
+      clearDraft();
+      setNotice(status==="Em elaboração" ? `${record.id} salvo como rascunho.` : `${record.id} finalizado e salvo com sucesso.`);
+      if(status==="Enviado") setTab("lista");
+    } catch {
+      setBudgetError("Não foi possível confirmar o orçamento. Os campos foram mantidos. Tente novamente.");
+    } finally {
+      budgetSaveLock.current=false;
+      setBudgetSaving(false);
+    }
   };
 
+  const registerAcceptance = async (record: ModuleRecord) => {
+    if (budgetSaveLock.current || isQuoteApproved(record) || record.approvalRequired || !/^(enviado|em negociação|aguardando retorno)$/i.test(record.status || "")) return;
+    if (!window.confirm(`O cliente confirmou o aceite de ${record.id}? Esta ação registra o aceite, mas não cria a OS.`)) return;
+    budgetSaveLock.current=true;
+    setBudgetSaving(true);
+    setNotice("");
+    try {
+      setNotice(await onSave({...record,status:"Aprovado"}) ? "Aceite registrado. A conversão em OS está disponível." : "O banco não confirmou o aceite. Tente novamente.");
+    } catch {
+      setNotice("Não foi possível confirmar o aceite. Tente novamente.");
+    } finally {
+      budgetSaveLock.current=false;
+      setBudgetSaving(false);
+    }
+  };
   const customerUnits = customer ? customerStructures(customer, customers, structures) : [];
   const selectedBudgetStructure = customerUnits.find(item => item.id === unit);
   const budgetStructureLabel = (item: ModuleRecord) => {
@@ -1619,8 +1718,8 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
     {tab==="novo" ? <>
       <section className="budget-order-head panel">
         <header><div><span className="section-kicker"><FileText size={12}/> ORÇAMENTO</span><h2>Novo orçamento</h2><p>Monte a proposta comercial em uma única tela, com itens, condições e totais.</p></div><span className="budget-draft-chip">Rascunho</span></header>
-        <div className="budget-order-fields">
-          <div className="budget-customer-field budget-field-wide"><span className="budget-field-label">Cliente</span><CustomerSearchSelect customers={customers} value={customer} customerIdValue={budgetCustomerId} locationId={unit} onLocationChange={selection=>{setUnit(selection.structureId||"");setBudgetCustomerId(selection.customerId);}} onChange={(value,selected) => { setCustomer(value);setBudgetCustomerId(selected?.id||""); setUnit(""); }} />{customer && <small className="budget-customer-selected"><CheckCircle2 size={11}/> Cliente selecionado</small>}</div>
+        <div className="budget-order-fields" inert={budgetSaving}>
+          <div ref={budgetCustomerField} className="budget-customer-field budget-field-wide"><span className="budget-field-label">Cliente</span><CustomerSearchSelect customers={customers} value={customer} customerIdValue={budgetCustomerId} locationId={unit} onLocationChange={selection=>{setUnit(selection.structureId||"");setBudgetCustomerId(selection.customerId);}} onChange={(value,selected) => { setCustomer(value);setBudgetCustomerId(selected?.id||""); setUnit(""); }} />{customer && <small className="budget-customer-selected"><CheckCircle2 size={11}/> Cliente selecionado</small>}</div>
           <label>Validade<select value={validity} onChange={event => {setValidity(Number(event.target.value));setEditingEndDate(null);}}><option value={7}>7 dias</option><option value={15}>15 dias</option><option value={30}>30 dias</option><option value={60}>60 dias</option></select></label>
           <label>Tabela de preços<select value={priceTable} onChange={event=>setPriceTable(event.target.value)}><option>Padrão</option><option>Promocional</option><option>Contrato</option><option>Licitação</option></select></label>
           <label>Referência<input value={reference} onChange={event=>setReference(event.target.value)} placeholder="Ref. comercial, obra ou pedido"/></label>
@@ -1630,9 +1729,10 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
         </div>
       </section>
 
-      {notice && <div className="pdv-notice"><CheckCircle2 size={15}/>{notice}<button onClick={() => setNotice("")}><X size={13}/></button></div>}
+      {budgetError && <div role="alert" className="pdv-notice"><AlertTriangle size={16}/>{budgetError}</div>}
+      {notice && <div className="pdv-notice" role="status"><CheckCircle2 size={15}/>{notice}<button onClick={() => setNotice("")}><X size={13}/></button></div>}
 
-      <section className="budget-item-entry panel">
+      <section className="budget-item-entry panel" ref={budgetItemsField} inert={budgetSaving}>
         <header><div><span className="section-kicker"><ShoppingCart size={12}/> ITENS DO ORÇAMENTO</span><h3>Adicionar produto ou serviço</h3></div><div className="budget-kind-tabs">{(["Todos","Produto","Serviço"] as const).map(kind => <button className={kindFilter === kind ? "active" : ""} key={kind} onClick={() => setKindFilter(kind)}>{kind}</button>)}</div></header>
         <div className="budget-item-command">
           <label className="budget-item-search"><span>Código / descrição</span><div><Search size={16}/><input value={search} onChange={event=>setSearch(event.target.value)} placeholder="Digite código, produto ou serviço..."/></div>{search.trim()&&<div className="budget-item-results">{items.slice(0,8).map(item=><button key={item.id} onClick={()=>add(item)}><span className={item.kind==="Produto"?"product":"service"}>{item.kind==="Produto"?<Package size={15}/>:<Wrench size={15}/>}</span><div><b>{item.name}</b><small>{item.id} • {item.category || item.kind}</small></div><strong>R$ {(item.value??0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong><Plus size={14}/></button>)}{!items.length&&<small className="budget-item-no-result">Nenhum item encontrado.</small>}</div>}</label>
@@ -1641,13 +1741,13 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
         </div>
       </section>
 
-      <section className="budget-line-items panel">
+      <section className="budget-line-items panel" inert={budgetSaving}>
         <div className="budget-line-table-wrap"><table><thead><tr><th>CÓDIGO</th><th>DESCRIÇÃO</th><th>QTD.</th><th>UN.</th><th>VALOR UNIT.</th><th>DESC. %</th><th>TOTAL</th><th></th></tr></thead><tbody>{cart.map(item=><tr key={item.id}><td><b>{item.productId||item.id}</b><small>{item.kind}</small></td><td><strong>{item.description}</strong></td><td><input aria-label={`Quantidade ${item.description}`} type="number" min="0.001" step="0.001" value={item.quantity} onChange={event=>update(item.id,{quantity:Number(event.target.value)})}/></td><td><input aria-label={`Unidade ${item.description}`} value={item.unitOfMeasure||""} onChange={event=>update(item.id,{unitOfMeasure:event.target.value.toUpperCase().slice(0,6)})}/></td><td><input aria-label={`Valor unitário ${item.description}`} type="number" min="0" step="0.01" value={item.unitValue} onChange={event=>update(item.id,{unitValue:Number(event.target.value)})}/></td><td><input aria-label={`Desconto ${item.description}`} type="number" min="0" max="100" step="0.01" value={item.discountPercent??0} onChange={event=>update(item.id,{discountPercent:Math.min(100,Math.max(0,Number(event.target.value)))})}/></td><td><strong>R$ {itemTotal(item).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></td><td><button title="Remover item" onClick={()=>setCart(current=>current.filter(record=>record.id!==item.id))}><Trash2 size={14}/></button></td></tr>)}</tbody></table></div>
         {!cart.length&&<div className="budget-lines-empty"><div><Plus size={24}/></div><b>Nenhum item adicionado</b><p>Use a busca acima para localizar produtos e serviços.</p></div>}
       </section>
 
       <section className="budget-finish panel">
-        <div className="budget-condition-fields">
+        <div className="budget-condition-fields" inert={budgetSaving}>
           <label>Forma de pagamento<select value={payment} onChange={event => setPayment(event.target.value)}>{["PIX","Dinheiro","Cartão de crédito","Cartão de débito","Boleto","Transferência","A combinar"].map(item => <option key={item}>{item}</option>)}</select></label>
           <label>Desconto geral<input type="number" min="0" max={subtotal} step="0.01" value={discount || ""} onChange={event => setDiscount(Math.max(0,Number(event.target.value)))} placeholder="R$ 0,00"/></label>
           <label>Acréscimo<input type="number" min="0" step="0.01" value={surcharge || ""} onChange={event => setSurcharge(Math.max(0,Number(event.target.value)))} placeholder="R$ 0,00"/></label>
@@ -1658,14 +1758,14 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
           <div><small>DESCONTO</small><b>- R$ {discount.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></div>
           <div><small>ACRÉSCIMO</small><b>R$ {surcharge.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></div>
           <div className="budget-grand-total"><small>TOTAL DO ORÇAMENTO</small><strong>R$ {total.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div>
-          <div className="budget-final-actions"><button className="outline-btn" disabled={!customer||!cart.length} onClick={()=>save("Em elaboração")}><Save size={15}/> Salvar rascunho</button><button className="primary-btn" disabled={!customer||!cart.length} onClick={()=>save("Enviado")}><CheckCircle2 size={16}/> Finalizar orçamento</button></div>
+          <div className="budget-final-actions"><button className="outline-btn" disabled={budgetSaving} onClick={()=>void save("Em elaboração")}><Save size={15}/> Salvar rascunho</button><button className="primary-btn" disabled={budgetSaving} onClick={()=>void save("Enviado")}><CheckCircle2 size={16}/> {budgetSaving?"Confirmando no banco…":"Finalizar orçamento"}</button></div>
         </div>
       </section>
     </> : <>
-      <div className="budget-saved panel"><header><div><span className="section-kicker"><History size={12}/> ACOMPANHAMENTO COMERCIAL</span><h3>Orçamentos salvos</h3></div><small>{budgets.length} orçamento(s)</small></header>{budgets.length ? <div>{budgets.map(record => <article key={record.id} onDoubleClick={()=>editBudget(record)} title="Dê dois cliques para alterar este orçamento"><span><b>{record.id}</b><strong>{record.client}</strong><small>{record.purchaseItems?.length ?? 0} item(ns) • {record.reference ? `Ref. ${record.reference} • ` : ""}{record.endDate ? `Válido até ${new Date(`${record.endDate}T12:00:00`).toLocaleDateString("pt-BR")}` : record.createdAt}</small></span><em>{record.status}</em><b>R$ {(record.value ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</b><select aria-label={`Status do orçamento ${record.id}`} value={record.status || "Em elaboração"} onChange={event=>onSave({...record,status:event.target.value,changeReason:`Status comercial atualizado para ${event.target.value}`})}>{["Em elaboração","Enviado","Aguardando retorno","Em negociação","Aprovado","Perdido","Cancelado"].map(status=><option key={status}>{status}</option>)}</select><button type="button" onClick={() => editBudget(record)}><Edit3 size={14}/> Alterar</button><button onClick={() => onConvert(record,"Pedido")} disabled={!/Aprovado|Em negociação|Enviado|Aguardando retorno/i.test(record.status||"")}><ShoppingBag size={14}/> Converter em venda</button><button onClick={() => onConvert(record,"Ordem de serviço")} disabled={!/Aprovado|Em negociação|Enviado|Aguardando retorno/i.test(record.status||"")}><ClipboardList size={14}/> Converter em OS</button><button type="button" className="danger" aria-label={`Excluir orçamento ${record.id}`} title="Excluir orçamento" onClick={() => onDelete(record)}><Trash2 size={14}/> Excluir</button></article>)}</div> : <div className="linked-empty"><FileText size={22}/><h4>Nenhum orçamento salvo</h4></div>}</div>
+      <div className="budget-saved panel">{notice&&<p role="status">{notice}</p>}<header><div><span className="section-kicker"><History size={12}/> ACOMPANHAMENTO COMERCIAL</span><h3>Orçamentos salvos</h3></div><small>{budgets.length} orçamento(s)</small></header>{budgets.length ? <div>{budgets.map(record => <article id={`budget-record-${record.id}`} tabIndex={focusedId===record.id?0:undefined} aria-current={focusedId===record.id?"true":undefined} key={record.id} onDoubleClick={()=>editBudget(record)} title="Dê dois cliques para alterar este orçamento"><span><b>{record.id}</b><strong>{record.client}</strong><small>{record.purchaseItems?.length ?? 0} item(ns) • {record.reference ? `Ref. ${record.reference} • ` : ""}{record.endDate ? `Válido até ${new Date(`${record.endDate}T12:00:00`).toLocaleDateString("pt-BR")}` : record.createdAt}</small></span><em>{record.status}</em><b>R$ {(record.value ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</b><select aria-label={`Status do orçamento ${record.id}`} value={record.status || "Em elaboração"} onChange={event=>onSave({...record,status:event.target.value,changeReason:`Status comercial atualizado para ${event.target.value}`})}>{["Em elaboração","Enviado","Aguardando retorno","Em negociação","Aprovado","Perdido","Cancelado"].map(status=><option key={status}>{status}</option>)}</select><button type="button" onClick={() => editBudget(record)}><Edit3 size={14}/> Alterar</button><button onClick={() => onConvert(record,"Pedido")} disabled={!/Aprovado|Em negociação|Enviado|Aguardando retorno/i.test(record.status||"")}><ShoppingBag size={14}/> Converter em venda</button>{!record.approvalRequired && /^(enviado|em negociação|aguardando retorno)$/i.test(record.status||"")&&<button type="button" disabled={budgetSaving} onClick={()=>void registerAcceptance(record)}>Registrar aceite</button>}<button onClick={() => onConvert(record,"Ordem de serviço")} disabled={budgetSaving||!isQuoteApproved(record)} title="Disponível após aprovação do orçamento"><ClipboardList size={14}/> Converter em OS</button><button type="button" className="danger" aria-label={`Excluir orçamento ${record.id}`} title="Excluir orçamento" onClick={() => onDelete(record)}><Trash2 size={14}/> Excluir</button></article>)}</div> : <div className="linked-empty"><FileText size={22}/><h4>Nenhum orçamento salvo</h4></div>}</div>
     </>}
 
-    <BudgetQuickCreateDrawer open={Boolean(quickCreate)} mode={quickCreate ?? "customer"} customerName={customer} customers={customers} structures={structures} onClose={() => setQuickCreate(null)} onCreateCustomer={created => { const result = onCreateCustomer(created); if (result) { setCustomer(result.name); setUnit(""); setNotice("Cliente criado e selecionado no orçamento."); } return result; }} onCreateStructure={created => { const result = onCreateStructure(created); if (result) { setUnit(result.id); setNotice("Estrutura criada e selecionada no orçamento."); } return result; }} />
+    <BudgetQuickCreateDrawer open={Boolean(quickCreate)} mode={quickCreate ?? "customer"} customerName={customer} customers={customers} structures={structures} onClose={() => setQuickCreate(null)} onCreateCustomer={async created => { const result = await onCreateCustomer(created); if (result) { setCustomer(result.name); setBudgetCustomerId(result.id); setUnit(""); setNotice("Cliente criado e selecionado no orçamento."); } return result; }} onCreateStructure={async created => { const result = await onCreateStructure(created); if (result) { setUnit(result.id); setNotice("Estrutura criada e selecionada no orçamento."); } return result; }} />
   </section>;
 }
 
@@ -3065,7 +3165,7 @@ function EmployeesWorkspace({ records, serviceOrders, onOpen, onUpdate, onDelete
   </section>;
 }
 
-function GenericModule({ name, onOpen, onDelete, onUpdate, onConvert, companyCnpj, canEdit, records, allModules, serviceOrders }: { name: string; onOpen: (name: string) => void; onDelete: (moduleName: string, record: ModuleRecord) => void; onUpdate: (moduleName: string, record: ModuleRecord) => void; onConvert?: (record: ModuleRecord, target: "Pedido" | "Ordem de serviço") => void; companyCnpj?: string; canEdit: boolean; records: ModuleRecord[]; allModules?: Record<string, ModuleRecord[]>; serviceOrders?: ServiceOrder[] }) {
+function GenericModule({ name, onOpen, onDelete, onUpdate, onConvert, companyCnpj, canEdit, records, allModules, serviceOrders }: { name: string; onOpen: (name: string) => void; onDelete: (moduleName: string, record: ModuleRecord) => void; onUpdate: (moduleName: string, record: ModuleRecord) => Promise<boolean>; onConvert?: (record: ModuleRecord, target: "Pedido" | "Ordem de serviço") => void; companyCnpj?: string; canEdit: boolean; records: ModuleRecord[]; allModules?: Record<string, ModuleRecord[]>; serviceOrders?: ServiceOrder[] }) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todas");
   const [dateFrom, setDateFrom] = useState("");
@@ -3225,12 +3325,13 @@ function GenericModule({ name, onOpen, onDelete, onUpdate, onConvert, companyCnp
   <div><b>Foto do {name==="Produtos"?"produto":"serviço"}</b><small>Usada no catálogo de Orçamentos e Vendas. A imagem é otimizada automaticamente.</small>
   <div className="catalog-image-actions"><label className="outline-btn"><ImagePlus size={14}/>{catalogImageBusy?"Processando...":editingCatalogRecord.catalogImage?"Trocar foto":"Adicionar foto"}<input type="file" accept="image/*" disabled={catalogImageBusy} onChange={event=>void uploadEditingCatalogImage(event.target.files?.[0])}/></label>{editingCatalogRecord.catalogImage&&<button type="button" className="outline-btn danger" onClick={()=>setEditingCatalogRecord(record=>record?{...record,catalogImage:undefined,catalogImageName:undefined,catalogImageUpdatedAt:new Date().toISOString()}:record)}><Trash2 size={14}/> Remover</button>}</div>{catalogImageError&&<em>{catalogImageError}</em>}</div>
 </div>}
-<label>Categoria<input value={editingCatalogRecord.category ?? ""} onChange={event => setEditingCatalogRecord(record => record ? { ...record, category: event.target.value } : record)}/></label><label>Situação<select value={editingCatalogRecord.status ?? "Ativo"} onChange={event => setEditingCatalogRecord(record => record ? { ...record, status: event.target.value } : record)}><option>Ativo</option><option>Inativo</option><option>Pendente</option></select></label><label className="wide">Descrição / observações<textarea value={editingCatalogRecord.description ?? ""} onChange={event => setEditingCatalogRecord(record => record ? { ...record, description: event.target.value } : record)}/></label>{name !== "Funcionários" && <div className="wide catalog-margin-preview"><span><CircleDollarSign size={18}/><div><small>MARGEM BRUTA ESTIMADA</small><b>R$ {Math.max(0, (editingCatalogRecord.value ?? 0) - (editingCatalogRecord.cost ?? 0)).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></div></span><strong>{editingCatalogRecord.value ? `${Math.max(0, (((editingCatalogRecord.value ?? 0) - (editingCatalogRecord.cost ?? 0)) / editingCatalogRecord.value) * 100).toFixed(1)}%` : "0%"}</strong></div>}</div><div className="modal-actions">{catalogDirty&&<span className="unsaved-indicator"><AlertTriangle size={13}/> Alterações não salvas</span>}<button className="outline-btn" onClick={closeCatalogEditor}>Cancelar</button><button className="primary-btn" disabled={!editingCatalogRecord.name.trim() || (name === "Funcionários" && (!editingCatalogRecord.employeeUsername?.trim() || (employeePasswordReset.length > 0 && employeePasswordReset.length < 4)))} onClick={async () => { const updated = name === "Funcionários" && employeePasswordReset ? { ...editingCatalogRecord, employeePasswordHash: await passwordHash(employeePasswordReset) } : editingCatalogRecord; onUpdate(name, updated); setEditingCatalogRecord(null); setEditingCatalogInitial(null); setEmployeePasswordReset(""); }}><CheckCircle2 size={15}/> Salvar alterações</button></div></div></div>}
+<label>Categoria<input value={editingCatalogRecord.category ?? ""} onChange={event => setEditingCatalogRecord(record => record ? { ...record, category: event.target.value } : record)}/></label><label>Situação<select value={editingCatalogRecord.status ?? "Ativo"} onChange={event => setEditingCatalogRecord(record => record ? { ...record, status: event.target.value } : record)}><option>Ativo</option><option>Inativo</option><option>Pendente</option></select></label><label className="wide">Descrição / observações<textarea value={editingCatalogRecord.description ?? ""} onChange={event => setEditingCatalogRecord(record => record ? { ...record, description: event.target.value } : record)}/></label>{name !== "Funcionários" && <div className="wide catalog-margin-preview"><span><CircleDollarSign size={18}/><div><small>MARGEM BRUTA ESTIMADA</small><b>R$ {Math.max(0, (editingCatalogRecord.value ?? 0) - (editingCatalogRecord.cost ?? 0)).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b></div></span><strong>{editingCatalogRecord.value ? `${Math.max(0, (((editingCatalogRecord.value ?? 0) - (editingCatalogRecord.cost ?? 0)) / editingCatalogRecord.value) * 100).toFixed(1)}%` : "0%"}</strong></div>}</div><div className="modal-actions">{catalogDirty&&<span className="unsaved-indicator"><AlertTriangle size={13}/> Alterações não salvas</span>}<button className="outline-btn" onClick={closeCatalogEditor}>Cancelar</button><button className="primary-btn" disabled={!editingCatalogRecord.name.trim() || (name === "Funcionários" && (!editingCatalogRecord.employeeUsername?.trim() || (employeePasswordReset.length > 0 && employeePasswordReset.length < 4)))} onClick={async () => { const updated = name === "Funcionários" && employeePasswordReset ? { ...editingCatalogRecord, employeePasswordHash: await passwordHash(employeePasswordReset) } : editingCatalogRecord; void onUpdate(name,updated).then(saved=>{if(saved){setEditingCatalogRecord(null);setEditingCatalogInitial(null);setEmployeePasswordReset("");}}); }}><CheckCircle2 size={15}/> Salvar alterações</button></div></div></div>}
     {historyCatalogRecord && (()=>{const key=historyCatalogRecord.id;const norm=historyCatalogRecord.name.trim().toLowerCase();const matches=(item:PurchaseItem)=>item.productId===key||item.description.trim().toLowerCase()===norm;const sales=(allModules?.Vendas??[]).filter(record=>record.purchaseItems?.some(matches));const budgets=(allModules?.Orçamentos??[]).filter(record=>record.purchaseItems?.some(matches));const purchases=(allModules?.Compras??[]).filter(record=>record.purchaseItems?.some(matches)).sort((a,b)=>String(b.date||b.createdAt).localeCompare(String(a.date||a.createdAt)));const orders=(serviceOrders??[]).filter(order=>order.catalogItems?.some(item=>item.id===key||item.name.trim().toLowerCase()===norm));const clients=Array.from(new Set([...sales.map(item=>item.client),...budgets.map(item=>item.client),...orders.map(item=>item.client)].filter(Boolean)));const lastPurchase=purchases[0];const lastItem=lastPurchase?.purchaseItems?.find(matches);return <div className="modal-layer catalog-history-layer" role="dialog" aria-modal="true"><button className="modal-backdrop" aria-label="Fechar histórico" onClick={()=>setHistoryCatalogRecord(null)}/><div className="modal catalog-history-modal"><div className="modal-head"><div><span>HISTÓRICO • {name.toUpperCase()}</span><h2>{historyCatalogRecord.name}</h2><p>Consumo por cliente, compras e utilização operacional deste cadastro.</p></div><button onClick={()=>setHistoryCatalogRecord(null)}><X size={18}/></button></div><div className="catalog-history-summary"><article><small>CLIENTES QUE CONSUMIRAM</small><b>{clients.length}</b></article><article><small>VENDAS</small><b>{sales.length}</b></article><article><small>ORÇAMENTOS</small><b>{budgets.length}</b></article><article><small>OS / UTILIZAÇÕES</small><b>{orders.length}</b></article>{name==="Produtos"&&<article><small>ÚLTIMA COMPRA</small><b>{lastPurchase?.date?new Date(`${lastPurchase.date}T12:00:00`).toLocaleDateString("pt-BR"):lastPurchase?.createdAt||"—"}</b><em>{lastItem?`R$ ${lastItem.unitValue.toLocaleString("pt-BR",{minimumFractionDigits:2})} • ${lastPurchase?.client||"Fornecedor"}`:"Sem compra registrada"}</em></article>}</div><div className="catalog-history-tabs"><section><h3>Clientes que consumiram</h3>{clients.length?<div className="history-chip-list">{clients.map(client=><span key={client}><UserRound size={13}/>{client}</span>)}</div>:<p>Nenhum consumo vinculado a cliente até o momento.</p>}</section><section><h3>Movimentações</h3><div className="catalog-movement-list">{[...sales.map(item=>({type:"Venda",id:item.id,client:item.client,date:item.date||item.createdAt,value:item.value})),...purchases.map(item=>({type:"Compra",id:item.id,client:item.client,date:item.date||item.createdAt,value:item.value})),...orders.map(item=>({type:"OS",id:item.id,client:item.client,date:item.date,value:0}))].sort((a,b)=>String(b.date).localeCompare(String(a.date))).map((item,index)=><article key={`${item.type}-${item.id}-${index}`}><span><b>{item.type} • {item.id}</b><small>{item.client||"—"}</small></span><time>{item.date||"—"}</time>{item.value? <strong>R$ {item.value.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong>:null}</article>)}</div></section></div><div className="modal-actions"><button className="primary-btn" onClick={()=>setHistoryCatalogRecord(null)}>Fechar histórico</button></div></div></div>})()}
   </section>;
 }
 
 type ModalSave = {
+  creationRequestId?: string;
   structureId?: string; unitId?: string; sectorId?: string; roomId?: string;
   title: string;
   customerId?: string;
@@ -3466,7 +3567,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }
   </main>;
 }
 
-function Modal({ title, initialOrderSeed, customers, structures, catalogRecords, supplierRecords, employeeRecords, equipmentRecords, serviceOrders, close, onSave, onCreateCustomer, canCreateCustomer, onCreateStructure }: { title: string; initialOrderSeed?:OrderScheduleSeed; customers: Customer[]; structures: ModuleRecord[]; catalogRecords: ModuleRecord[]; supplierRecords: ModuleRecord[]; employeeRecords: ModuleRecord[]; equipmentRecords: ModuleRecord[]; serviceOrders:ServiceOrder[]; close: () => void; onSave: (data: ModalSave) => void | Promise<void>; canCreateCustomer:boolean; onCreateCustomer:(draft:CustomerDraft & {address:string;organizationType:Customer["organizationType"]})=>Promise<Customer|null>; onCreateStructure: (draft: StructureDraft & { client: string }) => ModuleRecord | null | Promise<ModuleRecord | null> }) {
+function Modal({ title, initialOrderSeed, customers, structures, catalogRecords, supplierRecords, employeeRecords, equipmentRecords, serviceOrders, close, onSave, onCreateCustomer, canCreateCustomer, onCreateStructure }: { title: string; initialOrderSeed?:OrderScheduleSeed; customers: Customer[]; structures: ModuleRecord[]; catalogRecords: ModuleRecord[]; supplierRecords: ModuleRecord[]; employeeRecords: ModuleRecord[]; equipmentRecords: ModuleRecord[]; serviceOrders:ServiceOrder[]; close: () => void; onSave: (data: ModalSave) => void | Promise<void>; canCreateCustomer:boolean; onCreateCustomer:(draft:CustomerDraft & {address:string;organizationType:Customer["organizationType"]})=>Promise<Customer|null>; onCreateStructure: (draft: StructureDraft & { client: string }) => Promise<ModuleRecord|null> | Promise<ModuleRecord | null> }) {
   const isLinkedStructure = title.startsWith("Nova unidade, filial ou setor") || title.startsWith("Novo setor") || title.startsWith("Nova sala") || title.startsWith("Nova sala ou ambiente");
   const isNewOrder = title === "Nova ordem de serviço";
   const isNewCustomer = title === "Novo cliente";
@@ -3808,6 +3909,7 @@ function Modal({ title, initialOrderSeed, customers, structures, catalogRecords,
   const [orderSaveBusy,setOrderSaveBusy]=useState(false),[orderSaveError,setOrderSaveError]=useState("");
   const [reviewStatus,setReviewStatus]=useState<"Agendada"|"Rascunho"|null>(null);
   const orderSaveLock=useRef(false);
+  const newOrderRequestId=useRef<string|null>(null);
   const getScheduleWarnings=()=>{
     const [hours,minutes]=time.split(":").map(Number),start=hours*60+minutes,end=start+durationMinutes;
     const appointments=serviceOrders.filter(item=>item.date===date&&normalizeRelation(item.tech)===normalizeRelation(tech)&&tech.trim()&&!/cancelad|conclu[ií]d|finalizad/i.test(item.status));
@@ -3823,6 +3925,7 @@ function Modal({ title, initialOrderSeed, customers, structures, catalogRecords,
     if(!confirmed){setReviewStatus(status);return;}
     orderSaveLock.current=true;setOrderSaveBusy(true);setOrderSaveError("");
     try{await onSave({
+      creationRequestId:(newOrderRequestId.current ??= crypto.randomUUID()),
       title, name: "", client: selectedClient, doc: "", contact: selectedClientData?.contact ?? "", phone: selectedClientData?.phone ?? "",
       address: orderAddress, unit, tech, date, time, description, status, value: orderTotal, category: orderServiceType, kind: "Serviço",
       catalogItems: selectedOrderItems.map(item => ({ id:item.id, name:item.name, kind:item.kind || "Serviço", quantity:catalogQuantities[item.id] || 1 })),
@@ -3917,23 +4020,23 @@ function Modal({ title, initialOrderSeed, customers, structures, catalogRecords,
       <button className="modal-backdrop" onClick={requestClose} aria-label="Fechar janela"/>
       <section className={`modal os-create-modal${compactOrderForm?" os-create-modal-compact":""}`}>
         <header className="os-create-header">
-          <div className="os-create-title"><span className="os-create-icon"><Wrench size={17}/></span><div><div><h2>Cadastrar Nova Ordem de Serviço</h2><em>OS • NOVA</em></div><p>Cliente, local, serviço, equipamentos, valores e equipe de campo em um único fluxo.</p></div></div>
-          <div className="os-create-head-actions"><button type="button" className="os-compact-toggle" aria-pressed={compactOrderForm} onClick={()=>setCompactOrderForm(value=>{const next=!value;try{localStorage.setItem("proar:os-create-compact",next?"1":"0");}catch{}return next;})}>{compactOrderForm?"Modo padrão":"Modo compacto"}</button><button type="button" onClick={() => setDescription(improveTechnicalText(description))}><Sparkles size={14}/> Sugerir com IA</button><button type="button" className="icon-only" onClick={requestClose} aria-label="Fechar"><X size={17}/></button></div>
+          <div className="os-create-title"><span className="os-create-icon"><Wrench size={17}/></span><div><div><h2>Nova ordem de serviço</h2><em>OS • NOVA</em></div><p>Cliente, local, serviço, equipamentos, valores e equipe de campo em um único fluxo.</p></div></div>
+          <div className="os-create-head-actions"><button type="button" className="os-compact-toggle" aria-pressed={compactOrderForm} onClick={()=>setCompactOrderForm(value=>{const next=!value;try{localStorage.setItem("proar:os-create-compact",next?"1":"0");}catch{}return next;})}>{compactOrderForm?"Modo padrão":"Modo compacto"}</button><button type="button" className="os-ai-action" aria-label="Sugerir com IA" onClick={() => setDescription(improveTechnicalText(description))}><Sparkles size={14}/><span className="os-ai-label">Sugerir com IA</span></button><button type="button" className="icon-only" onClick={requestClose} aria-label="Fechar"><X size={17}/></button></div>
         </header>
 
         <section className="os-create-card os-create-schedule" aria-label="Data e horário do atendimento" >
           <div className="os-create-card-head"><span><CalendarDays size={15}/> Data e horário do atendimento</span></div>
           <div className="os-create-location-grid">
-            <label>Data do atendimento • para agendar<input id="os-create-date" type="date" value={date} disabled={orderSaveBusy} onInput={event=>{setDate(event.currentTarget.value);setOrderSaveError("");}} onChange={event=>{setDate(event.target.value);setOrderSaveError("");}}/></label>
-            <label>Horário de início<input id="os-create-time" type="time" value={time} disabled={orderSaveBusy} onInput={event=>setTime(event.currentTarget.value)} onChange={event=>setTime(event.target.value)}/></label>
+            <label>Data<input id="os-create-date" type="date" value={date} disabled={orderSaveBusy} onInput={event=>{setDate(event.currentTarget.value);setOrderSaveError("");}} onChange={event=>{setDate(event.target.value);setOrderSaveError("");}}/></label>
+            <label>Horário<input id="os-create-time" type="time" value={time} disabled={orderSaveBusy} onInput={event=>setTime(event.currentTarget.value)} onChange={event=>setTime(event.target.value)}/></label>
           </div>
         </section>
         <nav className="os-create-tabs" aria-label="Etapas da nova ordem">
-          <button type="button" className={orderTab === "Geral" ? "active" : ""} onClick={() => setOrderTab("Geral")}><FileText size={14}/><span>1. Geral & Agendamento</span></button>
-          <button type="button" className={orderTab === "Equipamentos" ? "active" : ""} onClick={() => setOrderTab("Equipamentos")}><Boxes size={14}/><span>2. Equipamentos ({selectedEquipmentIds.length})</span></button>
-          <button type="button" className={orderTab === "Valores" ? "active" : ""} onClick={() => setOrderTab("Valores")}><CircleDollarSign size={14}/><span>3. Peças & Valores</span></button>
-          <button type="button" className={orderTab === "Anexos" ? "active" : ""} onClick={() => setOrderTab("Anexos")}><ImagePlus size={14}/><span>4. Anexos & Fotos</span></button>
-        <button type="button" className={orderTab === "Configurações" ? "active" : ""} onClick={()=>setOrderTab("Configurações")}>5. Preferências</button></nav>
+          <button type="button" className={orderTab === "Geral" ? "active" : ""} aria-pressed={orderTab === "Geral"} onClick={() => setOrderTab("Geral")}><FileText size={14}/><span className="os-tab-full">1. Geral & Agendamento</span><span className="os-tab-short">Geral</span></button>
+          <button type="button" className={orderTab === "Equipamentos" ? "active" : ""} aria-pressed={orderTab === "Equipamentos"} onClick={() => setOrderTab("Equipamentos")}><Boxes size={14}/><span className="os-tab-full">2. Equipamentos ({selectedEquipmentIds.length})</span><span className="os-tab-short">Equip.</span></button>
+          <button type="button" className={orderTab === "Valores" ? "active" : ""} aria-pressed={orderTab === "Valores"} onClick={() => setOrderTab("Valores")}><CircleDollarSign size={14}/><span className="os-tab-full">3. Peças & Valores</span><span className="os-tab-short">Valores</span></button>
+          <button type="button" className={orderTab === "Anexos" ? "active" : ""} aria-pressed={orderTab === "Anexos"} onClick={() => setOrderTab("Anexos")}><ImagePlus size={14}/><span className="os-tab-full">4. Anexos & Fotos</span><span className="os-tab-short">Anexos</span></button>
+        <button type="button" className={orderTab === "Configurações" ? "active" : ""} aria-pressed={orderTab === "Configurações"} onClick={()=>setOrderTab("Configurações")}><Settings size={14}/><span className="os-tab-full">5. Preferências</span><span className="os-tab-short">Ajustes</span></button></nav>
 
         <div className="os-create-body">
           {orderTab === "Geral" && <div className="os-create-general">
@@ -3958,11 +4061,11 @@ function Modal({ title, initialOrderSeed, customers, structures, catalogRecords,
 
                 {selectedClientData && <div className="os-location-lineage" aria-live="polite"><div><small>CLIENTE / PAGADOR</small><strong>{selectedClientData.name}</strong></div><div><small>SECRETARIA / ÓRGÃO</small><strong>{hierarchyLocation?.sector||"Não informado"}</strong></div><div><small>LOCAL DE EXECUÇÃO</small><strong>{hierarchyLocation?.unit||hierarchyLocation?.room||selectedClientData.address||"Endereço principal"}</strong></div></div>}
                 {selectedClientData && <div className="os-client-confirm"><div><span>{selectedClientData.doc || "Documento não informado"}</span><strong className={selectedClientData.financialStatus === "Bloqueado" ? "blocked" : ""}>{selectedClientData.financialStatus || "Liberado"}</strong></div><b>{orderAddress || "Endereço principal não informado"}</b><small>{selectedClientData.contact || "Responsável não informado"} • {selectedClientData.phone || "Telefone não informado"}</small></div>}
-                <div className="os-create-location-grid">
-                  <label>Setor<select value={hierarchyLocation?.sectorId||""} onChange={event=>{if(selectedClientData&&orderLocations){chooseModalLocation(hierarchySelection(selectedClientData,orderLocations.nodes,event.target.value));setQuickSectorOpen(false);setQuickSectorName("");setQuickSectorFeedback("");}}} disabled={!selectedClient||orderSaveBusy||quickSectorBusy}><option value="">{selectedClient?"Selecione o setor (opcional)":"Selecione primeiro o cliente"}</option>{availableSectors.map(item=><option key={item.id} value={item.id}>{item.name}{orderLocations?.nodes.find(node=>node.id===item.id)?.depth? ` • ${orderLocations.nodes.find(node=>node.id===item.id)?.path.slice(0,-1).map(id=>orderLocations.nodes.find(node=>node.id===id)?.name).join(" / ")}`:""}</option>)}</select>{selectedClient&&<button type="button" className="inline-create-link" disabled={orderSaveBusy||quickSectorBusy||quickCustomerBusy} onClick={()=>{setQuickStructureKind("Setor");setQuickSectorName("");setQuickSectorFeedback("");setQuickSectorOpen(true);}}><Plus size={12}/> Cadastrar setor</button>}</label>
-                  <label>Unidade / local de execução<select value={hierarchyLocation?.unitId||""} onChange={event=>{if(selectedClientData&&orderLocations)chooseModalLocation(hierarchyLocation?.sectorId?orderSectorUnitSelection(selectedClientData,orderLocations.nodes,hierarchyLocation.sectorId,event.target.value):event.target.value?hierarchySelection(selectedClientData,orderLocations.nodes,event.target.value):hierarchySelection(selectedClientData,orderLocations.nodes));}} disabled={!selectedClient||orderSaveBusy||quickSectorBusy}><option value="">{hierarchyLocation?.sectorId?"Selecione a unidade (opcional)":"Unidade direta do cliente (opcional)"}</option>{availableUnits.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>{selectedClient&&<button type="button" className="inline-create-link" disabled={orderSaveBusy||quickSectorBusy} onClick={()=>{setQuickStructureKind("Unidade");setQuickSectorName("");setQuickUnitAddress({});setQuickSectorFeedback("");setQuickSectorOpen(true);}}><Plus size={12}/> Cadastrar unidade</button>}</label>
-                  <label >Sala / ambiente (opcional)<select value={hierarchyLocation?.roomId||""} onChange={event=>{if(selectedClientData&&orderLocations)chooseModalLocation(event.target.value?hierarchySelection(selectedClientData,orderLocations.nodes,event.target.value):orderSectorUnitSelection(selectedClientData,orderLocations.nodes,hierarchyLocation?.sectorId||"",hierarchyLocation?.unitId||""));}} disabled={!selectedClient||quickSectorBusy||Boolean(hierarchyLocation?.structureId)}><option value="">{selectedClient ? availableRooms.length ? "Selecione a sala (opcional)" : "Nenhuma sala cadastrada" : "Selecione o cliente"}</option>{availableRooms.map(item => <option key={item.id} value={item.id}>{item.name} • {item.category || item.environmentType || "Ambiente"}</option>)}</select></label>
-                  <label>Endereço do atendimento<input value={orderAddress} onChange={event=>setOrderAddressOverride(event.target.value)} placeholder="Informe o endereço da unidade onde o serviço será realizado"/>{orderAddress&&<a className="os-open-map-link" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(orderAddress)}`} target="_blank" rel="noreferrer"><MapPin size={12}/> Ver rota no Google Maps</a>}</label>
+                <div className="os-create-location-grid os-location-dependent" data-customer-selected={Boolean(selectedClient)} aria-label="Estrutura do local">
+                  <label className="os-dependent-select">Setor<select value={hierarchyLocation?.sectorId||""} onChange={event=>{if(selectedClientData&&orderLocations){chooseModalLocation(hierarchySelection(selectedClientData,orderLocations.nodes,event.target.value));setQuickSectorOpen(false);setQuickSectorName("");setQuickSectorFeedback("");}}} disabled={!selectedClient||orderSaveBusy||quickSectorBusy}><option value="">{selectedClient?"Selecione o setor (opcional)":"Selecione primeiro o cliente"}</option>{availableSectors.map(item=><option key={item.id} value={item.id}>{item.name}{orderLocations?.nodes.find(node=>node.id===item.id)?.depth? ` • ${orderLocations.nodes.find(node=>node.id===item.id)?.path.slice(0,-1).map(id=>orderLocations.nodes.find(node=>node.id===id)?.name).join(" / ")}`:""}</option>)}</select>{selectedClient&&<button type="button" className="inline-create-link" disabled={orderSaveBusy||quickSectorBusy||quickCustomerBusy} onClick={()=>{setQuickStructureKind("Setor");setQuickSectorName("");setQuickSectorFeedback("");setQuickSectorOpen(true);}}><Plus size={12}/> Cadastrar setor</button>}</label>
+                  <label className="os-dependent-select">Unidade / local de execução<select value={hierarchyLocation?.unitId||""} onChange={event=>{if(selectedClientData&&orderLocations)chooseModalLocation(hierarchyLocation?.sectorId?orderSectorUnitSelection(selectedClientData,orderLocations.nodes,hierarchyLocation.sectorId,event.target.value):event.target.value?hierarchySelection(selectedClientData,orderLocations.nodes,event.target.value):hierarchySelection(selectedClientData,orderLocations.nodes));}} disabled={!selectedClient||orderSaveBusy||quickSectorBusy}><option value="">{hierarchyLocation?.sectorId?"Selecione a unidade (opcional)":"Unidade direta do cliente (opcional)"}</option>{availableUnits.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>{selectedClient&&<button type="button" className="inline-create-link" disabled={orderSaveBusy||quickSectorBusy} onClick={()=>{setQuickStructureKind("Unidade");setQuickSectorName("");setQuickUnitAddress({});setQuickSectorFeedback("");setQuickSectorOpen(true);}}><Plus size={12}/> Cadastrar unidade</button>}</label>
+                  <label className="os-dependent-select">Sala / ambiente (opcional)<select value={hierarchyLocation?.roomId||""} onChange={event=>{if(selectedClientData&&orderLocations)chooseModalLocation(event.target.value?hierarchySelection(selectedClientData,orderLocations.nodes,event.target.value):orderSectorUnitSelection(selectedClientData,orderLocations.nodes,hierarchyLocation?.sectorId||"",hierarchyLocation?.unitId||""));}} disabled={!selectedClient||quickSectorBusy||Boolean(hierarchyLocation?.structureId)}><option value="">{selectedClient ? availableRooms.length ? "Selecione a sala (opcional)" : "Nenhuma sala cadastrada" : "Selecione o cliente"}</option>{availableRooms.map(item => <option key={item.id} value={item.id}>{item.name} • {item.category || item.environmentType || "Ambiente"}</option>)}</select></label>
+                  <label>Endereço do atendimento<input value={orderAddress} onChange={event=>setOrderAddressOverride(event.target.value)} placeholder="Rua, número e cidade"/>{orderAddress&&<a className="os-open-map-link" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(orderAddress)}`} target="_blank" rel="noreferrer"><MapPin size={12}/> Ver rota no Google Maps</a>}</label>
                 </div>
                 {quickSectorOpen&&<div className="order-sector-quick-create os-inline-sector"><div><span>CADASTRO DIRETO</span><b>{quickStructureKind==="Unidade"?"Nova unidade":"Novo setor"}</b><small>{quickStructureKind==="Unidade"?`Cliente: ${selectedClient} • ${sector?`Setor: ${sector}`:"vinculada diretamente ao cliente"}`:`Vinculado ao cliente principal: ${selectedClient}`}</small></div><label>Nome {quickStructureKind==="Unidade"?"da unidade":"do setor"}<input autoFocus disabled={quickSectorBusy} value={quickSectorName} onChange={event=>setQuickSectorName(event.target.value)} onKeyDown={event=>{if(event.key==="Enter"){event.preventDefault();void createSectorFromOrder();}}} placeholder={quickStructureKind==="Unidade"?"Ex.: UBS Central":"Ex.: Saúde"}/></label>{quickStructureKind==="Unidade"&&<div className="os-inline-unit-address"><CustomerAddressFields value={quickUnitAddress} onChange={patch=>setQuickUnitAddress(current=>({...current,...patch}))}/></div>}<div className="order-sector-quick-actions"><button type="button" className="outline-btn" disabled={quickSectorBusy} onClick={()=>setQuickSectorOpen(false)}>Cancelar</button><button type="button" className="primary-btn" disabled={quickSectorBusy} onClick={()=>void createSectorFromOrder()}>{quickSectorBusy?"Salvando…":"Cadastrar e selecionar"}</button></div></div>}
                 {quickSectorFeedback && <div className="field-hint order-sector-feedback"><CheckCircle2 size={13}/>{quickSectorFeedback}</div>}
@@ -4054,8 +4157,8 @@ function Modal({ title, initialOrderSeed, customers, structures, catalogRecords,
 
         {orderSaveError&&<p role="alert" style={{color:"#991b1b",background:"#fef2f2",border:"1px solid #f87171",padding:12,margin:"0 20px"}}><strong>Não foi salvo.</strong> {orderSaveError}</p>}
         <footer className="os-create-footer">
-          <div><button type="button" className="outline-btn" onClick={requestClose}>Cancelar</button><button type="button" className="outline-btn" disabled={orderSaveBusy||quickSectorBusy||quickCustomerBusy} onClick={() => void saveNewOrder("Rascunho")}>Revisar rascunho</button></div>
-          <div className="os-create-footer-summary"><span>{selectedOrderItems.length} item(ns) • {selectedEquipmentIds.length} equipamento(s)</span><strong>R$ {orderTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong><button type="button" className="primary-btn" disabled={orderSaveBusy||quickSectorBusy||quickCustomerBusy} onClick={() => void saveNewOrder("Agendada")}>{orderSaveBusy ? <><svg className="h-4 w-4 animate-spin shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Salvando...</> : <><CheckCircle2 size={15}/>Revisar e agendar OS</>}</button></div>
+          <div className="os-create-footer-secondary"><button type="button" className="outline-btn os-create-cancel" onClick={requestClose}>Cancelar</button><button type="button" className="outline-btn os-create-draft-action" disabled={orderSaveBusy||quickSectorBusy||quickCustomerBusy} onClick={() => void saveNewOrder("Rascunho")} aria-label="Revisar rascunho">Rascunho</button></div>
+          <div className="os-create-footer-summary"><span className="os-create-item-count">{selectedOrderItems.length} item(ns) • {selectedEquipmentIds.length} equipamento(s)</span><strong>R$ {orderTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong><button type="button" className="primary-btn os-create-schedule-action" disabled={orderSaveBusy||quickSectorBusy||quickCustomerBusy} onClick={() => void saveNewOrder("Agendada")}>{orderSaveBusy ? <><svg className="h-4 w-4 animate-spin shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Salvando...</> : <><CheckCircle2 size={15}/>Revisar e agendar OS</>}</button></div>
         </footer>
         {reviewStatus&&<div className="os-review-overlay" role="dialog" aria-modal="true" aria-labelledby="os-review-title"><section className="os-review-card"><span>CONFERÊNCIA FINAL • ORDEM DE SERVIÇO</span><h2 id="os-review-title">Confira os dados antes de salvar</h2><div className="os-review-grid"><div><small>CLIENTE</small><strong>{selectedClient||"Não informado"}</strong></div><div><small>UNIDADE / SETOR</small><strong>{[unit,sector,room].filter(Boolean).join(" • ")||"Endereço do cliente"}</strong></div><div className="wide"><small>ENDEREÇO DO ATENDIMENTO</small><strong>{orderAddress||"Não informado"}</strong></div><div><small>DATA E HORÁRIO</small><strong>{date?new Date(`${date}T12:00:00`).toLocaleDateString("pt-BR"):"Não definida"}{reviewStatus==="Agendada"?` • ${time||"Sem horário"}`:" • Rascunho"}</strong></div><div><small>TÉCNICO</small><strong>{tech||"A definir"}</strong></div><div className="wide"><small>SERVIÇO</small><strong>{description||selectedOrderItems.map(item=>item.name).join(", ")||"Não informado"}</strong></div><div><small>ITENS E EQUIPAMENTOS</small><strong>{selectedOrderItems.length} item(ns) • {selectedEquipmentIds.length} equipamento(s)</strong></div><div><small>VALOR ESTIMADO</small><strong>R$ {orderTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div></div>{reviewStatus==="Agendada"&&(()=>{const warnings=getScheduleWarnings();return <>{warnings.overlaps.length>0&&<div className="os-review-warning"><b>Conflito de agenda</b>{warnings.overlaps.map(({item})=><small key={item.id}>O técnico já tem a OS {item.id} às {item.time} • {item.address||item.client}.</small>)}</div>}{warnings.travel.length>0&&<div className="os-review-warning travel"><b>Confira o deslocamento</b>{warnings.travel.map(({item})=><small key={item.id}>Há menos de 30 minutos entre endereços diferentes envolvendo a OS {item.id}. Confira a rota antes de confirmar.</small>)}</div>}</>;})()}<div className="os-review-actions"><button type="button" className="outline-btn" disabled={orderSaveBusy} onClick={()=>setReviewStatus(null)}>Voltar e corrigir</button><button type="button" className="primary-btn" disabled={orderSaveBusy} onClick={()=>{const status=reviewStatus;setReviewStatus(null);if(status)void saveNewOrder(status,true);}}>{orderSaveBusy?"Salvando…":reviewStatus==="Agendada"?"Confirmar e agendar":"Confirmar e salvar rascunho"}</button></div></section></div>}
       </section>
@@ -4300,6 +4403,8 @@ export default function Home() {
   const [bootRunId, setBootRunId] = useState("");
   const [bootAttempt, setBootAttempt] = useState(0);
   const [current, setCurrentState] = useState("Painel inicial");
+  const [focusedBudgetId,setFocusedBudgetId]=useState("");
+  const [linkedOrderId,setLinkedOrderId]=useState("");
   const setCurrent = useCallback((moduleName:string) => {
     if (!navigationModuleNames().includes(moduleName)) return;
     setCurrentState(moduleName);
@@ -4331,6 +4436,9 @@ export default function Home() {
       const allowed=navigationModuleNames().filter(name=>canNavigateModule(name,authenticatedUser,effectiveEntitledModules));
       const target=canNavigateModule(requested,authenticatedUser,effectiveEntitledModules)?requested:allowed[0]||"Painel inicial";
       setCurrentState(target);
+      const record=validOperationalRecordId(new URLSearchParams(window.location.search).get("registro"));
+      setFocusedBudgetId(target==="Orçamentos"?record:"");
+      setLinkedOrderId(target==="Ordens de serviço"?record:"");
     };
     syncFromUrl();window.addEventListener("popstate",syncFromUrl);
     return ()=>window.removeEventListener("popstate",syncFromUrl);
@@ -4529,6 +4637,32 @@ export default function Home() {
     loadSharedState();
   }, [authenticatedUser, activeCompany.id]);
   const [feedbackTone, setFeedbackTone] = useState<FeedbackTone>("info");
+  const [desktopPending,setDesktopPending]=useState<DesktopOfflineOperation[]>([]);
+  const [legacyDesktopPending,setLegacyDesktopPending]=useState(0);
+  const [desktopQueueError,setDesktopQueueError]=useState("");
+  const [desktopSyncing,setDesktopSyncing]=useState(false);
+  const desktopSyncLock=useRef(false), desktopWriteLock=useRef(false);
+  const desktopUser=authenticatedUser?.username || "";
+  const desktopCompany=activeCompany.id;
+  const localScope=desktopUser&&(!authenticatedUser?.companyId||authenticatedUser.companyId===desktopCompany) ? desktopQueuePrefix(desktopCompany,desktopUser) : "";
+  const activeQueueScope=useRef("");
+  useEffect(()=>{activeQueueScope.current=localScope;return()=>{activeQueueScope.current="";};},[localScope]);
+  const refreshDesktopQueue=useCallback(()=>{
+    if(!localScope){setDesktopPending([]);setLegacyDesktopPending(0);setDesktopQueueError("");return;}
+    try{
+      setDesktopPending(readDesktopOperations(localStorage,localScope));
+      setLegacyDesktopPending(legacyDesktopOperationsCount(localStorage,desktopCompany));
+      setDesktopQueueError("");
+    }catch{
+      setDesktopQueueError("Não foi possível ler a fila local. Nenhuma entrada foi removida.");
+    }
+  },[localScope,desktopCompany]);
+  useEffect(()=>{
+    refreshDesktopQueue();
+    const handle=(event:StorageEvent)=>{if(event.key?.startsWith(localScope)||event.key==="proar-offline-queue")refreshDesktopQueue();};
+    window.addEventListener("storage",handle);
+    return()=>window.removeEventListener("storage",handle);
+  },[localScope,refreshDesktopQueue]);
   const showFeedback = (message: string, tone: FeedbackTone = "info", duration = 3200, actions?: FeedbackAction[]) => {
     setFeedbackTone(tone);
     notifyFeedback({ message, tone, duration, actions });
@@ -4540,16 +4674,23 @@ export default function Home() {
     notifyFeedback({ message:savedMessage, tone });
     setSavedMessage("");
   }, [savedMessage]);
-  const persistSharedState = async (nextCustomers:Customer[],nextOrders:ServiceOrder[],nextModules:Record<string,ModuleRecord[]>):Promise<boolean>=>{
-    if(databaseMode==="degraded"){setSavedMessage("Não foi salvo: banco em contingência. O formulário permanece aberto.");return false;}
-    const payload={companyId:activeCompany.id,customers:nextCustomers,serviceOrders:nextOrders,moduleRecords:nextModules,_baseRevision:stateRevision};
-    if(!navigator.onLine){
+  const persistSharedState = async (nextCustomers:Customer[],nextOrders:ServiceOrder[],nextModules:Record<string,ModuleRecord[]>,queueOffline=true,onConfirmed?:(state:ConfirmedState)=>boolean):Promise<boolean>=>{
+    if(desktopWriteLock.current || desktopSyncLock.current){setSavedMessage("Há outra gravação em andamento. Aguarde a confirmação e tente novamente.");return false;}
+    const payload={companyId:desktopCompany,customers:nextCustomers,serviceOrders:nextOrders,moduleRecords:nextModules,_baseRevision:stateRevision};
+    if(!navigator.onLine || databaseMode==="degraded"){
+      if(!queueOffline || !localScope || activeQueueScope.current!==localScope){setSavedMessage("Sem confirmação do banco. Os campos continuam em edição.");return false;}
       try{
-        const queue=JSON.parse(localStorage.getItem("proar-offline-queue")||"[]");
-        localStorage.setItem("proar-offline-queue",JSON.stringify([...queue.filter((item:{companyId:string})=>item.companyId!==activeCompany.id),{companyId:activeCompany.id,payload,createdAt:new Date().toISOString()}]));
-      }catch{setSavedMessage("Não foi salvo: sem conexão e não foi possível guardar a tentativa neste aparelho.");return false;}
-      setSavedMessage("Rascunho local: aguardando conexão. A gravação no banco ainda não foi confirmada.");return false;
+        const before={customers:customerRecords,serviceOrders,moduleRecords};
+        const after={customers:nextCustomers,serviceOrders:nextOrders,moduleRecords:nextModules};
+        const changes=desktopOperationChanges(before,after);
+        if(!changes.length){setSavedMessage("Nenhuma alteração nova para guardar.");return false;}
+        enqueueDesktopOperation(localStorage,localScope,{id:crypto.randomUUID(),at:new Date().toISOString(),changes});
+        refreshDesktopQueue();
+      }catch(error){setSavedMessage(error instanceof Error?error.message:"Não foi possível guardar esta tentativa neste aparelho.");return false;}
+      setSavedMessage("Alteração guardada neste aparelho. O banco ainda não confirmou.");
+      return false;
     }
+    desktopWriteLock.current=true;
     const applyConfirmed=(state:{customers?:unknown;serviceOrders?:unknown;moduleRecords?:unknown;_revision?:unknown})=>{
       const confirmedCustomers=state.customers as Customer[],confirmedOrders=state.serviceOrders as ServiceOrder[],confirmedModules=mergeImportedServices(state.moduleRecords as Record<string,ModuleRecord[]>);
       setCustomerRecords(confirmedCustomers);setServiceOrders(confirmedOrders);setModuleRecords(confirmedModules);setStateRevision(Number(state._revision||0));
@@ -4559,12 +4700,15 @@ export default function Home() {
     try{
       const response=await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
       const body=await response.json().catch(()=>null),outcome=stateSaveOutcome(response.status,body,stateRevision);
+      if(localScope && activeQueueScope.current!==localScope)return false;
       if(!outcome.confirmed){
         if(outcome.conflict&&Array.isArray(body?.state?.customers)&&Array.isArray(body?.state?.serviceOrders)&&body?.state?.moduleRecords)applyConfirmed(body.state);
         setSavedMessage("Não foi salvo: "+outcome.error);setSyncPhase("idle");return false;
       }
-      applyConfirmed(outcome.state);setSyncPhase("complete");window.setTimeout(()=>setSyncPhase("idle"),1000);return true;
-    }catch(error){setSavedMessage(friendlyErrorMessage(error,{fallback:"Não foi salvo: falha de conexão. Os campos permanecem em edição."}));setSyncPhase("idle");return false;}
+      applyConfirmed(outcome.state);
+      if(onConfirmed && !onConfirmed(outcome.state)){setSavedMessage("O banco não devolveu este registro confirmado. Confira a revisão antes de repetir.");setSyncPhase("idle");return false;}
+      setSyncPhase("complete");window.setTimeout(()=>setSyncPhase("idle"),1000);return true;
+    }catch(error){setSavedMessage(friendlyErrorMessage(error,{fallback:"Não foi salvo: falha de conexão. Os campos permanecem em edição."}));setSyncPhase("idle");return false;}finally{desktopWriteLock.current=false;}
   };
   const pullFromDatabase = async () => {
     if (!online) { setSavedMessage("Sem internet. Não foi possível atualizar do banco."); return; }
@@ -4601,26 +4745,45 @@ export default function Home() {
     }
     finally { setSyncing(false); }
   };
-  const pushToDatabase = async () => {
-    if (!online) { setSavedMessage("Sem internet. Alterações pendentes serão sincronizadas ao reconectar."); return; }
-    // Segurança multiaparelho: nunca força a cópia local como principal.
+  const synchronizeDesktopQueue=useCallback(async()=>{
+    if(!online || !localScope || desktopWriteLock.current || desktopSyncLock.current)return;
+    desktopSyncLock.current=true;setDesktopSyncing(true);
+    const endpoint=`/api/state?company=${encodeURIComponent(desktopCompany)}`;
+    const run=()=>syncDesktopOperations({
+      store:localStorage,prefix:localScope,active:()=>activeQueueScope.current===localScope && navigator.onLine,
+      read:async()=>{const response=await fetch(endpoint,{cache:"no-store"});const body=await response.json();return response.ok?body.state:null;},
+      write:async state=>{const response=await fetch(endpoint,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({customers:state.customers,serviceOrders:state.serviceOrders,moduleRecords:state.moduleRecords,_baseRevision:state._revision})});return {status:response.status,body:await response.json().catch(()=>null)};}
+    });
+    try{
+      const result=typeof navigator.locks?.request==="function" ? await navigator.locks.request(localScope,{ifAvailable:true},lock=>lock?run():Promise.resolve(null)) : await run();
+      if(!result || activeQueueScope.current!==localScope)return;
+      if(result.remaining.some(op=>op.status==="review"))setSavedMessage("Há alteração offline em conflito. Ela foi preservada para revisão; nada foi sobrescrito.");
+      else if(result.remaining.length)setSavedMessage("Ainda há alterações aguardando confirmação do banco.");
+      else if(result.confirmed)setSavedMessage(`${result.confirmed} alteração(ões) offline confirmada(s) pelo banco.`);
+    }catch{if(activeQueueScope.current===localScope)setSavedMessage("Não foi possível conferir a fila. As alterações não confirmadas continuam guardadas.");}
+    finally{desktopSyncLock.current=false;setDesktopSyncing(false);if(activeQueueScope.current===localScope)refreshDesktopQueue();}
+  },[online,localScope,desktopCompany,refreshDesktopQueue]);
+  const pushToDatabase=async()=>{
+    if(!online){setSavedMessage("Sem internet. As alterações guardadas continuam no aparelho.");return;}
+    await synchronizeDesktopQueue();
     await pullFromDatabase();
+  };
+  useEffect(()=>{if(online && localScope)void synchronizeDesktopQueue();},[online,localScope,synchronizeDesktopQueue]);
+  const removeDesktopDraftAfterReview=(op:DesktopOfflineOperation)=>{
+    if(!localScope||activeQueueScope.current!==localScope||desktopSyncLock.current)return;
+    if(!window.confirm("Remover este rascunho local? Faça o download antes, se precisar. Isto não altera a versão do banco."))return;
+    localStorage.removeItem(localScope+op.id);
+    refreshDesktopQueue();
+  };
+  const exportDesktopDraft=(op:DesktopOfflineOperation)=>{
+    if(!localScope || activeQueueScope.current!==localScope)return;
+    const url=URL.createObjectURL(new Blob([JSON.stringify(op,null,2)],{type:"application/json"}));
+    const link=document.createElement("a");link.href=url;link.download=`proar-alteracao-${op.id}.json`;link.click();
+    window.setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
   useEffect(() => {
     if (!online || !authenticatedUser) return;
-    const synchronize = async () => {
-      const queue = JSON.parse(localStorage.getItem("proar-offline-queue") || "[]") as { companyId: string; payload: unknown }[];
-      if (!queue.length) return;
-      const pending: typeof queue = [];
-      for (const item of queue) { try { const response = await fetch(`/api/state?company=${encodeURIComponent(item.companyId)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item.payload) }); if (response.status === 409) { setSavedMessage("Havia alterações mais novas no servidor. A base online foi preservada; revise a alteração feita offline."); continue; } if (!response.ok) pending.push(item); } catch { pending.push(item); } }
-      localStorage.setItem("proar-offline-queue", JSON.stringify(pending));
-      if (!pending.length) { setSavedMessage("Dados offline sincronizados com sucesso."); window.setTimeout(() => setSavedMessage(""), 3500); }
-    };
-    void synchronize();
-  }, [online, authenticatedUser]);
-  useEffect(() => {
-    if (!online || !authenticatedUser) return;
-    const refresh = () => { if (document.visibilityState === "visible" && !syncing) void pullFromDatabase(); };
+    const refresh = () => { if (document.visibilityState === "visible" && !syncing && !desktopWriteLock.current && !desktopSyncLock.current) void pullFromDatabase(); };
     const timer = window.setInterval(refresh, 20000);
     window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", refresh);
@@ -4648,6 +4811,11 @@ export default function Home() {
       }
     }
     let orderForPersistence: ServiceOrder = { ...updatedOrder, contractItems: (updatedOrder.contractItems ?? []).map(item => ({ ...item })) };
+    if(normalizeRelation(previousOrder.tech)!==normalizeRelation(updatedOrder.tech)){
+      const matches=(moduleRecords["Funcionários"]??[]).filter(entry=>!/^inativ|^desligad/i.test(entry.status||"")&&normalizeRelation(entry.name)===normalizeRelation(updatedOrder.tech));
+      const id=matches.length===1?matches[0].id:undefined;
+      orderForPersistence={...orderForPersistence,employeeId:id,techId:id};
+    }
     const reminderId = `LEM-${updatedOrder.id.replace(/\D/g, "")}`;
     let updatedModules = { ...moduleRecords };
     const currentReminders = updatedModules.Lembretes ?? [];
@@ -4721,28 +4889,18 @@ export default function Home() {
       return null;
     }
     updatedModules = appendAudit(updatedModules,"OS atualizada",`Ordens de serviço • ${orderForPersistence.id}`,`Status: ${previousOrder.status} → ${orderForPersistence.status}`,{moduleName:"Ordens de serviço",recordId:orderForPersistence.id,before:previousOrder as unknown as Record<string,unknown>,after:orderForPersistence as unknown as Record<string,unknown>});
-    const payload = { companyId: activeCompany.id, customers: customerRecords, serviceOrders: updatedOrders, moduleRecords: updatedModules, _baseRevision: stateRevision };
-    let response: Response;
-    let result: any;
-    try {
-      response = await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) });
-      result = await response.json();
-    } catch (error) {
-      showFeedback(error instanceof Error ? `Falha ao salvar a OS • ${error.message}` : "Falha ao salvar a OS • banco indisponível.", "error", 6000);
-      return null;
-    }
-    if (!response.ok) {
-      if (response.status === 409 && result.state) {
-        const serverCustomers=result.state.customers??[]; const serverOrders=result.state.serviceOrders??[]; const serverModules=mergeImportedServices(result.state.moduleRecords??{});
-        setCustomerRecords(serverCustomers); setServiceOrders(serverOrders); setModuleRecords(serverModules); setStateRevision(Number(result.state._revision||0));
-        localStorage.setItem(companyStorageKey(activeCompany.id,"customers"),JSON.stringify(serverCustomers)); localStorage.setItem(companyStorageKey(activeCompany.id,"service-orders"),JSON.stringify(serverOrders)); localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(serverModules));
+    let persisted:ServiceOrder|undefined;
+    const written=await persistSharedState(customerRecords,updatedOrders,updatedModules,false,state=>{
+      const order=state.serviceOrders.find(item=>item.id===orderForPersistence.id) as ServiceOrder|undefined;
+      if(!order)return false;
+      for(const key of ["status","date","time","tech","nfseStatus","nfseNumber","nfseValue","nfseVerificationCode"] as const){
+        if(previousOrder[key]!==orderForPersistence[key] && order[key]!==orderForPersistence[key])return false;
       }
-      showFeedback(response.status === 409 ? "Conflito ao salvar a OS • uma versão mais recente do banco foi preservada. Revise e tente novamente." : `Falha ao salvar a OS • ${result.error || "não foi possível confirmar a gravação no banco."}`, response.status === 409 ? "warning" : "error", 6000);
-      return null;
-    }
-    const confirmedCustomers=result.state?.customers??customerRecords; const confirmedOrders=result.state?.serviceOrders??updatedOrders; const confirmedModules=mergeImportedServices(result.state?.moduleRecords??updatedModules);
-    setCustomerRecords(confirmedCustomers); setServiceOrders(confirmedOrders); setModuleRecords(confirmedModules); setSelectedOrder(orderForPersistence); setStateRevision(Number(result.state?._revision||stateRevision+1));
-    localStorage.setItem(companyStorageKey(activeCompany.id,"customers"),JSON.stringify(confirmedCustomers)); localStorage.setItem(companyStorageKey(activeCompany.id,"service-orders"),JSON.stringify(confirmedOrders)); localStorage.setItem(companyStorageKey(activeCompany.id,"module-records"),JSON.stringify(confirmedModules));
+      persisted=order;return true;
+    });
+    if(!written || !persisted)return null;
+    orderForPersistence=persisted;
+    setSelectedOrder(persisted);
     // O acompanhamento externo recebe somente o recorte liberado ao cliente;
     // observações internas, financeiro e demais dados operacionais ficam na base autenticada.
     if (orderForPersistence.trackingToken) {
@@ -4758,33 +4916,47 @@ export default function Home() {
     return orderForPersistence;
   };
   const hasAction = (moduleName: string, action: "Visualizar" | "Criar" | "Editar" | "Excluir") => Boolean(authenticatedUser?.permissions?.includes("*") || authenticatedUser?.role === "Administrador" || authenticatedUser?.permissions?.includes(`${moduleName}:${action}`));
-  const updateCustomer = (updatedCustomer: Customer) => {
+  const updateCustomer = async (updatedCustomer: Customer) => {
+    if(!hasAction("Clientes","Editar")){setSavedMessage("Seu perfil não pode editar clientes.");return false;}
     const documentError=customerDocumentError(updatedCustomer.doc);
-    if(documentError){setSavedMessage(`Cliente não atualizado • ${documentError}`);return;}
+    if(documentError){setSavedMessage(`Cliente não atualizado • ${documentError}`);return false;}
     const previousCustomer=customerRecords.find(customer=>customer.id===updatedCustomer.id);
+    if(!previousCustomer)return false;
     const updatedCustomers = customerRecords.map(customer => customer.id === updatedCustomer.id ? updatedCustomer : customer);
     const updatedModules=appendAudit(moduleRecords,"Cliente atualizado",`Clientes • ${updatedCustomer.name}`,"Cadastro do cliente alterado.",{moduleName:"Clientes",recordId:updatedCustomer.id,before:previousCustomer as unknown as Record<string,unknown> | undefined,after:updatedCustomer as unknown as Record<string,unknown>});
-    setCustomerRecords(updatedCustomers);
-    setModuleRecords(updatedModules);
-    localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(updatedCustomers));
-    persistSharedState(updatedCustomers, serviceOrders, updatedModules);
+    if(!await persistSharedState(updatedCustomers,serviceOrders,updatedModules))return false;
     showFeedback(`Alteração salva com sucesso • ${updatedCustomer.name}.`, "success");
+    return true;
   };
   const appendAudit = (modules: Record<string, ModuleRecord[]>, action: string, reference: string, detail: string, meta?: { moduleName?:string; recordId?:string; before?:Record<string,unknown>; after?:Record<string,unknown> }) => ({ ...modules, Auditoria: [{ id: `AUD-${Date.now()}-${Math.random().toString(36).slice(2,6)}`, name: action, client: authenticatedUser?.displayName || "Sistema", description: `${reference} • ${detail}`, createdAt: new Date().toLocaleString("pt-BR"), status: "Registrado", category: "Rastreabilidade", auditModule:meta?.moduleName, recordId:meta?.recordId, auditAction:action, auditDetail:detail, auditUser:authenticatedUser?.displayName || "Sistema", auditChanges:diffAuditRecord(meta?.before,meta?.after), auditBeforeData:meta?.moduleName==="Clientes"?meta.before:undefined, auditAfterData:meta?.moduleName==="Clientes"?meta.after:undefined }, ...(modules.Auditoria ?? [])].slice(0, 1000) });
-  const convertBudget = (budget: ModuleRecord, target: "Pedido" | "Ordem de serviço") => {
+  const budgetConversionLock=useRef(false);
+  const convertBudget = async (budget: ModuleRecord, target: "Pedido" | "Ordem de serviço") => {
+    if(budgetConversionLock.current)return;
+    const destination=target==="Pedido"?"Vendas":"Ordens de serviço";
+    if(!hasAction("Orçamentos","Editar")||!hasAction(destination,"Criar")){setSavedMessage("Seu perfil não pode converter este orçamento.");return;}
+    const latest=(moduleRecords.Orçamentos??[]).find(item=>item.id===budget.id);
+    if(!latest){setSavedMessage("Orçamento não encontrado. Atualize e tente novamente.");return;}
+    budget=latest;
+    const linked=serviceOrders.find(item=>item.sourceBudgetId===budget.id);
+    if(linked || (moduleRecords.Vendas??[]).some(item=>item.sourceBudgetId===budget.id) || /convertid/i.test(budget.status||"")){setSavedMessage("Este orçamento já foi convertido.");return;}
+    if(target==="Ordem de serviço" && !isQuoteApproved(budget)){setSavedMessage("Confirme a aprovação do orçamento antes de gerar a OS.");return;}
     if (budget.approvalRequired && budget.approvalStatus !== "Aprovado") { setSavedMessage("Este orçamento depende de aprovação por alçada antes da conversão."); window.setTimeout(()=>setSavedMessage(""),3500); return; }
+    budgetConversionLock.current=true;
+    try {
     if (target === "Pedido") {
-      const sale: ModuleRecord = { ...budget, id:`VEN-${Date.now().toString().slice(-6)}`, name:`Pedido • ${budget.name}`, status:"Pedido confirmado", createdAt:new Date().toLocaleString("pt-BR") };
+      const sale: ModuleRecord = { ...budget, id:`VEN-${Date.now().toString().slice(-6)}`, name:`Pedido • ${budget.name}`, sourceBudgetId:budget.id, status:"Pedido confirmado", createdAt:new Date().toLocaleString("pt-BR") };
       const updated = { ...moduleRecords, Vendas:[sale,...(moduleRecords.Vendas ?? [])], Orçamentos:(moduleRecords.Orçamentos ?? []).map(item => item.id === budget.id ? {...item,status:"Convertido em pedido"} : item) };
-      setModuleRecords(updated); persistSharedState(customerRecords, serviceOrders, updated); setCurrent("Vendas");
+      if(!await persistSharedState(customerRecords,serviceOrders,updated,false))return; setCurrent("Vendas");
     } else {
-      const customer = customerRecords.find(item => item.name === budget.client);
+      const customer = budget.customerId ? customerRecords.find(item=>item.id===budget.customerId) : customerRecords.filter(item=>item.name===budget.client).length===1 ? customerRecords.find(item=>item.name===budget.client) : undefined;
+      if(!customer){setSavedMessage("Vincule o cadastro correto ao orçamento antes de gerar a OS.");return;}
       const budgetStructure = budget.structureId ? (moduleRecords["Unidades e setores"] ?? []).find(item => item.id === budget.structureId && item.client === budget.client) : undefined;
-      const order: ServiceOrder = { id:`#OS-${String(Math.max(15499,...serviceOrders.map(item => Number(item.id.replace(/\D/g,""))||0))+1).padStart(5,"0")}`, client:budget.client, customerId:budget.customerId || customer?.id, unit:budget.unitId ? budget.unit || "Matriz" : budgetStructure?.name || budget.unit || "Matriz", structureId:budget.structureId || budgetStructure?.id, unitId:budget.unitId || budgetStructure?.id, sector:budget.sector, sectorId:budget.sectorId, room:budget.room, roomId:budget.roomId, sourceBudgetId:budget.id, service:budget.purchaseItems?.map(item => item.description).join(", ") || budget.name, tech:"Não definido", date:new Date().toISOString().slice(0,10), time:"A definir", address:budgetStructure?.address || customer?.address || "", status:"Aberta", tone:"blue", avatar:budget.client.split(" ").map(item => item[0]).slice(0,2).join(""), catalogItems:budget.purchaseItems?.filter(item => item.kind !== "Custo adicional").map(item => ({ id:item.productId || item.id, name:item.description, kind:item.kind === "Produto" ? "Produto" : "Serviço" })) };
+      const order: ServiceOrder = { id:`#OS-${String(Math.max(15499,...serviceOrders.map(item => Number(item.id.replace(/\D/g,""))||0))+1).padStart(5,"0")}`, client:budget.client, customerId:budget.customerId || customer?.id, unit:budget.unitId ? budget.unit || "Matriz" : budgetStructure?.name || budget.unit || "Matriz", structureId:budget.structureId || budgetStructure?.id, unitId:budget.unitId || budgetStructure?.id, sector:budget.sector, sectorId:budget.sectorId, room:budget.room, roomId:budget.roomId, sourceBudgetId:budget.id, total:budget.value, discount:budget.discount, service:budget.purchaseItems?.map(item => item.description).join(", ") || budget.name, tech:"Não definido", date:new Date().toISOString().slice(0,10), time:"A definir", address:budgetStructure?.address || customer?.address || "", status:"Aberta", tone:"blue", avatar:budget.client.split(" ").map(item => item[0]).slice(0,2).join(""), catalogItems:budget.purchaseItems?.filter(item => item.kind !== "Custo adicional").map(item => ({ id:item.productId || item.id, name:item.description, quantity:item.quantity, kind:item.kind === "Produto" ? "Produto" : "Serviço" })) };
       const updatedOrders = [order,...serviceOrders]; const updatedModules = { ...moduleRecords, Orçamentos:(moduleRecords.Orçamentos ?? []).map(item => item.id === budget.id ? {...item,status:"Convertido em OS"} : item) };
-      setServiceOrders(updatedOrders); setModuleRecords(updatedModules); persistSharedState(customerRecords,updatedOrders,updatedModules); setCurrent("Ordens de serviço");
+      if(!await persistSharedState(customerRecords,updatedOrders,updatedModules,false))return; setCurrent("Ordens de serviço");setSelectedOrder(order);
     }
     setSavedMessage(`Orçamento convertido em ${target}.`); window.setTimeout(() => setSavedMessage(""),2500);
+    } finally {budgetConversionLock.current=false;}
   };
   const recordSaveLock=useRef(false);
   const saveRecord = async (data: ModalSave) => {
@@ -4849,9 +5021,16 @@ export default function Home() {
       setCurrent("Clientes");
       showFeedback(`Cliente ${newCustomer.name} cadastrado com sucesso!`, "success", 6000, [{label:"Abrir nova O.S.",onClick:()=>{setCurrent("Ordens de serviço");setModal("Nova ordem de serviço");}}]);
     } else if (data.title === "Nova ordem de serviço") {
+      const alreadySaved=data.creationRequestId?serviceOrders.find(order=>order.creationRequestId===data.creationRequestId):undefined;
+      if(alreadySaved){
+        setSelectedOrder(alreadySaved);setCurrent("Ordens de serviço");setModal("");setOrderSeed(undefined);
+        showFeedback(`O.S. ${alreadySaved.id} já confirmada. Nenhuma cópia foi criada.`, "success");
+        return;
+      }
       const sequence = Math.max(15499, ...serviceOrders.map(order => Number(order.id.replace(/\D/g, "")) || 0)) + 1;
       const newOrder: ServiceOrder = {
         id: `#OS-${String(sequence).padStart(5, "0")}`,
+        creationRequestId:data.creationRequestId,
         client: data.client,
         customerId: data.customerId || customerRecords.find(customer => customer.name === data.client)?.id,
         unit: data.unit || "Unidade principal",
@@ -4896,7 +5075,7 @@ export default function Home() {
       };
       const updatedOrders = [newOrder, ...serviceOrders];
       const updatedModules=appendAudit(moduleRecords,"OS criada",`Ordens de serviço • ${newOrder.id}`,"Nova ordem de serviço cadastrada.",{moduleName:"Ordens de serviço",recordId:newOrder.id,after:newOrder as unknown as Record<string,unknown>});
-      if(!await persistSharedState(customerRecords, updatedOrders, updatedModules))return;
+      if(!await persistSharedState(customerRecords, updatedOrders, updatedModules,false))throw new Error("O banco não confirmou a OS. Os campos estão preservados. Confira a conexão antes de tentar novamente.");
       setCurrent("Ordens de serviço");
       showFeedback(`O.S. ${newOrder.id} aberta com sucesso!`, "success", 6000, [{label:"Imprimir Ordem",onClick:()=>{void quickPrintServiceOrder(newOrder,activeCompany);}}]);
     } else {
@@ -5038,21 +5217,6 @@ export default function Home() {
     window.setTimeout(() => setSavedMessage(""), 3500);
     }finally{recordSaveLock.current=false;}
   };
-  useEffect(() => {
-    const handleProfileCustomerUpdate = (event: Event) => {
-      const detail = (event as CustomEvent<Customer>).detail;
-      if (!detail?.id) return;
-      const documentError=customerDocumentError(detail.doc);
-      if(documentError){setSavedMessage(`Cliente não atualizado • ${documentError}`);return;}
-      const updated = customerRecords.map(item => item.id === detail.id ? { ...item, ...detail } : item);
-      setCustomerRecords(updated);
-      localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(updated));
-      persistSharedState(updated, serviceOrders, moduleRecords);
-      showFeedback("Cadastro e locais atualizados com sucesso.", "change");
-    };
-    window.addEventListener("proar:update-customer", handleProfileCustomerUpdate);
-    return () => window.removeEventListener("proar:update-customer", handleProfileCustomerUpdate);
-  }, [activeCompany.id, customerRecords, serviceOrders, moduleRecords]);
   const titles: Record<string,string> = { "Painel inicial": "Olá", "Atividades": "Central de atividades", "Clientes": "Gestão de clientes", "Obras": "Gestão de obras", "Fiscal": "Central Fiscal", "Integridade do Sistema": "Integridade do Sistema" };
   const subtitles: Record<string,string> = { "Painel inicial": "Uma visão completa da sua empresa em tempo real.", "Atividades": "Histórico operacional de ações, alterações e usuários.", "Clientes": "Cadastros, unidades, histórico e relacionamento.", "Obras": "Planejamento, execução, perdas, custos e progresso em um único módulo.", "Fiscal": "NF-e, NFC-e, NFS-e, DF-e, validação e acompanhamento fiscal.", "Integridade do Sistema": "Diagnóstico empresarial somente leitura da base operacional." };
   const logout = async () => {
@@ -5060,46 +5224,40 @@ export default function Home() {
     localStorage.removeItem("proar-offline-session");
     setAuthenticatedUser(null);
   };
-  const deleteCustomer = (customer: Customer) => {
+  const deleteCustomer = async (customer: Customer) => {
     const reason = window.prompt("Motivo da inativação do cliente:"); if (!reason?.trim()) return;
     if (!window.confirm(`Inativar o cliente “${customer.name}”? O cadastro, seus vínculos e histórico serão preservados.`)) return;
     const updatedCustomers = customerRecords.map(item => item.id === customer.id ? { ...item, status: "Inativo", changeReason: reason.trim() } : item);
-    setCustomerRecords(updatedCustomers);
-    localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(updatedCustomers));
-    persistSharedState(updatedCustomers, serviceOrders, moduleRecords);
+    if(!await persistSharedState(updatedCustomers,serviceOrders,moduleRecords,false))return;
     setSavedMessage("Cliente inativado com sucesso. O histórico foi preservado.");
   };
-  const deleteOrder = (order: ServiceOrder) => {
+  const deleteOrder = async (order: ServiceOrder) => {
     const reason = window.prompt("Motivo do cancelamento da OS:"); if (!reason?.trim()) return;
     if (!window.confirm(`Cancelar a ordem ${order.id}? A ordem continuará disponível no histórico.`)) return;
     const updatedOrders = serviceOrders.map(item => item.id === order.id ? { ...item, status: "Cancelada", tone: "red", changeReason: reason.trim() } : item);
-    setServiceOrders(updatedOrders);
-    localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(updatedOrders));
-    persistSharedState(customerRecords, updatedOrders, moduleRecords);
+    if(!await persistSharedState(customerRecords,updatedOrders,moduleRecords,false))return;
     setSelectedOrder(null);
     setSavedMessage(`Ordem ${order.id} cancelada. O histórico foi preservado.`);
   };
-  const deleteModuleRecord = (moduleName: string, record: ModuleRecord) => {
+  const deleteModuleRecord = async (moduleName: string, record: ModuleRecord) => {
     const reason = window.prompt("Informe o motivo do cancelamento ou inativação:");
     if (!reason?.trim()) return;
     record = { ...record, changeReason: reason.trim() };
     const cancellation = /Vendas|Orçamentos|Compras|Financeiro/.test(moduleName);
     if (!window.confirm(`${cancellation ? "Cancelar" : "Inativar"} o registro “${record.name}”? O histórico será mantido.`)) return;
     const updatedModules = { ...moduleRecords, [moduleName]: (moduleRecords[moduleName] ?? []).map(item => item.id === record.id ? { ...item, changeReason: reason.trim(), status: cancellation ? "Cancelado" : "Inativo" } : item) };
-    setModuleRecords(updatedModules);
-    localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(updatedModules));
-    persistSharedState(customerRecords, serviceOrders, updatedModules);
+    if(!await persistSharedState(customerRecords,serviceOrders,updatedModules,false))return;
     setSavedMessage(`${cancellation ? "Registro cancelado" : "Registro inativado"} com histórico preservado.`);
     window.setTimeout(() => setSavedMessage(""), 3000);
   };
-  const updateModuleRecord = (moduleName: string, record: ModuleRecord) => {
+  const updateModuleRecord = async (moduleName: string, record: ModuleRecord) => {
     const oldRecord = (moduleRecords[moduleName] ?? []).find(item => item.id === record.id);
     if (moduleName === "Produtos" && oldRecord && Number(record.stockCurrent || 0) !== Number(oldRecord.stockCurrent || 0)) {
-      const reason = window.prompt("Motivo do ajuste de estoque:"); if (!reason?.trim()) return;
+      const reason = window.prompt("Motivo do ajuste de estoque:"); if (!reason?.trim()) return false;
       record = { ...record, stockAdjustmentReason: reason.trim() };
     }
     if (oldRecord && !/cancelad|inativ/i.test(oldRecord.status || "") && /cancelad|inativ/i.test(record.status || "")) {
-      const reason = window.prompt("Motivo do cancelamento ou inativação:"); if (!reason?.trim()) return;
+      const reason = window.prompt("Motivo do cancelamento ou inativação:"); if (!reason?.trim()) return false;
       record = { ...record, changeReason: reason.trim() };
     }
     const currentRecords = moduleRecords[moduleName] ?? [];
@@ -5115,12 +5273,11 @@ export default function Home() {
       // Recebimentos por item são registrados pelo servidor no livro de estoque.
     }
     updatedModules = appendAudit(updatedModules, exists ? "Registro atualizado" : "Registro criado", `${moduleName} • ${record.name}`, exists ? "Alteração registrada pelo utilizador" : "Novo cadastro registrado pelo utilizador", { moduleName, recordId:record.id, before:oldRecord as unknown as Record<string,unknown> | undefined, after:record as unknown as Record<string,unknown> });
-    setModuleRecords(updatedModules);
-    localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(updatedModules));
-    persistSharedState(customerRecords, serviceOrders, updatedModules);
+    if(!await persistSharedState(customerRecords,serviceOrders,updatedModules))return false;
     showFeedback(moduleName === "Compras" && record.status === "Recebida" ? "Compra recebida com sucesso • estoque e conta a pagar atualizados." : exists ? "Alteração salva com sucesso." : "Cadastro salvo com sucesso.", "success");
+    return true;
   };
-  const createQuickCustomer = (draft: CustomerDraft): Customer | null => {
+  const createQuickCustomer = async (draft: CustomerDraft): Promise<Customer|null> => {
     const documentError = customerDocumentError(draft.doc);
     if (documentError) { showFeedback(documentError, "error"); return null; }
     const existing = customerRecords.find(item => normalizeRelation(item.doc) === normalizeRelation(draft.doc) && draft.doc.replace(/\D/g, "").length >= 11);
@@ -5145,13 +5302,11 @@ export default function Home() {
       financialStatus: "Liberado",
     };
     const updatedCustomers = [created, ...customerRecords];
-    setCustomerRecords(updatedCustomers);
-    localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(updatedCustomers));
-    persistSharedState(updatedCustomers, serviceOrders, moduleRecords);
+    if(!hasAction("Clientes","Criar")||!await persistSharedState(updatedCustomers,serviceOrders,moduleRecords,false))return null;
     showFeedback(`Cliente ${created.name} cadastrado com sucesso.`, "success");
     return created;
   };
-  const createQuickStructure = (draft: StructureDraft & { client: string }): ModuleRecord | null => {
+  const createQuickStructure = async (draft: StructureDraft & { client: string }): Promise<ModuleRecord|null> => {
     const created: ModuleRecord = {
       id: `SET-${Date.now().toString().slice(-7)}`,
       name: draft.name,
@@ -5172,11 +5327,7 @@ export default function Home() {
     catch(error) { showFeedback(error instanceof Error?error.message:"Vínculo inválido.","error");return null; }
     const updatedModules = { ...moduleRecords, "Unidades e setores": [created, ...(moduleRecords["Unidades e setores"] ?? [])] };
     const updatedCustomers = customerRecords.map(item => item.name === draft.client ? { ...item, units: draft.kind === "Unidade" ? item.units + 1 : item.units } : item);
-    setModuleRecords(updatedModules);
-    setCustomerRecords(updatedCustomers);
-    localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(updatedModules));
-    localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(updatedCustomers));
-    persistSharedState(updatedCustomers, serviceOrders, updatedModules);
+    if(!hasAction("Clientes","Criar")||!await persistSharedState(updatedCustomers,serviceOrders,updatedModules,false))return null;
     showFeedback(`${created.category || "Estrutura"} cadastrada com sucesso.`, "success");
     return created;
   };
@@ -5203,56 +5354,9 @@ export default function Home() {
       "Alteração aguardou a confirmação do banco principal",
       { moduleName, recordId:record.id, before:(currentRecords.find(item=>item.id===record.id) as unknown as Record<string,unknown> | undefined), after:record as unknown as Record<string,unknown> },
     );
-    setSyncPhase("syncing");
-    try {
-      const response = await fetch(`/api/state?company=${encodeURIComponent(activeCompany.id)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          companyId: activeCompany.id,
-          customers: customerRecords,
-          serviceOrders,
-          moduleRecords: updatedModules,
-          _baseRevision: stateRevision,
-        }),
-      });
-      const result = await response.json();
-      if (response.status === 409 && result.state) {
-        const serverCustomers = result.state.customers ?? [];
-        const serverOrders = result.state.serviceOrders ?? [];
-        const serverModules = mergeImportedServices(result.state.moduleRecords ?? {});
-        setCustomerRecords(serverCustomers);
-        setServiceOrders(serverOrders);
-        setModuleRecords(serverModules);
-        setStateRevision(Number(result.state._revision || 0));
-        localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(serverCustomers));
-        localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(serverOrders));
-        localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(serverModules));
-        showFeedback("Falha ao salvar • este registro foi alterado por outro usuário. Atualize os dados e tente novamente.", "warning", 5000);
-        setSyncPhase("idle");
-        return false;
-      }
-      if (!response.ok || !result.state) throw new Error(result.error || "Falha ao confirmar a gravação");
-      const confirmedCustomers = result.state.customers ?? customerRecords;
-      const confirmedOrders = result.state.serviceOrders ?? serviceOrders;
-      const confirmedModules = mergeImportedServices(result.state.moduleRecords ?? updatedModules);
-      setCustomerRecords(confirmedCustomers);
-      setServiceOrders(confirmedOrders);
-      setModuleRecords(confirmedModules);
-      setStateRevision(Number(result.state._revision || stateRevision + 1));
-      localStorage.setItem(companyStorageKey(activeCompany.id, "customers"), JSON.stringify(confirmedCustomers));
-      localStorage.setItem(companyStorageKey(activeCompany.id, "service-orders"), JSON.stringify(confirmedOrders));
-      localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(confirmedModules));
-      setSyncPhase("complete");
-      window.setTimeout(() => setSyncPhase("idle"), 1000);
-      showFeedback(exists ? `${moduleName}: alterações salvas com sucesso.` : `${moduleName}: cadastro salvo com sucesso.`, "success");
-      return true;
-    } catch (error) {
-      console.error("Falha ao salvar registro confirmado", { moduleName, recordId: record.id, relatedModules:relatedRecords.map(item=>item.moduleName), error });
-      showFeedback("Falha ao salvar • verifique sua conexão e tente novamente.", "error", 5000);
-      setSyncPhase("idle");
-      return false;
-    }
+    if(!await persistSharedState(customerRecords,serviceOrders,updatedModules,false))return false;
+    showFeedback(exists ? `${moduleName}: alterações salvas com sucesso.` : `${moduleName}: cadastro salvo com sucesso.`, "success");
+    return true;
   };
 
   const createOrderCustomer=async(draft:CustomerDraft & {address:string;organizationType:Customer["organizationType"]}):Promise<Customer|null>=>{
@@ -5385,6 +5489,13 @@ export default function Home() {
     localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(confirmedModules));
     showFeedback("Operação confirmada no banco e registrada na auditoria.", "success");
   };
+  useEffect(()=>{
+    if(!linkedOrderId || current!=="Ordens de serviço" || !authenticatedUser || !canNavigateModule(current,authenticatedUser,effectiveEntitledModules))return;
+    const record=serviceOrders.find(order=>order.id===linkedOrderId);
+    if(!record)return;
+    setLinkedOrderId("");
+    setSelectedOrder(record);
+  },[linkedOrderId,current,serviceOrders,authenticatedUser,effectiveEntitledModules]);
   const globalSearchItems = useMemo<GlobalSearchItem[]>(() => {
     const customerItems = customerRecords.map(customer => ({ id: customer.id, title: customer.name, detail: [customer.doc, customer.phone, customer.city || customer.address].filter(Boolean).join(" • "), module: "Clientes", kind: "Cliente" as const }));
     const orderItems = serviceOrders.map(order => ({ id: order.id, title: order.id, detail: [order.client, order.service, order.tech].filter(Boolean).join(" • "), module: "Ordens de serviço", kind: "OS" as const }));
@@ -5409,6 +5520,18 @@ export default function Home() {
     setSavedMessage(`${item.kind} localizado: ${item.title}.`);
   };
   const openPending = (item: PendingItem) => {
+    if(!canNavigateModule(item.module,authenticatedUser??{},effectiveEntitledModules))return;
+    if(item.module==="Orçamentos" && item.recordId && (moduleRecords.Orçamentos??[]).some(budget=>budget.id===item.recordId)){
+      setFocusedBudgetId(item.recordId);
+      setCurrent(item.module);
+      return;
+    }
+    const order=item.recordId ? serviceOrders.find(row=>row.id===item.recordId) : undefined;
+    if(order && canNavigateModule("Ordens de serviço",authenticatedUser??{},effectiveEntitledModules)){
+      setCurrent("Ordens de serviço");
+      setSelectedOrder(order);
+      return;
+    }
     setCurrent(item.module);
     setSavedMessage(`Pendência selecionada: ${item.title}.`);
   };
@@ -5435,9 +5558,20 @@ export default function Home() {
         {online && <button type="button" onClick={()=>void pullFromDatabase()} disabled={syncing}><RefreshCw size={14}/> Testar novamente</button>}
       </div>}
 
+      {(desktopPending.length>0 || legacyDesktopPending>0 || desktopQueueError)&&<details className="panel" style={{padding:12,marginBlock:8}}>
+        <summary><strong>Alterações neste aparelho</strong> • {desktopPending.length} sem confirmação</summary>
+        {desktopQueueError&&<p role="alert">{desktopQueueError}</p>}
+        {legacyDesktopPending>0&&<p role="status">Há uma cópia de sincronização da versão anterior. Ela foi preservada e não será reaplicada automaticamente. Solicite revisão à equipe.</p>}
+        {desktopPending.length>0&&<><p>Guarde a referência antes de revisar. O ProAR não sobrescreve uma versão mais recente.</p>
+        <button type="button" className="outline-btn" disabled={!online||desktopSyncing} onClick={()=>void pushToDatabase()}>Conferir e sincronizar</button>
+        <ul>{desktopPending.map(item=><li key={item.id}>
+          {item.status==="review"?"Em revisão":"Aguardando confirmação"} • {item.changes.filter(change=>change.module!=="Auditoria").map(change=>`${change.module||"Clientes"}: ${change.id}`).join(" • ")}
+          {" "}<button type="button" className="outline-btn compact" onClick={()=>exportDesktopDraft(item)}>Baixar dados da alteração</button>{item.status==="review"&&<button type="button" className="outline-btn compact" disabled={desktopSyncing} onClick={()=>removeDesktopDraftAfterReview(item)}>Remover após revisar</button>}
+        </li>)}</ul></>}
+      </details>}
       <div className="company-context"><Building2 size={13}/><span>{activeCompany.tradeName}</span><small>{activeCompany.cnpj || "CNPJ pendente"} • {activeCompany.city}/{activeCompany.state}</small></div>
       {current === "PMOC e conformidade" && !planBlocked ? <TechnicalCompliancePanel plans={(moduleRecords.PMOC ?? []) as any} fluids={(moduleRecords.Refrigerantes ?? []) as any} documents={(moduleRecords["Documentação / Habilitação"] ?? []) as any} onSave={(module,record)=>saveConfirmedModuleRecord(module,record)} onDelete={(module,record)=>deleteModuleRecord(module,record as ModuleRecord)}/> : null}
-      <div className="page-content">{planBlocked ? <section className="mobile-module-blocked"><LockKeyhole size={28}/><h2>Módulo não contratado</h2><p>Este módulo não faz parte do plano ativo desta empresa. A liberação é feita pelo ProAR Manager conforme o contrato.</p><button className="primary-btn" onClick={()=>setCurrent(effectiveEntitledModules?.[0]||"Painel inicial")}>Voltar para módulos liberados</button></section> : mobileBlocked ? <section className="mobile-module-blocked"><ShieldCheck size={28}/><h2>Módulo disponível no computador</h2><p>No celular e tablet o ProAR é focado na operação de trabalho. Para gestão administrativa completa, utilize a versão desktop.</p><button className="primary-btn" onClick={()=>setCurrent("Painel inicial")}>Voltar para operação</button></section> : current === "PMOC e conformidade" ? null : current === "Integridade do Sistema" ? <IntegrityAudit/> : current === "Atividades" ? <ActivityCenter records={moduleRecords["Auditoria operacional"] ?? []}/> : current === "Painel inicial" && mobileExperience ? <MobileToday manager={mobileManager}/> : current === "Painel inicial" ? <DashboardWorkspace onNavigate={setCurrent} serviceOrders={serviceOrders} modules={moduleRecords} role={authenticatedUser.role}/> : current === "Central de pendências" ? <OperationsActionCenter serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} modules={moduleRecords as unknown as Record<string,Record<string,unknown>[]>} onNavigate={setCurrent}/> : current === "Clientes" ? <Customers onOpen={name => { setModal(""); window.setTimeout(() => setModal(name), 0); }} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={saveCustomerStructure} onDeleteStructure={deleteCustomerStructure} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Agenda" ? <Agenda companyId={activeCompany.id} serviceOrders={serviceOrders} onOpen={(name,seed)=>{setOrderSeed(seed);setModal(name);}} onSelect={setSelectedOrder} onScheduleUpdate={hasAction("Ordens de serviço","Editar")?updateServiceOrder:undefined} customers={customerRecords} staff={moduleRecords["Funcionários"]||[]}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} company={activeCompany} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <LicitacoesWorkspace company={activeCompany} modules={moduleRecords} customers={customerRecords} orders={serviceOrders} onSaveRecord={(moduleName,record)=>saveConfirmedModuleRecord(moduleName,record)} onDeleteRecord={deleteModuleRecord} onReadyToInvoice={record=>saveConfirmedModuleRecord("Empenhos",{...record,status:"Pronto para faturar"},[{moduleName:"Financeiro",record:{id:`FAT-${record.id}`,name:`Faturamento • ${record.name}`,client:record.client,description:`Aguardando emissão de Nota Fiscal • ${record.empenhoProcess || "processo não informado"}`,createdAt:new Date().toLocaleString("pt-BR"),status:"Pronto para faturar",date:new Date().toISOString().slice(0,10),value:record.value??0,category:"Faturamento público",transactionType:"Receber",empenhoId:record.id}}])} onOpenTender={item=>setModal(`Análise de edital • ${item.numeroControlePNCP || item.objetoCompra || "Licitação"}`)}/> : current === "Orçamentos" ? <BudgetPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={record => updateModuleRecord("Orçamentos",record)} onConvert={convertBudget} onDelete={record => deleteModuleRecord("Orçamentos",record)} onCreateCustomer={createQuickCustomer} onCreateStructure={createQuickStructure}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} sales={moduleRecords.Vendas ?? []} onSave={record => updateModuleRecord("Vendas",record)} onDelete={record=>deleteModuleRecord("Vendas",record)}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders} company={activeCompany}/> : current === "Diagnósticos" ? <DiagnosticManagementDashboard serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} equipment={(moduleRecords["Equipamentos"] ?? []) as unknown as Record<string,unknown>[]}/> : current === "Fiscal" ? <FiscalWorkspace modules={moduleRecords} serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} company={activeCompany} onNavigate={setCurrent}/> : current === "Base Técnica" ? <TechnicalBasePanel/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany} isAdministrator={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*"))}/> : current === "Aprovações" ? <ApprovalCenter records={moduleRecords["Aprovações"] ?? []} canApprove={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*") || authenticatedUser.permissions?.includes("aprovacoes.aprovar") || authenticatedUser.permissions?.includes("Aprovações"))} onOperation={runOperationalCommand}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} modules={moduleRecords} onOperation={runOperationalCommand} onOpen={setModal} onIssueInvoice={(record,invoiceNumber)=>{const commitment=(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId);const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Faturado"}}]:[];return saveConfirmedModuleRecord("Financeiro",{...record,status:"Em aberto",transactionType:"Receber",invoiceNumber,invoiceIssuedAt:new Date().toISOString()},related)}}/> : current === "Funcionários" ? <EmployeesWorkspace records={moduleRecords["Funcionários"] ?? []} serviceOrders={serviceOrders} onOpen={setModal} onUpdate={(moduleName,record)=>saveConfirmedModuleRecord(moduleName,record)} onDelete={deleteModuleRecord} canEdit={hasAction("Funcionários","Editar")} canManageLogin={Boolean(authenticatedUser.role==="Administrador"||authenticatedUser.permissions?.includes("*"))}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} onUpdate={updateServiceOrder} serviceOrders={serviceOrders} customers={customerRecords} company={activeCompany} role={authenticatedUser.role}/> : <>{(current === "Compras" || current === "Estoque") && <InventoryOperations mode={current} modules={moduleRecords} onOperation={runOperationalCommand}/>}<GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []} allModules={moduleRecords} serviceOrders={serviceOrders}/></>}</div>
+      <div className="page-content">{planBlocked ? <section className="mobile-module-blocked"><LockKeyhole size={28}/><h2>Módulo não contratado</h2><p>Este módulo não faz parte do plano ativo desta empresa. A liberação é feita pelo ProAR Manager conforme o contrato.</p><button className="primary-btn" onClick={()=>setCurrent(effectiveEntitledModules?.[0]||"Painel inicial")}>Voltar para módulos liberados</button></section> : mobileBlocked ? <section className="mobile-module-blocked"><ShieldCheck size={28}/><h2>Módulo disponível no computador</h2><p>No celular e tablet o ProAR é focado na operação de trabalho. Para gestão administrativa completa, utilize a versão desktop.</p><button className="primary-btn" onClick={()=>setCurrent("Painel inicial")}>Voltar para operação</button></section> : current === "PMOC e conformidade" ? null : current === "Integridade do Sistema" ? <IntegrityAudit/> : current === "Atividades" ? <ActivityCenter records={moduleRecords["Auditoria operacional"] ?? []}/> : current === "Painel inicial" && mobileExperience ? <MobileToday manager={mobileManager}/> : current === "Painel inicial" ? <DashboardWorkspace onNavigate={setCurrent} onPendingSelect={openPending} serviceOrders={serviceOrders} modules={moduleRecords} role={authenticatedUser.role} isAdmin={authenticatedUser.role==="Administrador" || Boolean(authenticatedUser.permissions?.includes("*"))} /> : current === "Central de pendências" ? <OperationsActionCenter serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} modules={moduleRecords as unknown as Record<string,Record<string,unknown>[]>} onNavigate={setCurrent} onPendingSelect={openPending}/> : current === "Clientes" ? <Customers onOpen={name => { setModal(""); window.setTimeout(() => setModal(name), 0); }} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={saveCustomerStructure} onDeleteStructure={deleteCustomerStructure} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Agenda" ? <Agenda companyId={activeCompany.id} serviceOrders={serviceOrders} onOpen={(name,seed)=>{setOrderSeed(seed);setModal(name);}} onSelect={setSelectedOrder} onScheduleUpdate={hasAction("Ordens de serviço","Editar")?updateServiceOrder:undefined} customers={customerRecords} staff={moduleRecords["Funcionários"]||[]}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} company={activeCompany} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <LicitacoesWorkspace company={activeCompany} modules={moduleRecords} customers={customerRecords} orders={serviceOrders} onSaveRecord={(moduleName,record)=>saveConfirmedModuleRecord(moduleName,record)} onDeleteRecord={deleteModuleRecord} onReadyToInvoice={record=>saveConfirmedModuleRecord("Empenhos",{...record,status:"Pronto para faturar"},[{moduleName:"Financeiro",record:{id:`FAT-${record.id}`,name:`Faturamento • ${record.name}`,client:record.client,description:`Aguardando emissão de Nota Fiscal • ${record.empenhoProcess || "processo não informado"}`,createdAt:new Date().toLocaleString("pt-BR"),status:"Pronto para faturar",date:new Date().toISOString().slice(0,10),value:record.value??0,category:"Faturamento público",transactionType:"Receber",empenhoId:record.id}}])} onOpenTender={item=>setModal(`Análise de edital • ${item.numeroControlePNCP || item.objetoCompra || "Licitação"}`)}/> : current === "Orçamentos" ? <BudgetPDV key={focusedBudgetId||"budget-default"} focusedId={focusedBudgetId} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={async record => { const action=(moduleRecords.Orçamentos??[]).some(item=>item.id===record.id)?"Editar":"Criar"; return hasAction("Orçamentos",action) && await persistSharedState(customerRecords,serviceOrders,appendAudit({...moduleRecords,Orçamentos:[record,...(moduleRecords.Orçamentos??[]).filter(item=>item.id!==record.id)]},"Orçamento salvo",record.id,"Orçamento registrado após confirmação.",{moduleName:"Orçamentos",recordId:record.id}),false); }} onConvert={convertBudget} onDelete={record => deleteModuleRecord("Orçamentos",record)} onCreateCustomer={createQuickCustomer} onCreateStructure={createQuickStructure}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} sales={moduleRecords.Vendas ?? []} onSave={record => updateModuleRecord("Vendas",record)} onDelete={record=>deleteModuleRecord("Vendas",record)}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders} company={activeCompany}/> : current === "Diagnósticos" ? <DiagnosticManagementDashboard serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} equipment={(moduleRecords["Equipamentos"] ?? []) as unknown as Record<string,unknown>[]}/> : current === "Fiscal" ? <FiscalWorkspace modules={moduleRecords} serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} company={activeCompany} onNavigate={setCurrent}/> : current === "Base Técnica" ? <TechnicalBasePanel/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany} isAdministrator={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*"))}/> : current === "Aprovações" ? <ApprovalCenter records={moduleRecords["Aprovações"] ?? []} canApprove={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*") || authenticatedUser.permissions?.includes("aprovacoes.aprovar") || authenticatedUser.permissions?.includes("Aprovações"))} onOperation={runOperationalCommand}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} modules={moduleRecords} onOperation={runOperationalCommand} onOpen={setModal} onIssueInvoice={(record,invoiceNumber)=>{const commitment=(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId);const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Faturado"}}]:[];return saveConfirmedModuleRecord("Financeiro",{...record,status:"Em aberto",transactionType:"Receber",invoiceNumber,invoiceIssuedAt:new Date().toISOString()},related)}}/> : current === "Funcionários" ? <EmployeesWorkspace records={moduleRecords["Funcionários"] ?? []} serviceOrders={serviceOrders} onOpen={setModal} onUpdate={(moduleName,record)=>saveConfirmedModuleRecord(moduleName,record)} onDelete={deleteModuleRecord} canEdit={hasAction("Funcionários","Editar")} canManageLogin={Boolean(authenticatedUser.role==="Administrador"||authenticatedUser.permissions?.includes("*"))}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} onUpdate={updateServiceOrder} serviceOrders={serviceOrders} customers={customerRecords} company={activeCompany} role={authenticatedUser.role}/> : <>{(current === "Compras" || current === "Estoque") && <InventoryOperations mode={current} modules={moduleRecords} onOperation={runOperationalCommand}/>}<GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []} allModules={moduleRecords} serviceOrders={serviceOrders}/></>}</div>
       <footer><span>© {new Date().getFullYear()} ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
     {modal && <div data-testid={modal === "Novo cliente" ? "customer-new-dialog" : undefined}><Modal initialOrderSeed={orderSeed} title={modal} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalogRecords={[...(moduleRecords["Serviços"] ?? []).map(item=>({...item,kind:"Serviço" as const})), ...(moduleRecords["Produtos"] ?? []).map(item=>({...item,kind:"Produto" as const}))]} supplierRecords={moduleRecords["Fornecedores"] ?? []} employeeRecords={moduleRecords["Funcionários"] ?? []} equipmentRecords={moduleRecords["Equipamentos"] ?? []} serviceOrders={serviceOrders} close={() => {setModal("");setOrderSeed(undefined);}} onSave={saveRecord} canCreateCustomer={hasAction("Clientes","Criar")} onCreateCustomer={createOrderCustomer} onCreateStructure={createOrderStructure}/></div>}

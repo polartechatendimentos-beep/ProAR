@@ -67,7 +67,7 @@ export default function DailyPendingDigestPage() {
         {!hasItems && data.complete && <p role="status">Nenhuma pendência acionável encontrada.</p>}
         {sections.map(({ heading, total, items, href, link }) => <section key={heading}>
           <h2>{heading}</h2>
-          {total > 0 ? <ul>{items.map(item => <li key={item.reference}><strong>{item.title}</strong> • {item.detail}{item.urgent ? " • prioridade" : ""}</li>)}</ul> : <p>{data.complete ? "Nenhuma encontrada." : "Nenhuma encontrada nos dados conferidos."}</p>}
+          {total > 0 ? <ul>{items.map(item => <li key={item.reference}>{item.kind === "quote" || item.kind === "visit" ? <Link href={`/?tab=${item.kind === "quote" ? "orcamento" : "os"}&registro=${encodeURIComponent(item.reference)}`}><strong>{item.title}</strong></Link> : <strong>{item.title}</strong>} • {item.detail}{item.urgent ? " • prioridade" : ""}</li>)}</ul> : <p>{data.complete ? "Nenhuma encontrada." : "Nenhuma encontrada nos dados conferidos."}</p>}
           {total > items.length && <p>Mostrando {items.length} de {total} pendências nesta seção.</p>}
           <Link href={href}>{link}</Link>
         </section>)}

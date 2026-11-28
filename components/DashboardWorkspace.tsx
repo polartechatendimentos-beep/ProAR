@@ -2,12 +2,14 @@
 import { useEffect, useState } from "react";
 import { Activity, AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, Boxes, CalendarDays, ChartNoAxesCombined, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock3, FileChartColumn, FileText, Filter, MoreHorizontal, ShieldCheck, ShoppingBag, ShoppingCart, TrendingUp, UsersRound, WalletCards, Zap } from "lucide-react";
 import {sortOrdersByTime} from "../lib/daily-usability";
-import { deriveOperationalActions } from "@/lib/action-center";
+import { agendaToday } from "@/lib/agenda-calendar";
+import type { DailyActionableDigest } from "@/lib/daily-actionable-digest";
+import { deriveOperationalActions, type OperationalAction } from "@/lib/action-center";
 
 type DashboardOrder = { id:string; client:string; unit:string; service:string; tech:string; date:string; time:string; status:string; tone:string; avatar:string };
 type DashboardRecord = { id:string; name:string; category?:string; transactionType?:"Pagar"|"Receber"; value?:number; settledValue?:number; status?:string; date?:string; firstDueDate?:string; [key:string]:unknown };
 
-export function DashboardWorkspace({ onNavigate, serviceOrders, modules, role }: { onNavigate: (s: string) => void; serviceOrders: DashboardOrder[]; modules: Record<string, DashboardRecord[]>; role?: string }) {
+export function DashboardWorkspace({ onNavigate, serviceOrders, modules, role, isAdmin, onPendingSelect }: { onNavigate: (s: string) => void; serviceOrders: DashboardOrder[]; modules: Record<string, DashboardRecord[]>; role?: string; isAdmin:boolean; onPendingSelect:(item:OperationalAction)=>void }) {
   const [period, setPeriod] = useState("Este mês");
   const [periodRestored, setPeriodRestored] = useState(false);
   useEffect(() => {
@@ -26,7 +28,19 @@ export function DashboardWorkspace({ onNavigate, serviceOrders, modules, role }:
   const [technician, setTechnician] = useState("Todos");
   const [status, setStatus] = useState("Todos");
   const today = new Date();
-  const todayIso = today.toISOString().slice(0, 10);
+  const todayIso = agendaToday(today);
+  const [attendance,setAttendance]=useState<{day:string; total:number; complete:boolean}|null>(null);
+  const [attendanceError,setAttendanceError]=useState(false);
+  useEffect(()=>{
+    if(!isAdmin)return;
+    const controller=new AbortController();
+    void fetch("/api/atendimento/pendencias",{signal:controller.signal,cache:"no-store"}).then(async response=>{
+      if(!response.ok)throw new Error("Fila indisponível");
+      const digest=await response.json() as DailyActionableDigest;
+      if(!controller.signal.aborted)setAttendance({day:digest.today,total:digest.conversations.total,complete:digest.complete});
+    }).catch(()=>{if(!controller.signal.aborted)setAttendanceError(true);});
+    return ()=>controller.abort();
+  },[isAdmin,todayIso]);
   const startOfPeriod = (() => {
     const date = new Date(today);
     if (period === "Hoje") return todayIso;
@@ -122,7 +136,7 @@ export function DashboardWorkspace({ onNavigate, serviceOrders, modules, role }:
       <div className="panel orders-panel">
         <div className="panel-head"><div><span className="section-kicker"><Zap size={12}/> OPERAÇÃO DE HOJE</span><h2>Ordens de serviço</h2><p>{today.toLocaleDateString("pt-BR")}</p></div><button onClick={() => onNavigate("Agenda")}>Ver agenda completa <ArrowRight size={13}/></button></div>
         <div className="table-wrap"><table><thead><tr><th>ORDEM</th><th>CLIENTE / UNIDADE</th><th>SERVIÇO</th><th>TÉCNICO</th><th>HORÁRIO</th><th>SITUAÇÃO</th><th /></tr></thead><tbody>
-          {todayOrders.map(o => <tr key={o.id}><td><b className="order-id">{o.id}</b></td><td><div className="client-cell"><span>{o.avatar}</span><div><strong>{o.client}</strong><small>{o.unit}</small></div></div></td><td>{o.service}</td><td><div className="tech"><span>{o.tech.split(" ").map(x => x[0]).slice(0,2).join("")}</span>{o.tech}</div></td><td><div className="time"><Clock3 size={12}/><b>{o.time}</b></div></td><td><span className={`status ${o.tone}`}><i/> {o.status}</span></td><td><button className="more" aria-label={`Abrir ${o.id}`} onClick={()=>onNavigate("Ordens de serviço")}><ChevronRight size={16}/></button></td></tr>)}
+          {todayOrders.map(o => <tr key={o.id}><td><b className="order-id">{o.id}</b></td><td><div className="client-cell"><span>{o.avatar}</span><div><strong>{o.client}</strong><small>{o.unit}</small></div></div></td><td>{o.service}</td><td><div className="tech"><span>{o.tech.split(" ").map(x => x[0]).slice(0,2).join("")}</span>{o.tech}</div></td><td><div className="time"><Clock3 size={12}/><b>{o.time}</b></div></td><td><span className={`status ${o.tone}`}><i/> {o.status}</span></td><td><button className="more" aria-label={`Abrir ${o.id}`} onClick={()=>onPendingSelect({id:o.id,recordId:o.id,title:o.id,detail:o.client,module:"Ordens de serviço",tone:"blue",priority:2,category:"OS"})}><ChevronRight size={16}/></button></td></tr>)}
         </tbody></table></div>
         {!todayOrders.length && <div className="linked-empty"><CalendarDays size={22}/><h4>Nenhum atendimento para hoje</h4><p>As ordens com data agendada aparecerão aqui.</p></div>}
       </div>
@@ -138,7 +152,10 @@ export function DashboardWorkspace({ onNavigate, serviceOrders, modules, role }:
         </div>
         <div className="panel alerts">
           <div className="panel-head"><div><span className="section-kicker"><AlertTriangle size={12}/> CENTRAL DE TRABALHO DO DIA</span><h2>Próximas ações</h2><p>Somente o que precisa de atenção agora.</p></div><button className="outline-btn compact" onClick={()=>onNavigate("Central de pendências")}>{workItems.length} ação(ões)</button></div>
-          {workItems.length ? <div className="workday-list">{workItems.map(item=><button key={item.id} className={item.tone} onClick={()=>onNavigate(item.module)}><i/><span><b>{item.title}</b><small>{item.detail}</small></span><ChevronRight size={15}/></button>)}</div> : <div className="linked-empty"><CheckCircle2 size={22}/><h4>Tudo certo por aqui</h4><p>Não há ações operacionais pendentes.</p></div>}
+          {isAdmin&&<a className="outline-btn compact" href="/atendimento/pendencias">
+            {attendance&&attendance.day===todayIso?(`${attendance.total} conversa(s) sem resposta${attendance.complete?"":" • consulta parcial"}`):attendanceError?"Conferir fila do WhatsApp":"Conferindo fila do WhatsApp…"}
+          </a>}
+          {workItems.length ? <div className="workday-list">{workItems.map(item=><button key={item.id} className={item.tone} onClick={()=>onPendingSelect(item)}><i/><span><b>{item.title}</b><small>{item.detail}</small></span><ChevronRight size={15}/></button>)}</div> : <div className="linked-empty"><CheckCircle2 size={22}/><h4>Tudo certo por aqui</h4><p>Não há ações operacionais pendentes.</p></div>}
         </div>
       </aside>
     </section>

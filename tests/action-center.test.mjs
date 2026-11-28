@@ -4,7 +4,7 @@ import { deriveOperationalActions, summarizeOperationalActions } from "../lib/ac
 const actions = deriveOperationalActions(
   [
     { id: "OS-1", client: "Cliente A", service: "Corretiva", status: "Aberta", date: "2026-10-01", time: "09:00" },
-    { id: "OS-2", client: "Cliente B", service: "Preventiva", status: "Agendada", date: "2026-10-02", time: "10:30" },
+    { id: "OS-2", client: "Cliente B", service: "Preventiva", tech: "Técnico A", status: "Agendada", date: "2026-10-02", time: "10:30" },
     { id: "OS-3", client: "Cliente C", service: "Instalação", status: "Concluída", nfseStatus: "Emitida", date: "2026-09-30" },
   ],
   {

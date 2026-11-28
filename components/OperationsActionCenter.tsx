@@ -12,12 +12,13 @@ type Props = {
   serviceOrders: Record<string, unknown>[];
   modules: Record<string, Record<string, unknown>[]>;
   onNavigate: (module: string) => void;
+  onPendingSelect?: (item:OperationalAction)=>void;
 };
 
 const categories = ["Todas", "OS", "Financeiro", "Estoque", "PMOC", "Fiscal", "Compras", "Comercial", "Aprovação", "Operação"] as const;
 const priorityLabel: Record<number,string> = {1:"Crítica",2:"Atenção",3:"Follow-up"};
 
-export function OperationsActionCenter({ serviceOrders, modules, onNavigate }: Props) {
+export function OperationsActionCenter({ serviceOrders, modules, onNavigate, onPendingSelect }: Props) {
   const [category,setCategory]=useState<(typeof categories)[number]>("Todas");
   const [priority,setPriority]=useState("Todas");
   const [query,setQuery]=useState("");
@@ -34,6 +35,7 @@ export function OperationsActionCenter({ serviceOrders, modules, onNavigate }: P
   const groupedModules = [...new Set(visible.map(item => item.module))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
 
   const resolve = (item: OperationalAction) => {
+    if(onPendingSelect && item.category==="OS"){onPendingSelect(item);return;}
     const plan=resolutionPlan(item);
     onNavigate(plan.module);
     window.dispatchEvent(new CustomEvent("proar:focus-record",{detail:{module:plan.module,recordId:plan.recordId,actionId:plan.actionId,resolutionMode:plan.mode,resolutionMessage:plan.message}}));

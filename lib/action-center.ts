@@ -1,3 +1,5 @@
+import { agendaToday } from "./agenda-calendar.ts";
+import { operationalVisitIssue } from "./operational-follow-through.ts";
 import { certificateHealth, brazilDay, type ProcurementData } from "./procurement-readiness.ts";
 export type OperationalActionTone = "blue" | "amber" | "red";
 
@@ -77,7 +79,7 @@ export function deriveOperationalActions(
   modules: Record<string, GenericRecord[]>,
   now = new Date(),
 ): OperationalAction[] {
-  const today = now.toISOString().slice(0, 10);
+  const today = agendaToday(now);
   const actions: OperationalAction[] = [];
   for (const record of modules["Documentação / Habilitação"] || []) {
     const data=record.procurement as ProcurementData | undefined;
@@ -119,6 +121,17 @@ export function deriveOperationalActions(
     }
     if (/conclu[ií]d|cancelad/i.test(status)) continue;
     const orderDate = dateOnly(order.date);
+    const visitIssue = operationalVisitIssue({...order,date:orderDate}, now);
+    if (visitIssue && order.id) {
+      actions.push({
+        id: `os-${visitIssue}-${order.id}`, recordId: String(order.id), category: "OS",
+        title: `${visitIssue === "parts" ? "OS aguardando peça ou material" : "Visita de hoje sem técnico"} • ${order.id}`,
+        detail: [order.client, order.service, order.time].filter(Boolean).join(" • "),
+        module: "Ordens de serviço", tone: visitIssue === "parts" ? "amber" : "red", priority: visitIssue === "parts" ? 2 : 1,
+        dueDate: orderDate || undefined,
+      });
+      if (visitIssue === "unassigned" || (orderDate && orderDate <= today)) continue;
+    }
     if (orderDate && orderDate < today) {
       actions.push({
         id: `os-overdue-${order.id}`,

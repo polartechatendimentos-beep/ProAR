@@ -1,4 +1,3 @@
-import {assertOrderScheduleChanges} from "../../../lib/order-schedule-validation";
 import { projectOperationalState, mergeOperationalView } from "../../../lib/state-access";
 import { after, NextRequest, NextResponse } from "next/server";
 import { createSaveTiming } from "../../../lib/save-timing";
@@ -136,13 +135,18 @@ async function readOperationalStates(db: { url: string; key: string }) {
   ));
 }
 
-async function writeState(db: { url: string; key: string }, id: string, payload: StatePayload) {
-  const response = await stateRest(db, "proar_state?on_conflict=id", {
-    method: "POST",
-    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-    body: JSON.stringify({ id, payload, updated_at: new Date().toISOString() }),
+async function consolidateLegacyState(db: { url: string; key: string }, id: string, previous: StatePayload | null, payload: StatePayload) {
+  const filter = previous
+    ? `id=eq.${encodeURIComponent(id)}&payload->>_revision=${previous._revision == null ? "is.null" : `eq.${Number(previous._revision)}`}&select=payload`
+    : "on_conflict=id&select=payload";
+  const response = await stateRest(db, `proar_state?${filter}`, {
+    method: previous ? "PATCH" : "POST",
+    headers: { Prefer: previous ? "return=representation" : "resolution=ignore-duplicates,return=representation" },
+    body: JSON.stringify({ ...(previous ? {} : {id}), payload, updated_at: payload._updatedAt }),
   });
-  return response.ok;
+  if(!response.ok)throw new Error("Falha ao consolidar o estado legado");
+  const rows = await response.json() as { payload?: StatePayload }[];
+  return rows[0]?.payload ?? null;
 }
 
 export async function GET(request: NextRequest) {
@@ -172,16 +176,20 @@ export async function GET(request: NextRequest) {
     // A leitura une os dados sem excluir nada e consolida no identificador canônico.
     const candidates = Array.from(new Set([id, "main", PRIMARY_COMPANY_ID].filter(Boolean)));
     const states: StatePayload[] = [];
+    let canonical:StatePayload|null=null;
     for (const candidate of candidates) {
       const state = await readState(db, candidate,company);
+      if(candidate===id)canonical=state;
       if (state) states.push(state);
     }
     const merged = mergeStates(states);
     if (merged && states.length > 1) {
       const revision = Math.max(...states.map(state => Number(state._revision || 0)), 0) + 1;
       const consolidated = { ...merged, _revision: revision, _updatedAt: new Date().toISOString(), _companyId: company, _legacyMerged: true };
-      await writeState(db, id, consolidated);
-      return NextResponse.json({ state: projectOperationalState(consolidated,session,p=>hasPermission(session,p as Permission)), dedicatedDatabase: false, canonicalCompanyId: company, recoveredLegacyStates: states.length });
+      const confirmed=await consolidateLegacyState(db,id,canonical,consolidated);
+      const latest=confirmed??await readState(db,id,company);
+      if(!latest)throw new Error("A base operacional mudou durante a consolidação.");
+      return NextResponse.json({ state: projectOperationalState(latest,session,p=>hasPermission(session,p as Permission)), dedicatedDatabase: false, canonicalCompanyId: company, recoveredLegacyStates: confirmed?states.length:0 });
     }
     return NextResponse.json({ state: projectOperationalState(merged,session,p=>hasPermission(session,p as Permission)), dedicatedDatabase: false, canonicalCompanyId: company });
   } catch (error) {
@@ -220,7 +228,6 @@ export async function PUT(request: NextRequest) {
     const mergedBody=mergeOperationalView(current,cleanBody,session,p=>hasPermission(session,p as Permission));
     if (Array.isArray(mergedBody.serviceOrders)) await guardTechnicianOsChanges(session,current?.serviceOrders||[],mergedBody.serviceOrders);
     const validated = prepareOperationalState(current || null, mergedBody, { username: session.username, displayName: session.displayName, can: permission => hasPermission(session, permission as Permission) });
-    try{assertOrderScheduleChanges(current?.serviceOrders||[],validated.serviceOrders||[]);}catch(error){throw new OperationError(error instanceof Error?error.message:"Programação inválida.",409);}
     beginPhase("tenant_checks");
     const currentUsers=employeeUsernames(current);
     const nextUsers=employeeUsernames(validated as StatePayload);
@@ -277,7 +284,7 @@ export async function PUT(request: NextRequest) {
     scheduleCheckpoint();
     return respond({ saved: true, state: projectOperationalState(confirmed,session,p=>hasPermission(session,p as Permission)), dedicatedDatabase: db.dedicated, canonicalCompanyId: company });
   } catch (error) {
-    if (error instanceof OperationError || error instanceof FieldSupportError) return respond({ error: error.message }, { status: error.status });
+    if (error instanceof OperationError || error instanceof FieldSupportError) return respond({ error: error.message, ...(error instanceof OperationError&&error.code?{code:error.code}:{}) }, { status: error.status });
     const company=companyKey(request,session);
     const descriptor=classifyProarError(error);
     void recordSystemIncident({companyId:company,module:"Sincronização",operation:"Gravar estado operacional",error,code:descriptor.code,route:"/api/state"});

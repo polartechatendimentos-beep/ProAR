@@ -1,3 +1,4 @@
+import { assertOrderScheduleChanges, OrderScheduleConflict } from "./order-schedule-validation.ts";
 import { calculateCatalogPrice } from "./catalog-cost-engine.ts";
 import { validateTracking, pipelineRecordId } from "./tender-pipeline.ts";
 import { nextPmocDate, type PmocPlan } from "./technical-compliance.ts";
@@ -11,7 +12,8 @@ export type ErpState = ErpRecord & { customers?: ErpRecord[]; serviceOrders?: Er
 export type Actor = { username: string; displayName?: string; can: (permission: string) => boolean };
 export class OperationError extends Error {
   status: number;
-  constructor(message: string, status = 422) { super(message); this.status = status; }
+  readonly code?: string;
+  constructor(message: string, status = 422, code?: string) { super(message); this.status = status; this.code=code; }
 }
 const list = (value: any): ErpRecord[] => Array.isArray(value) ? value : [];
 const normalize = (value: any) => String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
@@ -535,6 +537,11 @@ export function prepareOperationalState(previous: ErpState | null, incoming: Erp
     }
   }
   for (const name of managed) if (modules[name] && !same(modules[name], oldModules[name])) throw new OperationError(`O livro ${name} é mantido exclusivamente pelo servidor.`);
+  try { assertOrderScheduleChanges(list(old.serviceOrders),list(next.serviceOrders),list(modules.Funcionários)); }
+  catch(error) {
+    if(error instanceof OrderScheduleConflict)throw new OperationError(error.message,409,error.code);
+    throw new OperationError(error instanceof Error?error.message:"Programação inválida.",422);
+  }
   auditChanges(list(old.customers), list(next.customers), "Clientes", actor, now, audit);
   auditChanges(list(old.serviceOrders), list(next.serviceOrders), "OS", actor, now, audit);
   for (const module of new Set([...Object.keys(oldModules), ...Object.keys(modules)])) if (!managed.has(module) && module !== "Auditoria") auditChanges(list(oldModules[module]), list(modules[module]), module, actor, now, audit);
