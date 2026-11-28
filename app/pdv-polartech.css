@@ -152,3 +152,27 @@ html[data-proar-system-theme="light"] .pdv-polartech {
  .pdv-polartech .pdv-cart-jump b {margin-left:auto;text-align:right;}
  .pdv-polartech .pdv-cart {scroll-margin-top:12px;}
 }
+
+/* Override legacy PDV rules only within this new workspace. */
+.pdv-polartech .pdv-operational-grid-modern>.pdv-layout {
+  grid-template-columns:minmax(0,1fr) minmax(290px,32%)!important;
+}
+.pdv-polartech :is(.pdv-workspace,.pdv-cart) {min-height:0!important;}
+.pdv-polartech .pdv-operational-grid-modern .pdv-cart {position:sticky!important;}
+.pdv-polartech .pdv-catalog {grid-template-columns:repeat(auto-fill,minmax(144px,1fr))!important;margin:0!important;gap:10px!important;}
+.pdv-polartech .pdv-catalog>button {display:flex!important;align-items:stretch!important;min-height:0!important;padding:8px!important;}
+.pdv-polartech .pdv-catalog>button>.pdv-catalog-thumb {width:100%!important;height:88px!important;}
+.pdv-polartech .pdv-catalog>button>.pdv-tile-add {width:27px!important;height:27px!important;}
+.pdv-polartech .pdv-empty {min-height:112px!important;}
+.pdv-polartech .pdv-context {
+  grid-template-columns:minmax(0,1.25fr) minmax(0,.75fr)!important;
+}
+.pdv-polartech .pdv-top-total {display:none!important;}
+@media(max-width:970px) {
+ .pdv-polartech .pdv-operational-grid-modern>.pdv-layout {grid-template-columns:minmax(0,1fr)!important;}
+ .pdv-polartech .pdv-operational-grid-modern .pdv-cart {position:static!important;}
+}
+@media(max-width:580px) {
+ .pdv-polartech .pdv-context {grid-template-columns:minmax(0,1fr)!important;}
+ .pdv-polartech .pdv-catalog {grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important;}
+}
