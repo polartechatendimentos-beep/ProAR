@@ -13,6 +13,7 @@ import { EMPLOYEE_ACCESS_MODULES, EMPLOYEE_ACCESS_PROFILES, employeeAccessPreset
 import { employeePasswordIssue } from "@/lib/employee-password-validation";
 import { orderCreationIssue } from "@/lib/order-create-validation";
 import { orderSectorLocationOptions, orderSectorUnitSelection } from "@/lib/order-location-options";
+import { isQuoteApproved, validOperationalRecordId } from "@/lib/operational-follow-through";
 import { stateSaveOutcome } from "@/lib/state-save-confirmation";
 import type { CostLine } from "@/lib/catalog-cost-engine";
 import { CatalogBidSimulator } from "@/components/CatalogBidSimulator";
@@ -52,6 +53,7 @@ import "./fiscal-workspace.css";
 import "./responsive-hardening.css";
 import "./resilience-status.css";
 import "./proar-petroleum-palette.css";
+import "./os-create-compact-mobile.css";
 import { ConnectivityBanner } from "@/components/ResponsivePrimitives";
 import { MobileToday } from "@/components/MobileToday";
 
@@ -125,7 +127,7 @@ import { createMobilePaymentIntent, paymentStatusLabel } from "@/lib/mobile-paym
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type NavItem = { icon: IconType; name: string; badge?: string };
 type GlobalSearchItem = { id: string; title: string; detail: string; module: string; kind: "Cliente" | "OS" | "Cadastro" };
-type PendingItem = { id: string; title: string; detail: string; module: string; tone: "blue" | "amber" | "red" };
+type PendingItem = { id: string; title: string; detail: string; module: string; tone: "blue" | "amber" | "red"; recordId?: string };
 
 const navGroups: { label: string; items: NavItem[] }[] = [
   { label: "OPERAÇÃO DO DIA A DIA", items: [
@@ -174,6 +176,7 @@ type ServiceOrder = {
   sectorId?: string;
   roomId?: string;
   sourceBudgetId?: string;
+  creationRequestId?: string;
   equipmentIds?: string[];
   equipmentId?: string;
   equipmentLabelCode?: string;
@@ -473,6 +476,7 @@ async function prepareCatalogImage(file: File): Promise<{dataUrl:string;name:str
 const companyIdFromCnpj = (cnpj: string) => normalizeCnpj(cnpj) || `empresa-${Date.now()}`;
 
 type ModuleRecord = {
+  sourceBudgetId?: string;
   tracking?: TenderTracking;
   procurement?: ProcurementData;
   pricing?: PricingInput;
@@ -1030,32 +1034,54 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: so
     const message = "Olá " + order.client + ", aqui é da PolarTech. A manutenção preventiva do equipamento " + equipment + ", na unidade " + (order.unit || "informada") + ", está prevista para " + due + ". Podemos combinar o agendamento?";
     window.open("https://wa.me/" + internationalPhone + "?text=" + encodeURIComponent(message), "_blank", "noopener,noreferrer");
   };
+  const fiscalBusy=useRef(new Set<string>());
+  const fiscalValues=useRef<Record<string,string>>({});
+  const [fiscalFeedback,setFiscalFeedback]=useState("");
+  const [issuingOrder,setIssuingOrder]=useState("");
   const emitNfse = async (order: ServiceOrder) => {
-    const customer = customers.find(item => item.name === order.client);
-    if (!customer?.doc) return window.alert("Cadastre o CPF/CNPJ do cliente antes de emitir a NFS-e.");
-    const rawValue = window.prompt("Valor da NFS-e (R$):", String(order.nfseValue || ""));
+    if(fiscalBusy.current.size)return;
+    if(/^(autorizada|emitida|processando)$/i.test(order.nfseStatus || "")){setFiscalFeedback("Já existe uma emissão autorizada ou em processamento para esta OS. Consulte o Fiscal antes de reenviar.");return;}
+    const customer = order.customerId ? customers.find(item=>item.id===order.customerId) : customers.filter(item=>item.name===order.client).length===1 ? customers.find(item=>item.name===order.client) : undefined;
+    if (!customer?.doc) {setFiscalFeedback("Cliente: vincule o cadastro correto com CPF/CNPJ antes de emitir a NFS-e.");return;}
+    const rawValue = window.prompt("Valor da NFS-e (R$):", fiscalValues.current[order.id] ?? String(order.nfseValue || ""));
     if (rawValue === null) return;
     const value = Number(rawValue.replace(",", "."));
-    if (!Number.isFinite(value) || value <= 0) return window.alert("Informe um valor válido.");
+    fiscalValues.current[order.id]=rawValue;
+    if (!Number.isFinite(value) || value <= 0) {setFiscalFeedback("Valor da NFS-e: informe um valor maior que zero.");return;}
+    fiscalBusy.current.add(order.id);setIssuingOrder(order.id);setFiscalFeedback("");
+    let transmitted=false;
     try {
       const configResponse=await fetch("/api/fiscal-config",{cache:"no-store"});
       const fiscal=await configResponse.json();
       if(!configResponse.ok)throw new Error(fiscal.error||"Não foi possível carregar a configuração fiscal da empresa.");
       const nfseConfig=fiscal.nfse||{};
       if(!nfseConfig.serviceCode||!nfseConfig.municipalityCode)throw new Error("Configure o código do serviço e o município emissor em Configurações → Fiscal antes de preparar a NFS-e Nacional.");
-      onUpdate({ ...order, nfseStatus:"Processando", nfseValue:value });
-      const response = await fetch("/api/nfse/issue", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ serviceOrderId:order.id, customer:{ name:order.client, document:customer.doc, unit:order.unit, address:order.address }, service:{ description:nfseConfig.defaultServiceDescription||order.service, value }, nfse:{provider:"SEFIN Nacional",environment:fiscal.company?.environment||"Homologação",taxRegime:fiscal.company?.taxRegime,municipalityCode:nfseConfig.municipalityCode,serviceCode:nfseConfig.serviceCode,nbsCode:nfseConfig.nbsCode,issRate:nfseConfig.issRate,rpsSeries:nfseConfig.rpsSeries,issWithheld:nfseConfig.issWithheld,specialTaxRegime:nfseConfig.specialTaxRegime} }) });
+      transmitted=true;
+      const response = await fetch("/api/nfse/issue", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ serviceOrderId:order.id, customer:{ name:order.client, document:customer.doc, unit:order.unit, address:order.address }, service:{ description:nfseConfig.defaultServiceDescription||order.service, value, serviceCode:nfseConfig.serviceCode }, nfse:{provider:"SEFIN Nacional",environment:fiscal.company?.environment||"Homologação",taxRegime:fiscal.company?.taxRegime,municipalityCode:nfseConfig.municipalityCode,serviceCode:nfseConfig.serviceCode,nbsCode:nfseConfig.nbsCode,issRate:nfseConfig.issRate,rpsSeries:nfseConfig.rpsSeries,issWithheld:nfseConfig.issWithheld,specialTaxRegime:nfseConfig.specialTaxRegime} }) });
       const result = await response.json().catch(()=>({}));
       if (response.status === 202 || result.status === "Processando") {
         onUpdate({ ...order, nfseStatus:"Processando", nfseValue:value });
-        window.alert("A NFS-e foi recebida para processamento, mas ainda não está autorizada. Consulte novamente antes de enviar ao cliente.");
+        setFiscalFeedback("NFS-e em processamento. Consulte o Fiscal antes de reenviar ou enviar ao cliente.");
         return;
       }
-      if (!response.ok || result.issued !== true || result.status !== "Autorizada") throw new Error(result.error || "A emissão não foi confirmada pela SEFIN Nacional.");
+      if (!response.ok || result.issued !== true || result.status !== "Autorizada") {
+        const fields = Array.isArray(result.validation?.errors) ? result.validation.errors.map((issue:unknown) => typeof issue === "object" && issue && "message" in issue && typeof issue.message === "string" ? issue.message : "").filter(Boolean).join(" ") : "";
+        if(response.status < 500 && !result.provider){transmitted=false;throw new Error(fields || result.error || "Confira os campos da NFS-e e tente novamente.");}
+        if(result.status==="Rejeitada" && response.status===422){transmitted=false;throw new Error(result.error || "A NFS-e foi rejeitada.");}
+        throw new Error("O retorno do emissor foi inconclusivo.");
+      }
       const provider = result.result?.result || result.result?.data || result.result || {};
       onUpdate({ ...order, nfseStatus:"Autorizada", nfseValue:value, nfseNumber:String(provider.number || provider.numero || provider.nfseNumber || ""), nfseVerificationCode:String(provider.verificationCode || provider.codigoVerificacao || provider.chave || provider.key || ""), nfseIssuedAt:new Date().toISOString() });
-      window.alert(`NFS-e autorizada${provider.number || provider.numero ? `: ${provider.number || provider.numero}` : "."}`);
-    } catch (error) { onUpdate({ ...order, nfseStatus:"Rejeitada", nfseValue:value }); window.alert(error instanceof Error ? error.message : "Não foi possível autorizar a NFS-e."); }
+      delete fiscalValues.current[order.id];
+      setFiscalFeedback(`NFS-e autorizada${provider.number || provider.numero ? `: ${provider.number || provider.numero}` : "."}`);
+    } catch (error) {
+      if(transmitted){
+        onUpdate({...order,nfseStatus:"Processando",nfseValue:value});
+        setFiscalFeedback("A SEFIN não confirmou o resultado. Consulte o documento no Fiscal antes de reenviar. O valor foi mantido.");
+      }else{
+        setFiscalFeedback(error instanceof Error ? error.message : "Não foi possível preparar a NFS-e. O valor foi mantido.");
+      }
+    } finally {fiscalBusy.current.delete(order.id);setIssuingOrder("");}
   };
   const myTodayOrders = visibleOrders.filter(order => order.date === todayIso);
   return <section className={`module-page service-orders ${technicianMode ? "technician-mode" : ""}`}>
@@ -1063,6 +1089,7 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: so
       <div><span className="section-kicker"><Wrench size={12}/> MODO TÉCNICO</span><h2>Atendimentos do dia</h2><p>Abra a OS, execute o checklist, registre materiais/fotos e finalize com assinatura.</p></div>
       <div className="technician-command-grid">{myTodayOrders.map(order=><button key={order.id} onClick={()=>onSelect(order)}><span><b>{order.time || "A definir"}</b><small>{order.id}</small></span><div><strong>{order.client}</strong><small>{order.unit} • {order.service}</small></div><em>{order.status}</em><ChevronRight size={16}/></button>)}{!myTodayOrders.length&&<div className="linked-empty"><CheckCircle2 size={22}/><h4>Nenhum atendimento hoje</h4><p>Use a Agenda para consultar os próximos serviços.</p></div>}</div>
     </section>}
+    {fiscalFeedback&&<p role="status" className="pdv-notice">{fiscalFeedback}</p>}
     <div className="module-toolbar"><label className="list-search"><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Pesquisar por cliente, OS, CPF/CNPJ, telefone ou unidade..."/></label><label className="status-filter"><Filter size={14}/><select aria-label="Exibir ordens" value={visibility} onChange={event=>setVisibility(event.target.value)}><option>Em aberto</option><option>Programadas</option><option>Em andamento</option><option>Todas</option><option>Concluídas</option><option>Canceladas</option><option>Hoje</option></select></label><ContextReports title="Ordens de Serviço" rows={serviceOrders.map(order=>[order.id,order.client,order.status])} options={["Imprimir Ordem de Serviço","Relatório técnico","Certificado de higienização","Relatório fotográfico","Relatório da assistência técnica","Comprovante de entrega","Histórico completo da OS"]}/><button className="primary-btn" onClick={() => onOpen("Nova ordem de serviço")}><Plus size={16}/> Nova ordem de serviço</button></div>
     <div className="service-order-flow" role="group" aria-label="Fluxo das ordens de serviço">
       <button type="button" aria-pressed={visibility === "Programadas"} onClick={() => setVisibility("Programadas")}><span>1</span><div><strong>Programadas</strong><small>Fila e agenda futura</small></div><b>{stageOrders.scheduled.length}</b></button>
@@ -1076,7 +1103,7 @@ function ServiceOrders({ onOpen, onSelect, onDelete, onUpdate, serviceOrders: so
       <article><span><Bell size={19}/></span><div><small>REVISÕES PRÓXIMAS</small><strong>{reviewAlerts.length}</strong><em>Alertas preventivos</em></div></article>
     </div>
     {pmocDueSoon.length > 0 && <section className="pmoc-due-soon-panel" aria-live="polite"><header><div><span className="section-kicker"><Bell size={12}/> PREVENTIVAS PRÓXIMAS</span><h3>PMOC com vencimento em até 5 dias</h3><p>Equipamentos e planos com data registrada nas OS.</p></div><strong>{pmocDueSoon.length} alerta(s)</strong></header><div className="pmoc-due-soon-list">{pmocDueSoon.map((item,index)=>{const customer=customers.find(entry=>entry.name===item.order.client);return <article className="pmoc-due-item urgent" key={item.order.id + "-" + item.equipment + "-" + item.date + "-" + index}><span className="pmoc-due-indicator" aria-hidden="true"/><div className="pmoc-due-copy"><small>{item.order.client} • {item.order.unit || "Unidade não informada"} • {item.order.id}</small><b>{item.equipment}</b><span>Vence {item.daysLeft === 0 ? "hoje" : "em " + item.daysLeft + " dia(s)"} • {new Date(item.date + "T12:00:00").toLocaleDateString("pt-BR")}</span></div><div className="pmoc-due-actions"><button type="button" onClick={()=>onSelect(item.order)}>Abrir OS</button>{(customer?.whatsapp || customer?.phone) && <button type="button" className="pmoc-whatsapp-action" onClick={()=>sendPmocWhatsApp(item.order,item.equipment,item.date)}>Preparar WhatsApp</button>}</div></article>})}</div></section>}
-    <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><Wrench size={12}/> OPERAÇÃO TÉCNICA</span><h2>Ordens de serviço</h2><p>Duplo clique para abrir • PDF e WhatsApp disponíveis em um clique.</p></div><button>Exportar <ChevronDown size={13}/></button></div><div className="table-wrap"><table><thead><tr><th>ORDEM</th><th>CLIENTE / LOCAL</th><th>DATA / HORÁRIO</th><th>REVISÃO</th><th>TÉCNICO</th><th>SITUAÇÃO</th><th>AÇÕES RÁPIDAS</th></tr></thead><tbody>{serviceOrders.map(order => { const reviewDate = serviceOrderReviewDate(order); return <tr className="clickable-row" title="Clique duas vezes para abrir a ordem" onDoubleClick={() => onSelect(order)} key={`manage-${order.id}`}><td><b className="order-id">{order.id}</b></td><td><div className="client-cell"><span>{order.avatar}</span><div><strong>{order.client}</strong><small>{order.unit}</small></div></div></td><td>{order.date ? new Date(`${order.date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem data"} • {order.time || "Sem horário"}</td><td>{reviewDate ? <span className="review-date"><Bell size={12}/>{new Date(`${reviewDate}T12:00:00`).toLocaleDateString("pt-BR")}</span> : "—"}</td><td><div className="tech"><span>{order.tech.split(" ").map(name => name[0]).slice(0,2).join("")}</span>{order.tech}</div></td><td><span className={`status ${order.tone}`}><i/> {order.status}</span></td><td><div className="row-actions quick-order-actions"><button title="Abrir OS" onClick={() => onSelect(order)}><Eye size={14}/></button><button title="Imprimir PDF" onClick={() => quickPrintServiceOrder(order, company)}><FileText size={14}/></button><button className="whatsapp-action" title="Enviar por WhatsApp" onClick={() => sendWhatsApp(order)}><MessageCircle size={14}/></button><button title={order.nfseStatus === "Emitida" ? `NFS-e ${order.nfseNumber || "emitida"}` : "Emitir NFS-e de serviço"} onClick={() => void emitNfse(order)}><ReceiptText size={14}/></button><button className="delete-action" aria-label={`Excluir ${order.id}`} onClick={() => onDelete(order)}><Trash2 size={14}/></button></div></td></tr>; })}</tbody></table></div>{!serviceOrders.length && <div className="linked-empty"><ClipboardList size={22}/><h4>Nenhuma ordem cadastrada</h4><p>Crie uma nova ordem para iniciar a operação.</p></div>}</div>
+    <div className="panel customer-panel"><div className="panel-head"><div><span className="section-kicker"><Wrench size={12}/> OPERAÇÃO TÉCNICA</span><h2>Ordens de serviço</h2><p>Duplo clique para abrir • PDF e WhatsApp disponíveis em um clique.</p></div><button>Exportar <ChevronDown size={13}/></button></div><div className="table-wrap"><table><thead><tr><th>ORDEM</th><th>CLIENTE / LOCAL</th><th>DATA / HORÁRIO</th><th>REVISÃO</th><th>TÉCNICO</th><th>SITUAÇÃO</th><th>AÇÕES RÁPIDAS</th></tr></thead><tbody>{serviceOrders.map(order => { const reviewDate = serviceOrderReviewDate(order); return <tr className="clickable-row" title="Clique duas vezes para abrir a ordem" onDoubleClick={() => onSelect(order)} key={`manage-${order.id}`}><td><b className="order-id">{order.id}</b></td><td><div className="client-cell"><span>{order.avatar}</span><div><strong>{order.client}</strong><small>{order.unit}</small></div></div></td><td>{order.date ? new Date(`${order.date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem data"} • {order.time || "Sem horário"}</td><td>{reviewDate ? <span className="review-date"><Bell size={12}/>{new Date(`${reviewDate}T12:00:00`).toLocaleDateString("pt-BR")}</span> : "—"}</td><td><div className="tech"><span>{order.tech.split(" ").map(name => name[0]).slice(0,2).join("")}</span>{order.tech}</div></td><td><span className={`status ${order.tone}`}><i/> {order.status}</span></td><td><div className="row-actions quick-order-actions"><button title="Abrir OS" onClick={() => onSelect(order)}><Eye size={14}/></button><button title="Imprimir PDF" onClick={() => quickPrintServiceOrder(order, company)}><FileText size={14}/></button><button className="whatsapp-action" title="Enviar por WhatsApp" onClick={() => sendWhatsApp(order)}><MessageCircle size={14}/></button><button title={order.nfseStatus === "Emitida" ? `NFS-e ${order.nfseNumber || "emitida"}` : "Emitir NFS-e de serviço"} disabled={Boolean(issuingOrder)} onClick={() => void emitNfse(order)}><ReceiptText size={14}/></button><button className="delete-action" aria-label={`Excluir ${order.id}`} onClick={() => onDelete(order)}><Trash2 size={14}/></button></div></td></tr>; })}</tbody></table></div>{!serviceOrders.length && <div className="linked-empty"><ClipboardList size={22}/><h4>Nenhuma ordem cadastrada</h4><p>Crie uma nova ordem para iniciar a operação.</p></div>}</div>
   </section>;
 }
 
@@ -1483,8 +1510,14 @@ function CommercialRecordsManager({ title, records, onConvert, onDelete, onEdit 
   return <section className="commercial-manager panel"><header><div><span className="section-kicker"><FileChartColumn size={12}/> GERENCIADOR DE {title.toUpperCase()}</span><h3>Controle comercial</h3><p>{onEdit ? "Dê dois cliques no pedido para editar os dados e itens." : "Consulte, filtre e acompanhe todos os registros sem precisar abrir um por um."}</p></div><div className="commercial-kpis"><span><small>REGISTROS</small><b>{records.length}</b></span><span><small>VALOR FILTRADO</small><b>R$ {total.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></span><span><small>APROVADOS / CONCLUÍDOS</small><b>{approved}</b></span></div></header><div className="commercial-manager-toolbar"><label><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder={`Pesquisar ${title.toLowerCase()} por cliente, número ou unidade...`}/></label><select value={status} onChange={event=>setStatus(event.target.value)}>{statuses.map(item=><option key={item}>{item}</option>)}</select></div>{visible.length?<div className="table-wrap"><table><thead><tr><th>NÚMERO</th><th>CLIENTE / UNIDADE</th><th>SITUAÇÃO</th><th>ITENS</th><th>VALOR</th><th>DATA</th><th>AÇÕES</th></tr></thead><tbody>{visible.map(record=><tr key={record.id} className={onEdit ? "editable-row" : ""} onDoubleClick={()=>onEdit?.(record)} title={onEdit ? "Dê dois cliques para alterar este pedido" : undefined}><td><b className="order-id">{record.id}</b></td><td><strong>{record.client||"—"}</strong><small className="table-description">{record.unit||"Matriz"}</small></td><td><span className={`workflow-status ${/aprov|confirm|convert|fatur|conclu/i.test(record.status||"")?"done":/cancel|reprov|vencid/i.test(record.status||"")?"blocked":""}`}>{record.status||"Registrado"}</span></td><td>{record.purchaseItems?.length??0}</td><td><b>R$ {(record.value??0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></td><td>{record.date?new Date(`${record.date}T12:00:00`).toLocaleDateString("pt-BR"):record.createdAt}</td><td><div className="record-actions">{onEdit&&<button title="Alterar pedido" onClick={event=>{event.stopPropagation();onEdit(record)}}><Edit3 size={14}/></button>}{title==="Orçamentos"&&onConvert&&<><button title="Converter em venda" onClick={()=>onConvert(record,"Pedido")}><ShoppingBag size={14}/></button><button title="Converter em OS" onClick={()=>onConvert(record,"Ordem de serviço")}><ClipboardList size={14}/></button></>}<button title="Imprimir" onClick={()=>window.print()}><ReceiptText size={14}/></button>{onDelete&&<button className="danger" title="Excluir" onClick={()=>onDelete(record)}><Trash2 size={14}/></button>}</div></td></tr>)}</tbody></table></div>:<div className="linked-empty compact"><Search size={20}/><h4>Nenhum registro encontrado</h4><p>Altere os filtros para consultar outros registros.</p></div>}</section>;
 }
 
-function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert, onDelete, onCreateCustomer, onCreateStructure }: { customers: Customer[]; structures: ModuleRecord[]; catalog: ModuleRecord[]; budgets: ModuleRecord[]; onSave: (record: ModuleRecord) => void; onConvert: (record: ModuleRecord, target: "Pedido" | "Ordem de serviço") => void; onDelete: (record: ModuleRecord) => void; onCreateCustomer: (draft: CustomerDraft) => Customer | null; onCreateStructure: (draft: StructureDraft & { client: string }) => ModuleRecord | null }) {
-  const [tab,setTab]=useState<"novo"|"lista">("novo");
+function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert, onDelete, onCreateCustomer, onCreateStructure, focusedId }: { focusedId?:string; customers: Customer[]; structures: ModuleRecord[]; catalog: ModuleRecord[]; budgets: ModuleRecord[]; onSave: (record: ModuleRecord) => Promise<boolean>; onConvert: (record: ModuleRecord, target: "Pedido" | "Ordem de serviço") => void; onDelete: (record: ModuleRecord) => void; onCreateCustomer: (draft: CustomerDraft) => Customer | null; onCreateStructure: (draft: StructureDraft & { client: string }) => ModuleRecord | null }) {
+  const [tab,setTab]=useState<"novo"|"lista">(focusedId?"lista":"novo");
+  useEffect(()=>{
+    if(!focusedId)return;
+    const item=document.getElementById(`budget-record-${focusedId}`);
+    item?.scrollIntoView({block:"nearest"});
+    item?.focus({preventScroll:true});
+  },[focusedId,tab,budgets]);
   const [cart, setCart] = useState<PurchaseItem[]>([]);
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState<"Todos" | "Produto" | "Serviço">("Todos");
@@ -1503,6 +1536,12 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
   const [quickCreate, setQuickCreate] = useState<"customer" | "structure" | null>(null);
   const [editingBudgetId,setEditingBudgetId]=useState<string | null>(null);
   const [editingEndDate,setEditingEndDate]=useState<string | null>(null);
+  const [budgetSaving,setBudgetSaving]=useState(false);
+  const [budgetError,setBudgetError]=useState("");
+  const budgetSaveLock=useRef(false);
+  const newBudgetId=useRef<string|null>(null);
+  const budgetCustomerField=useRef<HTMLDivElement>(null);
+  const budgetItemsField=useRef<HTMLDivElement>(null);
 
   const items = catalog.filter(item => (item.kind === "Produto" || item.kind === "Serviço") && item.status !== "Inativo" && (kindFilter === "Todos" || item.kind === kindFilter) && `${item.name} ${item.id} ${item.category}`.toLowerCase().includes(search.toLowerCase()));
   const itemTotal=(item:PurchaseItem)=>item.quantity*item.unitValue*(1-Math.min(100,Math.max(0,item.discountPercent??0))/100);
@@ -1530,8 +1569,12 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
     setSearch("");
   };
   const update = (id: string, changes: Partial<PurchaseItem>) => setCart(current => current.map(item => item.id === id ? { ...item, ...changes } : item));
-  const clearDraft=()=>{setCart([]);setDiscount(0);setSurcharge(0);setObservations("");setUnit("");setReference("");setSearch("");setEditingBudgetId(null);setEditingEndDate(null);};
+  const clearDraft=()=>{newBudgetId.current=null;setBudgetError("");setCart([]);setDiscount(0);setSurcharge(0);setObservations("");setUnit("");setReference("");setSearch("");setEditingBudgetId(null);setEditingEndDate(null);};
   const editBudget=(record:ModuleRecord)=>{
+    if(budgetSaveLock.current)return;
+    newBudgetId.current=null;
+    setBudgetError("");
+    setBudgetCustomerId(record.customerId || "");
     setEditingBudgetId(record.id);
     setEditingEndDate(record.endDate || null);
     setCustomer(record.client || "");
@@ -1552,20 +1595,30 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
     setNotice(`Alterando ${record.id}. Salve para confirmar as mudanças.`);
   };
 
-  const save = (status:"Em elaboração"|"Enviado") => {
-    if (!customer || !cart.length) { setNotice("Selecione o cliente e adicione pelo menos um produto ou serviço."); return; }
+  const save = async (status:"Em elaboração"|"Enviado") => {
+    if(budgetSaveLock.current)return;
+    setNotice("");
+    setBudgetError("");
+    if (!customer || !cart.length) {
+      setBudgetError(!customer?"Selecione o cliente do orçamento.":"Adicione pelo menos um produto ou serviço.");
+      const target=!customer?budgetCustomerField.current:budgetItemsField.current;
+      target?.scrollIntoView({block:"nearest"});
+      target?.querySelector<HTMLElement>("input,button,select")?.focus();
+      return;
+    }
     let budgetLocation:HierarchySelection | undefined;
     const selectedCustomer=customers.find(item=>item.id===budgetCustomerId) || customers.find(item=>item.name===customer);
     if(selectedCustomer && isMunicipalCustomer(selectedCustomer)) {
       try { budgetLocation=hierarchySelection(selectedCustomer,customerHierarchy(selectedCustomer,structures,customers),unit); }
-      catch(error) { setNotice(error instanceof Error?error.message:"Local inválido."); return; }
+      catch(error) { setBudgetError(error instanceof Error?error.message:"Local inválido."); return; }
     }
     const validUntil = new Date(); validUntil.setDate(validUntil.getDate() + validity);
     const record: ModuleRecord = {
       ...(editingBudgetId ? budgets.find(item => item.id === editingBudgetId) : {}),
-      id:editingBudgetId || `ORC-${Date.now().toString().slice(-6)}`,
+      id:editingBudgetId || (newBudgetId.current ??= `ORC-${crypto.randomUUID().replace(/-/g,"").slice(0,12)}`),
       name:`Orçamento • ${customer}`,
       client:customer,
+      customerId:selectedCustomer?.id,
       unit:selectedBudgetStructure?.name || "",
       structureId:selectedBudgetStructure?.id,
       sector:/secretaria|setor|departamento|diretoria|órgão|area|área/i.test(`${selectedBudgetStructure?.category ?? ""} ${selectedBudgetStructure?.hierarchyLevel ?? ""}`) ? selectedBudgetStructure?.name : undefined,
@@ -1574,6 +1627,7 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
       date:new Date().toISOString().slice(0,10),
       endDate:editingEndDate || validUntil.toISOString().slice(0,10),
       status,
+      approvalStatus:editingBudgetId && budgets.find(item=>item.id===editingBudgetId)?.approvalRequired ? "Pendente" : undefined,
       value:total,
       subtotal,
       discount,
@@ -1586,12 +1640,39 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
       paymentMethod:payment,
       ...(budgetLocation || {}),
     };
-    onSave(record);
-    clearDraft();
-    setNotice(status==="Em elaboração" ? `${record.id} salvo como rascunho.` : `${record.id} finalizado e salvo com sucesso.`);
-    if(status==="Enviado") setTab("lista");
+    budgetSaveLock.current=true;
+    setBudgetSaving(true);
+    try {
+      if(!await onSave(record)) {
+        setBudgetError("O banco não confirmou o orçamento. Os campos foram mantidos. Verifique a conexão ou as permissões e tente novamente.");
+        return;
+      }
+      clearDraft();
+      setNotice(status==="Em elaboração" ? `${record.id} salvo como rascunho.` : `${record.id} finalizado e salvo com sucesso.`);
+      if(status==="Enviado") setTab("lista");
+    } catch {
+      setBudgetError("Não foi possível confirmar o orçamento. Os campos foram mantidos. Tente novamente.");
+    } finally {
+      budgetSaveLock.current=false;
+      setBudgetSaving(false);
+    }
   };
 
+  const registerAcceptance = async (record: ModuleRecord) => {
+    if (budgetSaveLock.current || isQuoteApproved(record) || record.approvalRequired || !/^(enviado|em negociação|aguardando retorno)$/i.test(record.status || "")) return;
+    if (!window.confirm(`O cliente confirmou o aceite de ${record.id}? Esta ação registra o aceite, mas não cria a OS.`)) return;
+    budgetSaveLock.current=true;
+    setBudgetSaving(true);
+    setNotice("");
+    try {
+      setNotice(await onSave({...record,status:"Aprovado"}) ? "Aceite registrado. A conversão em OS está disponível." : "O banco não confirmou o aceite. Tente novamente.");
+    } catch {
+      setNotice("Não foi possível confirmar o aceite. Tente novamente.");
+    } finally {
+      budgetSaveLock.current=false;
+      setBudgetSaving(false);
+    }
+  };
   const customerUnits = customer ? customerStructures(customer, customers, structures) : [];
   const selectedBudgetStructure = customerUnits.find(item => item.id === unit);
   const budgetStructureLabel = (item: ModuleRecord) => {
@@ -1619,8 +1700,8 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
     {tab==="novo" ? <>
       <section className="budget-order-head panel">
         <header><div><span className="section-kicker"><FileText size={12}/> ORÇAMENTO</span><h2>Novo orçamento</h2><p>Monte a proposta comercial em uma única tela, com itens, condições e totais.</p></div><span className="budget-draft-chip">Rascunho</span></header>
-        <div className="budget-order-fields">
-          <div className="budget-customer-field budget-field-wide"><span className="budget-field-label">Cliente</span><CustomerSearchSelect customers={customers} value={customer} customerIdValue={budgetCustomerId} locationId={unit} onLocationChange={selection=>{setUnit(selection.structureId||"");setBudgetCustomerId(selection.customerId);}} onChange={(value,selected) => { setCustomer(value);setBudgetCustomerId(selected?.id||""); setUnit(""); }} />{customer && <small className="budget-customer-selected"><CheckCircle2 size={11}/> Cliente selecionado</small>}</div>
+        <div className="budget-order-fields" inert={budgetSaving}>
+          <div ref={budgetCustomerField} className="budget-customer-field budget-field-wide"><span className="budget-field-label">Cliente</span><CustomerSearchSelect customers={customers} value={customer} customerIdValue={budgetCustomerId} locationId={unit} onLocationChange={selection=>{setUnit(selection.structureId||"");setBudgetCustomerId(selection.customerId);}} onChange={(value,selected) => { setCustomer(value);setBudgetCustomerId(selected?.id||""); setUnit(""); }} />{customer && <small className="budget-customer-selected"><CheckCircle2 size={11}/> Cliente selecionado</small>}</div>
           <label>Validade<select value={validity} onChange={event => {setValidity(Number(event.target.value));setEditingEndDate(null);}}><option value={7}>7 dias</option><option value={15}>15 dias</option><option value={30}>30 dias</option><option value={60}>60 dias</option></select></label>
           <label>Tabela de preços<select value={priceTable} onChange={event=>setPriceTable(event.target.value)}><option>Padrão</option><option>Promocional</option><option>Contrato</option><option>Licitação</option></select></label>
           <label>Referência<input value={reference} onChange={event=>setReference(event.target.value)} placeholder="Ref. comercial, obra ou pedido"/></label>
@@ -1630,9 +1711,10 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
         </div>
       </section>
 
-      {notice && <div className="pdv-notice"><CheckCircle2 size={15}/>{notice}<button onClick={() => setNotice("")}><X size={13}/></button></div>}
+      {budgetError && <div role="alert" className="pdv-notice"><AlertTriangle size={16}/>{budgetError}</div>}
+      {notice && <div className="pdv-notice" role="status"><CheckCircle2 size={15}/>{notice}<button onClick={() => setNotice("")}><X size={13}/></button></div>}
 
-      <section className="budget-item-entry panel">
+      <section className="budget-item-entry panel" ref={budgetItemsField} inert={budgetSaving}>
         <header><div><span className="section-kicker"><ShoppingCart size={12}/> ITENS DO ORÇAMENTO</span><h3>Adicionar produto ou serviço</h3></div><div className="budget-kind-tabs">{(["Todos","Produto","Serviço"] as const).map(kind => <button className={kindFilter === kind ? "active" : ""} key={kind} onClick={() => setKindFilter(kind)}>{kind}</button>)}</div></header>
         <div className="budget-item-command">
           <label className="budget-item-search"><span>Código / descrição</span><div><Search size={16}/><input value={search} onChange={event=>setSearch(event.target.value)} placeholder="Digite código, produto ou serviço..."/></div>{search.trim()&&<div className="budget-item-results">{items.slice(0,8).map(item=><button key={item.id} onClick={()=>add(item)}><span className={item.kind==="Produto"?"product":"service"}>{item.kind==="Produto"?<Package size={15}/>:<Wrench size={15}/>}</span><div><b>{item.name}</b><small>{item.id} • {item.category || item.kind}</small></div><strong>R$ {(item.value??0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong><Plus size={14}/></button>)}{!items.length&&<small className="budget-item-no-result">Nenhum item encontrado.</small>}</div>}</label>
@@ -1641,13 +1723,13 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
         </div>
       </section>
 
-      <section className="budget-line-items panel">
+      <section className="budget-line-items panel" inert={budgetSaving}>
         <div className="budget-line-table-wrap"><table><thead><tr><th>CÓDIGO</th><th>DESCRIÇÃO</th><th>QTD.</th><th>UN.</th><th>VALOR UNIT.</th><th>DESC. %</th><th>TOTAL</th><th></th></tr></thead><tbody>{cart.map(item=><tr key={item.id}><td><b>{item.productId||item.id}</b><small>{item.kind}</small></td><td><strong>{item.description}</strong></td><td><input aria-label={`Quantidade ${item.description}`} type="number" min="0.001" step="0.001" value={item.quantity} onChange={event=>update(item.id,{quantity:Number(event.target.value)})}/></td><td><input aria-label={`Unidade ${item.description}`} value={item.unitOfMeasure||""} onChange={event=>update(item.id,{unitOfMeasure:event.target.value.toUpperCase().slice(0,6)})}/></td><td><input aria-label={`Valor unitário ${item.description}`} type="number" min="0" step="0.01" value={item.unitValue} onChange={event=>update(item.id,{unitValue:Number(event.target.value)})}/></td><td><input aria-label={`Desconto ${item.description}`} type="number" min="0" max="100" step="0.01" value={item.discountPercent??0} onChange={event=>update(item.id,{discountPercent:Math.min(100,Math.max(0,Number(event.target.value)))})}/></td><td><strong>R$ {itemTotal(item).toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></td><td><button title="Remover item" onClick={()=>setCart(current=>current.filter(record=>record.id!==item.id))}><Trash2 size={14}/></button></td></tr>)}</tbody></table></div>
         {!cart.length&&<div className="budget-lines-empty"><div><Plus size={24}/></div><b>Nenhum item adicionado</b><p>Use a busca acima para localizar produtos e serviços.</p></div>}
       </section>
 
       <section className="budget-finish panel">
-        <div className="budget-condition-fields">
+        <div className="budget-condition-fields" inert={budgetSaving}>
           <label>Forma de pagamento<select value={payment} onChange={event => setPayment(event.target.value)}>{["PIX","Dinheiro","Cartão de crédito","Cartão de débito","Boleto","Transferência","A combinar"].map(item => <option key={item}>{item}</option>)}</select></label>
           <label>Desconto geral<input type="number" min="0" max={subtotal} step="0.01" value={discount || ""} onChange={event => setDiscount(Math.max(0,Number(event.target.value)))} placeholder="R$ 0,00"/></label>
           <label>Acréscimo<input type="number" min="0" step="0.01" value={surcharge || ""} onChange={event => setSurcharge(Math.max(0,Number(event.target.value)))} placeholder="R$ 0,00"/></label>
@@ -1658,11 +1740,11 @@ function BudgetPDV({ customers, structures, catalog, budgets, onSave, onConvert,
           <div><small>DESCONTO</small><b>- R$ {discount.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></div>
           <div><small>ACRÉSCIMO</small><b>R$ {surcharge.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></div>
           <div className="budget-grand-total"><small>TOTAL DO ORÇAMENTO</small><strong>R$ {total.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div>
-          <div className="budget-final-actions"><button className="outline-btn" disabled={!customer||!cart.length} onClick={()=>save("Em elaboração")}><Save size={15}/> Salvar rascunho</button><button className="primary-btn" disabled={!customer||!cart.length} onClick={()=>save("Enviado")}><CheckCircle2 size={16}/> Finalizar orçamento</button></div>
+          <div className="budget-final-actions"><button className="outline-btn" disabled={budgetSaving} onClick={()=>void save("Em elaboração")}><Save size={15}/> Salvar rascunho</button><button className="primary-btn" disabled={budgetSaving} onClick={()=>void save("Enviado")}><CheckCircle2 size={16}/> {budgetSaving?"Confirmando no banco…":"Finalizar orçamento"}</button></div>
         </div>
       </section>
     </> : <>
-      <div className="budget-saved panel"><header><div><span className="section-kicker"><History size={12}/> ACOMPANHAMENTO COMERCIAL</span><h3>Orçamentos salvos</h3></div><small>{budgets.length} orçamento(s)</small></header>{budgets.length ? <div>{budgets.map(record => <article key={record.id} onDoubleClick={()=>editBudget(record)} title="Dê dois cliques para alterar este orçamento"><span><b>{record.id}</b><strong>{record.client}</strong><small>{record.purchaseItems?.length ?? 0} item(ns) • {record.reference ? `Ref. ${record.reference} • ` : ""}{record.endDate ? `Válido até ${new Date(`${record.endDate}T12:00:00`).toLocaleDateString("pt-BR")}` : record.createdAt}</small></span><em>{record.status}</em><b>R$ {(record.value ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</b><select aria-label={`Status do orçamento ${record.id}`} value={record.status || "Em elaboração"} onChange={event=>onSave({...record,status:event.target.value,changeReason:`Status comercial atualizado para ${event.target.value}`})}>{["Em elaboração","Enviado","Aguardando retorno","Em negociação","Aprovado","Perdido","Cancelado"].map(status=><option key={status}>{status}</option>)}</select><button type="button" onClick={() => editBudget(record)}><Edit3 size={14}/> Alterar</button><button onClick={() => onConvert(record,"Pedido")} disabled={!/Aprovado|Em negociação|Enviado|Aguardando retorno/i.test(record.status||"")}><ShoppingBag size={14}/> Converter em venda</button><button onClick={() => onConvert(record,"Ordem de serviço")} disabled={!/Aprovado|Em negociação|Enviado|Aguardando retorno/i.test(record.status||"")}><ClipboardList size={14}/> Converter em OS</button><button type="button" className="danger" aria-label={`Excluir orçamento ${record.id}`} title="Excluir orçamento" onClick={() => onDelete(record)}><Trash2 size={14}/> Excluir</button></article>)}</div> : <div className="linked-empty"><FileText size={22}/><h4>Nenhum orçamento salvo</h4></div>}</div>
+      <div className="budget-saved panel">{notice&&<p role="status">{notice}</p>}<header><div><span className="section-kicker"><History size={12}/> ACOMPANHAMENTO COMERCIAL</span><h3>Orçamentos salvos</h3></div><small>{budgets.length} orçamento(s)</small></header>{budgets.length ? <div>{budgets.map(record => <article id={`budget-record-${record.id}`} tabIndex={focusedId===record.id?0:undefined} aria-current={focusedId===record.id?"true":undefined} key={record.id} onDoubleClick={()=>editBudget(record)} title="Dê dois cliques para alterar este orçamento"><span><b>{record.id}</b><strong>{record.client}</strong><small>{record.purchaseItems?.length ?? 0} item(ns) • {record.reference ? `Ref. ${record.reference} • ` : ""}{record.endDate ? `Válido até ${new Date(`${record.endDate}T12:00:00`).toLocaleDateString("pt-BR")}` : record.createdAt}</small></span><em>{record.status}</em><b>R$ {(record.value ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</b><select aria-label={`Status do orçamento ${record.id}`} value={record.status || "Em elaboração"} onChange={event=>onSave({...record,status:event.target.value,changeReason:`Status comercial atualizado para ${event.target.value}`})}>{["Em elaboração","Enviado","Aguardando retorno","Em negociação","Aprovado","Perdido","Cancelado"].map(status=><option key={status}>{status}</option>)}</select><button type="button" onClick={() => editBudget(record)}><Edit3 size={14}/> Alterar</button><button onClick={() => onConvert(record,"Pedido")} disabled={!/Aprovado|Em negociação|Enviado|Aguardando retorno/i.test(record.status||"")}><ShoppingBag size={14}/> Converter em venda</button>{!record.approvalRequired && /^(enviado|em negociação|aguardando retorno)$/i.test(record.status||"")&&<button type="button" disabled={budgetSaving} onClick={()=>void registerAcceptance(record)}>Registrar aceite</button>}<button onClick={() => onConvert(record,"Ordem de serviço")} disabled={budgetSaving||!isQuoteApproved(record)} title="Disponível após aprovação do orçamento"><ClipboardList size={14}/> Converter em OS</button><button type="button" className="danger" aria-label={`Excluir orçamento ${record.id}`} title="Excluir orçamento" onClick={() => onDelete(record)}><Trash2 size={14}/> Excluir</button></article>)}</div> : <div className="linked-empty"><FileText size={22}/><h4>Nenhum orçamento salvo</h4></div>}</div>
     </>}
 
     <BudgetQuickCreateDrawer open={Boolean(quickCreate)} mode={quickCreate ?? "customer"} customerName={customer} customers={customers} structures={structures} onClose={() => setQuickCreate(null)} onCreateCustomer={created => { const result = onCreateCustomer(created); if (result) { setCustomer(result.name); setUnit(""); setNotice("Cliente criado e selecionado no orçamento."); } return result; }} onCreateStructure={created => { const result = onCreateStructure(created); if (result) { setUnit(result.id); setNotice("Estrutura criada e selecionada no orçamento."); } return result; }} />
@@ -3231,6 +3313,7 @@ function GenericModule({ name, onOpen, onDelete, onUpdate, onConvert, companyCnp
 }
 
 type ModalSave = {
+  creationRequestId?: string;
   structureId?: string; unitId?: string; sectorId?: string; roomId?: string;
   title: string;
   customerId?: string;
@@ -3808,6 +3891,7 @@ function Modal({ title, initialOrderSeed, customers, structures, catalogRecords,
   const [orderSaveBusy,setOrderSaveBusy]=useState(false),[orderSaveError,setOrderSaveError]=useState("");
   const [reviewStatus,setReviewStatus]=useState<"Agendada"|"Rascunho"|null>(null);
   const orderSaveLock=useRef(false);
+  const newOrderRequestId=useRef<string|null>(null);
   const getScheduleWarnings=()=>{
     const [hours,minutes]=time.split(":").map(Number),start=hours*60+minutes,end=start+durationMinutes;
     const appointments=serviceOrders.filter(item=>item.date===date&&normalizeRelation(item.tech)===normalizeRelation(tech)&&tech.trim()&&!/cancelad|conclu[ií]d|finalizad/i.test(item.status));
@@ -3823,6 +3907,7 @@ function Modal({ title, initialOrderSeed, customers, structures, catalogRecords,
     if(!confirmed){setReviewStatus(status);return;}
     orderSaveLock.current=true;setOrderSaveBusy(true);setOrderSaveError("");
     try{await onSave({
+      creationRequestId:(newOrderRequestId.current ??= crypto.randomUUID()),
       title, name: "", client: selectedClient, doc: "", contact: selectedClientData?.contact ?? "", phone: selectedClientData?.phone ?? "",
       address: orderAddress, unit, tech, date, time, description, status, value: orderTotal, category: orderServiceType, kind: "Serviço",
       catalogItems: selectedOrderItems.map(item => ({ id:item.id, name:item.name, kind:item.kind || "Serviço", quantity:catalogQuantities[item.id] || 1 })),
@@ -3917,23 +4002,23 @@ function Modal({ title, initialOrderSeed, customers, structures, catalogRecords,
       <button className="modal-backdrop" onClick={requestClose} aria-label="Fechar janela"/>
       <section className={`modal os-create-modal${compactOrderForm?" os-create-modal-compact":""}`}>
         <header className="os-create-header">
-          <div className="os-create-title"><span className="os-create-icon"><Wrench size={17}/></span><div><div><h2>Cadastrar Nova Ordem de Serviço</h2><em>OS • NOVA</em></div><p>Cliente, local, serviço, equipamentos, valores e equipe de campo em um único fluxo.</p></div></div>
-          <div className="os-create-head-actions"><button type="button" className="os-compact-toggle" aria-pressed={compactOrderForm} onClick={()=>setCompactOrderForm(value=>{const next=!value;try{localStorage.setItem("proar:os-create-compact",next?"1":"0");}catch{}return next;})}>{compactOrderForm?"Modo padrão":"Modo compacto"}</button><button type="button" onClick={() => setDescription(improveTechnicalText(description))}><Sparkles size={14}/> Sugerir com IA</button><button type="button" className="icon-only" onClick={requestClose} aria-label="Fechar"><X size={17}/></button></div>
+          <div className="os-create-title"><span className="os-create-icon"><Wrench size={17}/></span><div><div><h2>Nova ordem de serviço</h2><em>OS • NOVA</em></div><p>Cliente, local, serviço, equipamentos, valores e equipe de campo em um único fluxo.</p></div></div>
+          <div className="os-create-head-actions"><button type="button" className="os-compact-toggle" aria-pressed={compactOrderForm} onClick={()=>setCompactOrderForm(value=>{const next=!value;try{localStorage.setItem("proar:os-create-compact",next?"1":"0");}catch{}return next;})}>{compactOrderForm?"Modo padrão":"Modo compacto"}</button><button type="button" className="os-ai-action" aria-label="Sugerir com IA" onClick={() => setDescription(improveTechnicalText(description))}><Sparkles size={14}/><span className="os-ai-label">Sugerir com IA</span></button><button type="button" className="icon-only" onClick={requestClose} aria-label="Fechar"><X size={17}/></button></div>
         </header>
 
         <section className="os-create-card os-create-schedule" aria-label="Data e horário do atendimento" >
           <div className="os-create-card-head"><span><CalendarDays size={15}/> Data e horário do atendimento</span></div>
           <div className="os-create-location-grid">
-            <label>Data do atendimento • para agendar<input id="os-create-date" type="date" value={date} disabled={orderSaveBusy} onInput={event=>{setDate(event.currentTarget.value);setOrderSaveError("");}} onChange={event=>{setDate(event.target.value);setOrderSaveError("");}}/></label>
-            <label>Horário de início<input id="os-create-time" type="time" value={time} disabled={orderSaveBusy} onInput={event=>setTime(event.currentTarget.value)} onChange={event=>setTime(event.target.value)}/></label>
+            <label>Data<input id="os-create-date" type="date" value={date} disabled={orderSaveBusy} onInput={event=>{setDate(event.currentTarget.value);setOrderSaveError("");}} onChange={event=>{setDate(event.target.value);setOrderSaveError("");}}/></label>
+            <label>Horário<input id="os-create-time" type="time" value={time} disabled={orderSaveBusy} onInput={event=>setTime(event.currentTarget.value)} onChange={event=>setTime(event.target.value)}/></label>
           </div>
         </section>
         <nav className="os-create-tabs" aria-label="Etapas da nova ordem">
-          <button type="button" className={orderTab === "Geral" ? "active" : ""} onClick={() => setOrderTab("Geral")}><FileText size={14}/><span>1. Geral & Agendamento</span></button>
-          <button type="button" className={orderTab === "Equipamentos" ? "active" : ""} onClick={() => setOrderTab("Equipamentos")}><Boxes size={14}/><span>2. Equipamentos ({selectedEquipmentIds.length})</span></button>
-          <button type="button" className={orderTab === "Valores" ? "active" : ""} onClick={() => setOrderTab("Valores")}><CircleDollarSign size={14}/><span>3. Peças & Valores</span></button>
-          <button type="button" className={orderTab === "Anexos" ? "active" : ""} onClick={() => setOrderTab("Anexos")}><ImagePlus size={14}/><span>4. Anexos & Fotos</span></button>
-        <button type="button" className={orderTab === "Configurações" ? "active" : ""} onClick={()=>setOrderTab("Configurações")}>5. Preferências</button></nav>
+          <button type="button" className={orderTab === "Geral" ? "active" : ""} aria-pressed={orderTab === "Geral"} onClick={() => setOrderTab("Geral")}><FileText size={14}/><span className="os-tab-full">1. Geral & Agendamento</span><span className="os-tab-short">Geral</span></button>
+          <button type="button" className={orderTab === "Equipamentos" ? "active" : ""} aria-pressed={orderTab === "Equipamentos"} onClick={() => setOrderTab("Equipamentos")}><Boxes size={14}/><span className="os-tab-full">2. Equipamentos ({selectedEquipmentIds.length})</span><span className="os-tab-short">Equip.</span></button>
+          <button type="button" className={orderTab === "Valores" ? "active" : ""} aria-pressed={orderTab === "Valores"} onClick={() => setOrderTab("Valores")}><CircleDollarSign size={14}/><span className="os-tab-full">3. Peças & Valores</span><span className="os-tab-short">Valores</span></button>
+          <button type="button" className={orderTab === "Anexos" ? "active" : ""} aria-pressed={orderTab === "Anexos"} onClick={() => setOrderTab("Anexos")}><ImagePlus size={14}/><span className="os-tab-full">4. Anexos & Fotos</span><span className="os-tab-short">Anexos</span></button>
+        <button type="button" className={orderTab === "Configurações" ? "active" : ""} aria-pressed={orderTab === "Configurações"} onClick={()=>setOrderTab("Configurações")}><Settings size={14}/><span className="os-tab-full">5. Preferências</span><span className="os-tab-short">Ajustes</span></button></nav>
 
         <div className="os-create-body">
           {orderTab === "Geral" && <div className="os-create-general">
@@ -3958,11 +4043,11 @@ function Modal({ title, initialOrderSeed, customers, structures, catalogRecords,
 
                 {selectedClientData && <div className="os-location-lineage" aria-live="polite"><div><small>CLIENTE / PAGADOR</small><strong>{selectedClientData.name}</strong></div><div><small>SECRETARIA / ÓRGÃO</small><strong>{hierarchyLocation?.sector||"Não informado"}</strong></div><div><small>LOCAL DE EXECUÇÃO</small><strong>{hierarchyLocation?.unit||hierarchyLocation?.room||selectedClientData.address||"Endereço principal"}</strong></div></div>}
                 {selectedClientData && <div className="os-client-confirm"><div><span>{selectedClientData.doc || "Documento não informado"}</span><strong className={selectedClientData.financialStatus === "Bloqueado" ? "blocked" : ""}>{selectedClientData.financialStatus || "Liberado"}</strong></div><b>{orderAddress || "Endereço principal não informado"}</b><small>{selectedClientData.contact || "Responsável não informado"} • {selectedClientData.phone || "Telefone não informado"}</small></div>}
-                <div className="os-create-location-grid">
-                  <label>Setor<select value={hierarchyLocation?.sectorId||""} onChange={event=>{if(selectedClientData&&orderLocations){chooseModalLocation(hierarchySelection(selectedClientData,orderLocations.nodes,event.target.value));setQuickSectorOpen(false);setQuickSectorName("");setQuickSectorFeedback("");}}} disabled={!selectedClient||orderSaveBusy||quickSectorBusy}><option value="">{selectedClient?"Selecione o setor (opcional)":"Selecione primeiro o cliente"}</option>{availableSectors.map(item=><option key={item.id} value={item.id}>{item.name}{orderLocations?.nodes.find(node=>node.id===item.id)?.depth? ` • ${orderLocations.nodes.find(node=>node.id===item.id)?.path.slice(0,-1).map(id=>orderLocations.nodes.find(node=>node.id===id)?.name).join(" / ")}`:""}</option>)}</select>{selectedClient&&<button type="button" className="inline-create-link" disabled={orderSaveBusy||quickSectorBusy||quickCustomerBusy} onClick={()=>{setQuickStructureKind("Setor");setQuickSectorName("");setQuickSectorFeedback("");setQuickSectorOpen(true);}}><Plus size={12}/> Cadastrar setor</button>}</label>
-                  <label>Unidade / local de execução<select value={hierarchyLocation?.unitId||""} onChange={event=>{if(selectedClientData&&orderLocations)chooseModalLocation(hierarchyLocation?.sectorId?orderSectorUnitSelection(selectedClientData,orderLocations.nodes,hierarchyLocation.sectorId,event.target.value):event.target.value?hierarchySelection(selectedClientData,orderLocations.nodes,event.target.value):hierarchySelection(selectedClientData,orderLocations.nodes));}} disabled={!selectedClient||orderSaveBusy||quickSectorBusy}><option value="">{hierarchyLocation?.sectorId?"Selecione a unidade (opcional)":"Unidade direta do cliente (opcional)"}</option>{availableUnits.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>{selectedClient&&<button type="button" className="inline-create-link" disabled={orderSaveBusy||quickSectorBusy} onClick={()=>{setQuickStructureKind("Unidade");setQuickSectorName("");setQuickUnitAddress({});setQuickSectorFeedback("");setQuickSectorOpen(true);}}><Plus size={12}/> Cadastrar unidade</button>}</label>
-                  <label >Sala / ambiente (opcional)<select value={hierarchyLocation?.roomId||""} onChange={event=>{if(selectedClientData&&orderLocations)chooseModalLocation(event.target.value?hierarchySelection(selectedClientData,orderLocations.nodes,event.target.value):orderSectorUnitSelection(selectedClientData,orderLocations.nodes,hierarchyLocation?.sectorId||"",hierarchyLocation?.unitId||""));}} disabled={!selectedClient||quickSectorBusy||Boolean(hierarchyLocation?.structureId)}><option value="">{selectedClient ? availableRooms.length ? "Selecione a sala (opcional)" : "Nenhuma sala cadastrada" : "Selecione o cliente"}</option>{availableRooms.map(item => <option key={item.id} value={item.id}>{item.name} • {item.category || item.environmentType || "Ambiente"}</option>)}</select></label>
-                  <label>Endereço do atendimento<input value={orderAddress} onChange={event=>setOrderAddressOverride(event.target.value)} placeholder="Informe o endereço da unidade onde o serviço será realizado"/>{orderAddress&&<a className="os-open-map-link" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(orderAddress)}`} target="_blank" rel="noreferrer"><MapPin size={12}/> Ver rota no Google Maps</a>}</label>
+                <div className="os-create-location-grid os-location-dependent" data-customer-selected={Boolean(selectedClient)} aria-label="Estrutura do local">
+                  <label className="os-dependent-select">Setor<select value={hierarchyLocation?.sectorId||""} onChange={event=>{if(selectedClientData&&orderLocations){chooseModalLocation(hierarchySelection(selectedClientData,orderLocations.nodes,event.target.value));setQuickSectorOpen(false);setQuickSectorName("");setQuickSectorFeedback("");}}} disabled={!selectedClient||orderSaveBusy||quickSectorBusy}><option value="">{selectedClient?"Selecione o setor (opcional)":"Selecione primeiro o cliente"}</option>{availableSectors.map(item=><option key={item.id} value={item.id}>{item.name}{orderLocations?.nodes.find(node=>node.id===item.id)?.depth? ` • ${orderLocations.nodes.find(node=>node.id===item.id)?.path.slice(0,-1).map(id=>orderLocations.nodes.find(node=>node.id===id)?.name).join(" / ")}`:""}</option>)}</select>{selectedClient&&<button type="button" className="inline-create-link" disabled={orderSaveBusy||quickSectorBusy||quickCustomerBusy} onClick={()=>{setQuickStructureKind("Setor");setQuickSectorName("");setQuickSectorFeedback("");setQuickSectorOpen(true);}}><Plus size={12}/> Cadastrar setor</button>}</label>
+                  <label className="os-dependent-select">Unidade / local de execução<select value={hierarchyLocation?.unitId||""} onChange={event=>{if(selectedClientData&&orderLocations)chooseModalLocation(hierarchyLocation?.sectorId?orderSectorUnitSelection(selectedClientData,orderLocations.nodes,hierarchyLocation.sectorId,event.target.value):event.target.value?hierarchySelection(selectedClientData,orderLocations.nodes,event.target.value):hierarchySelection(selectedClientData,orderLocations.nodes));}} disabled={!selectedClient||orderSaveBusy||quickSectorBusy}><option value="">{hierarchyLocation?.sectorId?"Selecione a unidade (opcional)":"Unidade direta do cliente (opcional)"}</option>{availableUnits.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>{selectedClient&&<button type="button" className="inline-create-link" disabled={orderSaveBusy||quickSectorBusy} onClick={()=>{setQuickStructureKind("Unidade");setQuickSectorName("");setQuickUnitAddress({});setQuickSectorFeedback("");setQuickSectorOpen(true);}}><Plus size={12}/> Cadastrar unidade</button>}</label>
+                  <label className="os-dependent-select">Sala / ambiente (opcional)<select value={hierarchyLocation?.roomId||""} onChange={event=>{if(selectedClientData&&orderLocations)chooseModalLocation(event.target.value?hierarchySelection(selectedClientData,orderLocations.nodes,event.target.value):orderSectorUnitSelection(selectedClientData,orderLocations.nodes,hierarchyLocation?.sectorId||"",hierarchyLocation?.unitId||""));}} disabled={!selectedClient||quickSectorBusy||Boolean(hierarchyLocation?.structureId)}><option value="">{selectedClient ? availableRooms.length ? "Selecione a sala (opcional)" : "Nenhuma sala cadastrada" : "Selecione o cliente"}</option>{availableRooms.map(item => <option key={item.id} value={item.id}>{item.name} • {item.category || item.environmentType || "Ambiente"}</option>)}</select></label>
+                  <label>Endereço do atendimento<input value={orderAddress} onChange={event=>setOrderAddressOverride(event.target.value)} placeholder="Rua, número e cidade"/>{orderAddress&&<a className="os-open-map-link" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(orderAddress)}`} target="_blank" rel="noreferrer"><MapPin size={12}/> Ver rota no Google Maps</a>}</label>
                 </div>
                 {quickSectorOpen&&<div className="order-sector-quick-create os-inline-sector"><div><span>CADASTRO DIRETO</span><b>{quickStructureKind==="Unidade"?"Nova unidade":"Novo setor"}</b><small>{quickStructureKind==="Unidade"?`Cliente: ${selectedClient} • ${sector?`Setor: ${sector}`:"vinculada diretamente ao cliente"}`:`Vinculado ao cliente principal: ${selectedClient}`}</small></div><label>Nome {quickStructureKind==="Unidade"?"da unidade":"do setor"}<input autoFocus disabled={quickSectorBusy} value={quickSectorName} onChange={event=>setQuickSectorName(event.target.value)} onKeyDown={event=>{if(event.key==="Enter"){event.preventDefault();void createSectorFromOrder();}}} placeholder={quickStructureKind==="Unidade"?"Ex.: UBS Central":"Ex.: Saúde"}/></label>{quickStructureKind==="Unidade"&&<div className="os-inline-unit-address"><CustomerAddressFields value={quickUnitAddress} onChange={patch=>setQuickUnitAddress(current=>({...current,...patch}))}/></div>}<div className="order-sector-quick-actions"><button type="button" className="outline-btn" disabled={quickSectorBusy} onClick={()=>setQuickSectorOpen(false)}>Cancelar</button><button type="button" className="primary-btn" disabled={quickSectorBusy} onClick={()=>void createSectorFromOrder()}>{quickSectorBusy?"Salvando…":"Cadastrar e selecionar"}</button></div></div>}
                 {quickSectorFeedback && <div className="field-hint order-sector-feedback"><CheckCircle2 size={13}/>{quickSectorFeedback}</div>}
@@ -4054,8 +4139,8 @@ function Modal({ title, initialOrderSeed, customers, structures, catalogRecords,
 
         {orderSaveError&&<p role="alert" style={{color:"#991b1b",background:"#fef2f2",border:"1px solid #f87171",padding:12,margin:"0 20px"}}><strong>Não foi salvo.</strong> {orderSaveError}</p>}
         <footer className="os-create-footer">
-          <div><button type="button" className="outline-btn" onClick={requestClose}>Cancelar</button><button type="button" className="outline-btn" disabled={orderSaveBusy||quickSectorBusy||quickCustomerBusy} onClick={() => void saveNewOrder("Rascunho")}>Revisar rascunho</button></div>
-          <div className="os-create-footer-summary"><span>{selectedOrderItems.length} item(ns) • {selectedEquipmentIds.length} equipamento(s)</span><strong>R$ {orderTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong><button type="button" className="primary-btn" disabled={orderSaveBusy||quickSectorBusy||quickCustomerBusy} onClick={() => void saveNewOrder("Agendada")}>{orderSaveBusy ? <><svg className="h-4 w-4 animate-spin shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Salvando...</> : <><CheckCircle2 size={15}/>Revisar e agendar OS</>}</button></div>
+          <div className="os-create-footer-secondary"><button type="button" className="outline-btn os-create-cancel" onClick={requestClose}>Cancelar</button><button type="button" className="outline-btn os-create-draft-action" disabled={orderSaveBusy||quickSectorBusy||quickCustomerBusy} onClick={() => void saveNewOrder("Rascunho")} aria-label="Revisar rascunho">Rascunho</button></div>
+          <div className="os-create-footer-summary"><span className="os-create-item-count">{selectedOrderItems.length} item(ns) • {selectedEquipmentIds.length} equipamento(s)</span><strong>R$ {orderTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong><button type="button" className="primary-btn os-create-schedule-action" disabled={orderSaveBusy||quickSectorBusy||quickCustomerBusy} onClick={() => void saveNewOrder("Agendada")}>{orderSaveBusy ? <><svg className="h-4 w-4 animate-spin shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Salvando...</> : <><CheckCircle2 size={15}/>Revisar e agendar OS</>}</button></div>
         </footer>
         {reviewStatus&&<div className="os-review-overlay" role="dialog" aria-modal="true" aria-labelledby="os-review-title"><section className="os-review-card"><span>CONFERÊNCIA FINAL • ORDEM DE SERVIÇO</span><h2 id="os-review-title">Confira os dados antes de salvar</h2><div className="os-review-grid"><div><small>CLIENTE</small><strong>{selectedClient||"Não informado"}</strong></div><div><small>UNIDADE / SETOR</small><strong>{[unit,sector,room].filter(Boolean).join(" • ")||"Endereço do cliente"}</strong></div><div className="wide"><small>ENDEREÇO DO ATENDIMENTO</small><strong>{orderAddress||"Não informado"}</strong></div><div><small>DATA E HORÁRIO</small><strong>{date?new Date(`${date}T12:00:00`).toLocaleDateString("pt-BR"):"Não definida"}{reviewStatus==="Agendada"?` • ${time||"Sem horário"}`:" • Rascunho"}</strong></div><div><small>TÉCNICO</small><strong>{tech||"A definir"}</strong></div><div className="wide"><small>SERVIÇO</small><strong>{description||selectedOrderItems.map(item=>item.name).join(", ")||"Não informado"}</strong></div><div><small>ITENS E EQUIPAMENTOS</small><strong>{selectedOrderItems.length} item(ns) • {selectedEquipmentIds.length} equipamento(s)</strong></div><div><small>VALOR ESTIMADO</small><strong>R$ {orderTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong></div></div>{reviewStatus==="Agendada"&&(()=>{const warnings=getScheduleWarnings();return <>{warnings.overlaps.length>0&&<div className="os-review-warning"><b>Conflito de agenda</b>{warnings.overlaps.map(({item})=><small key={item.id}>O técnico já tem a OS {item.id} às {item.time} • {item.address||item.client}.</small>)}</div>}{warnings.travel.length>0&&<div className="os-review-warning travel"><b>Confira o deslocamento</b>{warnings.travel.map(({item})=><small key={item.id}>Há menos de 30 minutos entre endereços diferentes envolvendo a OS {item.id}. Confira a rota antes de confirmar.</small>)}</div>}</>;})()}<div className="os-review-actions"><button type="button" className="outline-btn" disabled={orderSaveBusy} onClick={()=>setReviewStatus(null)}>Voltar e corrigir</button><button type="button" className="primary-btn" disabled={orderSaveBusy} onClick={()=>{const status=reviewStatus;setReviewStatus(null);if(status)void saveNewOrder(status,true);}}>{orderSaveBusy?"Salvando…":reviewStatus==="Agendada"?"Confirmar e agendar":"Confirmar e salvar rascunho"}</button></div></section></div>}
       </section>
@@ -4300,6 +4385,8 @@ export default function Home() {
   const [bootRunId, setBootRunId] = useState("");
   const [bootAttempt, setBootAttempt] = useState(0);
   const [current, setCurrentState] = useState("Painel inicial");
+  const [focusedBudgetId,setFocusedBudgetId]=useState("");
+  const [linkedOrderId,setLinkedOrderId]=useState("");
   const setCurrent = useCallback((moduleName:string) => {
     if (!navigationModuleNames().includes(moduleName)) return;
     setCurrentState(moduleName);
@@ -4331,6 +4418,9 @@ export default function Home() {
       const allowed=navigationModuleNames().filter(name=>canNavigateModule(name,authenticatedUser,effectiveEntitledModules));
       const target=canNavigateModule(requested,authenticatedUser,effectiveEntitledModules)?requested:allowed[0]||"Painel inicial";
       setCurrentState(target);
+      const record=validOperationalRecordId(new URLSearchParams(window.location.search).get("registro"));
+      setFocusedBudgetId(target==="Orçamentos"?record:"");
+      setLinkedOrderId(target==="Ordens de serviço"?record:"");
     };
     syncFromUrl();window.addEventListener("popstate",syncFromUrl);
     return ()=>window.removeEventListener("popstate",syncFromUrl);
@@ -4540,10 +4630,11 @@ export default function Home() {
     notifyFeedback({ message:savedMessage, tone });
     setSavedMessage("");
   }, [savedMessage]);
-  const persistSharedState = async (nextCustomers:Customer[],nextOrders:ServiceOrder[],nextModules:Record<string,ModuleRecord[]>):Promise<boolean>=>{
+  const persistSharedState = async (nextCustomers:Customer[],nextOrders:ServiceOrder[],nextModules:Record<string,ModuleRecord[]>,queueOffline=true):Promise<boolean>=>{
     if(databaseMode==="degraded"){setSavedMessage("Não foi salvo: banco em contingência. O formulário permanece aberto.");return false;}
     const payload={companyId:activeCompany.id,customers:nextCustomers,serviceOrders:nextOrders,moduleRecords:nextModules,_baseRevision:stateRevision};
     if(!navigator.onLine){
+      if(!queueOffline){setSavedMessage("Sem conexão. Os campos continuam em edição.");return false;}
       try{
         const queue=JSON.parse(localStorage.getItem("proar-offline-queue")||"[]");
         localStorage.setItem("proar-offline-queue",JSON.stringify([...queue.filter((item:{companyId:string})=>item.companyId!==activeCompany.id),{companyId:activeCompany.id,payload,createdAt:new Date().toISOString()}]));
@@ -4771,20 +4862,34 @@ export default function Home() {
     showFeedback(`Alteração salva com sucesso • ${updatedCustomer.name}.`, "success");
   };
   const appendAudit = (modules: Record<string, ModuleRecord[]>, action: string, reference: string, detail: string, meta?: { moduleName?:string; recordId?:string; before?:Record<string,unknown>; after?:Record<string,unknown> }) => ({ ...modules, Auditoria: [{ id: `AUD-${Date.now()}-${Math.random().toString(36).slice(2,6)}`, name: action, client: authenticatedUser?.displayName || "Sistema", description: `${reference} • ${detail}`, createdAt: new Date().toLocaleString("pt-BR"), status: "Registrado", category: "Rastreabilidade", auditModule:meta?.moduleName, recordId:meta?.recordId, auditAction:action, auditDetail:detail, auditUser:authenticatedUser?.displayName || "Sistema", auditChanges:diffAuditRecord(meta?.before,meta?.after), auditBeforeData:meta?.moduleName==="Clientes"?meta.before:undefined, auditAfterData:meta?.moduleName==="Clientes"?meta.after:undefined }, ...(modules.Auditoria ?? [])].slice(0, 1000) });
-  const convertBudget = (budget: ModuleRecord, target: "Pedido" | "Ordem de serviço") => {
+  const budgetConversionLock=useRef(false);
+  const convertBudget = async (budget: ModuleRecord, target: "Pedido" | "Ordem de serviço") => {
+    if(budgetConversionLock.current)return;
+    const destination=target==="Pedido"?"Vendas":"Ordens de serviço";
+    if(!hasAction("Orçamentos","Editar")||!hasAction(destination,"Criar")){setSavedMessage("Seu perfil não pode converter este orçamento.");return;}
+    const latest=(moduleRecords.Orçamentos??[]).find(item=>item.id===budget.id);
+    if(!latest){setSavedMessage("Orçamento não encontrado. Atualize e tente novamente.");return;}
+    budget=latest;
+    const linked=serviceOrders.find(item=>item.sourceBudgetId===budget.id);
+    if(linked || (moduleRecords.Vendas??[]).some(item=>item.sourceBudgetId===budget.id) || /convertid/i.test(budget.status||"")){setSavedMessage("Este orçamento já foi convertido.");return;}
+    if(target==="Ordem de serviço" && !isQuoteApproved(budget)){setSavedMessage("Confirme a aprovação do orçamento antes de gerar a OS.");return;}
     if (budget.approvalRequired && budget.approvalStatus !== "Aprovado") { setSavedMessage("Este orçamento depende de aprovação por alçada antes da conversão."); window.setTimeout(()=>setSavedMessage(""),3500); return; }
+    budgetConversionLock.current=true;
+    try {
     if (target === "Pedido") {
-      const sale: ModuleRecord = { ...budget, id:`VEN-${Date.now().toString().slice(-6)}`, name:`Pedido • ${budget.name}`, status:"Pedido confirmado", createdAt:new Date().toLocaleString("pt-BR") };
+      const sale: ModuleRecord = { ...budget, id:`VEN-${Date.now().toString().slice(-6)}`, name:`Pedido • ${budget.name}`, sourceBudgetId:budget.id, status:"Pedido confirmado", createdAt:new Date().toLocaleString("pt-BR") };
       const updated = { ...moduleRecords, Vendas:[sale,...(moduleRecords.Vendas ?? [])], Orçamentos:(moduleRecords.Orçamentos ?? []).map(item => item.id === budget.id ? {...item,status:"Convertido em pedido"} : item) };
-      setModuleRecords(updated); persistSharedState(customerRecords, serviceOrders, updated); setCurrent("Vendas");
+      if(!await persistSharedState(customerRecords,serviceOrders,updated,false))return; setCurrent("Vendas");
     } else {
-      const customer = customerRecords.find(item => item.name === budget.client);
+      const customer = budget.customerId ? customerRecords.find(item=>item.id===budget.customerId) : customerRecords.filter(item=>item.name===budget.client).length===1 ? customerRecords.find(item=>item.name===budget.client) : undefined;
+      if(!customer){setSavedMessage("Vincule o cadastro correto ao orçamento antes de gerar a OS.");return;}
       const budgetStructure = budget.structureId ? (moduleRecords["Unidades e setores"] ?? []).find(item => item.id === budget.structureId && item.client === budget.client) : undefined;
-      const order: ServiceOrder = { id:`#OS-${String(Math.max(15499,...serviceOrders.map(item => Number(item.id.replace(/\D/g,""))||0))+1).padStart(5,"0")}`, client:budget.client, customerId:budget.customerId || customer?.id, unit:budget.unitId ? budget.unit || "Matriz" : budgetStructure?.name || budget.unit || "Matriz", structureId:budget.structureId || budgetStructure?.id, unitId:budget.unitId || budgetStructure?.id, sector:budget.sector, sectorId:budget.sectorId, room:budget.room, roomId:budget.roomId, sourceBudgetId:budget.id, service:budget.purchaseItems?.map(item => item.description).join(", ") || budget.name, tech:"Não definido", date:new Date().toISOString().slice(0,10), time:"A definir", address:budgetStructure?.address || customer?.address || "", status:"Aberta", tone:"blue", avatar:budget.client.split(" ").map(item => item[0]).slice(0,2).join(""), catalogItems:budget.purchaseItems?.filter(item => item.kind !== "Custo adicional").map(item => ({ id:item.productId || item.id, name:item.description, kind:item.kind === "Produto" ? "Produto" : "Serviço" })) };
+      const order: ServiceOrder = { id:`#OS-${String(Math.max(15499,...serviceOrders.map(item => Number(item.id.replace(/\D/g,""))||0))+1).padStart(5,"0")}`, client:budget.client, customerId:budget.customerId || customer?.id, unit:budget.unitId ? budget.unit || "Matriz" : budgetStructure?.name || budget.unit || "Matriz", structureId:budget.structureId || budgetStructure?.id, unitId:budget.unitId || budgetStructure?.id, sector:budget.sector, sectorId:budget.sectorId, room:budget.room, roomId:budget.roomId, sourceBudgetId:budget.id, total:budget.value, discount:budget.discount, service:budget.purchaseItems?.map(item => item.description).join(", ") || budget.name, tech:"Não definido", date:new Date().toISOString().slice(0,10), time:"A definir", address:budgetStructure?.address || customer?.address || "", status:"Aberta", tone:"blue", avatar:budget.client.split(" ").map(item => item[0]).slice(0,2).join(""), catalogItems:budget.purchaseItems?.filter(item => item.kind !== "Custo adicional").map(item => ({ id:item.productId || item.id, name:item.description, quantity:item.quantity, kind:item.kind === "Produto" ? "Produto" : "Serviço" })) };
       const updatedOrders = [order,...serviceOrders]; const updatedModules = { ...moduleRecords, Orçamentos:(moduleRecords.Orçamentos ?? []).map(item => item.id === budget.id ? {...item,status:"Convertido em OS"} : item) };
-      setServiceOrders(updatedOrders); setModuleRecords(updatedModules); persistSharedState(customerRecords,updatedOrders,updatedModules); setCurrent("Ordens de serviço");
+      if(!await persistSharedState(customerRecords,updatedOrders,updatedModules,false))return; setCurrent("Ordens de serviço");setSelectedOrder(order);
     }
     setSavedMessage(`Orçamento convertido em ${target}.`); window.setTimeout(() => setSavedMessage(""),2500);
+    } finally {budgetConversionLock.current=false;}
   };
   const recordSaveLock=useRef(false);
   const saveRecord = async (data: ModalSave) => {
@@ -4849,9 +4954,16 @@ export default function Home() {
       setCurrent("Clientes");
       showFeedback(`Cliente ${newCustomer.name} cadastrado com sucesso!`, "success", 6000, [{label:"Abrir nova O.S.",onClick:()=>{setCurrent("Ordens de serviço");setModal("Nova ordem de serviço");}}]);
     } else if (data.title === "Nova ordem de serviço") {
+      const alreadySaved=data.creationRequestId?serviceOrders.find(order=>order.creationRequestId===data.creationRequestId):undefined;
+      if(alreadySaved){
+        setSelectedOrder(alreadySaved);setCurrent("Ordens de serviço");setModal("");setOrderSeed(undefined);
+        showFeedback(`O.S. ${alreadySaved.id} já confirmada. Nenhuma cópia foi criada.`, "success");
+        return;
+      }
       const sequence = Math.max(15499, ...serviceOrders.map(order => Number(order.id.replace(/\D/g, "")) || 0)) + 1;
       const newOrder: ServiceOrder = {
         id: `#OS-${String(sequence).padStart(5, "0")}`,
+        creationRequestId:data.creationRequestId,
         client: data.client,
         customerId: data.customerId || customerRecords.find(customer => customer.name === data.client)?.id,
         unit: data.unit || "Unidade principal",
@@ -4896,7 +5008,7 @@ export default function Home() {
       };
       const updatedOrders = [newOrder, ...serviceOrders];
       const updatedModules=appendAudit(moduleRecords,"OS criada",`Ordens de serviço • ${newOrder.id}`,"Nova ordem de serviço cadastrada.",{moduleName:"Ordens de serviço",recordId:newOrder.id,after:newOrder as unknown as Record<string,unknown>});
-      if(!await persistSharedState(customerRecords, updatedOrders, updatedModules))return;
+      if(!await persistSharedState(customerRecords, updatedOrders, updatedModules,false))throw new Error("O banco não confirmou a OS. Os campos estão preservados. Confira a conexão antes de tentar novamente.");
       setCurrent("Ordens de serviço");
       showFeedback(`O.S. ${newOrder.id} aberta com sucesso!`, "success", 6000, [{label:"Imprimir Ordem",onClick:()=>{void quickPrintServiceOrder(newOrder,activeCompany);}}]);
     } else {
@@ -5385,6 +5497,13 @@ export default function Home() {
     localStorage.setItem(companyStorageKey(activeCompany.id, "module-records"), JSON.stringify(confirmedModules));
     showFeedback("Operação confirmada no banco e registrada na auditoria.", "success");
   };
+  useEffect(()=>{
+    if(!linkedOrderId || current!=="Ordens de serviço" || !authenticatedUser || !canNavigateModule(current,authenticatedUser,effectiveEntitledModules))return;
+    const record=serviceOrders.find(order=>order.id===linkedOrderId);
+    if(!record)return;
+    setLinkedOrderId("");
+    setSelectedOrder(record);
+  },[linkedOrderId,current,serviceOrders,authenticatedUser,effectiveEntitledModules]);
   const globalSearchItems = useMemo<GlobalSearchItem[]>(() => {
     const customerItems = customerRecords.map(customer => ({ id: customer.id, title: customer.name, detail: [customer.doc, customer.phone, customer.city || customer.address].filter(Boolean).join(" • "), module: "Clientes", kind: "Cliente" as const }));
     const orderItems = serviceOrders.map(order => ({ id: order.id, title: order.id, detail: [order.client, order.service, order.tech].filter(Boolean).join(" • "), module: "Ordens de serviço", kind: "OS" as const }));
@@ -5409,6 +5528,18 @@ export default function Home() {
     setSavedMessage(`${item.kind} localizado: ${item.title}.`);
   };
   const openPending = (item: PendingItem) => {
+    if(!canNavigateModule(item.module,authenticatedUser??{},effectiveEntitledModules))return;
+    if(item.module==="Orçamentos" && item.recordId && (moduleRecords.Orçamentos??[]).some(budget=>budget.id===item.recordId)){
+      setFocusedBudgetId(item.recordId);
+      setCurrent(item.module);
+      return;
+    }
+    const order=item.recordId ? serviceOrders.find(row=>row.id===item.recordId) : undefined;
+    if(order && canNavigateModule("Ordens de serviço",authenticatedUser??{},effectiveEntitledModules)){
+      setCurrent("Ordens de serviço");
+      setSelectedOrder(order);
+      return;
+    }
     setCurrent(item.module);
     setSavedMessage(`Pendência selecionada: ${item.title}.`);
   };
@@ -5437,7 +5568,7 @@ export default function Home() {
 
       <div className="company-context"><Building2 size={13}/><span>{activeCompany.tradeName}</span><small>{activeCompany.cnpj || "CNPJ pendente"} • {activeCompany.city}/{activeCompany.state}</small></div>
       {current === "PMOC e conformidade" && !planBlocked ? <TechnicalCompliancePanel plans={(moduleRecords.PMOC ?? []) as any} fluids={(moduleRecords.Refrigerantes ?? []) as any} documents={(moduleRecords["Documentação / Habilitação"] ?? []) as any} onSave={(module,record)=>saveConfirmedModuleRecord(module,record)} onDelete={(module,record)=>deleteModuleRecord(module,record as ModuleRecord)}/> : null}
-      <div className="page-content">{planBlocked ? <section className="mobile-module-blocked"><LockKeyhole size={28}/><h2>Módulo não contratado</h2><p>Este módulo não faz parte do plano ativo desta empresa. A liberação é feita pelo ProAR Manager conforme o contrato.</p><button className="primary-btn" onClick={()=>setCurrent(effectiveEntitledModules?.[0]||"Painel inicial")}>Voltar para módulos liberados</button></section> : mobileBlocked ? <section className="mobile-module-blocked"><ShieldCheck size={28}/><h2>Módulo disponível no computador</h2><p>No celular e tablet o ProAR é focado na operação de trabalho. Para gestão administrativa completa, utilize a versão desktop.</p><button className="primary-btn" onClick={()=>setCurrent("Painel inicial")}>Voltar para operação</button></section> : current === "PMOC e conformidade" ? null : current === "Integridade do Sistema" ? <IntegrityAudit/> : current === "Atividades" ? <ActivityCenter records={moduleRecords["Auditoria operacional"] ?? []}/> : current === "Painel inicial" && mobileExperience ? <MobileToday manager={mobileManager}/> : current === "Painel inicial" ? <DashboardWorkspace onNavigate={setCurrent} serviceOrders={serviceOrders} modules={moduleRecords} role={authenticatedUser.role}/> : current === "Central de pendências" ? <OperationsActionCenter serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} modules={moduleRecords as unknown as Record<string,Record<string,unknown>[]>} onNavigate={setCurrent}/> : current === "Clientes" ? <Customers onOpen={name => { setModal(""); window.setTimeout(() => setModal(name), 0); }} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={saveCustomerStructure} onDeleteStructure={deleteCustomerStructure} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Agenda" ? <Agenda companyId={activeCompany.id} serviceOrders={serviceOrders} onOpen={(name,seed)=>{setOrderSeed(seed);setModal(name);}} onSelect={setSelectedOrder} onScheduleUpdate={hasAction("Ordens de serviço","Editar")?updateServiceOrder:undefined} customers={customerRecords} staff={moduleRecords["Funcionários"]||[]}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} company={activeCompany} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <LicitacoesWorkspace company={activeCompany} modules={moduleRecords} customers={customerRecords} orders={serviceOrders} onSaveRecord={(moduleName,record)=>saveConfirmedModuleRecord(moduleName,record)} onDeleteRecord={deleteModuleRecord} onReadyToInvoice={record=>saveConfirmedModuleRecord("Empenhos",{...record,status:"Pronto para faturar"},[{moduleName:"Financeiro",record:{id:`FAT-${record.id}`,name:`Faturamento • ${record.name}`,client:record.client,description:`Aguardando emissão de Nota Fiscal • ${record.empenhoProcess || "processo não informado"}`,createdAt:new Date().toLocaleString("pt-BR"),status:"Pronto para faturar",date:new Date().toISOString().slice(0,10),value:record.value??0,category:"Faturamento público",transactionType:"Receber",empenhoId:record.id}}])} onOpenTender={item=>setModal(`Análise de edital • ${item.numeroControlePNCP || item.objetoCompra || "Licitação"}`)}/> : current === "Orçamentos" ? <BudgetPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={record => updateModuleRecord("Orçamentos",record)} onConvert={convertBudget} onDelete={record => deleteModuleRecord("Orçamentos",record)} onCreateCustomer={createQuickCustomer} onCreateStructure={createQuickStructure}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} sales={moduleRecords.Vendas ?? []} onSave={record => updateModuleRecord("Vendas",record)} onDelete={record=>deleteModuleRecord("Vendas",record)}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders} company={activeCompany}/> : current === "Diagnósticos" ? <DiagnosticManagementDashboard serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} equipment={(moduleRecords["Equipamentos"] ?? []) as unknown as Record<string,unknown>[]}/> : current === "Fiscal" ? <FiscalWorkspace modules={moduleRecords} serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} company={activeCompany} onNavigate={setCurrent}/> : current === "Base Técnica" ? <TechnicalBasePanel/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany} isAdministrator={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*"))}/> : current === "Aprovações" ? <ApprovalCenter records={moduleRecords["Aprovações"] ?? []} canApprove={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*") || authenticatedUser.permissions?.includes("aprovacoes.aprovar") || authenticatedUser.permissions?.includes("Aprovações"))} onOperation={runOperationalCommand}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} modules={moduleRecords} onOperation={runOperationalCommand} onOpen={setModal} onIssueInvoice={(record,invoiceNumber)=>{const commitment=(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId);const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Faturado"}}]:[];return saveConfirmedModuleRecord("Financeiro",{...record,status:"Em aberto",transactionType:"Receber",invoiceNumber,invoiceIssuedAt:new Date().toISOString()},related)}}/> : current === "Funcionários" ? <EmployeesWorkspace records={moduleRecords["Funcionários"] ?? []} serviceOrders={serviceOrders} onOpen={setModal} onUpdate={(moduleName,record)=>saveConfirmedModuleRecord(moduleName,record)} onDelete={deleteModuleRecord} canEdit={hasAction("Funcionários","Editar")} canManageLogin={Boolean(authenticatedUser.role==="Administrador"||authenticatedUser.permissions?.includes("*"))}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} onUpdate={updateServiceOrder} serviceOrders={serviceOrders} customers={customerRecords} company={activeCompany} role={authenticatedUser.role}/> : <>{(current === "Compras" || current === "Estoque") && <InventoryOperations mode={current} modules={moduleRecords} onOperation={runOperationalCommand}/>}<GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []} allModules={moduleRecords} serviceOrders={serviceOrders}/></>}</div>
+      <div className="page-content">{planBlocked ? <section className="mobile-module-blocked"><LockKeyhole size={28}/><h2>Módulo não contratado</h2><p>Este módulo não faz parte do plano ativo desta empresa. A liberação é feita pelo ProAR Manager conforme o contrato.</p><button className="primary-btn" onClick={()=>setCurrent(effectiveEntitledModules?.[0]||"Painel inicial")}>Voltar para módulos liberados</button></section> : mobileBlocked ? <section className="mobile-module-blocked"><ShieldCheck size={28}/><h2>Módulo disponível no computador</h2><p>No celular e tablet o ProAR é focado na operação de trabalho. Para gestão administrativa completa, utilize a versão desktop.</p><button className="primary-btn" onClick={()=>setCurrent("Painel inicial")}>Voltar para operação</button></section> : current === "PMOC e conformidade" ? null : current === "Integridade do Sistema" ? <IntegrityAudit/> : current === "Atividades" ? <ActivityCenter records={moduleRecords["Auditoria operacional"] ?? []}/> : current === "Painel inicial" && mobileExperience ? <MobileToday manager={mobileManager}/> : current === "Painel inicial" ? <DashboardWorkspace onNavigate={setCurrent} onPendingSelect={openPending} serviceOrders={serviceOrders} modules={moduleRecords} role={authenticatedUser.role} isAdmin={authenticatedUser.role==="Administrador" || Boolean(authenticatedUser.permissions?.includes("*"))} /> : current === "Central de pendências" ? <OperationsActionCenter serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} modules={moduleRecords as unknown as Record<string,Record<string,unknown>[]>} onNavigate={setCurrent} onPendingSelect={openPending}/> : current === "Clientes" ? <Customers onOpen={name => { setModal(""); window.setTimeout(() => setModal(name), 0); }} onDelete={deleteCustomer} onUpdate={updateCustomer} onUpdateStructure={saveCustomerStructure} onDeleteStructure={deleteCustomerStructure} canEdit={hasAction("Clientes","Editar")} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} serviceOrders={serviceOrders} modules={moduleRecords}/> : current === "Agenda" ? <Agenda companyId={activeCompany.id} serviceOrders={serviceOrders} onOpen={(name,seed)=>{setOrderSeed(seed);setModal(name);}} onSelect={setSelectedOrder} onScheduleUpdate={hasAction("Ordens de serviço","Editar")?updateServiceOrder:undefined} customers={customerRecords} staff={moduleRecords["Funcionários"]||[]}/> : current === "Obras" ? <HousesWorkModule companyId={activeCompany.id} company={activeCompany} responsibleUser={authenticatedUser.displayName}/> : current === "Licitações" ? <LicitacoesWorkspace company={activeCompany} modules={moduleRecords} customers={customerRecords} orders={serviceOrders} onSaveRecord={(moduleName,record)=>saveConfirmedModuleRecord(moduleName,record)} onDeleteRecord={deleteModuleRecord} onReadyToInvoice={record=>saveConfirmedModuleRecord("Empenhos",{...record,status:"Pronto para faturar"},[{moduleName:"Financeiro",record:{id:`FAT-${record.id}`,name:`Faturamento • ${record.name}`,client:record.client,description:`Aguardando emissão de Nota Fiscal • ${record.empenhoProcess || "processo não informado"}`,createdAt:new Date().toLocaleString("pt-BR"),status:"Pronto para faturar",date:new Date().toISOString().slice(0,10),value:record.value??0,category:"Faturamento público",transactionType:"Receber",empenhoId:record.id}}])} onOpenTender={item=>setModal(`Análise de edital • ${item.numeroControlePNCP || item.objetoCompra || "Licitação"}`)}/> : current === "Orçamentos" ? <BudgetPDV key={focusedBudgetId||"budget-default"} focusedId={focusedBudgetId} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalog={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} budgets={moduleRecords.Orçamentos ?? []} onSave={async record => { const action=(moduleRecords.Orçamentos??[]).some(item=>item.id===record.id)?"Editar":"Criar"; return hasAction("Orçamentos",action) && await persistSharedState(customerRecords,serviceOrders,appendAudit({...moduleRecords,Orçamentos:[record,...(moduleRecords.Orçamentos??[]).filter(item=>item.id!==record.id)]},"Orçamento salvo",record.id,"Orçamento registrado após confirmação.",{moduleName:"Orçamentos",recordId:record.id}),false); }} onConvert={convertBudget} onDelete={record => deleteModuleRecord("Orçamentos",record)} onCreateCustomer={createQuickCustomer} onCreateStructure={createQuickStructure}/> : current === "Vendas" ? <SalesPDV customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} records={[...(moduleRecords.Produtos ?? []),...(moduleRecords.Serviços ?? [])]} sales={moduleRecords.Vendas ?? []} onSave={record => updateModuleRecord("Vendas",record)} onDelete={record=>deleteModuleRecord("Vendas",record)}/> : current === "Relatórios" ? <Reports modules={moduleRecords} customers={customerRecords} serviceOrders={serviceOrders} company={activeCompany}/> : current === "Diagnósticos" ? <DiagnosticManagementDashboard serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} equipment={(moduleRecords["Equipamentos"] ?? []) as unknown as Record<string,unknown>[]}/> : current === "Fiscal" ? <FiscalWorkspace modules={moduleRecords} serviceOrders={serviceOrders as unknown as Record<string,unknown>[]} company={activeCompany} onNavigate={setCurrent}/> : current === "Base Técnica" ? <TechnicalBasePanel/> : current === "Configurações" ? <SettingsModule companies={companies} activeCompany={activeCompany} onCompaniesChange={updateCompanies} onSelectCompany={selectCompany} isAdministrator={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*"))}/> : current === "Aprovações" ? <ApprovalCenter records={moduleRecords["Aprovações"] ?? []} canApprove={Boolean(authenticatedUser.role === "Administrador" || authenticatedUser.permissions?.includes("*") || authenticatedUser.permissions?.includes("aprovacoes.aprovar") || authenticatedUser.permissions?.includes("Aprovações"))} onOperation={runOperationalCommand}/> : current === "Financeiro" ? <FinancialModule records={moduleRecords.Financeiro ?? []} modules={moduleRecords} onOperation={runOperationalCommand} onOpen={setModal} onIssueInvoice={(record,invoiceNumber)=>{const commitment=(moduleRecords.Empenhos??[]).find(item=>item.id===record.empenhoId);const related=commitment?[{moduleName:"Empenhos",record:{...commitment,status:"Faturado"}}]:[];return saveConfirmedModuleRecord("Financeiro",{...record,status:"Em aberto",transactionType:"Receber",invoiceNumber,invoiceIssuedAt:new Date().toISOString()},related)}}/> : current === "Funcionários" ? <EmployeesWorkspace records={moduleRecords["Funcionários"] ?? []} serviceOrders={serviceOrders} onOpen={setModal} onUpdate={(moduleName,record)=>saveConfirmedModuleRecord(moduleName,record)} onDelete={deleteModuleRecord} canEdit={hasAction("Funcionários","Editar")} canManageLogin={Boolean(authenticatedUser.role==="Administrador"||authenticatedUser.permissions?.includes("*"))}/> : current === "Ordens de serviço" ? <ServiceOrders onOpen={setModal} onSelect={setSelectedOrder} onDelete={deleteOrder} onUpdate={updateServiceOrder} serviceOrders={serviceOrders} customers={customerRecords} company={activeCompany} role={authenticatedUser.role}/> : <>{(current === "Compras" || current === "Estoque") && <InventoryOperations mode={current} modules={moduleRecords} onOperation={runOperationalCommand}/>}<GenericModule name={current} onOpen={setModal} onDelete={deleteModuleRecord} onUpdate={updateModuleRecord} onConvert={convertBudget} companyCnpj={activeCompany.cnpj} canEdit={hasAction(current,"Editar")} records={moduleRecords[current] ?? []} allModules={moduleRecords} serviceOrders={serviceOrders}/></>}</div>
       <footer><span>© {new Date().getFullYear()} ProAR Gestão de Serviços</span><span><ShieldCheck size={12}/> Gestão segura e inteligente para prestadores de serviços.</span></footer>
     </main>
     {modal && <div data-testid={modal === "Novo cliente" ? "customer-new-dialog" : undefined}><Modal initialOrderSeed={orderSeed} title={modal} customers={customerRecords} structures={moduleRecords["Unidades e setores"] ?? []} catalogRecords={[...(moduleRecords["Serviços"] ?? []).map(item=>({...item,kind:"Serviço" as const})), ...(moduleRecords["Produtos"] ?? []).map(item=>({...item,kind:"Produto" as const}))]} supplierRecords={moduleRecords["Fornecedores"] ?? []} employeeRecords={moduleRecords["Funcionários"] ?? []} equipmentRecords={moduleRecords["Equipamentos"] ?? []} serviceOrders={serviceOrders} close={() => {setModal("");setOrderSeed(undefined);}} onSave={saveRecord} canCreateCustomer={hasAction("Clientes","Criar")} onCreateCustomer={createOrderCustomer} onCreateStructure={createOrderStructure}/></div>}
