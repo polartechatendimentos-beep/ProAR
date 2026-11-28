@@ -28,3 +28,6 @@ A versão não é contingência fiscal e não pode ser usada para afirmar que um
 
 ### Pagamento em mais de uma forma
 No PDV, escolha Pix, informe o valor realmente recebido e adicione crédito ou débito. O segundo campo sugere o valor restante, que pode ser ajustado. Confira cada recebimento no banco ou na maquininha antes de confirmar. O Histórico mostra os valores separados em um só pedido. Sem conexão, são apenas indicações no rascunho; após sincronizar, abra o pedido, confira e informe os recebimentos. Este fluxo registra, mas não cobra, autoriza nem emite nota.
+
+### Ajuste do preço de um item no carrinho
+Com a permissão de alterar preço comercial, dê dois cliques no valor unitário de um produto ou use o ícone de lápis. Digite o novo valor e aplique. O preço muda só naquele pedido; a quantidade e o cadastro ficam intactos. Use “Usar catálogo” para voltar ao preço normal, incluindo atacado quando aplicável. Confira o saldo dos pagamentos após mudar o total. O rascunho offline preserva o preço informado e o ProAR verifica novamente a permissão ao enviar e ao confirmar o pedido.

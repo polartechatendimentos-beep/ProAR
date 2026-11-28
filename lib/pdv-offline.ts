@@ -7,7 +7,10 @@ export const pdvNeedsReview=(status:unknown)=>status===PDV_REVIEW_STATUS;
 export const pdvDraftIdValid=(id:unknown):id is string=>typeof id==="string"&&/^PDV-[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(id);
 export const pdvDraftKey=(companyId:string,username:string)=>`proar:pdv-drafts:v1:${encodeURIComponent(companyId)}:${encodeURIComponent(username)}`;
 export const newPdvDraftId=()=>`PDV-${crypto.randomUUID()}`;
-type DraftLine={id:string;quantity:number;unitPrice:number};
+type DraftLine={id:string;quantity:number;unitPrice:number;priceOverride?:true};
+export const PDV_MAX_UNIT_PRICE=10_000_000;
+export const PDV_PRICE_PERMISSION="comercial.preco.alterar";
+export const validPdvUnitPrice=(value:unknown):value is number=>typeof value==="number"&&Number.isFinite(value)&&value>0&&value<=PDV_MAX_UNIT_PRICE&&Math.abs(Math.round(value*100)-value*100)<0.002;
 type DraftPayment={method:string;amount:number};
 export type PdvProposal={items:DraftLine[];customerId:string;structureId:string;discount:number;paymentMethod:string;plannedPayments?:DraftPayment[]};
 export type PdvDraft<T>={id:string;updatedAt:string;form:T;proposal:PdvProposal;attempted:boolean};
@@ -36,7 +39,7 @@ type PdvRecord=Record<string,unknown>;
 export class PdvDraftValidationError extends Error{readonly code="PDV_DRAFT_REVIEW"}
 const identifier=(value:unknown)=>typeof value==="string"&&value.length<=150?value:"";
 const money=(value:number)=>Math.round(value*100);
-export function validatePdvProposal(data:PdvRecord,customers:PdvRecord[],products:PdvRecord[],services:PdvRecord[],structures:PdvRecord[]){
+export function validatePdvProposal(data:PdvRecord,customers:PdvRecord[],products:PdvRecord[],services:PdvRecord[],structures:PdvRecord[],canOverridePrice=false){
   const reject=(message:string):never=>{throw new PdvDraftValidationError(message)};
   if(!Array.isArray(data.items)||data.items.length<1||data.items.length>100)throw new PdvDraftValidationError("Informe entre 1 e 100 itens no pedido.");
   const customerId=identifier(data.customerId),structureId=identifier(data.structureId);
@@ -58,6 +61,12 @@ export function validatePdvProposal(data:PdvRecord,customers:PdvRecord[],product
     if(!Number.isFinite(base)||base<0||base>10_000_000)reject("Preço indisponível no catálogo atual.");
     const minimum=Number(record.wholesaleMinimumQuantity||0);
     const pricing=quantityPrice(base,quantity,record.wholesalePrice!=null&&minimum>0?[{minimumQuantity:minimum,unitPrice:Number(record.wholesalePrice)}]:[]);
+    if(item?.priceOverride===true){
+      if(record.kind!=="Produto"||!canOverridePrice)reject("Seu perfil não pode alterar o preço deste produto. Restaure o valor do catálogo ou solicite liberação.");
+      const override=item.unitPrice;
+      if(!validPdvUnitPrice(override))throw new PdvDraftValidationError("Informe um preço unitário positivo, com até duas casas decimais.");
+      return {id,productId:id,description:String(record.name??id),quantity,unitValue:money(override)/100,kind:record.kind,priceRule:"Preço ajustado no PDV",priceOverride:true as const,catalogUnitValue:money(pricing.unitPrice)/100};
+    }
     if(typeof item?.unitPrice!=="number"||!Number.isFinite(item.unitPrice)||money(item.unitPrice)!==money(pricing.unitPrice))reject("Preço do catálogo mudou. Recarregue os preços do rascunho e confira o total.");
     return {id,productId:id,description:String(record.name??id),quantity,unitValue:money(pricing.unitPrice)/100,kind:record.kind,priceRule:pricing.minimumQuantity? `Atacado a partir de ${pricing.minimumQuantity}`:"Varejo"};
   });
