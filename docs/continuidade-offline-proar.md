@@ -25,3 +25,6 @@ A versão não é contingência fiscal e não pode ser usada para afirmar que um
 3. Religuem a rede, confirmem a sincronização dos rascunhos e revisem o pedido de PDV no histórico antes da finalização. Simulem perda da resposta após a gravação e repitam pelo mesmo rascunho.
 4. Em outro navegador, alterem o preço/estoque ou tentem reservar o horário escolhido enquanto a primeira sessão está offline. Confiram que o ProAR pede revisão em vez de sobrescrever ou duplicar.
 5. Testem a sessão vencida e outro perfil. A cópia ou os rascunhos da conta anterior não devem aparecer.
+
+### Pagamento em mais de uma forma
+No PDV, escolha Pix, informe o valor realmente recebido e adicione crédito ou débito. O segundo campo sugere o valor restante, que pode ser ajustado. Confira cada recebimento no banco ou na maquininha antes de confirmar. O Histórico mostra os valores separados em um só pedido. Sem conexão, são apenas indicações no rascunho; após sincronizar, abra o pedido, confira e informe os recebimentos. Este fluxo registra, mas não cobra, autoriza nem emite nota.

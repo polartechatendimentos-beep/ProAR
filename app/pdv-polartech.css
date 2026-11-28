@@ -188,3 +188,8 @@ html[data-proar-system-theme="light"] .pdv-polartech {
 @media(max-width:970px) {
  .pdv-polartech .pdv-operational-grid-modern>.pdv-layout>.pdv-cart {grid-column:1;grid-row:2;}
 }
+
+.pdv-polartech .pdv-payment-line{display:flex;gap:.5rem;align-items:end;min-width:0}
+.pdv-polartech .pdv-payment-lines .pdv-payment-line label{display:flex;flex-direction:column;flex:1;min-width:0;gap:.25rem}
+.pdv-polartech .pdv-payment-line input{width:100%;min-width:0}
+.pdv-polartech .pdv-payment-line button{min-width:2.75rem;min-height:2.75rem}
