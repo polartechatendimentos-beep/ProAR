@@ -59,3 +59,13 @@ test("recording a new online split retains historical sales without touching the
   assert.deepEqual(saved.moduleRecords.Vendas[1].pdvPayments,split);
   assert.equal(restore(saved,cmd).replay,true);
 });
+
+test("Only a cash surplus can appear beside the customer-facing total",async()=>{
+  const {readFile}=await import("node:fs/promises");
+  const app=await readFile(new URL("../app/page.tsx",import.meta.url),"utf8");
+  const css=await readFile(new URL("../app/pdv-polartech.css",import.meta.url),"utf8");
+  assert.match(app,/pdv-customer-totals[\s\S]*TOTAL DA VENDA[\s\S]*pdv-customer-change[\s\S]*breakdown\.valid&&change>0[\s\S]*TROCO EM DINHEIRO/);
+  assert.match(css,/pdv-customer-totals\[data-has-change="true"\]\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.equal(summarizePdvPayments([{method:"PIX",amount:320}],300).change,0);
+  assert.equal(summarizePdvPayments([{method:"PIX",amount:120},{method:"Dinheiro",amount:200}],300).change,20);
+});

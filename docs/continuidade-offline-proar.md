@@ -31,3 +31,5 @@ No PDV, escolha Pix, informe o valor realmente recebido e adicione crédito ou d
 
 ### Ajuste do preço de um item no carrinho
 Com a permissão de alterar preço comercial, dê dois cliques no valor unitário de um produto ou use o ícone de lápis. Digite o novo valor e aplique. O preço muda só naquele pedido; a quantidade e o cadastro ficam intactos. Use “Usar catálogo” para voltar ao preço normal, incluindo atacado quando aplicável. Confira o saldo dos pagamentos após mudar o total. O rascunho offline preserva o preço informado e o ProAR verifica novamente a permissão ao enviar e ao confirmar o pedido.
+
+Ao informar dinheiro acima do saldo da venda, o carrinho mostra **Troco em dinheiro** ao lado do **Total da venda**. Valores a maior em Pix ou cartão não são tratados como troco.
