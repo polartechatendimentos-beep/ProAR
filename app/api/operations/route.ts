@@ -30,12 +30,16 @@ export async function POST(request: NextRequest) {
     const categoryByAction: Record<string, string> = {
       settle: "financial", reverse: "financial", cancel: "financial", dates: "financial",
       receive: "purchases", account: "accounts", stock: "inventory", "stock-transfer": "inventory",
-      reconcile: "reconciliation", "approval-decide": "approvals",
+      reconcile: "reconciliation", "approval-decide": "approvals", "pdv-sync-draft":"sales",
     };
     timing.setCategory(categoryByAction[command.action] || "other");
     guardOperationalCommand(inferRuleContext(command as unknown as Record<string,unknown>));
-    const company = session.companyId || process.env.PROAR_PRIMARY_COMPANY_ID || "polartech-principal";
-    const db = await resolveTenantDb(session.companyId);
+    const primaryId=process.env.PROAR_PRIMARY_COMPANY_ID||"polartech-principal";
+    const pdv=command.action==="pdv-sync-draft";
+    const primary=String(session.companySlug||"").trim().toLowerCase()===(process.env.PROAR_PRIMARY_COMPANY_SLUG||"polartech").trim().toLowerCase();
+    const company=pdv&&primary?primaryId:session.companyId||primaryId;
+    if(pdv&&(!session.companyId||command.data?.companyId!==company||!hasPermission(session,"comercial.editar")))return respond({error:"A empresa ou a permissão do PDV não corresponde à sessão atual."},{status:403});
+    const db = await resolveTenantDb(pdv?company:session.companyId);
     if (!db.url || !db.key) throw new Error("Banco indisponível");
     const stateId = db.dedicated ? "main" : company;
     const baseUrl = `${db.url}/rest/v1/proar_state`;
@@ -51,6 +55,7 @@ export async function POST(request: NextRequest) {
       if (!response.ok) throw new Error("Falha ao ler a base");
       const rows = await response.json() as { payload: ErpState }[];
       const state = rows[0]?.payload;
+      if(pdv&&state?._companyId&&state._companyId!==company)return respond({error:"Registro de outra empresa."},{status:403});
       if (!state) return respond({ error: "Carregue a base da empresa antes de operar." }, { status: 409 });
       beginPhase("domain_validation");
       const result = applyOperationalCommand(state, command, actor);

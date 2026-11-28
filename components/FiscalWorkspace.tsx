@@ -61,8 +61,8 @@ export function FiscalWorkspace({
   const certificateOk=config?.certificate?.status==="Válido";
 
   const nfseCandidates=useMemo(()=>completedServices.filter(item=>!item.invoiceNumber),[serviceOrders]);
-  const nfceCandidates=useMemo(()=>sales.filter(item=>!item.invoiceNumber&&((item.purchaseItems??[]).some((x:FiscalRecord)=>x.kind==="Produto")||item.kind==="Produto")),[sales]);
-  const nfeCandidates=useMemo(()=>sales.filter(item=>!item.invoiceNumber),[sales]);
+  const nfceCandidates=useMemo(()=>sales.filter(item=>!item.invoiceNumber&&item.status!=="Aguardando conferência"&&((item.purchaseItems??[]).some((x:FiscalRecord)=>x.kind==="Produto")||item.kind==="Produto")),[sales]);
+  const nfeCandidates=useMemo(()=>sales.filter(item=>!item.invoiceNumber&&item.status!=="Aguardando conferência"),[sales]);
 
   const consultDfe=async()=>{
     setDfeLoading(true);

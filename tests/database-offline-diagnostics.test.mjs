@@ -22,5 +22,5 @@ test("client keeps cached data and recognizes provider quota contingency",async(
   const source=await read("app/page.tsx");
   assert.match(source,/PROAR-DB-004/);
   assert.match(source,/Limite de uso do banco excedido/);
-  assert.match(source,/last-successful-sync/);
+  assert.match(source,/readDesktopAccessCache/);
 });
