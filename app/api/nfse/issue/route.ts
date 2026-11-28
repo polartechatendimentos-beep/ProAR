@@ -1,47 +1,43 @@
-import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "../../../../lib/permissions";
+import { requirePermission, sessionCompany } from "../../../../lib/permissions";
 import { validateFiscalPayload } from "../../../../lib/fiscal-validation";
+import { runNfse, validNfseOrderId } from "../../../../lib/nfse-reconciliation";
+import { nfseCompany, nfseStore } from "../../../../lib/nfse-store";
 
 export const runtime = "nodejs";
-
-
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   const access = requirePermission(request, "fiscal.emitir");
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
-  const user = access.session;
-  const body = await request.json();
-  const validation = validateFiscalPayload({ ...body, kind: "NFSE" });
-  if (!validation.valid) return NextResponse.json({ error:"Pré-validação fiscal reprovada.", validation }, { status:422 });
-  const providerUrl = process.env.PROAR_SEFIN_NACIONAL_ADAPTER_URL;
-  const providerToken = process.env.PROAR_SEFIN_NACIONAL_ADAPTER_TOKEN;
-  if (!providerUrl || !providerToken) {
-    return NextResponse.json({ error: "Adaptador do Sistema Nacional NFS-e não configurado no servidor. Nenhuma DPS foi transmitida." }, { status: 428 });
+  const scope=sessionCompany(access.session);
+  if(!scope.ok)return NextResponse.json({error:scope.error},{status:scope.status});
+  const body=await request.json().catch(()=>null);
+  if(!body||!validNfseOrderId(body.serviceOrderId))return NextResponse.json({error:"Informe uma ordem de serviço válida."},{status:400});
+  let validation:ReturnType<typeof validateFiscalPayload>;
+  try{validation=validateFiscalPayload({...body,kind:"NFSE"});}catch{return NextResponse.json({error:"Formato inválido nos campos fiscais."},{status:400});}
+  if(!validation.valid)return NextResponse.json({error:"Pré-validação fiscal reprovada.",validation},{status:422});
+  const value=Number(body?.service?.value);
+  if(!body?.customer?.document||!body?.service?.description||!Number.isFinite(value)||value<=0){
+    return NextResponse.json({error:"Dados obrigatórios da NFS-e incompletos."},{status:400});
   }
-  if (!body?.serviceOrderId || !body?.customer?.document || !body?.service?.description || Number(body?.service?.value || 0) <= 0) {
-    return NextResponse.json({ error: "Dados obrigatórios da NFS-e incompletos." }, { status: 400 });
+  if(!/^\d{7}$/.test(String(body?.nfse?.municipalityCode||""))||!String(body?.nfse?.serviceCode||"").trim()){
+    return NextResponse.json({error:"Configure o código IBGE do município e o código de serviço antes de preparar a DPS nacional."},{status:422});
   }
-  if (!String(body?.nfse?.municipalityCode || "").match(/^\d{7}$/) || !String(body?.nfse?.serviceCode || "").trim()) {
-    return NextResponse.json({ error: "Configure o código IBGE do município e o código de serviço antes de preparar a DPS nacional." }, { status: 422 });
-  }
-  const idempotencyKey = String(body.idempotencyKey || createHash("sha256").update(`${user.companyId}:${body.serviceOrderId}:${body.service.value}`).digest("hex"));
-  const response = await fetch(providerUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${providerToken}`, "Idempotency-Key": idempotencyKey },
-    body: JSON.stringify({ ...body, issuer: "SEFIN Nacional", requestedBy: user.username, companyId: user.companyId, idempotencyKey }),
-    cache: "no-store",
-    signal: AbortSignal.timeout(30000),
-  });
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) return NextResponse.json({ error: result?.error || result?.message || "A SEFIN Nacional não confirmou a emissão da NFS-e.", status:"Rejeitada", provider: result }, { status: 502 });
-  const provider = result?.result ?? result?.data ?? result;
-  const statusText = String(provider?.status ?? provider?.situacao ?? provider?.state ?? "").toLocaleLowerCase("pt-BR");
-  const fiscalIdentifier = provider?.number ?? provider?.numero ?? provider?.nfseNumber ?? provider?.chave ?? provider?.key ?? provider?.protocol ?? provider?.protocolo ?? provider?.verificationCode ?? provider?.codigoVerificacao;
-  const authorized = Boolean(provider?.authorized === true || provider?.autorizada === true || provider?.issued === true || ["autorizada","autorizado","authorized","aprovada","aprovado"].includes(statusText)) && Boolean(fiscalIdentifier);
-  if (!authorized) {
-    const processing = ["processando","processing","pendente","pending","recebida","received"].includes(statusText);
-    return NextResponse.json({ issued:false, status:processing ? "Processando" : "Rejeitada", idempotencyKey, provider:result, error:processing ? undefined : "O provedor respondeu, mas não retornou autorização fiscal válida." }, { status:processing ? 202 : 422 });
-  }
-  return NextResponse.json({ issued:true, status:"Autorizada", idempotencyKey, result });
+  const companyId=nfseCompany({...access.session,companyId:scope.companyId});
+  const providerUrl=process.env.PROAR_SEFIN_NACIONAL_ADAPTER_URL;
+  const providerToken=process.env.PROAR_SEFIN_NACIONAL_ADAPTER_TOKEN;
+  try{
+    const repo=await nfseStore(companyId,body.serviceOrderId);
+    const result=await runNfse({
+      companyId,legacyCompanyId:scope.companyId,serviceOrderId:body.serviceOrderId,value,repo,
+      send:providerUrl&&providerToken?attempt=>fetch(providerUrl,{
+        method:"POST",
+        headers:{"Content-Type":"application/json",Authorization:`Bearer ${providerToken}`,"Idempotency-Key":attempt.idempotencyKey},
+        body:JSON.stringify({serviceOrderId:attempt.serviceOrderId,customer:body.customer,service:{...body.service,value:attempt.value},nfse:body.nfse,issuer:"SEFIN Nacional",requestedBy:access.session.username,companyId:attempt.providerCompanyId??attempt.companyId,idempotencyKey:attempt.idempotencyKey}),
+        cache:"no-store",redirect:"error",signal:AbortSignal.timeout(30_000),
+      }):undefined,
+    },"issue");
+    return NextResponse.json(result.body,{status:result.code});
+  }catch{return NextResponse.json({error:"Não foi possível conferir o registro de emissão. Consulte a NFS-e antes de qualquer reenvio."},{status:503});}
 }

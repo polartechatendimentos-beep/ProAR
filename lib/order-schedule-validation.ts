@@ -1,17 +1,61 @@
-import {agendaInsights} from "./agenda-insights.ts";
-import {closedAgendaOrder,validAgendaDate,type AgendaOrder} from "./agenda-calendar.ts";
+import {closedAgendaOrder,validAgendaDate} from "./agenda-calendar.ts";
 type Row=Record<string,unknown>;
-/** Use only after the request is authorized and the complete tenant state is selected. */
-export function assertOrderScheduleChanges(previous:Row[],incoming:Row[]){
- const fields=["date","time","tech","employeeId","techId","estimatedDurationMinutes","durationMinutes"] as const;
- const rows:AgendaOrder[]=incoming.map(row=>({...row,id:String(row.id),client:String(row.client||""),unit:String(row.unit||""),service:String(row.service||""),tech:String(row.tech||""),date:String(row.date||""),time:String(row.time||""),address:String(row.address||""),status:String(row.status||""),tone:String(row.tone||""),companyId:"authorized-tenant-state"}));
- for(const candidate of rows){const old=previous.find(row=>row.id===candidate.id);if(closedAgendaOrder(candidate)||old&&fields.every(key=>JSON.stringify(old[key])===JSON.stringify(candidate[key]))&&!closedAgendaOrder({...candidate,status:String(old.status||"")}))continue;
-  if(!candidate.date||!candidate.time||!candidate.tech||/^(não definido|a definir)$/i.test(candidate.tech))continue;
-  if(!validAgendaDate(candidate.date)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(candidate.time))throw new Error("Informe uma data e um horário válidos para programar a OS.");
-  const duration=Number(candidate.estimatedDurationMinutes||candidate.durationMinutes);
-  if(!Number.isInteger(duration)||duration<=0)continue;
-  const [hour,minute]=candidate.time.split(":").map(Number);if(duration>1440||hour*60+minute+duration>1440)throw new Error("A duração do atendimento precisa terminar no mesmo dia.");
-  const analysis=agendaInsights("authorized-tenant-state",rows,candidate.date,candidate.date);
-  if(analysis.conflicts.some(pair=>pair.first.id===candidate.id||pair.second.id===candidate.id))throw new Error("Conflito de horário para o técnico selecionado. Escolha outro horário ou responsável.");
+const text=(value:unknown)=>String(value??"").trim();
+const nameKey=(value:unknown)=>text(value).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR").replace(/\s+/g," ");
+const placeholder=/^(a definir|nao definid[oa]|nao informad[oa]|sem tecnico|tecnico a definir|-)$/;
+const active=(row:Row)=>!closedAgendaOrder({status:text(row.status)} as Parameters<typeof closedAgendaOrder>[0])&&!/^rascunho$/i.test(text(row.status));
+const timePattern=/^([01]\d|2[0-3]):([0-5]\d)$/;
+const legacyMinutes=120; // Same estimate used by the Agenda and the new-OS review.
+const scheduleFields=["date","time","tech","employeeId","techId","estimatedDurationMinutes","durationMinutes"] as const;
+const durationOf=(row:Row)=>text(row.estimatedDurationMinutes)||text(row.durationMinutes);
+
+export class OrderScheduleConflict extends Error {
+ readonly code="OS_SCHEDULE_CONFLICT";
+ constructor(){super("Conflito de horário para o técnico selecionado. Escolha outro horário ou responsável.");}
+}
+
+/** Validate against the full authorized proposed state, immediately before its revision-checked save. */
+export function assertOrderScheduleChanges(previous:Row[],incoming:Row[],staff:Row[]=[]){
+ const aliases=new Map<string,Set<string>>();
+ for(const employee of staff){
+  const key=text(employee.id), name=nameKey(employee.name);
+  if(key&&name&&!placeholder.test(name))aliases.set(key,new Set([...(aliases.get(key)||[]),name]));
+ }
+ const byId=new Map(previous.map(row=>[text(row.id),row]));
+ const byDate=new Map<string,Array<{id:string;changed:boolean;ids:string[];names:Set<string>;from:number;to:number}>>();
+ for(const row of incoming){
+  if(!active(row))continue;
+  const id=text(row.id),old=byId.get(id);
+  const changed=!old||!active(old)||scheduleFields.some(field=>text(old[field])!==text(row[field]));
+  const date=text(row.date),time=text(row.time),tech=nameKey(row.tech);
+  const ids=[...new Set([text(row.employeeId),text(row.techId)].filter(Boolean))];
+  const names=new Set(ids.flatMap(employee=>[...(aliases.get(employee)||[])]));
+  if(tech&&!placeholder.test(tech))names.add(tech);
+  // Partial schedules remain saveable and visible as backlog, not firm bookings.
+  if(!date||!time||(!ids.length&&!names.size))continue;
+  const match=time.match(timePattern);
+  if(!match||!validAgendaDate(date)){
+   if(changed)throw new Error("Informe uma data e um horário válidos para programar a OS.");
+   continue;
+  }
+  const from=Number(match[1])*60+Number(match[2]), raw=durationOf(row), minutes=Number(raw);
+  const validDuration=Number.isInteger(minutes)&&minutes>0&&minutes<=1440;
+  if(changed&&raw&&!validDuration)throw new Error("Informe uma duração válida para programar a OS.");
+  if(changed&&validDuration&&from+minutes>1440)throw new Error("A duração do atendimento precisa terminar no mesmo dia.");
+  const entries=byDate.get(date)||[];
+  entries.push({id,changed,ids,names,from,to:Math.min(1440,from+(validDuration?minutes:legacyMinutes))});
+  byDate.set(date,entries);
+ }
+ for(const entries of byDate.values()){
+  if(!entries.some(entry=>entry.changed))continue;
+  entries.sort((a,b)=>a.from-b.from);
+  for(const [index,left] of entries.entries()){
+   for(let i=index+1;i<entries.length&&entries[i].from<left.to;i++){
+    const right=entries[i];
+    if(left.id===right.id||(!left.changed&&!right.changed))continue;
+    const sameTech=left.ids.length&&right.ids.length?left.ids.some(id=>right.ids.includes(id)):[...left.names].some(name=>right.names.has(name));
+    if(sameTech)throw new OrderScheduleConflict();
+   }
+  }
  }
 }
