@@ -182,3 +182,9 @@ html[data-proar-system-theme="light"] .pdv-polartech {
 .pdv-polartech .pdv-tabs button span {display:inline!important;}
 .pdv-polartech .pdv-tabs button kbd {display:none!important;}
 .pdv-polartech .pdv-tabs button[aria-pressed="true"] {color:var(--pdv-accent)!important;background:var(--pdv-raised)!important;}
+.pdv-polartech .pdv-operational-grid-modern>.pdv-layout {display:grid!important;}
+.pdv-polartech .pdv-operational-grid-modern>.pdv-layout>.pdv-workspace {order:0!important;grid-column:1;grid-row:1;}
+.pdv-polartech .pdv-operational-grid-modern>.pdv-layout>.pdv-cart {order:0!important;grid-column:2;grid-row:1;}
+@media(max-width:970px) {
+ .pdv-polartech .pdv-operational-grid-modern>.pdv-layout>.pdv-cart {grid-column:1;grid-row:2;}
+}
