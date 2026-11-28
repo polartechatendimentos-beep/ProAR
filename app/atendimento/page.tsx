@@ -86,6 +86,14 @@ export default function Atendimento() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadQueue(); }, [loadQueue]);
   function selectConversation(phone: string) { selection.current = phone; setSelected(phone); setMobilePane(phone?"conversa":"fila"); setFeedback(""); setOrderId(""); setNote(false); setChat(null); setText(""); setConsentReason(""); pending.current = null; if (phone) void loadChat(phone); }
+  useEffect(()=>{
+    const phone=new URLSearchParams(window.location.hash.slice(1)).get("contato");
+    if(!phone || !/^55[1-9]\d{9,10}$/.test(phone))return;
+    selection.current=phone;
+    setSelected(phone);
+    setMobilePane("conversa");
+    void loadChat(phone);
+  },[loadChat]);
   useEffect(() => {
     const timer = window.setInterval(() => { if (document.visibilityState === "visible") { void loadQueue(); if (selected) void loadChat(selected); } }, 15000);
     return () => window.clearInterval(timer);
